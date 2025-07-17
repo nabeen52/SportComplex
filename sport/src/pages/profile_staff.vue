@@ -1,0 +1,349 @@
+<template>
+  <div class="layout">
+    <!-- Sidebar ทางซ้าย -->
+    <aside class="sidebar" :class="{ closed: isSidebarClosed }">
+      <div class="sidebar-header">
+        <img src="/img/logo.png" alt="logo" class="logo" />
+        <p class="sidebar-title">ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง</p>
+      </div>
+      <nav class="nav-links">
+        <router-link to="/approve_equipment" exact-active-class="active">
+          <i class="pi pi-home"></i> Approve
+        </router-link>
+        <router-link to="/equipment" active-class="active">
+          <i class="pi pi-map-marker"></i> Equipment
+        </router-link>
+        <router-link to="/return" active-class="active">
+          <i class="pi pi-box"></i> Return
+        </router-link>
+        <router-link to="/history_staff" active-class="active">
+          <i class="pi pi-history"></i> History
+        </router-link>
+      </nav>
+    </aside>
+
+    <!-- Content ทางขวา -->
+    <div class="main">
+      <!-- Topbar (Header เล็ก) -->
+      <header class="topbar">
+        <button class="menu-toggle" @click="toggleSidebar">☰</button>
+        <div class="topbar-actions">
+          <!-- กระดิ่งแจ้งเตือน -->
+          <div style="position: relative;">
+            <div
+              v-if="showNotifications"
+              class="notification-backdrop"
+              @click="closeNotifications"
+            ></div>
+            <button class="notification-btn" @click="toggleNotifications">
+              <i class="pi pi-bell"></i>
+              <span v-if="unreadCount > 0" class="badge">{{ unreadCount }}</span>
+            </button>
+            <div v-if="showNotifications" class="notification-dropdown">
+              <ul>
+                <li v-for="(noti, idx) in notifications" :key="idx">
+                  {{ noti.message }}
+                </li>
+                <li v-if="notifications.length === 0">ไม่มีแจ้งเตือน</li>
+              </ul>
+            </div>
+          </div>
+          <router-link to="/profile_staff"><i class="pi pi-user"></i></router-link>
+        </div>
+      </header>
+
+      <!-- Body -->
+      <div class="probody">
+        <!-- Profile -->
+        <div>
+          <h1 style="padding-left: 50px;">Profile</h1>
+          <div class="profile-container">
+  <div class="proinfo">
+    <!-- ใช้ dynamic src -->
+   <img :src="profileImageUrl" alt="profile" class="profile-img" @error="imgError" />
+
+    <div class="profile-details" v-if="info">
+      <p>Username : {{ info.name }}</p>
+      <p>ID : {{ info.id }}</p>
+      <p>Email : {{ info.email }}</p>
+    </div>
+  </div>
+</div>
+        </div>
+        <div class="logout-container">
+          <button @click="logout" class="logout-btn">Logout</button>
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <footer class="foot">
+        <div class="footer-left">
+          <p>
+            Sport Complex – Mae Fah Luang University |
+            Tel. 0-5391-7821 | Facebook:
+            <a href="https://www.facebook.com/mfusportcomplex" target="_blank">MFU Sports Complex Center</a> |
+            Email: <a href="mailto:sport-complex@mfu.ac.th">sport-complex@mfu.ac.th</a>
+          </p>
+        </div>
+      </footer>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
+import Swal from 'sweetalert2'
+import axios from 'axios'
+
+const API_BASE = import.meta.env.VITE_API_BASE // ให้ตรงกับ backend
+
+const isSidebarClosed = ref(false)
+const router = useRouter()
+
+// ดึงข้อมูล user จาก API (ไม่ใช้ userStore.user แล้ว)
+const info = ref({ id: "-", name: "-", email: "-", picture: null })
+
+const showNotifications = ref(false)
+const notifications = ref([])
+const unreadCount = ref(0)
+const lastCheckedIds = ref(new Set())
+let polling = null
+
+// Render รูป profile ถูกต้อง
+const profileImageUrl = computed(() => {
+  if (!info.value || !info.value.picture) return '/img/user.png'
+  if (info.value.picture.startsWith('http')) return info.value.picture
+  return API_BASE + info.value.picture
+})
+function imgError(event) {
+  event.target.src = '/img/user.png'
+}
+
+function toggleSidebar() {
+  isSidebarClosed.value = !isSidebarClosed.value
+}
+
+// LOGOUT
+async function logout() {
+  const result = await Swal.fire({
+    title: 'ต้องการออกจากระบบ-?',
+    text: "คุณต้องการออกจากระบบใช่หรือไม่",
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: '#3085d6',
+    cancelButtonColor: '#d33',
+    confirmButtonText: 'ใช่, ออกจากระบบ',
+    cancelButtonText: 'ยกเลิก'
+  });
+
+  if (result.isConfirmed) {
+    try {
+      await fetch(`${API_BASE}/auth/logout`, {
+        method: 'GET',
+        credentials: 'include'
+      });
+    } catch (err) {}
+    localStorage.removeItem('jwt');
+    localStorage.removeItem('user_id');
+    // ถ้ามี userStore ให้รีเซ็ต (กันค้าง)
+    try { 
+      const { useUserStore } = await import('@/stores/userStore');
+      useUserStore().$reset?.();
+    } catch(e){}
+    window.location.href =
+      'https://accounts.google.com/Logout?continue=https://appengine.google.com/_ah/logout?continue=http://localhost:5173/login';
+  }
+}
+
+// Notification
+function closeNotifications() { showNotifications.value = false }
+function toggleNotifications() {
+  showNotifications.value = !showNotifications.value
+  if (showNotifications.value) unreadCount.value = 0
+}
+async function fetchNotifications() {
+  try {
+    const res = await axios.get(`${API_BASE}/api/equipments/pending`)
+    const data = Array.isArray(res.data) ? res.data : []
+    const pendings = data.filter(item => !lastCheckedIds.value.has(item._id?.$oid || item._id))
+    if (pendings.length) {
+      const newMessages = pendings.map(item => ({
+        id: item._id?.$oid || item._id,
+        message: `มีรายการ '${item.name}' ที่รออนุมัติ`
+      }))
+      notifications.value = [...notifications.value, ...newMessages]
+      pendings.forEach(item => lastCheckedIds.value.add(item._id?.$oid || item._id))
+      unreadCount.value = notifications.value.length
+    }
+  } catch (err) {}
+}
+
+onMounted(async () => {
+  // ดึง user profile สดใหม่เสมอ
+  try {
+    const res = await axios.get(`${API_BASE}/api/me`, { withCredentials: true })
+    if (res.data && res.data.user) {
+      info.value = {
+        id: res.data.user.user_id,
+        name: res.data.user.name,
+        email: res.data.user.email,
+        picture: res.data.user.picture
+      }
+    } else {
+      router.push('/login')
+      return
+    }
+  } catch (e) {
+    router.push('/login')
+    return
+  }
+
+  await fetchNotifications()
+  polling = setInterval(fetchNotifications, 30000)
+})
+onUnmounted(() => clearInterval(polling))
+</script>
+
+
+<style scoped>
+.probody {
+  background-color: #dbe9f4;
+  width: 100%;
+  height: 100vh;
+  padding: 20px;
+  box-sizing: border-box;
+  overflow-x: hidden;
+}
+.proinfo {
+  background-color: white;
+  border-radius: 20px;
+  padding: 30px 40px;
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+  width: 100%;
+  min-height: 160px;
+}
+.profile-img {
+  height: 120px;
+  width: 120px;
+  object-fit: cover;
+  border-radius: 16px;
+  box-shadow: 0 1px 12px #e3e3e3;
+  margin-right: 24px;
+}
+
+.profile-details {
+  color: #333;
+  font-size: 1.07rem;
+  padding-left: 12px;
+}
+.profile-container {
+  padding: 1rem 70px;
+}
+.profile-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1rem 70px;
+}
+.profile-card {
+  background-color: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+  padding: 1rem 1.5rem;
+  width: 100%;
+}
+.profile-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 1rem;
+  color: #333;
+}
+.left, .center, .right {
+  flex: 1;
+}
+.center {
+  text-align: center;
+}
+.logout-container {
+  display: flex;
+  justify-content: flex-end;
+  margin: 0px 70px 20px 0px;
+}
+.logout-btn {
+  background: #ef4444;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 18px;
+  font-weight: 600;
+  margin-top: 16px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.logout-btn:hover {
+  background: #dc2626;
+}
+.notification-dropdown {
+  position: absolute;
+  right: 0;
+  top: 36px;
+  background: white;
+  box-shadow: 0 4px 24px rgba(70, 70, 70, 0.14);
+  border-radius: 10px;
+  width: 320px;
+  max-width: 90vw;
+  z-index: 1500;
+  padding: 10px 0;
+  margin-top: 6px;
+  font-size: 1rem;
+}
+.notification-dropdown ul {
+  padding: 0 18px;
+  margin: 0;
+}
+.notification-dropdown li {
+  list-style: none;
+  padding: 10px 0;
+  border-bottom: 1px solid #eaeaea;
+  word-break: break-word;
+}
+.notification-dropdown li:last-child {
+  border-bottom: none;
+}
+.notification-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1.4rem;
+  position: relative;
+  margin-right: 8px;
+}
+.badge {
+  position: absolute;
+  top: 1px;
+  right: 3px;
+  background: #e11d48;
+  color: white;
+  border-radius: 8px;
+  padding: 1px 8px;
+  font-size: 0.83rem;
+  font-weight: bold;
+  min-width: 20px;
+  text-align: center;
+  z-index: 10;
+}
+.notification-backdrop {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: transparent;
+  z-index: 1400;
+}
+</style>
+
+<style>
+@import '../css/style.css';
+</style>

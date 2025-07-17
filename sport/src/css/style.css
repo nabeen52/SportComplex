@@ -1,0 +1,332 @@
+/* Reset and Base Styles */
+html,
+body {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 100%;
+    height: 100%;
+    /* <--- เพิ่ม */
+    /* overflow-x: hidden; */
+    /* overflow: hidden; */
+    /* <--- อย่าใส่ */
+    /* อย่าใส่ overflow: hidden เด็ดขาด */
+}
+
+#app {
+    min-height: 100vh;
+    height: 100vh;
+    /* อย่าใส่ overflow: hidden */
+}
+
+*,
+*::before,
+*::after {
+    box-sizing: inherit;
+    max-width: 100%;
+}
+
+template {
+    display: flex;
+}
+
+/* Layout */
+.layout {
+    background-color: #dbe9f4;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    box-sizing: border-box;
+    min-height: 100vh;
+    font-family: sans-serif;
+    transition: all 0.3s ease;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    /* <--- เพิ่มเพื่อช่วยให้ .main ทำงานถูก */
+    overflow: hidden;
+    /* <--- เพิ่มเพื่อกันไม่ให้ layout หลุด แต่ scroll จะไปอยู่ .main */
+}
+
+/* Sidebar */
+.sidebar {
+    width: 250px;
+    background-color: #1e345d;
+    color: white;
+    padding: 20px 10px;
+    transition: transform 0.3s ease-in-out;
+    transform: translateX(0);
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    /* <--- fix sidebar ยาวตลอด */
+    overflow-y: auto;
+}
+
+.sidebar-header {
+    text-align: center;
+    margin-bottom: 2rem;
+}
+
+.sidebar.closed {
+    transform: translateX(-100%);
+    padding: 0;
+    overflow: hidden;
+    position: absolute;
+}
+
+.sidebar.closed~.main {
+    margin-left: 0;
+}
+
+.logo {
+    width: 60px;
+    height: 60px;
+}
+
+.sidebar-title {
+    margin-top: 0.5rem;
+    font-size: 14px;
+    line-height: 1.2;
+}
+
+.nav-links {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.nav-links a {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.6rem;
+    color: white;
+    text-decoration: none;
+    border-radius: 6px;
+    transition: background 0.2s;
+}
+
+.nav-links a.active,
+.nav-links a:hover {
+    background-color: #2e4b82;
+}
+
+/* Main Content Area */
+.main {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    transition: margin-left 0.3s ease-in-out;
+    margin-left: 250px;
+    min-height: 100vh;
+    max-height: 100vh;
+    overflow-y: auto;
+    /* <--- สำคัญที่สุด! ให้ scroll เฉพาะ content */
+    overflow-x: hidden;
+}
+
+/* Topbar */
+.topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background-color: #2c3e73;
+    color: white;
+    padding: 0.5rem 1rem;
+}
+
+.menu-toggle {
+    top: 20px;
+    left: 20px;
+    background-color: #2c3e73;
+    color: white;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+}
+
+.topbar-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+/* Content Area */
+.content {
+    flex: 1;
+    padding: 1.5rem;
+    background-color: #dbe9f4;
+    overflow-y: auto;
+}
+
+/* Common UI Elements */
+.circle-btn {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background-color: #ffffff;
+    color: rgb(0, 0, 0);
+    border: none;
+    font-size: 10px;
+    cursor: pointer;
+}
+
+.left-group {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.text-group {
+    display: flex;
+    flex-direction: column;
+    font-size: 2rem;
+    color: white;
+}
+
+.subtext {
+    font-size: medium;
+    opacity: 1;
+    color: white;
+}
+
+/* Icons */
+.pi {
+    font-size: 25px;
+    color: white;
+}
+
+/* Announcement */
+.announcement {
+    margin: 1rem auto;
+    background: rgb(253, 170, 170);
+    border: 2px solid red;
+    color: black;
+    width: 90%;
+    max-width: 90rem;
+    padding: 0.6rem 2rem;
+    text-align: left;
+    font-weight: bold;
+    border-radius: 12px;
+}
+
+:root {
+    --announcement-width: 900px;
+    /* ปรับตามจำนวนอักษรต่อบรรทัดที่ต้องการ */
+}
+
+.foot {
+    background-color: #2c3e73;
+    color: white;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.8rem;
+    padding: 1rem;
+    margin-top: auto;
+}
+
+.foot a {
+    color: #facc15;
+    text-decoration: underline;
+}
+
+.footer-left {
+    flex: 1;
+    text-align: center;
+}
+
+.notification-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1.4rem;
+    position: relative;
+    margin-right: 8px;
+    padding: 0;
+    display: inline-block;
+}
+
+.badge {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    background: #e11d48;
+    color: white;
+    border-radius: 50%;
+    padding: 2px 6px;
+    font-size: 0.75rem;
+    font-weight: bold;
+    min-width: 18px;
+    height: 18px;
+    line-height: 18px;
+    text-align: center;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    user-select: none;
+    pointer-events: none;
+}
+
+.notification-dropdown {
+    position: absolute;
+    right: 0;
+    top: 36px;
+    background: white;
+    box-shadow: 0 4px 24px rgba(70, 70, 70, 0.14);
+    border-radius: 10px;
+    width: 320px;
+    max-width: 90vw;
+    z-index: 1500;
+    padding: 10px 0;
+    font-size: 1rem;
+    word-break: break-word;
+}
+
+.notification-dropdown ul {
+    padding: 0 18px;
+    margin: 0;
+}
+
+.notification-dropdown li {
+    list-style: none;
+    padding: 10px 0;
+    border-bottom: 1px solid #eaeaea;
+    word-break: break-word;
+    color: black;
+    white-space: normal;
+    max-width: 290px;
+    overflow-wrap: break-word;
+}
+
+.notification-dropdown li:last-child {
+    border-bottom: none;
+}
+
+.cart-link {
+    position: relative;
+    display: inline-block;
+    color: inherit;
+}
+
+.cart-link .badge {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    background-color: red;
+    color: white;
+    border-radius: 50%;
+    font-size: 0.75rem;
+    padding: 2px 6px;
+    font-weight: bold;
+    min-width: 18px;
+    height: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    user-select: none;
+    pointer-events: none;
+}

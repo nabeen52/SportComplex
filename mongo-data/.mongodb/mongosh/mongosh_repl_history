@@ -1,0 +1,4 @@
+db.getMongo()
+db.history.find().pretty()
+show collections
+use SportComplex

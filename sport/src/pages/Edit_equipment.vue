@@ -1,0 +1,526 @@
+<template>
+  <div class="layout" :class="{ 'sidebar-closed': isSidebarClosed }">
+    <!-- Sidebar -->
+    <aside class="sidebar" :class="{ closed: isSidebarClosed }">
+      <div class="sidebar-header">
+        <img src="/img/logo.png" alt="logo" class="logo" />
+        <p class="sidebar-title">ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง</p>
+      </div>
+      <nav class="nav-links">
+        <router-link to="/dashboard" exact-active-class="active">
+          <i class="pi pi-chart-pie"></i> Dashboard
+        </router-link>
+        <router-link to="/home_admin" exact-active-class="active">
+          <i class="pi pi-megaphone"></i> Edit News
+        </router-link>
+        <router-link to="/edit_field" active-class="active">
+          <i class="pi pi-map-marker"></i> Edit Field
+        </router-link>
+        <router-link to="/edit_equipment" active-class="active">
+          <i class="pi pi-clipboard"></i> Edit Equipment
+        </router-link>
+        <router-link to="/booking_field_admin" active-class="active">
+          <i class="pi pi-map-marker"></i> Book Field
+        </router-link>
+        <router-link to="/approve_field" active-class="active">
+          <i class="pi pi-verified"></i> Approve
+        </router-link>
+        <router-link to="/return_admin" active-class="active">
+            <i class="pi pi-box"></i> Return
+          </router-link>
+        <router-link to="/members" active-class="active">
+          <i class="pi pi-user-edit"></i> Member
+        </router-link>
+        <router-link to="/history_admin" active-class="active">
+          <i class="pi pi-history"></i> History System
+        </router-link>
+      </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <div class="main">
+      <header class="topbar">
+        <button class="menu-toggle" @click="toggleSidebar">☰</button>
+        <div class="topbar-actions">
+          <div style="position: relative;">
+            <button class="notification-btn" @click="toggleNotifications">
+              <i class="pi pi-bell"></i>
+              <span v-if="unreadCount > 0" class="badge">{{ unreadCount }}</span>
+            </button>
+            <div v-if="showNotifications" class="notification-dropdown">
+              <ul>
+                <li v-for="(noti, idx) in notifications" :key="idx">
+                  {{ noti.message }}
+                </li>
+                <li v-if="notifications.length === 0">ไม่มีแจ้งเตือน</li>
+              </ul>
+            </div>
+          </div>
+          <router-link to="/profile_admin"><i class="pi pi-user"></i></router-link>
+        </div>
+
+      </header>
+
+      <main class="content">
+        <div class="title-row">
+          <h2>Equipment</h2>
+          <button class="add-btn" @click="addEquipment">＋</button>
+        </div>
+        <div class="card-list">
+          <div class="equipment-card" v-for="(equipment, index) in equipments" :key="equipment._id || index">
+            <img class="equipment-img" :src="equipment.image" alt="field" />
+            <div class="equipment-info">
+              <div class="equipment-row">
+                <p class="equipment-name"><strong>{{ equipment.name }}</strong></p>
+                <div style="display: flex; align-items: center; gap: 1.5rem;">
+                  <p class="equipment-amount">จำนวน: {{ equipment.quantity }}</p>
+                  <!-- Toggle Switch -->
+                  <label class="switch" @click.prevent="confirmToggle(index)">
+                    <input type="checkbox" :checked="equipment.visible" readonly>
+                    <span class="slider round"></span>
+                  </label>
+                  <!-- แสดงสถานะ -->
+                  <span style="margin-left: 8px;">
+                    <span v-if="equipment.visible" style="color: green;">เปิด</span>
+                    <span v-else style="color: gray;">ปิด</span>
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div style="margin-left: auto; display: flex; gap: 1.5rem; align-items: center;">
+              <button class="edit-btn" @click="editEquipment(index)">Edit</button>
+            </div>
+          </div>
+
+        </div>
+      </main>
+
+      <!-- Footer -->
+      <footer class="foot">
+        <div class="footer-left">
+          <p>
+            Sport Complex – Mae Fah Luang University |
+            Tel. 0-5391-7821 | Facebook:
+            <a href="https://www.facebook.com/mfusportcomplex" target="_blank">MFU Sports Complex Center</a> |
+            Email: <a href="mailto:sport-complex@mfu.ac.th">sport-complex@mfu.ac.th</a>
+          </p>
+        </div>
+      </footer>
+    </div>
+  </div>
+</template>
+
+<script>
+import Swal from 'sweetalert2';
+import axios from 'axios';
+const API_BASE = import.meta.env.VITE_API_BASE
+
+export default {
+  data() {
+    return {
+      isSidebarClosed: false,
+      equipments: [],
+      showNotifications: false,
+      notifications: [],
+      unreadCount: 0,
+      lastCheckedIds: new Set(),
+      polling: null,
+    };
+  },
+  methods: {
+    toggleSidebar() {
+      this.isSidebarClosed = !this.isSidebarClosed;
+    },
+
+    // ===== ฟังก์ชันกระดิ่ง =====
+    toggleNotifications() {
+      this.showNotifications = !this.showNotifications;
+      if (this.showNotifications) this.unreadCount = 0;
+    },
+    closeNotifications() {
+      this.showNotifications = false;
+    },
+    handleClickOutside(event) {
+      const notifDropdown = document.querySelector('.notification-dropdown');
+      const notifBtn = document.querySelector('.notification-btn');
+      if (
+        notifDropdown &&
+        !notifDropdown.contains(event.target) &&
+        notifBtn &&
+        !notifBtn.contains(event.target)
+      ) {
+        this.closeNotifications();
+      }
+    },
+    async fetchNotifications() {
+      try {
+        // ดึงรายการ pending ทั้งสนามและอุปกรณ์
+        const res = await axios.get(`${API_BASE}/api/history/approve_field`);
+        const data = Array.isArray(res.data) ? res.data : [];
+
+        const pendings = data.filter(item =>
+          item.status === 'pending' &&
+          (item.type === 'field' || item.type === 'equipment') &&
+          !this.lastCheckedIds.has(item._id?.$oid || item._id)
+        );
+
+        if (pendings.length) {
+          const newMessages = pendings.map(item => {
+            if (item.type === 'field') {
+              return {
+                id: item._id?.$oid || item._id,
+                message: `สนาม '${item.name}' กำลังรอการอนุมัติ`
+              };
+            } else if (item.type === 'equipment') {
+              return {
+                id: item._id?.$oid || item._id,
+                message: `อุปกรณ์ '${item.name}' กำลังรอการอนุมัติ`
+              };
+            }
+          });
+
+          this.notifications = [...this.notifications, ...newMessages];
+          pendings.forEach(item => this.lastCheckedIds.add(item._id?.$oid || item._id));
+          this.unreadCount = this.notifications.length;
+        }
+      } catch (err) {
+        // ไม่ต้องแจ้ง error
+      }
+    },
+    async confirmToggle(index) {
+      const result = await Swal.fire({
+        title: 'คุณต้องการเปลี่ยนสถานะการแสดงผล?',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'ใช่',
+        cancelButtonText: 'ยกเลิก'
+      });
+      if (result.isConfirmed) {
+        this.equipments[index].visible = !this.equipments[index].visible;
+        // อัปเดตไป backend ด้วย ถ้าต้องการ
+        try {
+          const id = this.equipments[index]._id;
+          await axios.patch(`${API_BASE}/api/equipments/${id}`, {
+            visible: this.equipments[index].visible
+          });
+        } catch (e) {
+          Swal.fire('ผิดพลาด', 'อัปเดตสถานะล้มเหลว', 'error');
+        }
+      }
+    },
+    async addEquipment() {
+      const { value: formValues } = await Swal.fire({
+        title: 'เพิ่มอุปกรณ์',
+        html: `
+          <input type="text" id="name" class="swal2-input" placeholder="ชื่ออุปกรณ์">
+          <input type="number" id="quantity" class="swal2-input" placeholder="จำนวน" min="0">
+          <input type="file" id="image" class="swal2-file">
+          <select id="visible" class="swal2-select">
+            <option value="true">เปิด</option>
+            <option value="false">ปิด</option>
+          </select>
+        `,
+        focusConfirm: false,
+        showCancelButton: true,
+        confirmButtonText: 'เพิ่ม',
+        cancelButtonText: 'ยกเลิก',
+        preConfirm: async () => {
+          const name = document.getElementById('name').value.trim();
+          const quantity = document.getElementById('quantity').value;
+          const fileInput = document.getElementById('image');
+          const visible = document.getElementById('visible').value === 'true';
+
+          if (!name || quantity === '' || parseInt(quantity) < 0) {
+            Swal.showValidationMessage('กรุณากรอกข้อมูลให้ครบ และจำนวนต้องไม่ติดลบ');
+            return false;
+          }
+          if (!fileInput.files[0]) {
+            Swal.showValidationMessage('กรุณาเลือกรูปภาพ');
+            return false;
+          }
+          // แปลงเป็น base64
+          const toBase64 = file => new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = error => reject(error);
+          });
+          const imageBase64 = await toBase64(fileInput.files[0]);
+
+          return {
+            name,
+            quantity: parseInt(quantity),
+            image: imageBase64,
+            visible
+          };
+        }
+      });
+
+      if (formValues) {
+        try {
+          const res = await axios.post(`${API_BASE}/api/equipments`, formValues);
+          if (res.data.success) {
+            this.equipments.push(res.data.data);
+            Swal.fire('เพิ่มสำเร็จ!', '', 'success');
+          }
+        } catch (err) {
+          Swal.fire('ผิดพลาด!', err.response?.data?.message || err.message, 'error');
+        }
+      }
+    },
+    async editEquipment(index) {
+      const equipment = this.equipments[index];
+      const result = await Swal.fire({
+        title: 'แก้ไขอุปกรณ์',
+        html: `
+          <input type="text" id="name" class="swal2-input" placeholder="ชื่ออุปกรณ์" value="${equipment.name}">
+          <input type="number" id="quantity" class="swal2-input" placeholder="จำนวน" min="0" value="${equipment.quantity}">
+          <input type="file" id="image" class="swal2-file">
+          <div style="padding: 0.5rem;">
+            <label for="visible" style="display: block; margin-bottom: 0.5rem;">สถานะแสดงผล:</label>
+            <select id="visible" class="swal2-select" style="text-align: center; width: 50px; padding: 0.5rem; border: 1px solid #ccc; border-radius: 4px;">
+              <option value="true" ${equipment.visible ? 'selected' : ''}>เปิด</option>
+              <option value="false" ${!equipment.visible ? 'selected' : ''}>ปิด</option>
+            </select>
+          </div>
+        `,
+        showCancelButton: true,
+        showDenyButton: true,
+        confirmButtonText: 'บันทึก',
+        denyButtonText: 'ลบ',
+        cancelButtonText: 'ยกเลิก',
+        preConfirm: async () => {
+          const nameVal = document.getElementById('name').value;
+          const quantityVal = document.getElementById('quantity').value;
+          const fileInput = document.getElementById('image');
+          const visibleVal = document.getElementById('visible').value === 'true';
+
+          if (nameVal.trim() === '' || quantityVal === '' || parseInt(quantityVal) < 0) {
+            Swal.showValidationMessage('กรุณากรอกข้อมูลให้ครบ และจำนวนต้องไม่ติดลบ');
+            return false;
+          }
+          let imageToSave = equipment.image;
+          if (fileInput.files[0]) {
+            const toBase64 = file => new Promise((resolve, reject) => {
+              const reader = new FileReader();
+              reader.readAsDataURL(file);
+              reader.onload = () => resolve(reader.result);
+              reader.onerror = error => reject(error);
+            });
+            imageToSave = await toBase64(fileInput.files[0]);
+          }
+
+          return {
+            name: nameVal,
+            quantity: parseInt(quantityVal),
+            image: imageToSave,
+            visible: visibleVal
+          };
+        }
+      });
+
+      if (result.isConfirmed && result.value) {
+        // PATCH ไป backend
+        try {
+          const id = equipment._id;
+          const res = await axios.patch(`${API_BASE}/api/equipments/${id}`, result.value);
+          if (res.data.success) {
+            this.equipments[index] = res.data.data;
+            Swal.fire('แก้ไขสำเร็จ!', '', 'success');
+          }
+        } catch (err) {
+          Swal.fire('ผิดพลาด!', err.response?.data?.message || err.message, 'error');
+        }
+      }
+
+      if (result.isDenied) {
+        // DELETE ไป backend
+        try {
+          const id = equipment._id;
+          await axios.delete(`${API_BASE}/api/equipments/${id}`);
+          this.equipments.splice(index, 1);
+          Swal.fire('ลบแล้ว!', '', 'success');
+        } catch (err) {
+          Swal.fire('ผิดพลาด!', err.response?.data?.message || err.message, 'error');
+        }
+      }
+    }
+  },
+  async mounted() {
+    try {
+      const res = await axios.get(`${API_BASE}/api/equipments`);
+      this.equipments = res.data;
+    } catch (e) {
+      console.error(e);
+      this.equipments = [];
+    }
+
+    await this.fetchNotifications();
+    this.polling = setInterval(this.fetchNotifications, 30000);
+
+    document.addEventListener('mousedown', this.handleClickOutside);
+  },
+  beforeUnmount() {
+    clearInterval(this.polling);
+    document.removeEventListener('mousedown', this.handleClickOutside);
+  },
+};
+</script>
+
+
+
+
+<style scoped>
+.add-btn {
+  width: 60px;
+  height: 60px;
+  font-size: 24px;
+  background-color: #1e3a8a;
+  color: white;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  float: right;
+  margin-bottom: 1rem;
+}
+.card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.equipment-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  background: rgb(255, 255, 255);
+  padding: 1rem;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  gap: 5rem;
+}
+.equipment-info {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+.equipment-img {
+  width: 150px;
+  height: 180px;
+  object-fit: contain !important;
+  /* เดิม cover ให้เปลี่ยนเป็น contain */
+  background: #fff;
+  /* เพิ่มพื้นหลังขาว */
+  border-radius: 8px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+  display: block;
+}
+.equipment-name {
+  flex: 1;
+  padding: 0.5rem;
+  font-size: 1rem;
+  margin-right: 50rem;
+}
+.edit-btn {
+  background-color: #ff2424;
+  color: white;
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.content h2 {
+  text-align: center;
+  font-size: 1.8rem;
+  color: #1e3a8a;
+}
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 42px;
+  height: 24px;
+}
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+input:checked + .slider {
+  background-color: #4dff20;
+}
+input:checked + .slider::before {
+  transform: translateX(18px);
+}
+.title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+.card-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+.equipment-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+.equipment-name {
+  margin-right: 1rem;
+}
+
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 42px;
+  height: 24px;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #ccc;
+  transition: .4s;
+  border-radius: 24px;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: .4s;
+  border-radius: 50%;
+}
+
+input:checked+.slider {
+  background-color: #4dff20;
+}
+
+input:checked+.slider:before {
+  transform: translateX(18px);
+}
+</style>
+
+<style>
+@import '../css/style.css';
+</style>
