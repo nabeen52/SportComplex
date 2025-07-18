@@ -411,8 +411,6 @@ app.use(session({
 }));
 
 
-
-
 app.use(passport.initialize());
 app.use(passport.session());
 
@@ -673,42 +671,42 @@ app.post('/api/register', (req, res) => {
     res.send({ success: true, message: 'Register completed' });
 });
 
-app.get('/auth/callback', async (req, res) => {
-    const code = req.query.code;
-    if (!code) return res.status(400).send('No code provided');
-    try {
-        const tokenResponse = await axios.post('https://lamduan.mfu.ac.th/oauth/token', {
-            grant_type: 'authorization_code',
-            code,
-            redirect_uri: 'http://localhost:3000/auth/callback',
-            client_id: 'YOUR_CLIENT_ID',
-            client_secret: 'YOUR_CLIENT_SECRET'
-        }, {
-            headers: { 'Content-Type': 'application/json' }
-        });
-        const access_token = tokenResponse.data.access_token;
-        const userResponse = await axios.get('https://lamduan.mfu.ac.th/api/userinfo', {
-            headers: { Authorization: `Bearer ${access_token}` }
-        });
-        const { email, name, student_id } = userResponse.data;
-        let user = await User.findOne({ email });
-        if (!user) {
-            user = new User({ email, name, user_id: student_id, role: 'user' });
-            await user.save();
-        }
-        res.json({
-            success: true,
-            user: {
-                name: user.name,
-                email: user.email,
-                user_id: user.user_id,
-                role: user.role
-            }
-        });
-    } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
-    }
-});
+// app.get('/auth/callback', async (req, res) => {
+//     const code = req.query.code;
+//     if (!code) return res.status(400).send('No code provided');
+//     try {
+//         const tokenResponse = await axios.post('https://lamduan.mfu.ac.th/oauth/token', {
+//             grant_type: 'authorization_code',
+//             code,
+//             redirect_uri: 'http://localhost:3000/auth/callback',
+//             client_id: 'YOUR_CLIENT_ID',
+//             client_secret: 'YOUR_CLIENT_SECRET'
+//         }, {
+//             headers: { 'Content-Type': 'application/json' }
+//         });
+//         const access_token = tokenResponse.data.access_token;
+//         const userResponse = await axios.get('https://lamduan.mfu.ac.th/api/userinfo', {
+//             headers: { Authorization: `Bearer ${access_token}` }
+//         });
+//         const { email, name, student_id } = userResponse.data;
+//         let user = await User.findOne({ email });
+//         if (!user) {
+//             user = new User({ email, name, user_id: student_id, role: 'user' });
+//             await user.save();
+//         }
+//         res.json({
+//             success: true,
+//             user: {
+//                 name: user.name,
+//                 email: user.email,
+//                 user_id: user.user_id,
+//                 role: user.role
+//             }
+//         });
+//     } catch (err) {
+//         res.status(500).json({ success: false, message: err.message });
+//     }
+// });
 
 
 // app.post('/api/login', async (req, res) => {
@@ -1457,7 +1455,7 @@ app.get('/api/equipments/return-pending', async (req, res) => {
         res.status(500).send({ message: err.message });
     }
 });
- 
+
 
 
 
@@ -1948,7 +1946,7 @@ app.delete('/api/announcement', async (req, res) => {
 // ==================== Booking Equipment (form data) ====================
 app.post('/api/booking_equipment', async (req, res) => {
     try {
-        
+
         const data = req.body;
         const booking = new BookingEquipment({
             ...data,

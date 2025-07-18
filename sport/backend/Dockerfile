@@ -1,5 +1,4 @@
-# backend/Dockerfile
-FROM node:20
+FROM node:20   
 
 WORKDIR /app
 
@@ -8,6 +7,8 @@ RUN npm install
 
 COPY . .
 
-EXPOSE 3000
+# เปลี่ยนพอร์ตตามที่ต้องการ (ควรตั้ง ENV PORT=8020 ใน .env หรือ start script)
+EXPOSE 8020
 
 CMD ["node", "app.js"]
+
