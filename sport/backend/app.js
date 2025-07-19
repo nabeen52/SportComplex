@@ -1,4 +1,5 @@
 require('dotenv').config();
+const fs = require('fs');
 
 const connectDB = require('./db'); // << ต้องมี!
 connectDB(); // << ต้องเรียกแค่ที่เดียว!
@@ -375,7 +376,10 @@ const allowedOrigins = [
     'http://localhost:5173',
     'http://localhost:8010',
     'http://localhost:3000',
-    'https://reserv-scc.mfu.ac.th'
+    'https://reserv-scc.mfu.ac.th',
+    'https://reserv-scc.mfu.ac.th/',
+    'http://reserv-scc.mfu.ac.th:8010',    // <--- เพิ่มอันนี้
+    'https://reserv-scc.mfu.ac.th:8010'    // <--- และอันนี้
 ];
 app.use(cors({
     origin: function (origin, callback) {
@@ -396,19 +400,32 @@ app.use(express.urlencoded({ limit: '20mb', extended: true }));
 //login oauth
 
 
-
 app.use(session({
     secret: process.env.SESSION_SECRET || 'YOUR_SECRET',
     resave: false,
     saveUninitialized: false,
     cookie: {
-        secure: process.env.NODE_ENV === 'production',         // true = require HTTPS (production)
-        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',  // 'none' = cross-site (prod), 'lax' = dev
+        secure: process.env.NODE_ENV === 'production',      // true เฉพาะ prod (https)
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // none เฉพาะ prod
         httpOnly: true,
         path: '/',
-        // domain: 'reserv-scc.mfu.ac.th'   // เปิดถ้าต้องการ lock domain (แนะนำกรณี deploy จริง)
+        domain: process.env.NODE_ENV === 'production' ? '.mfu.ac.th' : undefined // ใส่ให้ตรง domain จริง
     }
 }));
+
+
+// app.use(session({
+//     secret: process.env.SESSION_SECRET || 'YOUR_SECRET',
+//     resave: false,
+//     saveUninitialized: false,
+//     cookie: {
+//         secure: process.env.NODE_ENV === 'production',         // true = require HTTPS (production)
+//         sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',  // 'none' = cross-site (prod), 'lax' = dev
+//         httpOnly: true,
+//         path: '/',
+//         // domain: 'reserv-scc.mfu.ac.th'   // เปิดถ้าต้องการ lock domain (แนะนำกรณี deploy จริง)
+//     }
+// }));
 
 
 app.use(passport.initialize());
@@ -565,14 +582,28 @@ app.get('/auth/google/callback',
 
 
 
+// app.get('/api/me', (req, res) => {
+//     if (req.user) {
+//         res.json({
+//             loggedIn: true,
+//             user: req.user
+//         });
+//     } else {
+//         res.status(401).json({ loggedIn: false });
+//     }
+// });
+
 app.get('/api/me', (req, res) => {
-    if (req.user) {
-        res.json({
-            loggedIn: true,
-            user: req.user
-        });
-    } else {
-        res.status(401).json({ loggedIn: false });
+    console.log("REQ USER:", req.user);
+    try {
+        if (req.user) {
+            res.json({ loggedIn: true, user: req.user });
+        } else {
+            res.status(401).json({ loggedIn: false });
+        }
+    } catch (e) {
+        console.error(e);
+        res.status(500).send(e.message || "Unknown error");
     }
 });
 
@@ -2166,7 +2197,7 @@ app.get('/api/upload_file', async (req, res) => {
     }
 });
 
-// Download base64 file by id
+
 app.get('/api/uploadfile/:id', async (req, res) => {
     const file = await UploadFile.findById(req.params.id);
     if (!file) return res.status(404).send('File not found');
@@ -2179,6 +2210,24 @@ app.get('/api/uploadfile/:id', async (req, res) => {
     res.set('Content-Disposition', `attachment; filename="${file.fileName}"`);
     res.send(buffer);
 });
+
+
+
+
+
+// // Download base64 file by id
+// app.get('/api/uploadfile/:id', async (req, res) => {
+//     const file = await UploadFile.findById(req.params.id);
+//     if (!file) return res.status(404).send('File not found');
+//     let base64Data = file.fileData;
+//     if (base64Data.startsWith('data:')) {
+//         base64Data = base64Data.split(',')[1];
+//     }
+//     const buffer = Buffer.from(base64Data, 'base64');
+//     res.set('Content-Type', file.mimetype || 'application/octet-stream');
+//     res.set('Content-Disposition', `attachment; filename="${file.fileName}"`);
+//     res.send(buffer);
+// });
 
 
 
@@ -2483,18 +2532,19 @@ app.get('/api/history/:id/file/:idx', async (req, res) => {
 
 
 
-// GET: ดาวน์โหลดไฟล์ base64 จาก UploadFile collection
-app.get('/api/uploadfile/:id', async (req, res) => {
-    try {
-        const file = await UploadFile.findById(req.params.id);
-        if (!file) return res.status(404).send('File not found');
-        res.set('Content-Type', file.mimetype || 'application/octet-stream');
-        res.set('Content-Disposition', `attachment; filename="${file.fileName}"`);
-        res.send(file.fileData);
-    } catch (e) {
-        res.status(500).send('Download error');
-    }
-});
+// // GET: ดาวน์โหลดไฟล์ base64 จาก UploadFile collection
+// app.get('/api/uploadfile/:id', async (req, res) => {
+//     try {
+//         const file = await UploadFile.findById(req.params.id);
+//         if (!file) return res.status(404).send('File not found');
+//         res.set('Content-Type', file.mimetype || 'application/octet-stream');
+//         res.set('Content-Disposition', `attachment; filename="${file.fileName}"`);
+//         res.send(file.fileData);
+//     } catch (e) {
+//         res.status(500).send('Download error');
+//     }
+// });
+
 
 app.post('/api/booking_field_upload', bookingFieldUpload.array('files'), async (req, res) => {
     try {
