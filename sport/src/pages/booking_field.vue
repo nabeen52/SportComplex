@@ -108,6 +108,7 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 const API_BASE = import.meta.env.VITE_API_BASE
+// const API_BASE = "http://localhost:8020"
 
 // ตัวแปร Reactive
 const showAnnouncementBar = ref(false)

@@ -42,8 +42,6 @@ const transporter = nodemailer.createTransport({
     }
 });
 
-
-
 // ฟังก์ชันสำหรับส่งอีเมล
 // ฟังก์ชันส่งอีเมล
 async function sendApproveEmail({ to, name, equipment, quantity }) {

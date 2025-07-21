@@ -138,18 +138,10 @@ export default {
     }
   },
   async mounted() {
-    try {
-      const { data } = await axios.get('/api/fields');
-      this.fields = data.map(f => ({
-        ...f,
-        visible: f.visible !== undefined ? f.visible : true,
-        hasZone: f.hasZone !== undefined ? f.hasZone : false,
-        zones: f.zones || [],
-        showZones: false,
-      }));
-    } catch (error) {
-      console.error('Error loading fields:', error);
-    }
+    console.log('API_BASE', API_BASE)  // ตรวจสอบค่า API_BASE
+
+    await this.loadFields()
+
     await this.fetchNotifications();
     this.polling = setInterval(this.fetchNotifications, 30000);
 
@@ -209,10 +201,12 @@ export default {
           pendings.forEach(item => this.lastCheckedIds.add(item._id?.$oid || item._id))
           this.unreadCount = this.notifications.length
         }
-      } catch (err) { /* error เงียบได้ */ }
+      } catch (err) {
+        // console.error('Error fetching notifications:', err)
+      }
     },
 
-    // ===== Field & Zone logic (ไม่ถูกย่อ) =====
+    // ===== Field & Zone logic =====
     getImageUrl(img) {
       if (!img) return '/img/default.png'
       if (img.startsWith('data:image/')) return img
@@ -241,7 +235,7 @@ export default {
 
       if (result.isConfirmed) {
         try {
-          await axios.patch(`/api/fields/${field._id}`, { visible: newStatus });
+          await axios.patch(`${API_BASE}/api/fields/${field._id}`, { visible: newStatus });
           this.fields[fIndex].visible = newStatus;
           Swal.fire({
             title: 'สำเร็จ!',
@@ -263,16 +257,23 @@ export default {
 
     async loadFields() {
       try {
-        const { data } = await axios.get('/api/fields')
-        this.fields = (data || []).map(f => ({
+        const res = await axios.get(`${API_BASE}/api/fields`);
+        this.fields = (res.data || []).map(f => ({
           ...f,
           visible: f.visible !== undefined ? f.visible : true,
           hasZone: f.hasZone !== undefined ? f.hasZone : false,
-          zones: f.zones || [],
-          showZones: false
-        }))
-      } catch (e) {
-        this.fields = []
+          zones: (f.zones || []).map(z => ({
+            ...z,
+            image: this.getImageUrl(z.image),
+            active: z.active !== undefined ? z.active : true,
+          })),
+          image: this.getImageUrl(f.image),
+          showZones: false,
+        }));
+        console.log('Loaded fields:', this.fields);
+      } catch (err) {
+        console.error('Error loading fields:', err);
+        this.fields = [];
       }
     },
 
@@ -340,7 +341,7 @@ export default {
       });
       if (form) {
         try {
-          await axios.post('/api/fields', form);
+          await axios.post(`${API_BASE}/api/fields`, form);
           await this.loadFields();
           Swal.fire({ title: 'สำเร็จ!', text: 'เพิ่มสนามเรียบร้อยแล้ว', icon: 'success', customClass: { popup: 'custom-swal-popup' } });
         } catch (error) {
@@ -372,7 +373,7 @@ export default {
         }
       })
       if (result.isConfirmed && result.value) {
-        await axios.patch(`/api/fields/${field._id}`, result.value)
+        await axios.patch(`${API_BASE}/api/fields/${field._id}`, result.value)
         await this.loadFields()
         Swal.fire({ title: 'สำเร็จ!', text: 'บันทึกข้อมูลเรียบร้อยแล้ว', icon: 'success', customClass: { popup: 'custom-swal-popup' } })
       }
@@ -383,7 +384,7 @@ export default {
           customClass: { popup: 'custom-swal-popup', confirmButton: 'custom-confirm-btn danger', cancelButton: 'custom-cancel-btn' }
         })
         if (confirmDelete.isConfirmed) {
-          await axios.delete(`/api/fields/${field._id}`)
+          await axios.delete(`${API_BASE}/api/fields/${field._id}`)
           await this.loadFields()
           Swal.fire({ title: 'ลบแล้ว!', text: 'ลบสนามเรียบร้อยแล้ว', icon: 'success', customClass: { popup: 'custom-swal-popup' } })
         }
@@ -426,7 +427,7 @@ export default {
         }
       })
       if (form) {
-        await axios.patch(`/api/fields/${field._id}`, { zones: [...field.zones, form], hasZone: true })
+        await axios.patch(`${API_BASE}/api/fields/${field._id}`, { zones: [...field.zones, form], hasZone: true })
         await this.loadFields()
         Swal.fire({ title: 'สำเร็จ!', text: 'เพิ่มโซนเรียบร้อยแล้ว', icon: 'success', customClass: { popup: 'custom-swal-popup' } })
       }
@@ -474,7 +475,7 @@ export default {
       if (result.isConfirmed && result.value) {
         const zones = [...field.zones]
         zones[zIndex] = result.value
-        await axios.patch(`/api/fields/${field._id}`, { zones })
+        await axios.patch(`${API_BASE}/api/fields/${field._id}`, { zones })
         await this.loadFields()
         Swal.fire({ title: 'สำเร็จ!', text: 'บันทึกข้อมูลเรียบร้อยแล้ว', icon: 'success', customClass: { popup: 'custom-swal-popup' } })
       }
@@ -486,7 +487,7 @@ export default {
         })
         if (confirmDelete.isConfirmed) {
           const zones = field.zones.filter((z, i) => i !== zIndex)
-          await axios.patch(`/api/fields/${field._id}`, { zones })
+          await axios.patch(`${API_BASE}/api/fields/${field._id}`, { zones })
           await this.loadFields()
           Swal.fire({ title: 'ลบแล้ว!', text: 'ลบโซนเรียบร้อยแล้ว', icon: 'success', customClass: { popup: 'custom-swal-popup' } })
         }
@@ -512,13 +513,15 @@ export default {
       if (result.isConfirmed) {
         zones[zoneIndex].active = !current
         zones[zoneIndex].status = zones[zoneIndex].active ? 'เปิด' : 'ปิด'
-        await axios.patch(`/api/fields/${field._id}`, { zones })
+        await axios.patch(`${API_BASE}/api/fields/${field._id}`, { zones })
         await this.loadFields()
       }
     }
   }
 }
 </script>
+
+
 
 <style scoped>
 /* ----- Main layout/field list styles (เหมือนเดิม) ----- */
