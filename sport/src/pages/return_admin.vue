@@ -35,6 +35,11 @@
         </router-link>
       </nav>
     </aside>
+<div
+  v-if="isMobile && !isSidebarClosed"
+  class="sidebar-overlay"
+  @click="toggleSidebar"
+></div>
 
     <div class="main">
       <header class="topbar">
@@ -64,11 +69,26 @@
             v-for="(group, idx) in equipmentGroups"
             :key="group.booking_id || 'noid_' + idx"
           >
-            <div class="hist-row" style="font-weight:600;">
-              <span class="item-name">รายการอุปกรณ์ </span>
-              <span class="item-amount"></span>
-              <button class="return-btn" @click="returnGroup(group)">Return</button>
-            </div>
+            <!-- Mobile: 2 ช่อง (ชื่อ|ปุ่ม) -->
+<div 
+  class="hist-row hist-row-mobile" 
+  style="font-weight:600;" 
+  v-if="isMobile"
+>
+  <span class="item-name">รายการอุปกรณ์</span>
+  <button class="return-btn" @click="returnGroup(group)">Return</button>
+</div>
+
+<!-- Desktop: 3 ช่อง (ชื่อ|ช่องว่าง|ปุ่ม) -->
+<div 
+  class="hist-row hist-row-desktop" 
+  style="font-weight:600;" 
+  v-else
+>
+  <span class="item-name">รายการอุปกรณ์</span>
+  <span class="item-amount"></span>
+  <button class="return-btn" @click="returnGroup(group)">Return</button>
+</div>
             <div
               class="hist-row"
               v-for="(item, i) in group.items"
@@ -115,6 +135,7 @@ export default {
       unreadCount: 0,
       lastCheckedIds: new Set(),
       polling: null,
+      isMobile: window.innerWidth <= 600,
     }
   },
   computed: {
@@ -135,10 +156,13 @@ export default {
     this.polling = setInterval(this.fetchNotifications, 30000);
     // เพิ่ม event listener เพื่อปิดแจ้งเตือนเมื่อคลิกข้างนอก dropdown
     document.addEventListener('mousedown', this.handleClickOutside);
+     window.addEventListener('resize', this.handleResize);
+  this.handleResize();
   },
   beforeUnmount() {
     clearInterval(this.polling);
     document.removeEventListener('mousedown', this.handleClickOutside);
+     window.removeEventListener('resize', this.handleResize);
   },
   methods: {
     toggleSidebar() {
@@ -148,6 +172,10 @@ export default {
       this.showNotifications = !this.showNotifications;
       if (this.showNotifications) this.unreadCount = 0;
     },
+     handleResize() {
+    this.isMobile = window.innerWidth <= 600;
+    if (!this.isMobile) this.isSidebarClosed = false;
+  },
     closeNotifications() {
       this.showNotifications = false;
     },
@@ -367,6 +395,9 @@ export default {
   align-items: center;
   gap: 1rem;
 }
+.hist-row-desktop { grid-template-columns: 200px 1fr 80px; gap: 1rem; }
+.hist-row-mobile { grid-template-columns: 1fr auto; gap: 0.6rem; }
+
 .item-name {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -396,6 +427,60 @@ export default {
 .return-btn:hover{
   background-color: #178129;
 }
+@media (max-width: 600px) {
+  .histbody {
+    padding: 14px 0 0 0 !important;
+    width: 100vw;
+    min-width: unset;
+    overflow-x: auto !important;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .hist-grid {
+    min-width: 320px;
+    width: 95vw;
+    max-width: 440px;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    align-items: center;
+  }
+  .hist-card {
+    min-width: 95vw;
+    max-width: 440px;
+    margin: 0 auto;
+    box-sizing: border-box;
+  }
+  .hist-row {
+    display: grid !important;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    min-width: 0 !important;
+    width: 100% !important;
+    gap: 0.6rem;
+    flex-wrap: unset !important;
+    overflow-x: unset !important;
+  }
+  .item-name {
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+.sidebar-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.16);
+  z-index: 1100;
+}
+.sidebar {
+  z-index: 1200;
+}
+
 </style>
 
 <style>

@@ -48,7 +48,10 @@
 
 
 
-          <router-link to="/cart"><i class="pi pi-shopping-cart"></i></router-link>
+         <router-link to="/cart" class="cart-link">
+            <i class="pi pi-shopping-cart"></i>
+            <span v-if="products.length > 0" class="badge">{{ products.length }}</span>
+          </router-link>
           <router-link to="/profile"><i class="pi pi-user"></i></router-link>
         </div>
       </header>
@@ -104,10 +107,11 @@ export default {
       equipmentImage: '', // รูปอุปกรณ์
       defaultImage: '/img/basketball.jpg',
       showNotifications: false,
-    notifications: [],
-    unreadCount: 0,
-    userId: localStorage.getItem('user_id') || '',
-    lastCheckedIds: new Set()
+      notifications: [],
+      unreadCount: 0,
+      userId: localStorage.getItem('user_id') || '',
+      lastCheckedIds: new Set(),
+       products: [],
     };
   },
   computed: {
@@ -154,6 +158,18 @@ export default {
   }
 },
 
+ async loadCart() {
+    if (!this.userId) {
+      this.products = []
+      return
+    }
+    try {
+      const res = await axios.get(`${API_BASE}/api/cart?user_id=${this.userId}`)
+      this.products = res.data || []
+    } catch (err) {
+      this.products = []
+    }
+  },
 
     closeNotifications() {
     this.showNotifications = false
@@ -239,6 +255,7 @@ export default {
   this.polling = setInterval(this.fetchNotifications, 30000);
   // โหลดจำนวนที่เหลือจริงจากฐานข้อมูล
   await this.fetchRemaining();
+  await this.loadCart();
 }
 ,
 
@@ -294,7 +311,7 @@ export default {
 .field-image {
   width: 450px;
   height: 540px;
-  object-fit: contain !important;
+  object-fit: cover !important;
   /* จาก cover เป็น contain */
   background: #fff;
   /* พื้นหลังขาว */
@@ -359,7 +376,15 @@ export default {
   cursor: not-allowed;
   box-shadow: none;
 }
-
+.badge {
+  background-color: red;
+  color: white;
+  border-radius: 50%;
+  padding: 2px 6px;
+  font-size: 0.75rem;
+  vertical-align: top;
+  margin-left: 4px;
+}
 /* การเเจ้งเตือน   */
 .notification-dropdown {
   position: absolute;
@@ -445,16 +470,6 @@ export default {
   border-left: 4px solid #8b5cf6;
 } */
 
-@media (max-width: 540px) {
-  .notification-dropdown {
-    min-width: 220px;
-    max-width: 99vw;
-  }
-  .notification-dropdown li {
-    font-size: 0.99rem;
-    padding: 0.7em 0.7em;
-  }
-}
 .notification-item.approved {
   background: linear-gradient(90deg, #e9fbe7 85%, #cbffdb 100%);
   border-left: 4px solid #38b000;

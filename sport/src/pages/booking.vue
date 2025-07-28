@@ -41,7 +41,10 @@
               </ul>
             </div>
           </div>
-          <router-link to="/cart"><i class="pi pi-shopping-cart"></i></router-link>
+          <router-link to="/cart" class="cart-link">
+            <i class="pi pi-shopping-cart"></i>
+            <span v-if="products.length > 0" class="badge">{{ products.length }}</span>
+          </router-link>
           <router-link to="/profile"><i class="pi pi-user"></i></router-link>
         </div>
       </header>
@@ -130,7 +133,7 @@ const API_BASE = import.meta.env.VITE_API_BASE
 
 const route = useRoute()
 const router = useRouter()
-
+const products = ref([]) // เพิ่มบรรทัดนี้
 const isSidebarClosed = ref(false)
 const selectedZoneName = ref(null)
 const field = ref(null)
@@ -189,7 +192,15 @@ function toggleNotifications() {
     unreadCount.value = 0
   }
 }
-
+async function loadCart() {
+  if (!userId) return
+  try {
+    const res = await axios.get(`${API_BASE}/api/cart?user_id=${userId}`)
+    products.value = res.data
+  } catch (err) {
+    products.value = []
+  }
+}
 function closeNotifications() {
   showNotifications.value = false
 }
@@ -285,6 +296,9 @@ onMounted(async () => {
   }
   await fetchNotifications()
   setInterval(fetchNotifications, 30000)
+  
+  await loadCart()
+
 })
 </script>
 
@@ -315,7 +329,7 @@ onMounted(async () => {
   width: 100%;
   max-width: 800px;
   height: 480px;
-  object-fit: contain !important;
+  object-fit: cover !important;
   background: #fff;
   border-radius: 12px;
   margin-bottom: 20px;
@@ -402,7 +416,15 @@ onMounted(async () => {
   cursor: not-allowed !important;
   opacity: 0.7;
 }
-
+.badge {
+  background-color: red;
+  color: white;
+  border-radius: 50%;
+  padding: 2px 6px;
+  font-size: 0.75rem;
+  vertical-align: top;
+  margin-left: 4px;
+}
 /* ===== CSS แจ้งเตือนแบบ history ===== */
 .notification-dropdown {
   position: absolute;
@@ -498,20 +520,8 @@ onMounted(async () => {
 .notification-item {
   transition: background 0.3s, border-color 0.3s, color 0.3s;
 }
-@media (max-width: 540px) {
-  .notification-dropdown {
-    min-width: 220px;
-    max-width: 99vw;
-  }
-  .notification-dropdown li {
-    font-size: 0.99rem;
-    padding: 0.7em 0.7em;
-  }
-}
-.notification-backdrop {
-  position: fixed;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: transparent;
-  z-index: 1001; /* ต้องน้อยกว่า .notification-dropdown (1002) */
-}
+
+</style>
+<style>
+@import '../css/style.css';
 </style>

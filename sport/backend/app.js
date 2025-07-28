@@ -444,6 +444,49 @@ passport.deserializeUser(async (id, done) => {
 
 
 
+// passport.use(new GoogleStrategy({
+//     clientID: process.env.GOOGLE_CLIENT_ID,
+//     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+//     callbackURL: process.env.GOOGLE_CALLBACK_URL,
+// },
+//     async (accessToken, refreshToken, profile, done) => {
+//         try {
+//             const email = profile.emails[0].value;
+//             // บังคับให้ login ได้เฉพาะ email @mfu.ac.th เท่านั้น
+//             if (!email.endsWith('.mfu.ac.th')) {
+//                 // ถ้า email ไม่ตรง จะไม่ login ให้
+//                 return done(null, false, { message: 'อนุญาตเฉพาะอีเมล mfu.ac.th เท่านั้น' });
+//             }
+//             let user = await User.findOne({ email });
+//             // ดึง url รูปจาก Google profile
+//             let profilePicUrl = profile._json.picture || '';
+
+//             // ดาวน์โหลดและบันทึกรูป Google profile เป็นไฟล์ใน server (และได้ url กลับมา)
+//             let savedPicUrl = null;
+//             if (profilePicUrl && profile.id) {
+//                 savedPicUrl = await saveGoogleProfilePic(profilePicUrl, profile.id);
+//             }
+
+//             if (!user) {
+//                 user = new User({
+//                     email: email,
+//                     name: profile.displayName,
+//                     user_id: profile.id,
+//                     role: 'user',
+//                     picture: savedPicUrl || profilePicUrl
+//                 });
+//                 await user.save();
+//             } else {
+//                 user.picture = savedPicUrl || profilePicUrl;
+//                 await user.save();
+//             }
+//             return done(null, user);
+//         } catch (error) {
+//             return done(error, null);
+//         }
+//     }
+// ));
+
 passport.use(new GoogleStrategy({
     clientID: process.env.GOOGLE_CLIENT_ID,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
@@ -451,37 +494,51 @@ passport.use(new GoogleStrategy({
 },
     async (accessToken, refreshToken, profile, done) => {
         try {
-            const email = profile.emails[0].value;
-            // บังคับให้ login ได้เฉพาะ email @mfu.ac.th เท่านั้น
-            if (!email.endsWith('.mfu.ac.th')) {
-                // ถ้า email ไม่ตรง จะไม่ login ให้
-                return done(null, false, { message: 'อนุญาตเฉพาะอีเมล mfu.ac.th เท่านั้น' });
+            const email = profile.emails?.[0]?.value;
+
+            console.log("Google Email Login:", email);
+
+            // ✅ แก้ตรงนี้!
+            if (!(email.endsWith('@mfu.ac.th') || email.endsWith('@lamduan.mfu.ac.th'))) {
+                console.log("Reject email:", email);
+                return done(null, false, { message: 'อนุญาตเฉพาะอีเมล @mfu.ac.th หรือ @lamduan.mfu.ac.th เท่านั้น' });
             }
+            // === ส่วนที่เพิ่มเข้าไป ===
+            let user_id;
+            if (email.endsWith('@lamduan.mfu.ac.th')) {
+                user_id = email.split('@')[0]; // เลขไอดีหน้า @
+            } else {
+                user_id = profile.id; // Google ID เดิม
+            }
+
             let user = await User.findOne({ email });
+
             // ดึง url รูปจาก Google profile
             let profilePicUrl = profile._json.picture || '';
 
             // ดาวน์โหลดและบันทึกรูป Google profile เป็นไฟล์ใน server (และได้ url กลับมา)
             let savedPicUrl = null;
             if (profilePicUrl && profile.id) {
-                savedPicUrl = await saveGoogleProfilePic(profilePicUrl, profile.id);
+                savedPicUrl = await saveGoogleProfilePic(profilePicUrl, user_id);
             }
 
             if (!user) {
                 user = new User({
                     email: email,
                     name: profile.displayName,
-                    user_id: profile.id,
+                    user_id: user_id,  // << ใช้ user_id ที่ set แล้ว
                     role: 'user',
                     picture: savedPicUrl || profilePicUrl
                 });
                 await user.save();
             } else {
                 user.picture = savedPicUrl || profilePicUrl;
+                if (user.user_id !== user_id) user.user_id = user_id; // อัปเดตให้เสมอ
                 await user.save();
             }
             return done(null, user);
         } catch (error) {
+            console.error("Google OAuth error:", error);
             return done(error, null);
         }
     }
@@ -520,7 +577,15 @@ app.use('/api', (req, res, next) => {
 
 // ====== OAuth Routes ======
 
-app.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
+// app.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
+
+app.get('/auth/google',
+    passport.authenticate('google', {
+        scope: ['profile', 'email'],
+        prompt: 'select_account'  // <<< บังคับให้ Google ถามเลือกบัญชีใหม่ทุกครั้ง
+    })
+);
+
 
 
 app.post('/auth/login', async (req, res) => {
@@ -556,7 +621,7 @@ app.get('/auth/logout', (req, res) => {
     req.logout(() => {
         req.session.destroy(() => {
             // เปลี่ยน wreply= ให้เป็น url ที่กำหนดใน env
-            const ssoLogoutUrl = `https://authsso.mfu.ac.th/adfs/ls/?wa=wsignout1.0&wreply=${FRONTEND_URL}/login`;
+            const ssoLogoutUrl = `https://authsso.mfu.ac.th/adfs/ls/?wa=wsignout1.0&wreply=${encodeURIComponent(FRONTEND_URL + '/login?error=logout')}`;
             res.clearCookie('connect.sid');
             res.redirect(ssoLogoutUrl);
         });
@@ -572,10 +637,20 @@ app.get('/auth/logout-google', (req, res) => {
 });
 
 
+// app.get('/auth/google/callback',
+//     passport.authenticate('google', { failureRedirect: '/login', session: true }),
+//     (req, res) => {
+//         // เปลี่ยนให้ redirect ไปที่ url ที่กำหนดใน env
+//         res.redirect(`${FRONTEND_URL}/login-success`);
+//     }
+// );
+
 app.get('/auth/google/callback',
-    passport.authenticate('google', { failureRedirect: '/login-failed', session: true }),
+    passport.authenticate('google', {
+        failureRedirect: `${FRONTEND_URL}/login?error=not_mfu`,
+        session: true
+    }),
     (req, res) => {
-        // เปลี่ยนให้ redirect ไปที่ url ที่กำหนดใน env
         res.redirect(`${FRONTEND_URL}/login-success`);
     }
 );
@@ -755,27 +830,59 @@ app.post('/api/register', (req, res) => {
 // });
 
 
+// app.post('/api/login', async (req, res) => {
+//     try {
+//         const { username, password } = req.body;
+
+//         // บังคับให้ login ได้เฉพาะ email @mfu.ac.th เท่านั้น
+//         if (!(username.endsWith('@lamduan.mfu.ac.th') || username.endsWith('@mfu.ac.th'))) {
+ 
+//             return res.status(401).json({ success: false, message: 'กรุณาใช้ email ที่ลงท้ายด้วย @mfu.ac.th' });
+//         }
+
+//         // หา user จาก username
+//         const user = await User.findOne({ username });
+//         if (!user) return res.status(401).json({ success: false, message: "Username หรือ Password ไม่ถูกต้อง" });
+
+//         // ตรวจสอบ password กับ hash ที่อยู่ใน database
+//         const isMatch = await bcrypt.compare(password, user.password);
+//         if (!isMatch) return res.status(401).json({ success: false, message: "Username หรือ Password ไม่ถูกต้อง" });
+
+//         // สำเร็จ!
+//         res.json({
+//             success: true,
+//             token: "dummy-token", // หรือ JWT จริงก็ได้
+//             user_id: user.user_id,
+//             role: user.role,
+//             name: user.name
+//         });
+//     } catch (err) {
+//         res.status(500).json({ success: false, message: err.message });
+//     }
+// });
+
+
 app.post('/api/login', async (req, res) => {
     try {
-        const { username, password } = req.body;
+        let { username, password } = req.body;
+        username = username.trim();
+        const usernameLower = username.toLowerCase();
 
-        // บังคับให้ login ได้เฉพาะ email @mfu.ac.th เท่านั้น
-        if (!username.endsWith('.mfu.ac.th')) {
-            return res.status(401).json({ success: false, message: 'กรุณาใช้ email ที่ลงท้ายด้วย @mfu.ac.th' });
+        if (!(email.endsWith('@mfu.ac.th') || email.endsWith('@lamduan.mfu.ac.th'))) {
+            return done(null, false, { message: 'อนุญาตเฉพาะอีเมล @mfu.ac.th หรือ @lamduan.mfu.ac.th เท่านั้น' });
         }
 
-        // หา user จาก username
-        const user = await User.findOne({ username });
+
+        // หาก DB email มีปนเล็ก-ใหญ่ ใช้ $regex (ถ้าไม่ ปล่อยแบบเดิมก็ได้)
+        const user = await User.findOne({ username: { $regex: new RegExp('^' + username + '$', 'i') } });
         if (!user) return res.status(401).json({ success: false, message: "Username หรือ Password ไม่ถูกต้อง" });
 
-        // ตรวจสอบ password กับ hash ที่อยู่ใน database
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) return res.status(401).json({ success: false, message: "Username หรือ Password ไม่ถูกต้อง" });
 
-        // สำเร็จ!
         res.json({
             success: true,
-            token: "dummy-token", // หรือ JWT จริงก็ได้
+            token: "dummy-token",
             user_id: user.user_id,
             role: user.role,
             name: user.name
@@ -784,6 +891,7 @@ app.post('/api/login', async (req, res) => {
         res.status(500).json({ success: false, message: err.message });
     }
 });
+
 
 
 
@@ -1074,6 +1182,8 @@ app.post('/api/history', async (req, res) => {
                 agency: req.body.agency || '',
                 booking_id: req.body.booking_id || '',
                 date: req.body.date || new Date(),
+                proxyStudentName: req.body.proxyStudentName || '',
+                proxyStudentId: req.body.proxyStudentId || '',
             });
             await newHistory.save();
 
@@ -1250,7 +1360,9 @@ app.patch('/api/history/:id/return', async (req, res) => {
             attachment: oldRecord.attachment || null,
             fileName: oldRecord.fileName || null,
             fileType: oldRecord.fileType || null,
-            booking_id: oldRecord.booking_id || null  // เพิ่มบรรทัดนี้
+            booking_id: oldRecord.booking_id || null,  // เพิ่มบรรทัดนี้
+            since: oldRecord.since || '',
+            uptodate: oldRecord.uptodate || ''
         });
 
         await returnedRecord.save();
@@ -1278,6 +1390,7 @@ app.patch('/api/history/:id/return', async (req, res) => {
         res.status(500).send({ message: err.message });
     }
 });
+
 
 
 app.patch('/api/history/:id/request-return', async (req, res) => {
@@ -1515,7 +1628,18 @@ app.get('/api/equipments/pending', async (req, res) => {
 
 
 
-
+app.get('/api/equipments/approve-list', async (req, res) => {
+    try {
+        // คืนทั้ง pending, approved, disapproved, return-pending, returned
+        const items = await History.find({
+            type: 'equipment',
+            status: { $in: ['pending', 'approved', 'disapproved', 'return-pending', 'returned'] }
+        }).sort({ date: -1 });
+        res.send(items);
+    } catch (err) {
+        res.status(500).send({ message: err.message });
+    }
+});
 
 app.patch('/api/equipments/:id/status', async (req, res) => {
     try {
@@ -1753,15 +1877,45 @@ app.patch('/api/history/:id/approve_equipment', async (req, res) => {
         }
 
         // อัพเดตจำนวนอุปกรณ์
+        // สะสมจำนวน approve ของแต่ละอุปกรณ์ (รวมทุกอันใน booking_id เดียวกัน)
+        // แทนที่จะ push หลายรอบ ให้รวมจำนวนของแต่ละอุปกรณ์แล้ว push แค่รอบเดียว
+        const usageUpdateMap = {}; // { 'ชื่ออุปกรณ์': จำนวนที่ approve }
         for (const h of updatedList) {
             if (h && h.name && h.quantity) {
                 const equipName = (h.name || '').trim();
-                await Equipment.updateOne(
-                    { name: equipName },
-                    { $inc: { quantity: -Math.abs(h.quantity) } }
-                );
+                // ถ้ามีอยู่แล้วไม่ต้อง push object ใหม่ ให้รวมจำนวนแล้ว push object เดียว
+                usageUpdateMap[equipName] = (usageUpdateMap[equipName] || 0) + Math.abs(h.quantity);
             }
         }
+        for (const [equipName, usageQty] of Object.entries(usageUpdateMap)) {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = now.getMonth() + 1;
+
+            const equipment = await Equipment.findOne({ name: equipName });
+            if (equipment) {
+                equipment.usageByMonthYear = equipment.usageByMonthYear || [];
+                // ===== เช็คซ้ำก่อน push =====
+                const found = equipment.usageByMonthYear.find(
+                    (item) => item.year === year && item.month === month
+                );
+                if (found) {
+                    found.usage += usageQty;
+                } else {
+                    equipment.usageByMonthYear.push({
+                        year,
+                        month,
+                        usage: usageQty
+                    });
+                }
+                equipment.quantity -= usageQty;
+                equipment.usageCount = (equipment.usageCount || 0) + usageQty;
+
+                equipment.markModified('usageByMonthYear');
+                await equipment.save();
+            }
+        }
+
 
         // ======= ส่งอีเมลแจ้งเตือน (เวอร์ชันส่งฉบับเดียว) =======
         if (updatedList.length > 0) {
@@ -2053,7 +2207,7 @@ app.get('/api/booking_equipment_borrow', async (req, res) => {
 // ======================= BookingField CRUD ============================
 app.post('/api/booking_field', upload.array('files', 10), async (req, res) => {
     try {
-        // เก็บ array ไฟล์ที่อัปโหลดไว้
+        // -- เก็บไฟล์ที่ upload มา --
         let filesArr = [];
         if (req.files && req.files.length) {
             filesArr = req.files.map(file => ({
@@ -2065,10 +2219,10 @@ app.post('/api/booking_field', upload.array('files', 10), async (req, res) => {
             }));
         }
 
-        // ฟังก์ชันช่วย parse วันที่
+        // -- helper: แปลง string เป็น Date (หรือ null) --
         const parseDate = (v) => (v ? new Date(v) : null);
 
-        // เก็บข้อมูล booking
+        // -- เก็บข้อมูลจาก form (req.body) --
         const bookingData = {
             aw: req.body.aw,
             date: parseDate(req.body.date),
@@ -2092,23 +2246,26 @@ app.post('/api/booking_field', upload.array('files', 10), async (req, res) => {
             turnoff_lights: req.body.turnoff_lights,
             other: req.body.other,
             amphitheater: req.body.amphitheater,
-            need_equipment: req.body.need_equipment, // equipment
+            need_equipment: req.body.need_equipment,
             user_id: req.body.user_id,
             files: filesArr,
             no_receive: req.body.no_receive,
             date_receive: parseDate(req.body.date_receive),
             receiver: req.body.receiver,
-            uploadFiles: req.body.uploadFiles || [], // (ถ้ามีส่งมาด้วย)
-            // **เพิ่มสองอันนี้**
+            uploadFiles: req.body.uploadFiles || [],
             utilityRequest: req.body.utilityRequest,
             facilityRequest: req.body.facilityRequest,
-
+            proxyStudentName: req.body.proxyStudentName,   // <--- แก้ตรงนี้!
+            proxyStudentId: req.body.proxyStudentId,       // <--- แก้ตรงนี้!
         };
 
-        // สร้าง booking record
+        // -- debug log ถ้าอยากดู req.body ว่ามีอะไรส่งมา --
+        // console.log('REQ.BODY:', req.body);
+
+        // -- สร้าง booking ใหม่ใน DB --
         const booking = await BookingField.create(bookingData);
 
-        // เพิ่ม booking_id ให้เท่ากับ _id ของตัวเอง
+        // -- เพิ่ม booking_id ถ้ายังไม่มี --
         if (!booking.booking_id) {
             booking.booking_id = booking._id.toString();
             await booking.save();

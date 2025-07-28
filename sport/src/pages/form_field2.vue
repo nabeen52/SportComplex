@@ -4,7 +4,7 @@
     <aside class="sidebar" :class="{ closed: isSidebarClosed }">
       <div class="sidebar-header">
         <img src="/img/logo.png" alt="logo" class="logo" />
-        <p class="sidebar-title">ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง</p>
+        <p class="sidebar-title">Sport Complex MFU</p>
       </div>
       <nav class="nav-links">
         <router-link to="/" exact-active-class="active">
@@ -154,8 +154,6 @@ function handleNext() {
 </script>
 
 <style scoped>
-@import '../css/style.css';
-
 .headStepper {
   background-color: white;
   margin: 15px auto;
@@ -290,4 +288,8 @@ function handleNext() {
   padding: 0.5rem 1rem;
   cursor: pointer;
 }
+</style>
+
+<style>
+@import '../css/style.css';
 </style>

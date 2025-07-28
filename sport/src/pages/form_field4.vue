@@ -4,7 +4,7 @@
     <aside class="sidebar" :class="{ closed: isSidebarClosed }">
       <div class="sidebar-header">
         <img src="/img/logo.png" alt="logo" class="logo" />
-        <p class="sidebar-title">ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง</p>
+        <p class="sidebar-title">Sport Complex MFU</p>
       </div>
       <nav class="nav-links">
         <router-link to="/home_user" exact-active-class="active"><i class="pi pi-home"></i> Home</router-link>
@@ -14,35 +14,31 @@
       </nav>
     </aside>
 
+     <div v-if="!isSidebarClosed" class="sidebar-overlay" @click="toggleSidebar"></div>
+
     <div class="main">
       <header class="topbar">
         <button class="menu-toggle" @click="toggleSidebar">☰</button>
         <div class="topbar-actions">
           <div>
-            <div
-      v-if="showNotifications"
-      class="notification-backdrop"
-      @click="closeNotifications"
-    ></div>
+            <div v-if="showNotifications" class="notification-backdrop" @click="closeNotifications"></div>
             <button class="notification-btn" @click="toggleNotifications">
               <i class="pi pi-bell"></i>
               <span v-if="unreadCount > 0" class="badge">{{ unreadCount }}</span>
             </button>
             <div v-if="showNotifications" class="notification-dropdown">
-  <ul>
-    <li
-      v-for="(noti, idx) in notifications"
-      :key="noti.id || idx"
-      :class="['notification-item', noti.type || '', { unread: idx === 0 }]"
-    >
-      {{ noti.message }}
-    </li>
-    <li v-if="notifications.length === 0" class="no-noti">ไม่มีแจ้งเตือน</li>
-  </ul>
-</div>
-
+              <ul>
+                <li v-for="(noti, idx) in notifications" :key="noti.id || idx" :class="['notification-item', noti.type || '', { unread: idx === 0 }]">
+                  {{ noti.message }}
+                </li>
+                <li v-if="notifications.length === 0" class="no-noti">ไม่มีแจ้งเตือน</li>
+              </ul>
+            </div>
           </div>
-          <router-link to="/cart"><i class="pi pi-shopping-cart"></i></router-link>
+          <router-link to="/cart" class="cart-link">
+            <i class="pi pi-shopping-cart"></i>
+            <span v-if="products.length > 0" class="badge">{{ products.length }}</span>
+          </router-link>
           <router-link to="/profile"><i class="pi pi-user"></i></router-link>
         </div>
       </header>
@@ -51,12 +47,7 @@
       <div class="headStepper">
         <div class="stepper">
           <div v-for="(step, index) in steps" :key="index" class="step">
-            <div
-              class="circle"
-              :class="{ active: index === currentStep, completed: index < currentStep }"
-              style="cursor:not-allowed"
-              @click.stop
-            ></div>
+            <div class="circle" :class="{ active: index === currentStep, completed: index < currentStep }" style="cursor:not-allowed" @click.stop></div>
             <div class="label">{{ step }}</div>
             <div v-if="index < steps.length - 1" class="line" :class="{ filled: index < currentStep }"></div>
           </div>
@@ -65,10 +56,8 @@
 
       <div class="form-container">
         <h1 style="display: flex; justify-content: center;">ส่งคำขอสำเร็จ ✅</h1>
-        <button class="pdfmake-btn" @click="() => { console.log('info', info); exportPdf(info) }">ดาวน์โหลด PDF ฟอร์ม</button>
-
-        <br>
-        <br>
+        <button class="pdfmake-btn" @click="() => { exportPdf(info) }">ดาวน์โหลด PDF ฟอร์ม</button>
+        <br><br>
         <button id="btnNext" @click="handleNext">กลับหน้าแรก</button>
       </div>
     </div>
@@ -92,24 +81,19 @@ import { useRouter } from 'vue-router'
 import Swal from 'sweetalert2'
 import axios from 'axios'
 
-
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
-
-// (ถ้าจะใช้ภาษาไทย ต้อง import Sarabun font ที่ bundle มาแล้วใน public หรือ assets ตามตัวอย่างด้านล่าง)
 import '@/assets/fonts/Sarabun-Regular-normal.js'
 import '@/assets/fonts/Sarabun-Bold-normal.js'
 
-
 const API_BASE = import.meta.env.VITE_API_BASE
-// -------------- กระดิ่งแจ้งเตือน --------------
 const showNotifications = ref(false)
 const notifications = ref([])
+const products = ref([])
 const unreadCount = ref(0)
 const userId = localStorage.getItem('user_id') || ''
 const lastCheckedIds = new Set()
-
 
 function toggleNotifications() {
   showNotifications.value = !showNotifications.value
@@ -161,11 +145,23 @@ async function fetchNotifications() {
     // ไม่ต้อง alert
   }
 }
+
+async function loadCart() {
+  const userId = localStorage.getItem('user_id') || ''
+  if (!userId) return
+  try {
+    const res = await axios.get(`${API_BASE}/api/cart?user_id=${userId}`)
+    products.value = res.data
+  } catch (err) {
+    products.value = []
+  }
+}
+
 onMounted(() => {
   fetchNotifications()
   setInterval(fetchNotifications, 30000)
+  loadCart()
 })
-// ----------------------------------------------
 
 const router = useRouter()
 const info = ref({})
@@ -177,7 +173,6 @@ const stepRoutes = ['/form_field', '/form_field3', '/form_field4']
 function toggleSidebar() { isSidebarClosed.value = !isSidebarClosed.value }
 function canStepTo(idx) { return idx <= currentStep.value }
 function goStep(idx) {
-  // ฟังก์ชันนี้จะไม่มีทางถูกเรียก เพราะปิด @click ไว้หมดแล้ว
   if (!canStepTo(idx) || idx === currentStep.value) return
   router.push(stepRoutes[idx])
 }
@@ -185,10 +180,8 @@ function formatDateOnly(dateTime) {
   if (!dateTime) return '-'
   let dateObj
   if (typeof dateTime === 'string') {
-    // รองรับรูปแบบ ISO: 2024-07-05T00:00:00.000Z หรือ 2024-07-05
     const parts = dateTime.split('T')[0].split('-')
     if (parts.length === 3) {
-      // yyyy-mm-dd
       dateObj = new Date(parts[0], parts[1] - 1, parts[2])
     } else {
       dateObj = new Date(dateTime)
@@ -203,7 +196,6 @@ function formatDateOnly(dateTime) {
   return `${day}/${month}/${year}`
 }
 
-// ==== ดึง booking + ดึงชื่อผู้ขอ ====
 async function loadBookingInfo() {
   const bookingId = localStorage.getItem('bookingId')
   if (!bookingId) {
@@ -213,8 +205,7 @@ async function loadBookingInfo() {
   try {
     const res = await axios.get(`${API_BASE}/api/booking_field/${bookingId}`)
     info.value = res.data
-    info.value.type = 'field' // <---- เพิ่มบรรทัดนี้!
-    // <<< เพิ่มจุดนี้ >>>>
+    info.value.type = 'field'
     if (info.value.user_id) {
       try {
         const userRes = await axios.get(`${API_BASE}/api/user/${info.value.user_id}`)
@@ -226,7 +217,6 @@ async function loadBookingInfo() {
       info.value.requester = '-'
     }
 
-    // === แจ้งเตือนเหมือนเดิม ===
     await Swal.fire({
       title: 'ส่งคำขอสำเร็จ!',
       html: `
@@ -244,9 +234,7 @@ async function loadBookingInfo() {
   } catch (err) {
     Swal.fire('ดึงข้อมูลไม่สำเร็จ')
   }
-  
 }
-
 onMounted(loadBookingInfo)
 
 function handleNext() {
@@ -255,11 +243,9 @@ function handleNext() {
   localStorage.removeItem('equipment_upload_file')
   sessionStorage.clear()
 
-  // ==== ล้างไฟล์แนบให้หมด ====
   if (window._tempSelectedFiles) window._tempSelectedFiles = []
   sessionStorage.removeItem('form_field_save')
 
-  // เผื่อ input file ยังจำไฟล์เดิม
   setTimeout(() => {
     const fileInput = document.getElementById('fileUploadInput')
     if (fileInput) fileInput.value = ''
@@ -268,8 +254,8 @@ function handleNext() {
   router.push('/home_user')
 }
 
- async function exportPdf(item) {
-  // ฟังก์ชันช่วย format วันที่/เวลา
+// ------------------ PDF MULTI-PAGE -------------------
+async function exportPdf(item) {
   function formatDate(date) {
     if (!date) return '-';
     if (typeof date === 'string' && date.includes('T')) {
@@ -288,8 +274,24 @@ function handleNext() {
     if (!isNaN(t.getTime())) return t.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
     return time;
   }
+  // เช็คตำแหน่ง y และขึ้นหน้าใหม่
+  function checkY(doc, y, minY = 50, maxY = 780) {
+    if (y > maxY) {
+      doc.addPage();
+      return minY;
+    }
+    return y;
+  }
+  // วาดข้อความหลายบรรทัดและเลื่อน y อัตโนมัติ
+  function drawLines(doc, lines, x, y, lineHeight = 15, minY = 50, maxY = 780) {
+    for (const line of lines) {
+      y = checkY(doc, y, minY, maxY);
+      doc.text(line, x, y);
+      y += lineHeight;
+    }
+    return y;
+  }
 
-  // รองรับ field ชื่อ booking_field_id, booking_equipment_id, booking_id
   const mainBookingId = item.booking_field_id || item.booking_equipment_id || item.booking_id;
   const mainId = item.id || item._id;
 
@@ -331,58 +333,113 @@ function handleNext() {
     const doc = new jsPDF({ unit: 'pt', format: 'a4' });
     doc.setFont('Sarabun');
 
-    // ---------------- ฟอร์ม "field" -------------------
     if (item.type === 'field') {
       doc.setFont('Sarabun', 'bold');
       doc.setFontSize(17);
-      doc.text('แบบฟอร์มขออนุมัติใช้สถานที่ ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง', 80, 48);
+      doc.text('แบบฟอร์มขออนุมัติใช้สถานที่ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง', 80, 48);
+
       doc.setFont('Sarabun', 'normal');
       doc.setFontSize(11);
       doc.text('โทร 053-917820-1 | E-mail: sport-complex@mfu.ac.th', 180, 68);
+      doc.setFont('Sarabun', 'normal');
+doc.setFontSize(11);
 
-      doc.setFontSize(12);
-      doc.text(`ที่ อว. ${data.aw || '-'}`, 55, 96);
-      doc.text(`วันที่ ${formatDate(data.since) || '-'}`, 240, 96);
-      doc.text(`โทร ${data.tel || '-'}`, 425, 96);
+doc.setFont('Sarabun', 'bold');
+doc.setFontSize(12);
 
+doc.setFont('Sarabun', 'normal');
+doc.setFontSize(11);
+doc.text(`ที่ อว. ${data.aw || '-'}`, 30, 100);     // ← จาก 45 → 30
+doc.text(`วันที่ ${formatDate(data.date) || '-'}`, 230, 100);
+doc.text(`โทร ${data.tel || '-'}`, 430, 100);
+
+      doc.setFont('Sarabun', 'normal');
       doc.setFontSize(12);
       doc.text('เรื่อง  ขออนุมัติใช้สถานที่', 25, 121);
       doc.text('เรียน  ผู้อำนวยการศูนย์กีฬา', 25, 146);
 
       doc.setFontSize(12);
-      doc.text(`ด้วย ${data.agency || '-'}`, 55, 171);
-      doc.text(`จะดำเนินกิจกรรม / โครงการ ${data.name_activity || '-'}`, 25, 196);
-      doc.text(`เหตุผลในการขอใช้คือ ${data.reasons || '-'}`, 25, 221);
 
-      doc.text(`ในวันที่ ${formatDate(data.since) || '-'}`, 25, 246);
-      doc.text(`ถึงวันที่ ${formatDate(data.uptodate) || '-'}`, 175, 246);
-      doc.text(`ตั้งแต่เวลา ${formatTime(data.since_time) || '-'} น.`, 325, 246);
-      doc.text(`ถึงเวลา ${formatTime(data.until_thetime) || '-'} น.`, 475, 246);
+      let y = 171;
+      y = checkY(doc, y);
+      const activityLines = doc.splitTextToSize('ด้วย ' + (data.agency || '-'), 500);
+      y = drawLines(doc, activityLines, 55, y);
 
-      doc.text(`จำนวนผู้เข้าร่วม ${data.participants || '-'}`, 25, 271);
+      const projectLines = doc.splitTextToSize('จะดำเนินกิจกรรม / โครงการ ' + (data.name_activity || '-'), 500);
+      y = drawLines(doc, projectLines, 25, y);
 
+      const reasonLabel = 'เหตุผลในการขอใช้คือ';
+      const reasonValue = data.reasons || '-';
+      y = checkY(doc, y);
+      doc.text(reasonLabel, 25, y);
+      y += 20;
+      const reasonsLines = doc.splitTextToSize(reasonValue, 480);
+      y = drawLines(doc, reasonsLines, 40, y);
+
+      y = checkY(doc, y);
+      doc.text(`ในวันที่ ${formatDate(data.since) || '-'}`, 25, y+10);
+      doc.text(`ถึงวันที่ ${formatDate(data.uptodate) || '-'}`, 175, y+10);
+      doc.text(`ตั้งแต่เวลา ${formatTime(data.since_time) || '-'} น.`, 325, y+10);
+      doc.text(`ถึงเวลา ${formatTime(data.until_thetime) || '-'} น.`, 475, y+10);
+      y += 30;
+
+      y = checkY(doc, y);
+      doc.text(`จำนวนผู้เข้าร่วม ${data.participants || '-'}`, 25, y);
+      y += 25;
+
+      y = checkY(doc, y);
+      doc.text('และมีความประสงค์ขออนุญาตใช้ห้อง/สนาม ดังรายละเอียดต่อไปนี้', 25, y);
+      y += 30;
+
+      y = checkY(doc, y);
       doc.setFontSize(12);
-      doc.text('และมีความประสงค์ขออนุญาตใช้ห้อง/สนาม ดังรายละเอียดต่อไปนี้', 25, 296);
+      doc.setFont('Sarabun', 'bold');
+      doc.text('1. ข้อมูลผู้ใช้สถานที่', 25, y);
+      doc.setFont('Sarabun', 'normal');
+      y += 25;
 
-      doc.setFontSize(12);
-      doc.setFont('Sarabun', 'bold');
-      doc.text('1. ข้อมูลผู้ใช้สถานที่', 25, 321);
-      doc.setFont('Sarabun', 'normal');
-      doc.text(`อาคาร ${data.building || '-'}`, 55, 346);
-      doc.text(`ระบุหมายเลขพื้นที่/ห้องที่ต้องการใช้ ${data.zone || '-'}`, 280, 346);
-      doc.setFont('Sarabun', 'bold');
-      doc.text('2. ขออนุญาตใช้ระบบสาธารณูปโภค', 25, 371);
-      doc.setFont('Sarabun', 'normal');
-      doc.text(`เปิดเครื่องปรับอากาศตั้งแต่ ${data.turnon_air || '-'} น. ถึง ${data.turnoff_air || '-'} น. ( เฉพาะอาคารเฉลิมพระเกียรติฯ)`, 55, 396);
-      doc.text(`ไฟฟ้าส่องสว่างตั้งแต่ ${data.turnon_lights || '-'} น. ถึง ${data.turnoff_lights || '-'} น. ( เฉพาะอาคารเฉลิมพระเกียรติฯ)`, 55, 421);
-      doc.text(`อื่นๆ ${data.other || '-'}`, 55, 446);
-      doc.setFont('Sarabun', 'bold');
-      doc.text('3.ขออนุมัติรายการประกอบอาคาร', 25, 471);
-      doc.setFont('Sarabun', 'normal');
-      doc.text(`ดึงอัฒจันทร์ภายในอาคารเฉลิมพระเกียรติฯ ${data.amphitheater || '-'}`, 55, 496);
-      doc.text(`อุปกรณ์กีฬา (โปรดระบุรายการและจำนวน) ${data.need_equipment || '-'}`, 55, 521);
+      const buildingLines = doc.splitTextToSize('อาคาร ' + (data.building || '-'), 200);
+      const zoneLines = doc.splitTextToSize('ระบุหมายเลขพื้นที่/ห้องที่ต้องการใช้ ' + (data.zone || '-'), 250);
+      y = checkY(doc, y);
+      drawLines(doc, buildingLines, 55, y);
+      drawLines(doc, zoneLines, 280, y);
+      y += Math.max(buildingLines.length, zoneLines.length) * 15;
 
-      let signY = 565;
+      y = checkY(doc, y);
+      doc.setFont('Sarabun', 'bold');
+      doc.text('2. ขออนุญาตใช้ระบบสาธารณูปโภค', 25, y+10);
+      doc.setFont('Sarabun', 'normal');
+      y += 30;
+
+      const airLines = doc.splitTextToSize(`เปิดเครื่องปรับอากาศตั้งแต่ ${data.turnon_air || '-'} น. ถึง ${data.turnoff_air || '-'} น. ( เฉพาะอาคารเฉลิมพระเกียรติฯ)`, 500);
+      const lightLines = doc.splitTextToSize(`ไฟฟ้าส่องสว่างตั้งแต่ ${data.turnon_lights || '-'} น. ถึง ${data.turnoff_lights || '-'} น. ( เฉพาะอาคารเฉลิมพระเกียรติฯ)`, 500);
+      y = drawLines(doc, airLines, 55, y);
+      y = drawLines(doc, lightLines, 55, y);
+
+      const otherLines = doc.splitTextToSize('อื่นๆ ' + (data.other || '-'), 480);
+      y = drawLines(doc, otherLines, 55, y);
+
+      y = checkY(doc, y);
+      doc.setFont('Sarabun', 'bold');
+      doc.text('3.ขออนุมัติรายการประกอบอาคาร', 25, y+10);
+      doc.setFont('Sarabun', 'normal');
+      y += 25;
+
+      const amphitheaterLines = doc.splitTextToSize('ดึงอัฒจันทร์ภายในอาคารเฉลิมพระเกียรติฯ ' + (data.amphitheater || '-'), 480);
+      y = drawLines(doc, amphitheaterLines, 55, y+10);
+
+      const needEquipmentLines = doc.splitTextToSize('อุปกรณ์กีฬา (โปรดระบุรายการและจำนวน) ' + (data.need_equipment || '-'), 480);
+      y = drawLines(doc, needEquipmentLines, 55, y+10);
+      y += 25;
+
+      // ----------------- แยกเช็คพื้นที่เซ็นชื่อ ---------------------
+      const signNameHeight = 45;
+      if (y + signNameHeight > doc.internal.pageSize.getHeight()) {
+        doc.addPage();
+        y = 50;
+      }
+      let signY = y;
+
       doc.setFontSize(12);
       doc.text('ลงชื่อ................................................', 25, signY);
       doc.text('ลงชื่อ................................................', 210, signY);
@@ -396,10 +453,19 @@ function handleNext() {
       doc.text('อาจารย์/ที่ปรึกษาโครงการ', 235, signY + 45);
       doc.text('คณะ/หัวหน้าหน่วยงาน', 434, signY + 45);
 
-      let boxY = signY + 65;
+      y = signY + 65; // เตรียม y สำหรับกล่องกรอบล่าง
+
+      // ----------------- แยกเช็คพื้นที่กล่องกรอบ ---------------------
+      const signBoxHeight = 190;
+      if (y + signBoxHeight > doc.internal.pageSize.getHeight()) {
+        doc.addPage();
+        y = 50;
+      }
+
+      const boxY = y;
       const pageWidth2 = doc.internal.pageSize.getWidth();
       const boxWidth = (pageWidth2 - 40) / 3;
-      const boxHeight = 190;
+      const boxHeight = signBoxHeight;
       const marginLeft = 20;
 
       for (let i = 0; i < 3; i++) {
@@ -408,6 +474,7 @@ function handleNext() {
         doc.rect(marginLeft + i * boxWidth, boxY, boxWidth, boxHeight);
       }
 
+      // ----- เพิ่มวาดข้อความ/checkbox ในแต่ละกรอบต่อเหมือนเดิม -----
       let x1 = marginLeft;
       doc.setFont('Sarabun', 'bold');
       doc.setFontSize(12);
@@ -460,10 +527,7 @@ function handleNext() {
         doc.setLineWidth(1);
         doc.line(marginLeft + i * boxWidth, boxY + 32, marginLeft + (i + 1) * boxWidth, boxY + 32);
       }
-    }
-
-    // ---------------- ฟอร์ม "equipment" -------------------
-    else if (item.type === 'equipment') {
+    } else if (item.type === 'equipment') {
       doc.setFont('Sarabun', 'normal');
       doc.setFontSize(16);
       const title = 'แบบฟอร์มการยืมอุปกรณ์/วัสดุ/ครุภัณฑ์ ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง';
@@ -483,8 +547,16 @@ function handleNext() {
       doc.text(`ชื่อผู้ขอ ${data.requester || item.userName || '-'}`, 60, 132);
       doc.text(`รหัส ${data.user_id || '-'}`, 310, 132);
 
-      doc.text(`เหตุผลในการขอใช้เพื่อ: ${data.reason || '-'}`, 60, 150);
-      doc.text(`สถานที่ใช้งาน: ${data.location || '-'}`, 60, 170);
+      const reasonLabel = 'เหตุผลในการขอใช้เพื่อ:';
+      const reasonValue = data.reason || '-';
+      const reasonLines = doc.splitTextToSize(reasonLabel + ' ' + reasonValue, 400);
+      doc.text(reasonLines, 60, 150);
+
+      const locationLabel = 'สถานที่ใช้งาน:';
+      const locationValue = data.location || '-';
+      const locationLines = doc.splitTextToSize(locationLabel + ' ' + locationValue, 400);
+      doc.text(locationLines, 60, 170);
+
       doc.text(
         `ในวันที่ ${formatDate(data.start_date) || '-'} ถึงวันที่ ${formatDate(data.end_date) || '-'}`,
         60, 190
@@ -506,20 +578,17 @@ function handleNext() {
         styles: { font: 'Sarabun', fontSize: 11, halign: 'center', cellPadding: 4 }
       });
 
-      // ==== ตารางเซ็นชื่อ 2 ช่องแนวนอนแบบมีกรอบ ====
       let signY = doc.lastAutoTable.finalY + 30;
       const pageWidth2 = doc.internal.pageSize.getWidth();
       const boxWidth = (pageWidth2 - 40) / 2;
       const boxHeight = 120;
       const marginLeft = 20;
 
-      // วาดกรอบ 2 ช่อง
       for (let i = 0; i < 2; i++) {
         doc.setDrawColor(30, 30, 30);
         doc.setLineWidth(1);
         doc.rect(marginLeft + i * boxWidth, signY, boxWidth, boxHeight);
       }
-      // ช่องซ้าย
       let x1 = marginLeft;
       doc.setFont('Sarabun', 'normal');
       doc.setFontSize(12);
@@ -529,7 +598,6 @@ function handleNext() {
       doc.text('ลงชื่อ............................................................หัวหน้าส่วน', x1 + 8, signY + 82);
       doc.text('วันที่....................../.............................../.......................', x1 + 8, signY + 102);
 
-      // ช่องขวา
       let x2 = marginLeft + boxWidth;
       doc.text('ผลการดำเนินการ/ผลการปฏิบัติงาน', x2 + 8, signY + 22);
       doc.text('.....................................................................................', x2 + 8, signY + 42);
@@ -537,14 +605,12 @@ function handleNext() {
       doc.text('ลงชื่อ.......................................ผู้ปฏิบัติงาน/ผู้รับผิดชอบ', x2 + 8, signY + 82);
       doc.text('วันที่....................../.............................../.......................', x2 + 8, signY + 102);
 
-      // เส้นคาดหัวช่อง
       for (let i = 0; i < 2; i++) {
         doc.setDrawColor(140, 140, 140);
         doc.setLineWidth(0.5);
         doc.line(marginLeft + i * boxWidth, signY + 28, marginLeft + (i + 1) * boxWidth, signY + 28);
       }
 
-      // === ส่วนไฟล์แนบและชื่อผู้ขอ (เพิ่มท้ายฟอร์ม)
       let fileY = signY + boxHeight + 16;
       if (data.requester || item.userName) {
         doc.text(`ลงชื่อ  ${data.requester || item.userName}`, 420, fileY + 60);
@@ -557,7 +623,6 @@ function handleNext() {
     console.error(err);
   }
 }
-
 </script>
 
 
@@ -738,16 +803,7 @@ function handleNext() {
 .notification-item {
   transition: background 0.3s, border-color 0.3s, color 0.3s;
 }
-@media (max-width: 540px) {
-  .notification-dropdown {
-    min-width: 220px;
-    max-width: 99vw;
-  }
-  .notification-dropdown li {
-    font-size: 0.99rem;
-    padding: 0.7em 0.7em;
-  }
-}
+
 .notification-backdrop {
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
@@ -770,4 +826,9 @@ function handleNext() {
 .pdfmake-btn:hover {
   background-color: #7e0f0fdf;
 }
+</style>
+
+
+<style>
+@import '../css/style.css';
 </style>

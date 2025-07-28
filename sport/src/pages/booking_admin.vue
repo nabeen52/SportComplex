@@ -20,7 +20,11 @@
         <router-link to="/history_admin" active-class="active"><i class="pi pi-history"></i> History System</router-link>
       </nav>
     </aside>
-
+<div
+  v-if="isMobile && !isSidebarClosed"
+  class="sidebar-overlay"
+  @click="toggleSidebar"
+></div>
     <!-- Main Content -->
     <div class="main">
       <header class="topbar">
@@ -64,6 +68,17 @@
               scrolling="no"
             ></iframe>
           </div>
+          <!-- ปุ่ม BOOKING เฉพาะ mobile -->
+  <div v-if="isMobile" class="booking-btn-wrapper">
+    <button
+      class="booking-btn"
+      @click="bookZone"
+      :disabled="zoneRequired && !selectedZoneName"
+    >
+      <i class="pi pi-check-circle" style="margin-right: 8px"></i>
+      BOOKING
+    </button>
+  </div>
         </div>
 
         <!-- Right -->
@@ -142,14 +157,16 @@ const isSidebarClosed = ref(false)
 const selectedZoneName = ref(null)
 const field = ref(null)
 const fieldName = ref(route.query.fieldName || '')
-
+const isMobile = ref(false)
 // ====== กระดิ่งแจ้งเตือน (dashboard-style, พร้อม close/handleClickOutside) ======
 const showNotifications = ref(false)
 const notifications = ref([])
 const unreadCount = ref(0)
 const lastCheckedIds = ref(new Set())
 let polling = null
-
+function checkMobile() {
+  isMobile.value = window.innerWidth <= 600
+}
 function toggleNotifications() {
   showNotifications.value = !showNotifications.value
   if (showNotifications.value) unreadCount.value = 0
@@ -262,6 +279,9 @@ function bookZone() {
 
 onMounted(async () => {
   document.addEventListener('mousedown', handleClickOutside)
+
+  checkMobile()
+  window.addEventListener('resize', checkMobile)
   // โหลด field สำหรับ booking admin
   if (!fieldName.value) return
   try {
@@ -292,6 +312,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   if (polling) clearInterval(polling)
   document.removeEventListener('mousedown', handleClickOutside)
+window.removeEventListener('resize', checkMobile)
 })
 </script>
 
@@ -321,7 +342,7 @@ onBeforeUnmount(() => {
   width: 100%;
   max-width: 800px;
   height: 480px;
-  object-fit: contain !important;
+  object-fit: cover !important;
   background: #fff;
   border-radius: 12px;
   margin-bottom: 20px;
@@ -406,4 +427,73 @@ onBeforeUnmount(() => {
   opacity: 0.7;
 }
 /* =============================================== */
+@media (max-width: 600px) {
+  .probody-flex {
+    flex-direction: column !important;
+    gap: 1rem !important;
+    padding: 8px !important;
+    overflow-x: auto !important;
+  }
+  .left-column, .right-column {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+  .calendar-wrapper {
+    overflow-x: auto;
+    width: 100vw;
+    min-width: 320px;
+    /* ถ้าตารางล้นจะเลื่อนได้ */
+  }
+  .booking-btn-wrapper {
+    display: flex;
+    justify-content: center;
+    width: 100%;
+    margin-top: 12px;
+    margin-bottom: 10px;
+  }
+  .booking-btn {
+    width: 80vw !important;
+    max-width: 400px;
+    font-size: 1.2rem;
+    padding: 16px 0;
+    border-radius: 999px;
+  }
+  .right-column {
+    display: none !important;
+  }
+}
+.sidebar-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.22);
+  z-index: 1999;
+}
+.sidebar {
+  z-index: 2000;
+}
+.probody-flex {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2rem;
+  padding: 20px;
+  background-color: #dbe9f4;
+  box-sizing: border-box;
+}
+.left-column {
+  flex: 1 1 60%;
+  max-width: 60%;
+}
+.right-column {
+  flex: 1 1 35%;
+  max-width: 35%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 600px;
+}
+</style>
+<style>
+@import '../css/style.css';
 </style>

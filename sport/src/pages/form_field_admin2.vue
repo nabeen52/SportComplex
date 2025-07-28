@@ -131,9 +131,6 @@ function handleFileUpload(event) {
 
   </script>
 
-<style>
-@import '../css/style.css';
-</style>
 
   <style scoped>
 

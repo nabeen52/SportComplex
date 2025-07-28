@@ -33,6 +33,9 @@ const historySchema = new mongoose.Schema({
     canceledById: String,
     canceledAt: Date,
     notified: { type: Boolean, default: false },
+    proxyStudentName: { type: String, default: '' },
+    proxyStudentId: { type: String, default: '' },
+
 }, {
     timestamps: true // <--- **เพิ่มตรงนี้!!**
 });

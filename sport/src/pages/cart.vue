@@ -4,7 +4,7 @@
     <aside class="sidebar" :class="{ closed: isSidebarClosed }">
       <div class="sidebar-header">
         <img src="/img/logo.png" alt="logo" class="logo" />
-        <p class="sidebar-title">ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง</p>
+        <p class="sidebar-title">Sport Complex MFU</p>
       </div>
       <nav class="nav-links">
         <router-link to="/home_user" exact-active-class="active">
@@ -21,6 +21,12 @@
         </router-link>
       </nav>
     </aside>
+
+    <div
+      v-if="!isSidebarClosed"
+      class="sidebar-overlay"
+      @click="toggleSidebar"
+    ></div>
 
     <!-- Main Content -->
     <div class="main">
@@ -60,7 +66,7 @@
       </header>
 
       <div style="background-color: #dbe9f4;">
-         <transition name="slide-down">
+         <!-- <transition name="slide-down">
           <div class="announcement-bar" v-if="showAnnouncementBar">
             <i class="pi pi-megaphone announcement-icon"></i>
             <div class="announcement-bar-text">{{ announcement }}</div>
@@ -68,7 +74,7 @@
               <i class="pi pi-times" style="color: red;"></i>
             </button>
           </div>
-        </transition>
+        </transition> -->
 
         <div class="cartbody">
           <h1 class="cart-title">Cart</h1>
@@ -395,7 +401,12 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: 2rem;
+
+  overflow-x: auto;
+  white-space: nowrap;
+  -webkit-overflow-scrolling: touch;
 }
+
 .cart-img {
   width: 60px;
   height: 60px;
@@ -571,23 +582,8 @@ onMounted(async () => {
 .notification-item {
   transition: background 0.3s, border-color 0.3s, color 0.3s;
 }
-@media (max-width: 540px) {
-  .notification-dropdown {
-    min-width: 220px;
-    max-width: 99vw;
-  }
-  .notification-dropdown li {
-    font-size: 0.99rem;
-    padding: 0.7em 0.7em;
-  }
-}
-.notification-backdrop {
-  position: fixed;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: transparent;
-  z-index: 1001; /* ต้องน้อยกว่า .notification-dropdown (1002) */
-}
 
-
-
+</style>
+<style>
+@import '../css/style.css';
 </style>

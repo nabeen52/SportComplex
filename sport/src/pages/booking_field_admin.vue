@@ -37,6 +37,11 @@
       </nav>
     </aside>
 
+<div
+  v-if="isMobile && !isSidebarClosed"
+  class="sidebar-overlay"
+  @click="toggleSidebar"
+></div>
     <!-- Content -->
     <div class="main">
       <header class="topbar">
@@ -124,7 +129,7 @@ const fields = ref([])
 const isSidebarClosed = ref(false)
 const announcement = ref("")
 const showAnnouncementBar = ref(false)
-
+const isMobile = ref(false)
 const showNotifications = ref(false)
 const notifications = ref([])
 const unreadCount = ref(0)
@@ -132,7 +137,9 @@ const lastCheckedIds = ref(new Set())
 let polling = null
 
 const router = useRouter()
-
+function checkMobile() {
+  isMobile.value = window.innerWidth <= 600
+}
 function resolveImagePath(img) {
   if (!img) return '/img/default.png'
   if (img.startsWith('data:image/')) return img
@@ -215,6 +222,8 @@ function goToBooking(field) {
 }
 
 onMounted(async () => {
+  checkMobile()
+  window.addEventListener('resize', checkMobile)
   try {
     const res = await axios.get(`${API_BASE}/api/fields`)
     fields.value = res.data.map(field => ({
@@ -242,22 +251,25 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   if (polling) clearInterval(polling)
   document.removeEventListener('mousedown', handleClickOutside)
+window.removeEventListener('resize', checkMobile)
 })
 </script>
 
 
 <style scoped>
-.field-image {
+
+.field-image, .card img {
   width: 100%;
-  max-width: 200px;
   height: 120px;
-  object-fit: contain !important;
-  border-radius: 6px;
+  object-fit: cover !important;
+  border-radius: 8px;
   margin-bottom: 0.5rem;
   background: #fff;
   display: block;
   margin-left: auto;
   margin-right: auto;
+  box-shadow: 0 1px 4px #c7d6ed2a;
+  border: 1px solid #e0e0e0;
 }
 
 .content {
@@ -284,7 +296,7 @@ onBeforeUnmount(() => {
 .card {
   background: rgb(203, 217, 243);
   border-radius: 10px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   padding: 1rem;
   width: 220px;
   text-align: center;
@@ -294,27 +306,21 @@ onBeforeUnmount(() => {
   justify-content: flex-start;
   align-items: stretch;
   min-height: 260px;
+  /* height: 260px;  // ไม่ fix ความสูง แต่ใช้ min-height */
 }
 
 .card:hover {
   transform: translateY(-4px);
 }
 
-.card img {
-  width: 200px;
-  height: 120px;
-  object-fit: contain;
-  border-radius: 6px;
-  margin-bottom: 0.5rem;
-  background: #fff;
-}
 
 .card h4 {
   word-break: break-word;
   overflow-wrap: break-word;
   margin-bottom: 0.5rem;
-  min-height: 40px;
-  max-height: 56px;
+  /* font-size: 1.08rem; */
+  min-height: 40px; /* รองรับ 2 บรรทัด */
+  max-height: 56px; /* รองรับ 2-3 บรรทัด */
   line-height: 1.3;
   display: flex;
   align-items: center;
@@ -345,6 +351,7 @@ onBeforeUnmount(() => {
   color: #666;
 }
 
+/* Animation แถบประกาศ slide down */
 .slide-down-enter-active,
 .slide-down-leave-active {
   transition: all 0.5s cubic-bezier(0.23, 1, 0.32, 1);
@@ -408,5 +415,136 @@ onBeforeUnmount(() => {
   color: #222;
 }
 
+/* ===== CSS แจ้งเตือนแบบ history ===== */
+.notification-dropdown {
+  position: absolute;
+  right: 0;
+  top: 38px;
+  background: #fff;
+  border-radius: 18px 0 18px 18px;
+  box-shadow:
+    0 8px 24px 0 rgba(27, 50, 98, 0.14),
+    0 2px 4px 0 rgba(33, 125, 215, 0.06);
+  min-width: 330px;
+  max-width: 370px;
+  max-height: 420px;
+  overflow-y: auto;
+  z-index: 1002;
+  padding: 0;
+  border: none;
+  animation: fadeDown 0.22s;
+}
+@keyframes fadeDown {
+  0% { opacity: 0; transform: translateY(-24px);}
+  100% { opacity: 1; transform: translateY(0);}
+}
+.notification-dropdown ul {
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+.notification-dropdown li {
+  background: linear-gradient(90deg, #f6fafd 88%, #e2e7f3 100%);
+  margin: 0.2em 0.8em;
+  padding: 0.85em 1.1em;
+  border-radius: 12px;
+  border: none;
+  font-size: 1.07rem;
+  font-weight: 500;
+  color: #1e2c48;
+  box-shadow: 0 2px 8px 0 rgba(85, 131, 255, 0.06);
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  position: relative;
+  cursor: default;
+  transition: background 0.2s;
+}
+.notification-dropdown li:not(:last-child) {
+  margin-bottom: 0.15em;
+}
+.notification-dropdown li::before {
+  content: "🔔";
+  font-size: 1.2em;
+  margin-right: 7px;
+  color: #1976d2;
+  opacity: 0.80;
+}
+.notification-dropdown li.no-noti {
+  background: #f2f3f6;
+  color: #a7aab7;
+  justify-content: center;
+  font-style: italic;
+}
+.notification-dropdown::-webkit-scrollbar {
+  width: 7px;
+}
+.notification-dropdown::-webkit-scrollbar-thumb {
+  background: #e1e7f5;
+  border-radius: 10px;
+}
+.notification-dropdown::-webkit-scrollbar-track {
+  background: transparent;
+}
+.notification-item.approved {
+  background: linear-gradient(90deg, #e9fbe7 85%, #cbffdb 100%);
+  border-left: 4px solid #38b000;
+  color: #228c22;
+}
+.notification-item.disapproved {
+  background: linear-gradient(90deg, #ffeaea 85%, #ffd6d6 100%);
+  border-left: 4px solid #ff6060;
+  color: #b91423;
+}
+.notification-item.canceled,
+.notification-item.cancel {
+  background: linear-gradient(90deg, #f9d7d7 80%, #e26a6a 100%);
+  border-left: 4px solid #bb2124;
+  color: #91061a;
+}
+.notification-item.returned {
+  background: linear-gradient(90deg, #e0f0ff 85%, #b6e0ff 100%);
+  border-left: 4px solid #1976d2;
+  color: #1976d2;
+}
+.notification-item {
+  transition: background 0.3s, border-color 0.3s, color 0.3s;
+}
+.sidebar-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.22);
+  z-index: 1999;
+}
+.sidebar {
+  z-index: 2000;
+}
 
+@media (max-width: 600px) {
+  .main, .content {
+    width: 100vw !important;
+    min-width: 0 !important;
+    max-width: 100vw !important;
+    overflow-x: visible !important;
+  }
+  .block {
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+  }
+  .grid {
+    flex-direction: column !important;
+    flex-wrap: nowrap !important;
+    gap: 1rem !important;
+    align-items: center !important;    /* <- เพิ่มบรรทัดนี้ */
+    width: 100% !important;
+  }
+ 
+}
+
+
+
+</style>
+
+<style>
+@import '../css/style.css';
 </style>

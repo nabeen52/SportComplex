@@ -4,7 +4,7 @@
     <aside class="sidebar" :class="{ closed: isSidebarClosed }">
       <div class="sidebar-header">
         <img src="/img/logo.png" alt="logo" class="logo" />
-        <p class="sidebar-title">ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง</p>
+        <p class="sidebar-title">Sport Complex MFU</p>
       </div>
       <nav class="nav-links">
         <router-link to="/home_user" exact-active-class="active"><i class="pi pi-home"></i> Home</router-link>
@@ -13,39 +13,41 @@
         <router-link to="/history" active-class="active"><i class="pi pi-history"></i> History</router-link>
       </nav>
     </aside>
+    
+    <div v-if="!isSidebarClosed" class="sidebar-overlay" @click="toggleSidebar"></div>
+
+<button class="menu-toggle" @click="toggleSidebar">☰</button>
     <div class="main">
       <header class="topbar">
         <button class="menu-toggle" @click="toggleSidebar">☰</button>
         <div class="topbar-actions">
           <div>
-            <div
-      v-if="showNotifications"
-      class="notification-backdrop"
-      @click="closeNotifications"
-    ></div>
+            <div v-if="showNotifications" class="notification-backdrop" @click="closeNotifications"></div>
             <button class="notification-btn" @click="toggleNotifications">
               <i class="pi pi-bell"></i>
               <span v-if="unreadCount > 0" class="badge">{{ unreadCount }}</span>
             </button>
             <div v-if="showNotifications" class="notification-dropdown">
-  <ul>
-    <li
-      v-for="(noti, idx) in notifications"
-      :key="noti.id || idx"
-      :class="['notification-item', noti.type || '', { unread: idx === 0 }]"
-    >
-      {{ noti.message }}
-    </li>
-    <li v-if="notifications.length === 0" class="no-noti">ไม่มีแจ้งเตือน</li>
-  </ul>
-</div>
-
+              <ul>
+                <li
+                  v-for="(noti, idx) in notifications"
+                  :key="noti.id || idx"
+                  :class="['notification-item', noti.type || '', { unread: idx === 0 }]"
+                >
+                  {{ noti.message }}
+                </li>
+                <li v-if="notifications.length === 0" class="no-noti">ไม่มีแจ้งเตือน</li>
+              </ul>
+            </div>
           </div>
-          <router-link to="/cart"><i class="pi pi-shopping-cart"></i></router-link>
+          <router-link to="/cart" class="cart-link">
+            <i class="pi pi-shopping-cart"></i>
+            <span v-if="products.length > 0" class="badge">{{ products.length }}</span>
+          </router-link>
+
           <router-link to="/profile"><i class="pi pi-user"></i></router-link>
         </div>
       </header>
-
       <!-- Stepper -->
       <div class="headStepper">
         <div class="stepper">
@@ -62,52 +64,107 @@
         </div>
       </div>
 
-      <div>
+       <div class="scroll-x-container">
+
         <div class="form-container">
           <div class="form-header">
-            <h3>แบบฟอร์มขออนุมัติใช้สถานที่ ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง</h3>
+            <h3>แบบฟอร์มขออนุมัติใช้สถานที่ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง</h3>
             <p>โทร 053-917820-1 E-mail Sport-complex@mfu.ac.th</p>
           </div>
-
-
           <form @submit.prevent="handleSubmit" enctype="multipart/form-data" class="booking-form">
             <div class="form-grid">
-              <!-- ... ฟิลด์เดิม ... -->
+
               <div class="form-row">
-                <label>ที่ อว.</label>
-                <input type="text" :class="inputClass('aw')" v-model="formData.aw" />
+                <label>
+                  ที่ อว.
+                  <span v-if="showValidate && missingFields.aw" class="required-star">*</span>
+                </label>
+                <input
+                  type="text"
+                  :class="inputClass('aw')"
+                  v-model="formData.aw"
+                  maxlength="10"
+                  @input="onlyAwInput"
+                />
               </div>
               <div class="form-row">
-                <label>วันที่</label>
+                <label>
+                  วันที่
+                  <span v-if="showValidate && missingFields.date" class="required-star">*</span>
+                </label>
                 <input type="date" :class="inputClass('date')" v-model="formData.date" />
               </div>
               <div class="form-row">
-                <label>เบอร์โทรติดต่อ</label>
-                <input type="text" :class="inputClass('tel')" v-model="formData.tel" />
-              </div>
-              <div class="form-row">
-                <label>ชื่อหน่วยงาน</label>
+                <label>
+                  เบอร์โทรติดต่อ
+                  <span v-if="showValidate && missingFields.tel" class="required-star">*</span>
+                </label>
                 <input
+                  type="text"
+                  :class="inputClass('tel')"
+                  v-model="formData.tel"
+                  maxlength="10"
+                  @input="onlyNumbersLimit('tel')"
+                />
+              </div>
+
+              <div class="form-row">
+              <label>
+                ชื่อหน่วยงาน
+                <span v-if="showValidate && missingFields.agency" class="required-star">*</span>
+              </label>
+              <div style="display:flex;gap:6px;align-items:center;">
+                <input
+                  class="custom-input"
                   list="agency-list"
-                  :class="inputClass('agency')"
                   v-model="agencyInput"
                   placeholder="ค้นหาหรือเลือกหน่วยงาน"
                   @change="handleAgencyChange"
+                  :readonly="isAgencySelected"
+                  :class="{ 'is-invalid': showValidate && missingFields.agency }"
+                  style="flex:1"
                 />
+                <button
+                  v-if="isAgencySelected"
+                  type="button"
+                  @click="clearAgency"
+                  style="background:#eee;padding:3px 10px;border-radius:6px;border:none;cursor:pointer"
+                  title="ลบ"
+                >ลบ</button>
                 <datalist id="agency-list">
                   <option v-for="option in agencyOptions" :key="option" :value="option" />
                 </datalist>
               </div>
-              <div class="form-row" v-if="agencyInput === 'อื่นๆ'">
-                <label>โปรดระบุหน่วยงาน</label>
-                <input type="text" :class="inputClass('agencyOther')" v-model="customAgency" placeholder="กรอกชื่อหน่วยงาน" />
+            </div>
+            <div class="form-row" v-if="agencyInput === 'อื่นๆ'">
+              <label>
+                โปรดระบุหน่วยงาน
+                <span v-if="showValidate && missingFields.agencyOther" class="required-star">*</span>
+              </label>
+              <input
+                type="text"
+                class="custom-input"
+                v-model="customAgency"
+                placeholder="กรอกชื่อหน่วยงาน"
+                :class="{ 'is-invalid': showValidate && missingFields.agencyOther }"
+              />
+            </div>
+            <div class="form-row" v-if="agencyInput === 'อื่นๆ'">
+              <label>รายละเอียดเพิ่มเติม (ถ้ามี)</label>
+              <input
+                type="text"
+                class="custom-input"
+                v-model="otherAgencyDetail"
+                placeholder="รายละเอียดเพิ่มเติม"
+              />
               </div>
-              <div class="form-row" v-if="agencyInput === 'อื่นๆ'">
-                <label>รายละเอียดเพิ่มเติม (ถ้ามี)</label>
-                <input type="text" class="custom-input" v-model="otherAgencyDetail" placeholder="รายละเอียดเพิ่มเติม" />
-              </div>
+
+
               <div class="form-row">
-                <label>ชื่อกิจกรรม/โครงการ</label>
+                <label>
+                  ชื่อกิจกรรม/โครงการ
+                  <span v-if="showValidate && missingFields.name_activity" class="required-star">*</span>
+                </label>
                 <textarea
                   :class="inputClass('name_activity') + ' custom-textarea'"
                   v-model="formData.name_activity"
@@ -116,7 +173,10 @@
                 ></textarea>
               </div>
               <div class="form-row">
-                <label>เหตุผลในการขอใช้</label>
+                <label>
+                  เหตุผลในการขอใช้
+                  <span v-if="showValidate && missingFields.reasons" class="required-star">*</span>
+                </label>
                 <textarea
                   :class="inputClass('reasons') + ' custom-textarea'"
                   v-model="formData.reasons"
@@ -124,48 +184,83 @@
                   placeholder="กรอกเหตุผลในการขอใช้"
                 ></textarea>
               </div>
-              <div class="form-row">
-                <label>ตั้งแต่วันที่</label>
-                <input type="date" :class="inputClass('since')" v-model="formData.since" :min="minBookingDate" />
+              <div class="form-row date-range-row">
+                <label>
+                  ช่วงวันที่
+                  <span v-if="showValidate && (missingFields.since || missingFields.uptodate)" class="required-star">*</span>
+                </label>
+                <div class="date-range-group">
+                  <input
+                    type="date"
+                    :min="minBookingDate"
+                    v-model="dateRange[0]"
+                    @change="syncDateRange('start')"
+                    :class="inputClass('since')"
+                  />
+                  <span style="margin: 0 6px;">-</span>
+                  <input
+                    type="date"
+                    :min="dateRange[0] || minBookingDate"
+                    v-model="dateRange[1]"
+                    @change="syncDateRange('end')"
+                    :class="inputClass('uptodate')"
+                  />
+                </div>
                 <small class="note-text">* กรุณาจองก่อนใช้งานจริง 5 วัน</small>
               </div>
               <div class="form-row">
-                <label>ถึงวันที่</label>
-                <input type="date" :class="inputClass('uptodate')" v-model="formData.uptodate" :min="formData.since || minBookingDate" />
+                <label>
+                  ตั้งแต่เวลา
+                  <span v-if="showValidate && missingFields.since_time" class="required-star">*</span>
+                </label>
+                <input type="time" :class="inputClass('since_time')" v-model="formData.since_time" />
               </div>
               <div class="form-row">
-  <label>ตั้งแต่เวลา</label>
-  <input type="time" :class="inputClass('since_time')" v-model="formData.since_time" />
-</div>
-<div class="form-row">
-  <label>ถึงเวลา</label>
-  <input
-    type="time"
-    :class="inputClass('until_thetime')"
-    v-model="formData.until_thetime"
-    :min="minUntilTime"
-  />
-</div>
-              <div class="form-row">
-                <label>จำนวนผู้เข้าร่วม</label>
-                <input type="text" :class="inputClass('participants')" v-model="formData.participants" />
+                <label>
+                  ถึงเวลา
+                  <span v-if="showValidate && missingFields.until_thetime" class="required-star">*</span>
+                </label>
+                <input type="time" :class="inputClass('until_thetime')" v-model="formData.until_thetime" :min="minUntilTime" />
               </div>
               <div class="form-row">
-                <label>ชื่อผู้ขอใช้สถานที่</label>
+                <label>
+                  จำนวนผู้เข้าร่วม
+                  <span v-if="showValidate && missingFields.participants" class="required-star">*</span>
+                </label>
                 <input
                   type="text"
-                  :class="inputClass('requester')"
-                  v-model="formData.requester"
-                  :readonly="!isProxyBooking"
-                  :placeholder="isProxyBooking ? 'กรอกชื่อผู้ขอใช้สถานที่' : loginName"
+                  :class="inputClass('participants')"
+                  v-model="formData.participants"
+                  maxlength="10"
+                  @input="onlyNumbersLimit('participants')"
                 />
-                <div class="proxy-checkbox-row-under">
-                  <input type="checkbox" v-model="isProxyBooking" id="proxy-booking-checkbox" />
-                  <label for="proxy-booking-checkbox" class="proxy-checkbox-label-under">จองแทนผู้อื่น</label>
-                </div>
               </div>
-              <div class="form-row">
-  <label>รหัสนักศึกษา/รหัสพนักงาน</label>
+
+              <!-- เพิ่มใน <form> ตำแหน่งใกล้ๆ requester/proxyUserId -->
+<div class="form-row">
+  <label>
+    ชื่อผู้ขอใช้สถานที่
+    <span v-if="isProxyBooking && showValidate && missingFields.requester" class="required-star">*</span>
+  </label>
+  <input
+    type="text"
+    :class="inputClass('requester')"
+    v-model="formData.requester"
+    :readonly="!isProxyBooking"
+    :placeholder="isProxyBooking ? 'กรอกชื่อผู้ขอใช้สถานที่' : loginName"
+  />
+  <div class="proxy-checkbox-row-under">
+    <input type="checkbox" v-model="isProxyBooking" id="proxy-booking-checkbox" />
+    <label for="proxy-booking-checkbox" class="proxy-checkbox-label-under">จองแทนผู้อื่น</label>
+  </div>
+</div>
+
+<!-- ช่องสำหรับรหัสผู้จอง (เดิม) -->
+<div class="form-row">
+  <label>
+    รหัสนักศึกษา/รหัสพนักงาน
+    <span v-if="showValidate && missingFields.userId" class="required-star">*</span>
+  </label>
   <input
     type="text"
     :class="inputClass('userId')"
@@ -175,75 +270,115 @@
   />
 </div>
 
-              <div class="form-section-title">1.ขออนุมัติใช้สถานที่</div>
+<!-- ✅ เพิ่มสองช่องใหม่สำหรับข้อมูลผู้ที่จองแทน -->
+<div class="form-row" v-if="isProxyBooking">
+  <label>
+    ชื่อของผู้ที่จองแทน
+    <span v-if="showValidate && missingFields.proxyStudentName" class="required-star">*</span>
+  </label>
+  <input
+    type="text"
+    class="custom-input"
+    :class="{ 'input-error': showValidate && missingFields.proxyStudentName }"
+    v-model="proxyStudentName"
+    placeholder="กรอกชื่อของผู้ที่คุณจองแทน"
+  />
+</div>
+
+<div class="form-row" v-if="isProxyBooking">
+  <label>
+    รหัสนักศึกษาของผู้ที่จองแทน
+    <span v-if="showValidate && missingFields.proxyStudentId" class="required-star">*</span>
+  </label>
+  <input
+    type="text"
+    class="custom-input"
+    :class="{ 'input-error': showValidate && missingFields.proxyStudentId }"
+    v-model="proxyStudentId"
+    placeholder="กรอกรหัสนักศึกษาของผู้ที่คุณจองแทน"
+  />
+</div>
+
+
+
+              <div class="form-section-title">1.ขอใช้สถานที่</div>
               <div class="form-row">
-                <label>อาคารที่ต้องการขอใช้</label>
-                <input type="text" class="custom-input" :value="formData.building || 'ยังไม่ได้เลือกอาคาร'" readonly />
+                <label>
+                  อาคารที่ต้องการขอใช้
+                  <span v-if="showValidate && missingFields.building" class="required-star">*</span>
+                </label>
+                <input type="text" class="custom-input building-readonly" :value="formData.building || 'ยังไม่ได้เลือกอาคาร'" readonly />
               </div>
-              <!-- *** เงื่อนไขใหม่ *** -->
-              <div class="form-row"
-                   v-if="hasZone && formData.zone && zones.some(z => z.name === formData.zone)">
-                <label>ระบุตำแหน่งพื้นที่/ห้องที่ต้องการใช้</label>
+              <div class="form-row" v-if="hasZone && formData.zone && zones.some(z => z.name === formData.zone)">
+                <label>
+                  ระบุตำแหน่งพื้นที่/ห้องที่ต้องการใช้
+                  <span v-if="showValidate && missingFields.zone" class="required-star">*</span>
+                </label>
                 <input type="text" class="custom-input" :value="formData.zone" readonly />
               </div>
-              <!-- *** /เงื่อนไขใหม่ *** -->
-
-              <!-- **** เปลี่ยนตรงนี้ **** -->
-              <div class="form-section-title">2.ขออนุมัติใช้ระบบสาธารณูปโภค</div>
+              <div class="form-section-title">2.ขอใช้ระบบสาธารณูปโภค</div>
               <div class="form-row" style="grid-column: span 2;">
                 <div>
                   <label>
-  <input type="radio" name="utility-request" value="yes" v-model="formData.utilityRequest" /> ต้องการ
-</label>
-<label>
-  <input type="radio" name="utility-request" value="no" v-model="formData.utilityRequest" /> ไม่ต้องการ
-</label>
+                    <input type="radio" name="utility-request" value="yes" v-model="formData.utilityRequest" /> ต้องการ
+                  </label>
+                  <label>
+                    <input type="radio" name="utility-request" value="no" v-model="formData.utilityRequest" /> ไม่ต้องการ
+                  </label>
                 </div>
               </div>
-              <div class="form-row" v-if="formData.utilityRequest === 'yes'">
-                <label>เปิดเครื่องปรับอากาศตั้งแต่เวลา</label>
-                <input type="time" :class="inputClass('turnon_air')" v-model="formData.turnon_air" />
-              </div>
-              <div class="form-row" v-if="formData.utilityRequest === 'yes'">
-                <label>ถึงเวลา</label>
-                <input type="time" :class="inputClass('turnoff_air')" v-model="formData.turnoff_air" />
-              </div>
-              <div class="form-row" v-if="formData.utilityRequest === 'yes'">
-                <label>ไฟฟ้าส่องสว่างตั้งแต่เวลา</label>
-                <input type="time" :class="inputClass('turnon_lights')" v-model="formData.turnon_lights" />
-              </div>
-              <div class="form-row" v-if="formData.utilityRequest === 'yes'">
-                <label>ถึงเวลา</label>
-                <input type="time" :class="inputClass('turnoff_lights')" v-model="formData.turnoff_lights" />
-              </div>
-              <div class="form-row">
-                <label>อื่นๆ</label>
-                <input type="text" class="custom-input" v-model="formData.other" />
-              </div>
-
-              <div class="form-section-title">3.ขออนุมัติรายการประกอบอาคาร </div>
+              <template v-if="formData.utilityRequest === 'yes'">
+                <div class="form-row">
+                  <label>เปิดเครื่องปรับอากาศตั้งแต่เวลา</label>
+                  <input type="time" :class="inputClass('turnon_air')" v-model="formData.turnon_air" />
+                </div>
+                <div class="form-row">
+                  <label>ถึงเวลา</label>
+                  <input type="time" :class="inputClass('turnoff_air')" v-model="formData.turnoff_air" />
+                </div>
+                <div class="form-row">
+                  <label>ไฟฟ้าส่องสว่างตั้งแต่เวลา</label>
+                  <input type="time" :class="inputClass('turnon_lights')" v-model="formData.turnon_lights" />
+                </div>
+                <div class="form-row">
+                  <label>ถึงเวลา</label>
+                  <input type="time" :class="inputClass('turnoff_lights')" v-model="formData.turnoff_lights" />
+                </div>
+                <div class="form-row">
+                  <label>อื่นๆ</label>
+                  <input type="text" class="custom-input" v-model="formData.other" />
+                </div>
+              </template>
+              <div class="form-section-title">3.ขอใช้รายการประกอบอาคาร</div>
               <div class="form-row" style="grid-column: span 2;">
                 <div>
                   <label>
-  <input type="radio" name="facility-request" value="yes" v-model="formData.facilityRequest" /> ต้องการ
-</label>
-<label>
-  <input type="radio" name="facility-request" value="no" v-model="formData.facilityRequest" /> ไม่ต้องการ
-</label>
+                    <input type="radio" name="facility-request" value="yes" v-model="formData.facilityRequest" /> ต้องการ
+                  </label>
+                  <label>
+                    <input type="radio" name="facility-request" value="no" v-model="formData.facilityRequest" /> ไม่ต้องการ
+                  </label>
                 </div>
+              </div>
+              <div
+                class="form-row"
+                v-if="formData.facilityRequest === 'yes' && formData.building && formData.building.includes('72')"
+              >
+                <label>
+                  ดึงอัฒจันทร์ภายในอาคารเฉลิมพระเกียรติ 72 พรรษา
+                  <span v-if="showValidate && missingFields.amphitheater" class="required-star">*</span>
+                </label>
+                <input type="text" class="custom-input" v-model="formData.amphitheater" placeholder="เฉพาะอาคาร72พรรษา" />
               </div>
               <div class="form-row" v-if="formData.facilityRequest === 'yes'">
-                <label>ดึงอัฒจันทร์ภายในอาคาารเฉลิมพระเกียรติ 72 พรรษา</label>
-                <input type="text" class="custom-input" v-model="formData.amphitheater"  placeholder="เฉพาะอาคาร72พรรษา" />
-              </div>
-              <div class="form-row"  v-if="formData.facilityRequest === 'yes'">
                 <label>อุปกรณ์กีฬา (โปรดระบุรายการและจำนวน)</label>
                 <input type="text" class="custom-input" v-model="formData.need_equipment" />
               </div>
-
-              
-              <div class="form-row" style="grid-column: span 2;">
-                <label>แนบไฟล์ (บังคับ)</label>
+           <div class="form-row" style="grid-column: span 2;">
+                <label>
+                  แนบไฟล์
+                  <span class="required-star">*</span>
+                </label>
                 <div class="file-upload-wrapper">
                   <label class="custom-file-label" :class="{ 'input-error': fileError }">
                     <span class="custom-file-button">เลือกไฟล์</span>
@@ -253,6 +388,7 @@
                       multiple
                       style="display:none"
                       @change="handleFileChange"
+                      accept=".png,.jpg,.jpeg,.pdf,.xls,.xlsx,.doc,.docx"
                     />
                     <span class="custom-file-name">
                       <span v-if="selectedFiles.length > 0">
@@ -267,14 +403,47 @@
                     ล้างไฟล์
                   </button>
                 </div>
-                <small class="note-text">* สามารถแนบไฟล์ได้ทุกชนิด</small>
+                <small class="note-text">* เฉพาะ .png, .jpg, .jpeg, .pdf, .xls, .xlsx, .doc, .docx</small>
                 <div v-if="fileError" class="input-error-message">กรุณาแนบไฟล์อย่างน้อย 1 ไฟล์</div>
-                <div v-if="selectedFiles.length > 0" class="attached-files-list">
-                  <div v-for="(file, idx) in selectedFiles" :key="idx" class="attached-file-item">
-                    {{ shortenFileName(file.name) }}
-                  </div>
-                </div>
-              </div>
+
+                <!-- รายการไฟล์แนบ -->
+<div v-if="selectedFiles.length > 0" class="attached-files-list">
+  <div
+    v-for="(file, idx) in selectedFiles"
+    :key="idx"
+    class="attached-file-item attached-file-row"
+  >
+    <!-- รูปภาพ -->
+    <template v-if="/\.(png|jpe?g)$/i.test(file.name)">
+      <a href="#" class="file-name file-link" @click.prevent="viewImage(idx)">
+        {{ shortenFileName(file.name) }}
+      </a>
+    </template>
+    <!-- PDF -->
+    <template v-else-if="/\.pdf$/i.test(file.name)">
+      <a href="#" class="file-name file-link" @click.prevent="viewPdf(idx)">
+        {{ shortenFileName(file.name) }}
+      </a>
+    </template>
+    <!-- Word/Excel/อื่นๆ -->
+    <template v-else>
+      <a href="#" class="file-name file-link" @click.prevent="viewFile(idx)">
+        {{ shortenFileName(file.name) }}
+      </a>
+    </template>
+    <!-- ปุ่มลบขวาสุด -->
+    <span class="remove-file-btn" @click="removeFile(idx)">✖</span>
+  </div>
+</div>
+
+<!-- modal ดูรูป -->
+<div v-if="showImageModal" class="image-modal-backdrop" @click="showImageModal=false">
+  <div class="image-modal-content" @click.stop>
+    <img :src="modalImageUrl" style="max-width:100%;max-height:60vh;display:block;margin:auto;" />
+    <button style="margin-top:12px;" @click="showImageModal=false">ปิด</button>
+  </div>
+</div>
+   </div>
             </div>
             <div class="button-wrapper">
               <button type="button" class="clear-btn" @click="handleClear">ล้างฟอร์ม</button>
@@ -305,13 +474,13 @@ import Swal from 'sweetalert2'
 
 const API_BASE = import.meta.env.VITE_API_BASE
 
-/* -------------------- กระดิ่งแจ้งเตือน -------------------- */
+// --- Notification ---
 const showNotifications = ref(false)
 const notifications = ref([])
 const unreadCount = ref(0)
+const products = ref([])
 const userId = localStorage.getItem('user_id') || ''
 const lastCheckedIds = new Set()
-
 function toggleNotifications() {
   showNotifications.value = !showNotifications.value
   if (showNotifications.value) unreadCount.value = 0
@@ -362,12 +531,25 @@ async function fetchNotifications() {
     // ignore
   }
 }
+
+async function loadCart() {
+  const userId = localStorage.getItem('user_id') || ''
+  if (!userId) return
+  try {
+    const res = await axios.get(`${API_BASE}/api/cart?user_id=${userId}`)
+    products.value = res.data
+  } catch (err) {
+    products.value = []
+  }
+}
+
 onMounted(() => {
   fetchNotifications()
   setInterval(fetchNotifications, 30000)
+  loadCart()
 })
 
-/* --------------------- ฟอร์มขออนุมัติ --------------------- */
+// --- Form Main ---
 const steps = ['กรอกข้อมูล', 'ยืนยันข้อมูล', 'สำเร็จ']
 const stepRoutes = ['/form_field1', '/form_field3', '/form_field4']
 const currentStep = 0
@@ -381,10 +563,14 @@ function toggleSidebar() { isSidebarClosed.value = !isSidebarClosed.value }
 const userIdRef = ref(localStorage.getItem('user_id') || '')
 const studentId = ref(localStorage.getItem('student_id') || '')
 const loginName = ref('')
-const loginStudentId = ref('')   // สำหรับโชว์ placeholder ช่องรหัส
-
+const loginStudentId = ref('')
 const proxyUserId = ref(localStorage.getItem('student_id') || localStorage.getItem('user_id') || '')
 const isProxyBooking = ref(false)
+
+// script setup ส่วนบน
+const proxyStudentName = ref('')
+const proxyStudentId = ref('')
+
 
 const formData = ref({
   aw: '', date: '', tel: '', name_activity: '', reasons: '',
@@ -394,14 +580,16 @@ const formData = ref({
   other: '', amphitheater: '', need_equipment: '',
    utilityRequest: 'no',
   facilityRequest: 'no',
-})
+  proxyStudentName: '',
+  proxyStudentId: '',
 
+})
 const agencyOptions = ref([])
 const agencyInput = ref('')
 const customAgency = ref('')
 const otherAgencyDetail = ref('')
 
-// Zone (ดึง zone จาก backend เมื่อเลือก building)
+// Zone
 const hasZone = ref(false)
 const zones = ref([])
 watch(() => formData.value.building, async (newBuilding) => {
@@ -432,12 +620,77 @@ watch(() => formData.value.building, async (newBuilding) => {
   }
 })
 
+// Date Range
+const minBookingDate = computed(() => {
+  const d = new Date()
+  d.setDate(d.getDate() + 5)
+  return d.toISOString().slice(0, 10)
+})
+const dateRange = ref([formData.value.since, formData.value.uptodate])
+watch(dateRange, ([start, end]) => {
+  formData.value.since = start
+  formData.value.uptodate = end
+})
+function syncDateRange(type) {
+  if (type === 'start') {
+    if (dateRange.value[1] && dateRange.value[1] < dateRange.value[0]) {
+      dateRange.value[1] = dateRange.value[0]
+    }
+    formData.value.since = dateRange.value[0]
+  } else if (type === 'end') {
+    if (dateRange.value[0] && dateRange.value[1] < dateRange.value[0]) {
+      dateRange.value[0] = dateRange.value[1]
+    }
+    formData.value.uptodate = dateRange.value[1]
+  }
+}
+
 // ไฟล์แนบ
 const selectedFiles = ref([])
 const fileError = ref(false)
+function handleFileChange(event) {
+  let files = Array.from(event.target.files)
+  const allowExt = /\.(png|jpg|jpeg|pdf|xls|xlsx|doc|docx)$/i
+  files = files.filter(f => allowExt.test(f.name))
+  selectedFiles.value = files
+  window._tempSelectedFiles = selectedFiles.value
+  fileError.value = selectedFiles.value.length === 0
+  saveFormToSession()
+}
+function clearFiles() {
+  selectedFiles.value = []
+  window._tempSelectedFiles = []
+  fileError.value = false
+  setTimeout(() => {
+    const fileInput = document.getElementById('fileUploadInput')
+    if (fileInput) fileInput.value = ''
+  }, 0)
+}
+function removeFile(idx) {
+  selectedFiles.value.splice(idx, 1)
+  window._tempSelectedFiles = selectedFiles.value
+  fileError.value = selectedFiles.value.length === 0
+}
 
-// ------------------------ ส่วนที่เพิ่ม/แก้ไข ------------------------
-/** ให้ "ถึงเวลา" เลือกได้แค่หลัง "ตั้งแต่เวลา" 1 นาที **/
+// ดูไฟล์แนบ (Preview Image)
+const showImageModal = ref(false)
+const modalImageUrl = ref('')
+function viewImage(idx) {
+  const file = selectedFiles.value[idx]
+  if (file.url) {
+    modalImageUrl.value = file.url
+    showImageModal.value = true
+  } else {
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      modalImageUrl.value = e.target.result
+      showImageModal.value = true
+    }
+    reader.readAsDataURL(file)
+  }
+}
+
+// ถึงเวลา
 const minUntilTime = computed(() => {
   if (!formData.value.since_time) return ''
   const [h, m] = formData.value.since_time.split(':').map(Number)
@@ -448,7 +701,6 @@ const minUntilTime = computed(() => {
   }
   return `${hour.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}`
 })
-
 watch(() => formData.value.since_time, () => {
   if (
     formData.value.until_thetime &&
@@ -457,24 +709,7 @@ watch(() => formData.value.since_time, () => {
     formData.value.until_thetime = ''
   }
 })
-// ---------------------------------------------------------------------
 
-// เวลาขั้นต่ำสำหรับจอง
-const minBookingDate = computed(() => {
-  const d = new Date()
-  d.setDate(d.getDate() + 5)
-  return d.toISOString().slice(0, 10)
-})
-
-// ชื่อไฟล์ย่อ
-function shortenFileName(name) {
-  if (name.length <= 30) return name
-  const dot = name.lastIndexOf('.')
-  const ext = dot > -1 ? name.slice(dot) : ''
-  return name.slice(0, 15) + '...' + (ext.length < 8 ? ext : ext.slice(0, 8) + '...')
-}
-
-// onMounted: โหลดข้อมูลเริ่มต้น
 onMounted(async () => {
   if (studentId.value) {
     loginStudentId.value = studentId.value
@@ -486,8 +721,6 @@ onMounted(async () => {
     loginStudentId.value = 'รหัสผู้ใช้ระบบ'
     proxyUserId.value = ''
   }
-
-  // loginName
   const storedRequester = localStorage.getItem('requesterName') || ''
   if (storedRequester) {
     formData.value.requester = storedRequester
@@ -505,7 +738,6 @@ onMounted(async () => {
   } else {
     loginName.value = 'ชื่อผู้ใช้ระบบ'
   }
-
   if (route.query.restore === 'true') {
     loadFormFromSession()
     loadFilesFromGlobal()
@@ -521,7 +753,6 @@ onMounted(async () => {
     if (route.query.zone) formData.value.zone = route.query.zone
     return
   }
-
   if (route.query.fieldName) formData.value.building = route.query.fieldName
   if (route.query.zone) formData.value.zone = route.query.zone
   if (!formData.value.building) {
@@ -532,7 +763,6 @@ onMounted(async () => {
     const storedZone = sessionStorage.getItem('zone') || localStorage.getItem('zone') || localStorage.getItem('zoneSelected')
     if (storedZone) formData.value.zone = storedZone
   }
-
   try {
     const res = await axios.get(`${API_BASE}/api/information`)
     const uniqueUnits = [...new Set(res.data.map(item => item.unit))]
@@ -541,19 +771,17 @@ onMounted(async () => {
   } catch (e) {
     agencyOptions.value = ['อื่นๆ']
   }
-
   loadFormFromSession()
   loadFilesFromGlobal()
 })
 
-// Watch: isProxyBooking
-watch(isProxyBooking, (val) => {
-  if (!val) {
-    proxyUserId.value = loginStudentId.value
-  } else {
-    proxyUserId.value = ''
-  }
-})
+// watch(isProxyBooking, (val) => {
+//   if (!val) {
+//     proxyUserId.value = loginStudentId.value
+//   } else {
+//     proxyUserId.value = ''
+//   }
+// })
 
 watch(formData, saveFormToSession, { deep: true })
 watch(agencyInput, saveFormToSession)
@@ -561,12 +789,13 @@ watch(customAgency, saveFormToSession)
 watch(otherAgencyDetail, saveFormToSession)
 watch(proxyUserId, saveFormToSession)
 watch(isProxyBooking, saveFormToSession)
+watch(proxyStudentName, saveFormToSession)
+watch(proxyStudentId, saveFormToSession)
 watch(selectedFiles, () => {
   window._tempSelectedFiles = selectedFiles.value
   saveFormToSession()
 }, { deep: true })
 
-// Session ฟอร์ม
 function saveFormToSession() {
   sessionStorage.setItem(
     'form_field_save',
@@ -577,7 +806,9 @@ function saveFormToSession() {
       otherAgencyDetail: otherAgencyDetail.value,
       proxyUserId: proxyUserId.value,
       isProxyBooking: isProxyBooking.value,
-      selectedFileNames: selectedFiles.value.map(f => f.name)
+      selectedFileNames: selectedFiles.value.map(f => f.name),
+      proxyStudentName: proxyStudentName.value,     
+      proxyStudentId: proxyStudentId.value,
     })
   )
 }
@@ -593,6 +824,9 @@ function loadFormFromSession() {
       proxyUserId.value = d.proxyUserId || ''
       isProxyBooking.value = d.isProxyBooking || false
       selectedFiles.value = (d.selectedFileNames || []).map(name => ({ name }))
+      dateRange.value = [formData.value.since, formData.value.uptodate]
+      proxyStudentName.value = d.proxyStudentName || ''
+      proxyStudentId.value = d.proxyStudentId || ''
     } catch (e) {
       sessionStorage.removeItem('form_field_save')
     }
@@ -604,30 +838,10 @@ function loadFilesFromGlobal() {
   }
 }
 
-// File upload
-function handleFileChange(event) {
-  selectedFiles.value = Array.from(event.target.files)
-  window._tempSelectedFiles = selectedFiles.value
-  fileError.value = selectedFiles.value.length === 0
-  saveFormToSession()
-}
-function clearFiles() {
-  selectedFiles.value = []
-  window._tempSelectedFiles = []
-  fileError.value = false
-  setTimeout(() => {
-    const fileInput = document.getElementById('fileUploadInput')
-    if (fileInput) fileInput.value = ''
-  }, 0)
-}
-
-// Stepper
 async function goStep(targetStep) {
   saveFormToSession()
   window._tempSelectedFiles = selectedFiles.value
   if (targetStep === currentStep) return
-
-  // ไม่อนุญาตข้าม step!
   if (targetStep === 2 && currentStep === 0) {
     Swal.fire({
       icon: 'info',
@@ -641,7 +855,6 @@ async function goStep(targetStep) {
     router.push({ path: stepRoutes[0], query: { restore: 'true' } })
     return
   }
-  // validate ก่อนข้ามไป step 2
   if (targetStep === 1) {
     showValidate.value = true
     if (!validateFields()) {
@@ -686,8 +899,6 @@ async function goStep(targetStep) {
     return
   }
 }
-
-// ฟิลด์, validate, base64, submit
 const finalAgency = computed(() => (agencyInput.value === 'อื่นๆ' ? customAgency.value : agencyInput.value))
 function handleAgencyChange() {
   if (agencyInput.value !== 'อื่นๆ') {
@@ -695,6 +906,14 @@ function handleAgencyChange() {
     otherAgencyDetail.value = ''
   }
 }
+
+const isAgencySelected = computed(() =>
+  !!agencyInput.value &&
+  agencyOptions.value.includes(agencyInput.value) &&
+  agencyInput.value !== 'อื่นๆ'
+)
+
+
 const missingFields = ref({})
 const showValidate = ref(false)
 function inputClass(field) {
@@ -708,8 +927,16 @@ function inputClass(field) {
   }
   if (showValidate.value && missingFields.value[field]) return 'custom-input input-error'
   if (field === 'files' && fileError.value) return 'input-error'
+  if (field === 'building') return 'custom-input building-readonly'
   return 'custom-input'
 }
+
+function clearAgency() {
+  agencyInput.value = ''
+  customAgency.value = ''
+  otherAgencyDetail.value = ''
+}
+
 function validateFields() {
   const fields = {}
   const requiredFields = [
@@ -725,15 +952,20 @@ function validateFields() {
       fields['requester'] = true
     }
   }
+
+  if (isProxyBooking.value) {
+  if (!proxyStudentName.value || proxyStudentName.value.trim() === '') {
+    fields['proxyStudentName'] = true
+  }
+  if (!proxyStudentId.value || proxyStudentId.value.trim() === '') {
+    fields['proxyStudentId'] = true
+  }
+}
+
   if (!finalAgency.value || String(finalAgency.value).trim() === '') fields['agency'] = true
   if (agencyInput.value === 'อื่นๆ' && (!customAgency.value || String(customAgency.value).trim() === ''))
     fields['agencyOther'] = true
   if (hasZone.value && (!formData.value.zone || String(formData.value.zone).trim() === '')) fields['zone'] = true
-  if (formData.value.selectedUtility === 'ไฟฟ้า') {
-    ['turnon_air', 'turnoff_air', 'turnon_lights', 'turnoff_lights'].forEach((k) => {
-      if (!formData.value[k] || String(formData.value[k]).trim() === '') fields[k] = true
-    })
-  }
   if (!proxyUserId.value || String(proxyUserId.value).trim() === '') fields['userId'] = true
   if (selectedFiles.value.length === 0) {
     fields['files'] = true
@@ -774,18 +1006,15 @@ async function handleSubmit() {
         user_id: proxyUserId.value
       })
       if (res.data && res.data.id) uploadFileIds.push(res.data.id)
-
-      // ก่อน submit หรือก่อนเซฟ sessionStorage
-if (!formData.value.utilityRequest) formData.value.utilityRequest = 'no'
-if (!formData.value.facilityRequest) formData.value.facilityRequest = 'no'
-
     }
     const submitData = {
       ...formData.value,
       agency: finalAgency.value ?? '',
       agency_other_detail: otherAgencyDetail.value ?? '',
       user_id: proxyUserId.value ?? '',
-      uploadFiles: uploadFileIds
+      uploadFiles: uploadFileIds,
+      proxyStudentName: proxyStudentName.value ?? '',
+      proxyStudentId: proxyStudentId.value ?? ''
     }
     const bookingRes = await axios.post(`${API_BASE}/api/booking_field`, submitData)
     localStorage.setItem('bookingId', bookingRes.data.bookingId)
@@ -827,8 +1056,6 @@ function handleClear() {
     if (fileInput) fileInput.value = ''
   }, 0)
 }
-
-/* ---- Clear ไฟล์แนบ/เซสชันเมื่อออกจากหน้านี้ ---- */
 onBeforeRouteLeave((to, from, next) => {
   if (to.path !== '/form_field' && to.path !== '/form_field3') {
     selectedFiles.value = []
@@ -841,14 +1068,59 @@ onBeforeRouteLeave((to, from, next) => {
   }
   next()
 })
+function onlyNumbersLimit(field) {
+  formData.value[field] = formData.value[field].replace(/[^0-9]/g, '').slice(0, 10)
+}
+function onlyAwInput(e) {
+  // อนุญาตแค่เลขและ / - _
+  let val = e.target.value.replace(/[^0-9/_-]/g, '').slice(0, 10)
+  formData.value.aw = val
+}
+function shortenFileName(name) {
+  if (!name) return ''
+  if (name.length <= 30) return name
+  const dot = name.lastIndexOf('.')
+  const ext = dot > -1 ? name.slice(dot) : ''
+  return name.slice(0, 15) + '...' + (ext.length < 8 ? ext : ext.slice(0, 8) + '...')
+}
+function viewPdf(idx) {
+  const file = selectedFiles.value[idx]
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    const pdfData = e.target.result
+    const blob = new Blob([pdfData], { type: 'application/pdf' })
+    const url = URL.createObjectURL(blob)
+    window.open(url, '_blank')
+    setTimeout(() => URL.revokeObjectURL(url), 10000)
+  }
+  reader.readAsArrayBuffer(file)
+}
+
+function viewFile(idx) {
+  const file = selectedFiles.value[idx]
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    const arrbuf = e.target.result
+    let mime = ''
+    if (/\.(docx?|rtf)$/i.test(file.name)) mime = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    else if (/\.(xlsx?)$/i.test(file.name)) mime = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    else mime = file.type || 'application/octet-stream'
+    const blob = new Blob([arrbuf], { type: mime })
+    const url = URL.createObjectURL(blob)
+    window.open(url, '_blank')
+    setTimeout(() => URL.revokeObjectURL(url), 10000)
+  }
+  reader.readAsArrayBuffer(file)
+}
+
 </script>
-
-
-
 
 <style scoped>
 /* ... วาง style ของคุณที่นี่ ... */
 /* ตัวอย่าง style ตามที่แนบมาก่อนหน้า */
+.required-star {
+  color: red;
+}
 .flex-row {
   display: flex;
   gap: 32px;
@@ -860,12 +1132,7 @@ onBeforeRouteLeave((to, from, next) => {
   display: flex;
   flex-direction: column;
 }
-@media (max-width: 900px) {
-  .flex-row {
-    flex-direction: column;
-    gap: 18px;
-  }
-}
+
 .layout {
   background: #e7f2fb;
   min-height: 100vh;
@@ -962,12 +1229,7 @@ onBeforeRouteLeave((to, from, next) => {
   margin-bottom: 6px;
   font-size: 14px;
 }
-@media (max-width: 900px) {
-  .form-grid {
-    grid-template-columns: 1fr;
-    gap: 18px;
-  }
-}
+
 .custom-input {
   padding: 10px 14px;
   font-size: 14px;
@@ -1249,20 +1511,70 @@ onBeforeRouteLeave((to, from, next) => {
 .notification-item {
   transition: background 0.3s, border-color 0.3s, color 0.3s;
 }
-@media (max-width: 540px) {
-  .notification-dropdown {
-    min-width: 220px;
-    max-width: 99vw;
-  }
-  .notification-dropdown li {
-    font-size: 0.99rem;
-    padding: 0.7em 0.7em;
-  }
-}
+
 .notification-backdrop {
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
   background: transparent;
   z-index: 1001; /* ต้องน้อยกว่า .notification-dropdown (1002) */
 }
+
+.is-invalid {
+  border-color: #ef4444 !important;
+  background: #ffeaea !important;
+}
+
+
+
+
+@media (max-width: 540px) {
+  /* ตัวครอบ card ให้ scroll-x */
+  .scroll-x-container {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    width: 100vw;
+    padding: 0;
+  }
+
+  .form-container {
+    min-width: 900px;  
+    width: 900px;
+    max-width: 900px;
+    padding: 16px 24px !important;
+    border-radius: 10px !important;
+    box-sizing: border-box;
+  }
+
+  .form-row {
+    width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+  }
+
+  /* ให้ input และ textarea เต็มความกว้างของ col */
+  .custom-input,
+  .custom-textarea,
+  input[type="text"],
+  input[type="date"],
+  input[type="time"],
+  select,
+  textarea {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    overflow-x: auto;
+  }
+
+  /* ปรับขนาด font หรือ padding ถ้าต้องการ */
+  .form-header h3 {
+    font-size: 1.1rem;
+  }
+}
+
+</style>
+
+
+<style>
+@import '../css/style.css';
 </style>

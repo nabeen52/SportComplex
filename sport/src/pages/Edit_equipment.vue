@@ -36,7 +36,11 @@
         </router-link>
       </nav>
     </aside>
-
+<div
+  v-if="isMobile && !isSidebarClosed"
+  class="sidebar-overlay"
+  @click="toggleSidebar"
+></div>
     <!-- Main Content -->
     <div class="main">
       <header class="topbar">
@@ -119,6 +123,7 @@ export default {
   data() {
     return {
       isSidebarClosed: false,
+      isMobile: false,
       equipments: [],
       showNotifications: false,
       notifications: [],
@@ -131,7 +136,12 @@ export default {
     toggleSidebar() {
       this.isSidebarClosed = !this.isSidebarClosed;
     },
-
+checkMobile() {
+    this.isMobile = window.innerWidth <= 600
+  },
+  toggleSidebar() {
+    this.isSidebarClosed = !this.isSidebarClosed
+  },
     // ===== ฟังก์ชันกระดิ่ง =====
     toggleNotifications() {
       this.showNotifications = !this.showNotifications;
@@ -212,14 +222,54 @@ export default {
       const { value: formValues } = await Swal.fire({
         title: 'เพิ่มอุปกรณ์',
         html: `
-          <input type="text" id="name" class="swal2-input" placeholder="ชื่ออุปกรณ์">
-          <input type="number" id="quantity" class="swal2-input" placeholder="จำนวน" min="0">
-          <input type="file" id="image" class="swal2-file">
-          <select id="visible" class="swal2-select">
-            <option value="true">เปิด</option>
-            <option value="false">ปิด</option>
-          </select>
-        `,
+  <input type="text" id="name" class="swal2-input" placeholder="ชื่ออุปกรณ์">
+  <input type="number" id="quantity" class="swal2-input" placeholder="จำนวน" min="0">
+  <div style="display:flex; flex-direction:column; align-items:center; width:100%;">
+  <label for="image" style=" margin-bottom:1px; margin-top:4px;">เลือกรูปภาพอุปกรณ์</label>
+  <input 
+    type="file"
+    id="image"
+    class="swal2-file"
+    accept="image/*"
+    style="margin-bottom:8px; margin-top:6px; display:block;"
+  >
+ <small style="color:#555; font-style:italic;">* อัตราส่วนภาพควรเป็น 5:6 </small>
+<div style="
+  display: inline-flex; 
+  align-items: center; 
+  margin-top: 5px;
+  margin-left: auto;
+  margin-right: auto;
+">
+  <label for="visible" 
+    style="white-space: nowrap; margin-right: 4px; font-size: 18px; min-width: 55px; text-align: right;">
+    สถานะ :
+  </label>
+  <select id="visible" 
+    class="swal2-select" 
+    style="
+      width: 72px !important;
+      min-width: 0 !important;
+      padding-left: 2px !important;
+      padding-right: 18px !important;
+      box-sizing: border-box;
+      font-size: 18px;
+      margin-left: 0 !important;
+    ">
+    <option value="true">เปิด</option>
+    <option value="false">ปิด</option>
+  </select>
+</div>
+
+
+
+
+
+
+
+  </div>
+`
+,
         focusConfirm: false,
         showCancelButton: true,
         confirmButtonText: 'เพิ่ม',
@@ -273,17 +323,46 @@ export default {
       const result = await Swal.fire({
         title: 'แก้ไขอุปกรณ์',
         html: `
-          <input type="text" id="name" class="swal2-input" placeholder="ชื่ออุปกรณ์" value="${equipment.name}">
-          <input type="number" id="quantity" class="swal2-input" placeholder="จำนวน" min="0" value="${equipment.quantity}">
-          <input type="file" id="image" class="swal2-file">
-          <div style="padding: 0.5rem;">
-            <label for="visible" style="display: block; margin-bottom: 0.5rem;">สถานะแสดงผล:</label>
-            <select id="visible" class="swal2-select" style="text-align: center; width: 50px; padding: 0.5rem; border: 1px solid #ccc; border-radius: 4px;">
-              <option value="true" ${equipment.visible ? 'selected' : ''}>เปิด</option>
-              <option value="false" ${!equipment.visible ? 'selected' : ''}>ปิด</option>
-            </select>
-          </div>
-        `,
+  <input type="text" id="name" class="swal2-input" placeholder="ชื่ออุปกรณ์" value="${equipment.name}">
+  <input type="number" id="quantity" class="swal2-input" placeholder="จำนวน" min="0" value="${equipment.quantity}">
+  <div style="display:flex; flex-direction:column; align-items:center; width:100%;">
+  <label for="image" style=" margin-bottom:1px; margin-top:4px;">เลือกรูปภาพใหม่ (ถ้าต้องการเปลี่ยน)</label>
+  <input 
+    type="file"
+    id="image"
+    class="swal2-file"
+    accept="image/*"
+    style="margin-bottom:8px; margin-top:6px; display:block;"
+  >
+ <small style="color:#555; font-style:italic;">* อัตราส่วนภาพควรเป็น 5:6 </small>
+<div style="
+  display: inline-flex; 
+  align-items: center; 
+  margin-top: 5px;
+  margin-left: auto;
+  margin-right: auto;
+">
+  <label for="visible" 
+    style="white-space: nowrap; margin-right: 4px; font-size: 18px; min-width: 55px; text-align: right;">
+    สถานะ :
+  </label>
+  <select id="visible" 
+    class="swal2-select" 
+    style="
+      width: 72px !important;
+      min-width: 0 !important;
+      padding-left: 2px !important;
+      padding-right: 18px !important;
+      box-sizing: border-box;
+      font-size: 18px;
+      margin-left: 0 !important;
+    ">
+    <option value="true" ${equipment.visible ? 'selected' : ''}>เปิด</option>
+          <option value="false" ${!equipment.visible ? 'selected' : ''}>ปิด</option>
+  </select>
+</div> 
+</div>
+    `,
         showCancelButton: true,
         showDenyButton: true,
         confirmButtonText: 'บันทึก',
@@ -347,6 +426,8 @@ export default {
     }
   },
   async mounted() {
+    this.checkMobile();
+  window.addEventListener('resize', this.checkMobile);
     try {
       const res = await axios.get(`${API_BASE}/api/equipments`);
       this.equipments = res.data;
@@ -363,6 +444,7 @@ export default {
   beforeUnmount() {
     clearInterval(this.polling);
     document.removeEventListener('mousedown', this.handleClickOutside);
+     window.removeEventListener('resize', this.checkMobile);
   },
 };
 </script>
@@ -409,7 +491,7 @@ export default {
 .equipment-img {
   width: 150px;
   height: 180px;
-  object-fit: contain !important;
+  object-fit: cover;
   /* เดิม cover ให้เปลี่ยนเป็น contain */
   background: #fff;
   /* เพิ่มพื้นหลังขาว */
@@ -518,6 +600,92 @@ input:checked+.slider {
 
 input:checked+.slider:before {
   transform: translateX(18px);
+}
+
+.swal2-select {
+  min-width: 0 !important;
+  width: 72px !important;
+  padding-left: 2px !important;
+  padding-right: 18px !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  box-sizing: border-box !important;
+}
+
+@media (max-width: 600px) {
+  .main, .content {
+    width: 100vw !important;
+    min-width: 0 !important;
+    overflow-x: visible !important;
+  }
+  .title-row {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    min-width: 0;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    box-sizing: border-box;
+    /* ไม่มี overflow-x */
+  }
+  .add-btn {
+    width: 46px !important;
+    height: 46px !important;
+    font-size: 1.3rem !important;
+    min-width: 0 !important;
+    border-radius: 50%;
+    margin-bottom: 0;
+    margin-left: 8px;
+    flex-shrink: 0;
+    float: none;
+    /* กำหนดไว้ใน flex ไม่ต้อง float */
+  }
+  .card-list {
+    gap: 0.8rem !important;
+  }
+  .equipment-card {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap !important;
+    align-items: flex-start;
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    padding: 0.7rem;
+    gap: 1.2rem;
+    width: 100%;
+    min-width: 320px;
+    max-width: 100vw;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .equipment-img {
+    width: 92px !important;
+    height: 112px !important;
+    min-width: 92px !important;
+    min-height: 112px !important;
+    border-radius: 7px !important;
+    margin-right: 0.6rem !important;
+  }
+  .equipment-info, .equipment-row {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    min-width: 180px;
+    gap: 0.5rem;
+  }
+  .equipment-name {
+    font-size: 1rem;
+    padding: 0.2rem;
+    margin-right: 0 !important;
+  }
+}
+.sidebar-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.25);
+  z-index: 1999; /* ต้องน้อยกว่า sidebar */
 }
 </style>
 

@@ -4,23 +4,29 @@
     <aside class="sidebar" :class="{ closed: isSidebarClosed }">
       <div class="sidebar-header">
         <img src="/img/logo.png" alt="logo" class="logo" />
-        <p class="sidebar-title">ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง</p>
+        <p class="sidebar-title">Sport Complex MFU</p>
       </div>
       <nav class="nav-links">
         <router-link to="/approve_equipment" exact-active-class="active">
-          <i class="pi pi-home"></i> Approve
+          <i class="pi pi-home"></i> อนุมัติ/รับคืนอุปกรณ์
         </router-link>
         <router-link to="/equipment" active-class="active">
-          <i class="pi pi-map-marker"></i> Equipment
+          <i class="pi pi-map-marker"></i> อุปกรณ์
         </router-link>
-        <router-link to="/return" active-class="active">
+        <!-- <router-link to="/return" active-class="active">
           <i class="pi pi-box"></i> Return
-        </router-link>
+        </router-link> -->
         <router-link to="/history_staff" active-class="active">
-          <i class="pi pi-history"></i> History
+          <i class="pi pi-history"></i> ประวัติการทำรายการ
         </router-link>
       </nav>
     </aside>
+
+    <div
+      v-if="!isSidebarClosed && isMobile"
+      class="sidebar-overlay"
+      @click="toggleSidebar"
+    ></div>
 
     <div class="main">
       <!-- Topbar -->
@@ -54,7 +60,7 @@
 
 
       <!-- แถบประกาศ slide-down -->
-      <transition name="slide-down">
+      <!-- <transition name="slide-down">
         <div class="announcement-bar" v-if="showAnnouncementBar">
           <i class="pi pi-megaphone announcement-icon"></i>
           <div class="announcement-bar-text">{{ announcement }}</div>
@@ -62,7 +68,7 @@
             <i class="pi pi-times" style="color: red;"></i>
           </button>
         </div>
-      </transition>
+      </transition> -->
 
       <!-- Body -->
       <div style="background-color: #dbe9f4;">
@@ -118,6 +124,12 @@ const notifications = ref([])
 const unreadCount = ref(0)
 const lastCheckedIds = ref(new Set())
 let polling = null
+const isMobile = ref(window.innerWidth <= 600)
+
+function checkMobile() {
+  isMobile.value = window.innerWidth <= 600
+  // อาจ auto-close sidebar ด้วยก็ได้
+}
 
 onMounted(async () => {
   await fetchEquipments()
@@ -132,9 +144,13 @@ onMounted(async () => {
 
   await fetchNotifications()
   polling = setInterval(fetchNotifications, 30000)
+   window.addEventListener('resize', checkMobile)
 })
 
-onBeforeUnmount(() => { if (polling) clearInterval(polling) })
+onBeforeUnmount(() => {
+   if (polling) clearInterval(polling)
+   window.removeEventListener('resize', checkMobile)
+  })
 
 async function fetchEquipments() {
   try {
@@ -242,7 +258,7 @@ async function confirmToggle(item) {
   transition: 0.18s;
 }
 .btn-on {
-  background: #2ecc40;
+  background: #42bd41;
   color: #fff;
 }
 .btn-off {
@@ -368,7 +384,6 @@ async function confirmToggle(item) {
   background: transparent;
   z-index: 1400;
 }
-
 
 </style>
 

@@ -12,6 +12,12 @@
         </router-link>
       </nav>
     </aside>
+<div 
+      v-if="isMobile && !isSidebarClosed" 
+      class="sidebar-overlay" 
+      @click="toggleSidebar"
+    ></div>
+
     <div class="main">
       <header class="topbar">
         <button class="menu-toggle" @click="toggleSidebar">☰</button>
@@ -114,6 +120,7 @@ export default {
   name: 'FieldLayout',
   data() {
     return {
+      
       isSidebarClosed: false,
       navs: [
         { to: "/dashboard", label: "Dashboard", icon: "pi pi-chart-pie", exact: true },
@@ -135,9 +142,13 @@ export default {
       unreadCount: 0,
       lastCheckedIds: new Set(),
       polling: null,
+      isMobile: false,
     }
   },
   async mounted() {
+    this.checkMobile()
+  window.addEventListener('resize', this.checkMobile)
+
     console.log('API_BASE', API_BASE)  // ตรวจสอบค่า API_BASE
 
     await this.loadFields()
@@ -150,10 +161,20 @@ export default {
   beforeUnmount() {
     clearInterval(this.polling);
     document.removeEventListener('mousedown', this.handleClickOutside);
+    window.removeEventListener('resize', this.checkMobile)
   },
   methods: {
     toggleSidebar() { this.isSidebarClosed = !this.isSidebarClosed },
-
+checkMobile() {
+    this.isMobile = window.innerWidth <= 600
+    if (!this.isMobile && !this.isSidebarClosed) {
+      // ปิด overlay ถ้าออกจาก mobile
+      this.isSidebarClosed = false
+    }
+  },
+  toggleSidebar() {
+    this.isSidebarClosed = !this.isSidebarClosed
+  },
     // ===== Notification logic =====
     toggleNotifications() {
       this.showNotifications = !this.showNotifications;
@@ -295,7 +316,7 @@ export default {
             <label class="form-label">เลือกรูปภาพ :</label>
             <input type="file" id="image" class="swal2-file modern-file" accept="image/*">
             <label class="form-label">${isEdit ? '*เลือกรูปภาพใหม่(ถ้าต้องการเปลี่ยน)' : ''}</label>
-            <div class="file-info">*ขนาดภาพควรเป็น 200x120</div>
+            <div class="file-info">*อัตราส่วนภาพควรเป็น 5:3</div>
           </div>
           <div class="form-group"><label class="form-label">สถานะ :</label>
             <select id="visible" class="swal2-select modern-select">
@@ -401,7 +422,7 @@ export default {
                 <input type="text" id="zoneName" class="swal2-input modern-input" placeholder="กรอกชื่อโซน"></div>
               <div class="form-group"><label class="form-label">เลือกรูปภาพ :</label>
                 <input type="file" id="zoneImage" class="swal2-file modern-file" accept="image/*">
-                <div class="file-info">*ขนาดภาพควรเป็น 200x120</div>
+                <div class="file-info">*อัตราส่วนภาพควรเป็น 5:3</div>
               </div>
               <div class="form-group"><label class="form-label">สถานะ :</label>
                 <select id="zoneStatus" class="swal2-select modern-select">
@@ -446,7 +467,7 @@ export default {
               <div class="form-group"><div class="form-group"><label class="form-label">เลือกรูปภาพ :</label>
                 <input type="file" id="zoneImage" class="swal2-file modern-file" accept="image/*">
                 <div class="file-info">*เลือกรูปภาพใหม่(ถ้าต้องการเปลี่ยน)</div>
-                <div class="file-info">*ขนาดภาพควรเป็น 200x120</div>
+                <div class="file-info">*อัตราส่วนภาพควรเป็น 5:3</div>
               </div>
               <div class="form-group"><label class="form-label">สถานะ :</label>
                 <select id="zoneStatus" class="swal2-select modern-select">
@@ -601,7 +622,7 @@ export default {
 .field-image {
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  object-fit: cover;
   transition: transform .3s;
   background: #fff;
 }
@@ -743,15 +764,24 @@ input:checked+.toggle-slider:before {
   background: linear-gradient(135deg, #f59e0b 0, #d97706 100%);
   color: #fff;
   border: none;
-  padding: .5rem;
   border-radius: 6px;
   cursor: pointer;
+  display: flex;               /* เพิ่ม */
+  align-items: center;          /* เพิ่ม */
+  justify-content: center;      /* เพิ่ม */
+  width: 38px;                  /* ปรับให้เป็นสี่เหลี่ยมจัตุรัส */
+  height: 38px;
+  padding: 0;                   /* reset */
+  transition: .2s;
+  font-size: 1.4rem;            /* ให้ + ใหญ่ขึ้น */
+  box-sizing: border-box;
+}
+.add-zone-btn i {
+  margin: 0 !important;         /* ลบ margin ออกถ้ามี */
+  font-size: 1.35em;            /* เพิ่มขนาดถ้าต้องการ */
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
-  transition: .2s;
 }
 
 .add-zone-btn:hover {
@@ -819,7 +849,7 @@ input:checked+.toggle-slider:before {
 .zone-image {
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  object-fit: cover;
   background: #fff;
 }
 
@@ -1098,18 +1128,61 @@ input:checked+.toggle-slider:before {
   overflow-x: hidden !important;
   box-sizing: border-box !important;
 }
-
-@media (max-width: 500px) {
-  .swal-form {
-    grid-template-columns: 1fr !important;
-    row-gap: 12px !important;
+@media (max-width: 600px) {
+   .title-row {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    /* ไม่ต้องมี overflow-x: auto */
+    margin-bottom: 1rem;
+    padding-bottom: 1rem;
+    border-bottom: 2px solid #e2e8f0;
   }
-
-  .form-label {
-    text-align: left !important;
-    padding-right: 0 !important;
+  .add-field-btn {
+    flex-shrink: 0;   /* ปุ่มไม่ย่อ */
+    /* อาจเพิ่ม margin-left หรือปรับขนาดปุ่มเล็กลงในจอเล็ก */
+    font-size: 1rem;
+    padding: .6rem 1.2rem;
+    min-width: 100px;
+  }
+  .content {
+    width: 100vw !important;
+    min-width: 0 !important;
+    box-sizing: border-box;
+    overflow-x: visible !important; /* สำคัญ ห้าม auto/hide เดี๋ยวจะไปบีบปุ่ม */
+  }
+  .field-container {
+    flex-direction: column !important;
+    gap: 1.2rem;
+  }
+  .field-item {
+    width: 100%;
+    max-width: 100vw;
+    border-radius: 12px;
+    overflow: visible;
+  }
+  .field-card {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    width: 100%;
+    /* ไม่ต้อง set min-width */
+  }
+  .field-content {
+    min-width: 400px; /* ปรับค่าตามเนื้อหาที่อาจจะล้น */
   }
 }
+
+.sidebar-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.28);
+  z-index: 2999;
+}
+
 </style>
 
 <style>

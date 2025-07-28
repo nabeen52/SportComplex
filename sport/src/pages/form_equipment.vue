@@ -4,7 +4,7 @@
     <aside class="sidebar" :class="{ closed: isSidebarClosed }">
       <div class="sidebar-header">
         <img src="/img/logo.png" alt="logo" class="logo" />
-        <p class="sidebar-title">ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง</p>
+        <p class="sidebar-title">Sport Complex MFU</p>
       </div>
       <nav class="nav-links">
         <router-link to="/home_user" exact-active-class="active"><i class="pi pi-home"></i> Home</router-link>
@@ -13,35 +13,45 @@
         <router-link to="/history" active-class="active"><i class="pi pi-history"></i> History</router-link>
       </nav>
     </aside>
+
+    <div
+  v-if="!isSidebarClosed"
+  class="sidebar-overlay"
+  @click="toggleSidebar"
+    ></div>
+
     <div class="main">
       <header class="topbar">
         <button class="menu-toggle" @click="toggleSidebar">☰</button>
         <div class="topbar-actions">
           <div>
             <div
-    v-if="showNotifications"
-    class="notification-backdrop"
-    @click="closeNotifications"
-  ></div>
+              v-if="showNotifications"
+              class="notification-backdrop"
+              @click="closeNotifications"
+            ></div>
             <button class="notification-btn" @click="toggleNotifications">
               <i class="pi pi-bell"></i>
               <span v-if="unreadCount > 0" class="badge">{{ unreadCount }}</span>
             </button>
             <div v-if="showNotifications" class="notification-dropdown">
               <ul>
-  <li
-    v-for="(noti, idx) in notifications.slice(0, 10)"  
-    :key="noti.id || idx"
-    :class="['notification-item', noti.type || '', { unread: idx === 0 }]"
-  >
-    {{ noti.message }}
-  </li>
-  <li v-if="notifications.length === 0" class="no-noti">ไม่มีแจ้งเตือน</li>
-</ul>
-
-</div>
+                <li
+                  v-for="(noti, idx) in notifications.slice(0, 10)"
+                  :key="noti.id || idx"
+                  :class="['notification-item', noti.type || '', { unread: idx === 0 }]"
+                >
+                  {{ noti.message }}
+                </li>
+                <li v-if="notifications.length === 0" class="no-noti">ไม่มีแจ้งเตือน</li>
+              </ul>
+            </div>
           </div>
-          <router-link to="/cart"><i class="pi pi-shopping-cart"></i></router-link>
+          <router-link to="/cart" class="cart-link">
+            <i class="pi pi-shopping-cart"></i>
+            <span v-if="products.length > 0" class="badge">{{ products.length }}</span>
+          </router-link>
+
           <router-link to="/profile"><i class="pi pi-user"></i></router-link>
         </div>
       </header>
@@ -60,15 +70,20 @@
           </div>
         </div>
       </div>
+
+      <div class="scroll-x-container">
       <div class="form-container">
         <div class="form-header">
           <h3>แบบฟอร์มการยืมอุปกรณ์/วัสดุ/ครุภัณฑ์</h3>
-          <p> ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง โทร 917-820 โทรสาร 917-823</p>
+          <p> ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง โทร 053-917820</p>
         </div>
         <div class="form-grid">
           <!-- Name -->
           <div class="form-row">
-            <label>ชื่อ-นามสกุล</label>
+            <label>
+              ชื่อ-นามสกุล
+              <span v-if="touched && (showError && !form.name)" style="color:red">*</span>
+            </label>
             <input
               type="text"
               class="custom-input"
@@ -79,7 +94,10 @@
           </div>
           <!-- Student ID -->
           <div class="form-row">
-            <label>รหัสนักศึกษา</label>
+            <label>
+              รหัสนักศึกษา
+              <span v-if="touched && (showError && !form.user_id)" style="color:red">*</span>
+            </label>
             <input
               type="text"
               class="custom-input"
@@ -90,31 +108,47 @@
           </div>
           <!-- Agency (หน่วยงาน) -->
           <div class="form-row">
-            <label>ชื่อหน่วยงาน</label>
-            <input
-              class="custom-input"
-              list="agency-list"
-              v-model="agencyInput"
-              placeholder="ค้นหาหรือเลือกหน่วยงาน"
-              @change="handleAgencyChange"
-              :readonly="isFormLocked"
-              :class="{ 'is-invalid': touched && showError && !agencyInput }"
-            />
-            <datalist id="agency-list">
-              <option v-for="option in agencyOptions" :key="option" :value="option" />
-            </datalist>
-          </div>
-          <div class="form-row" v-if="agencyInput === 'อื่นๆ'">
-            <label>โปรดระบุหน่วยงาน</label>
-            <input
-              type="text"
-              class="custom-input"
-              v-model="customAgency"
-              placeholder="กรอกชื่อหน่วยงาน"
-              :readonly="isFormLocked"
-              :class="{ 'is-invalid': touched && showError && !customAgency }"
-            />
-          </div>
+  <label>
+    ชื่อหน่วยงาน
+    <span v-if="touched && (showError && !agencyInput)" style="color:red">*</span>
+  </label>
+   <input
+    class="custom-input"
+    list="agency-list"
+    v-model="agencyInput"
+    placeholder="ค้นหาหรือเลือกหน่วยงาน"
+    @change="handleAgencyChange"
+    :readonly="isAgencySelected"
+    :class="{ 'is-invalid': touched && showError && !agencyInput }"
+    style="flex:1"
+  />
+  <button
+    v-if="isAgencySelected && !isFormLocked"
+    type="button"
+    @click="clearAgency"
+    style="background:#eee;padding:3px 10px;border-radius:6px;border:none;cursor:pointer"
+    title="ลบ"
+  >ลบ</button>
+  <datalist id="agency-list">
+    <option v-for="option in agencyOptions" :key="option" :value="option" />
+  </datalist>
+
+</div>
+<div class="form-row" v-if="agencyInput === 'อื่นๆ'">
+  <label>
+    โปรดระบุหน่วยงาน
+    <span v-if="touched && (showError && !customAgency)" style="color:red">*</span>
+  </label>
+  <input
+    type="text"
+    class="custom-input"
+    v-model="customAgency"
+    placeholder="กรอกชื่อหน่วยงาน"
+    :readonly="isFormLocked"
+    :class="{ 'is-invalid': touched && showError && !customAgency }"
+  />
+</div>
+
           <div class="form-row" v-if="agencyInput === 'อื่นๆ'">
             <label>รายละเอียดเพิ่มเติม (ถ้ามี)</label>
             <input
@@ -127,43 +161,59 @@
           </div>
           <!-- Phone number -->
           <div class="form-row">
-            <label>เบอร์โทรศัพท์</label>
+            <label>
+              เบอร์โทรศัพท์
+              <span v-if="touched && (showError && (!form.number || form.number.length !== 10))" style="color:red">*</span>
+            </label>
             <input
               type="text"
               class="custom-input"
               v-model="form.number"
-              :class="{ 'is-invalid': touched && showError && !form.number }"
+              maxlength="10"
+              inputmode="numeric"
+              pattern="\d*"
+              @input="onPhoneInput"
               :readonly="isFormLocked"
+              :class="{ 'is-invalid': touched && (showError && (!form.number || form.number.length !== 10)) }"
             />
           </div>
           <!-- Reason -->
           <div class="form-row">
-  <label>เหตุผลที่ขอใช้</label>
-  <textarea
-    class="custom-textarea"
-    v-model="form.reason"
-    :class="{ 'is-invalid': touched && showError && !form.reason }"
-    :readonly="isFormLocked"
-    rows="4"
-    placeholder="กรอกเหตุผลในการขอใช้"
-  ></textarea>
-</div>
+            <label>
+              เหตุผลที่ขอใช้
+              <span v-if="touched && (showError && !form.reason)" style="color:red">*</span>
+            </label>
+            <textarea
+              class="custom-textarea"
+              v-model="form.reason"
+              :class="{ 'is-invalid': touched && showError && !form.reason }"
+              :readonly="isFormLocked"
+              rows="4"
+              placeholder="กรอกเหตุผลในการขอใช้"
+            ></textarea>
+          </div>
 
-<div class="form-row">
-  <label>สถานที่ใช้งาน</label>
-  <textarea
-    class="custom-textarea"
-    v-model="form.location"
-    :class="{ 'is-invalid': touched && showError && !form.location }"
-    :readonly="isFormLocked"
-    rows="3"
-    placeholder="กรอกสถานที่ใช้งาน"
-  ></textarea>
-</div>
+          <div class="form-row">
+            <label>
+              สถานที่ใช้งาน
+              <span v-if="touched && (showError && !form.location)" style="color:red">*</span>
+            </label>
+            <textarea
+              class="custom-textarea"
+              v-model="form.location"
+              :class="{ 'is-invalid': touched && showError && !form.location }"
+              :readonly="isFormLocked"
+              rows="3"
+              placeholder="กรอกสถานที่ใช้งาน"
+            ></textarea>
+          </div>
 
           <!-- Date range -->
           <div class="form-row">
-            <label>ตั้งแต่วันที่</label>
+            <label>
+              ตั้งแต่วันที่
+              <span v-if="touched && (showError && !form.start_date)" style="color:red">*</span>
+            </label>
             <input
               type="date"
               class="custom-input"
@@ -174,7 +224,10 @@
             />
           </div>
           <div class="form-row">
-            <label>ถึงวันที่</label>
+            <label>
+              ถึงวันที่
+              <span v-if="touched && (showError && !form.end_date)" style="color:red">*</span>
+            </label>
             <input
               type="date"
               class="custom-input"
@@ -200,31 +253,58 @@
             <label>เวลาที่มารับของ:</label>
             <input v-model="form.receive_time" type="time" :readonly="isFormLocked" class="custom-input" />
           </div>
-          <!-- อัปโหลดไฟล์ (บังคับ) -->
-          <div class="form-row">
-            <label>แนบไฟล์ (บังคับ)</label>
-            <div class="file-upload-wrapper">
-              <label class="custom-file-label" :class="{ 'input-error': fileError }">
-                <span class="custom-file-button">เลือกไฟล์</span>
-                <input
-                  id="fileUploadInput"
-                  type="file"
-                  multiple
-                  style="display:none"
-                  @change="handleFileChange"
-                />
-              </label>
-              <div class="custom-file-list" v-if="selectedFiles.length > 0" style="margin-top:10px;">
-                <div v-for="(file, idx) in selectedFiles" :key="idx" class="file-list-item">
-                  {{ file.name }}
-                  <button type="button" class="remove-file-btn" @click="removeFile(idx)">×</button>
-                </div>
-              </div>
-              
-              <div v-else class="custom-file-name">ยังไม่ได้เลือกไฟล์</div>
-              <p style="color: red;">***หมายเหตุ***</p>
-            </div>
-          </div>
+         <!-- เฉพาะ block แนบไฟล์ใน template -->
+<div class="form-row">
+  <label>
+  แนบไฟล์
+  <span v-if="touched && showError && selectedFiles.length === 0" style="color:red">*</span>
+</label>
+
+  <div class="file-upload-wrapper">
+    <div class="file-upload-header">
+      <button
+        type="button"
+        class="custom-file-button"
+        @click="$refs.fileUploadInput.click()"
+      >เลือกไฟล์</button>
+      <input
+        ref="fileUploadInput"
+        id="fileUploadInput"
+        type="file"
+        multiple
+        accept=".png,.jpg,.jpeg,.pdf,.xls,.xlsx,.doc,.docx"
+        style="display:none"
+        @change="handleFileChange"
+      />
+      <div class="accepted-file-info">
+        * รองรับไฟล์ <span class="file-ext">.png, .jpg, .jpeg, .pdf, .xls, .xlsx, .doc, .docx</span> เท่านั้น
+      </div>
+    </div>
+    <template v-if="selectedFiles.length > 0">
+      <div class="custom-file-list">
+        <div
+          v-for="(file, idx) in selectedFiles"
+          :key="idx"
+          class="file-list-item"
+        >
+          <a
+            href="#"
+            @click.prevent="previewFile(file)"
+            class="file-link"
+            :title="file.name"
+          >{{ file.name }}</a>
+          <button type="button" class="remove-file-btn" @click="removeFile(idx)">×</button>
+        </div>
+      </div>
+    </template>
+    <template v-else>
+      <div class="custom-file-name">ยังไม่ได้เลือกไฟล์</div>
+    </template>
+  </div>
+</div>
+
+
+
           <!-- Equipment cart -->
           <div class="form-section-title">รายการอุปกรณ์/วัสดุ/ครุภัณฑ์</div>
           <div class="equipment-list">
@@ -243,17 +323,15 @@
                 placeholder="จำนวน"
                 :disabled="isFormLocked"
                 :class="{ 'is-invalid': touched && showError && (!selectedQuantities[name] || selectedQuantities[name] <= 0) }"
-              
-                />
-                 <!-- เพิ่มช่องหมายเหตุ -->
-    <input
-      type="text"
-      class="equipment-remark-input"
-      v-model="equipmentRemarks[name]"
-      :readonly="isFormLocked"
-      placeholder="หมายเหตุ"
-      style="margin-left: 12px; width: 140px"
-    />
+              />
+              <input
+                type="text"
+                class="equipment-remark-input"
+                v-model="equipmentRemarks[name]"
+                :readonly="isFormLocked"
+                placeholder="หมายเหตุ"
+                style="margin-left: 12px; width: 140px"
+              />
             </div>
           </div>
         </div>
@@ -261,6 +339,7 @@
       <div class="button-wrapper" style="padding-bottom: 20px;">
         <button id="btnReset" @click="resetForm" type="button">ล้างฟอร์ม</button>
         <button id="btnNext" @click="submitBooking" :disabled="isFormLocked">Next</button>
+      </div>
       </div>
       <footer class="foot">
         <div class="footer-left">
@@ -281,11 +360,11 @@
 <script setup>
 import { ref, reactive, onMounted, onBeforeUnmount, watch, computed } from 'vue'
 import axios from 'axios'
-import { useRouter, useRoute } from 'vue-router'
+import { useRouter, useRoute, onBeforeRouteLeave } from 'vue-router'
 import Swal from 'sweetalert2'
 
 const API_BASE = import.meta.env.VITE_API_BASE
-
+const products = ref([]) // จำนวนรายการในรถเข็น
 const router = useRouter()
 const route = useRoute()
 const steps = ['กรอกข้อมูล', 'ยืนยันข้อมูล', 'สำเร็จ']
@@ -324,28 +403,58 @@ const touched = ref(false)
 const equipments = ref([])
 const selectedQuantities = reactive({})
 const cartMap = reactive({})
-const equipmentRemarks = reactive({})   // <<---- สำหรับเก็บ remark ของแต่ละอุปกรณ์
+const equipmentRemarks = reactive({})
 const showNotifications = ref(false)
 const notifications = ref([])
 const unreadCount = ref(0)
 const lastCheckedIds = new Set()
 const userId = localStorage.getItem('user_id') || ''
 
+const isAgencySelected = computed(() =>
+  !!agencyInput.value &&
+  agencyOptions.value.includes(agencyInput.value) &&
+  agencyInput.value !== 'อื่นๆ'
+)
+function clearAgency() {
+  agencyInput.value = ''
+  customAgency.value = ''
+  otherAgencyDetail.value = ''
+}
+
+
 function toggleNotifications() {
   showNotifications.value = !showNotifications.value
   if (showNotifications.value) unreadCount.value = 0
 }
+
+async function loadCart() {
+  if (!userId) return
+  try {
+    const res = await axios.get(`${API_BASE}/api/cart?user_id=${userId}`)
+    products.value = res.data
+  } catch (err) {
+    products.value = []
+  }
+}
+
+function onPhoneInput(e) {
+  let digits = e.target.value.replace(/\D/g, '')
+  if (digits.length > 10) digits = digits.slice(0, 10)
+  form.number = digits
+}
+
 function validateFields() {
   const fields = {}
   if (!form.name) fields['name'] = true
   if (!form.user_id) fields['user_id'] = true
   if (!agencyInput.value || String(agencyInput.value).trim() === "") fields['agency'] = true
   if (agencyInput.value === 'อื่นๆ' && (!customAgency.value || String(customAgency.value).trim() === "")) fields['agencyOther'] = true
-  if (!form.number) fields['number'] = true
+  if (!form.number || form.number.length !== 10) fields['number'] = true
   if (!form.reason) fields['reason'] = true
   if (!form.location) fields['location'] = true
   if (!form.start_date) fields['start_date'] = true
   if (!form.end_date) fields['end_date'] = true
+  if (!selectedFiles.value.length) fields['file'] = true
 
   let invalidQty = false
   for (const name in cartMap) {
@@ -359,23 +468,24 @@ function validateFields() {
   showError.value = Object.keys(fields).length > 0
   return Object.keys(fields).length === 0
 }
+
 function hasUploadedFile() {
-  const fileData = localStorage.getItem('equipment_upload_file')
-  if (!fileData) return false
-  try {
-    const arr = JSON.parse(fileData)
-    return Array.isArray(arr) && arr.length > 0
-  } catch {
-    return false
-  }
+  return selectedFiles.value.length > 0
 }
+
 function handleFileChange(event) {
-  const files = Array.from(event.target.files)
+  const allowedExts = [".png", ".jpg", ".jpeg", ".pdf", ".xls", ".xlsx", ".doc", ".docx"]
+  const files = Array.from(event.target.files).filter(file =>
+    allowedExts.some(ext => file.name.toLowerCase().endsWith(ext))
+  )
+  if (files.length !== event.target.files.length) {
+    Swal.fire('รองรับเฉพาะไฟล์ .png, .jpg, .jpeg, .pdf, .xls, .xlsx, .doc, .docx', '', 'warning')
+  }
   const promises = files.map(file =>
     new Promise(resolve => {
       const reader = new FileReader()
       reader.onload = e => resolve({
-        fileData: e.target.result,     // base64
+        fileData: e.target.result,
         fileName: file.name,
         mimeType: file.type
       })
@@ -383,17 +493,15 @@ function handleFileChange(event) {
     })
   )
   Promise.all(promises).then(results => {
-    // เก็บข้อมูล base64+meta ลง localStorage
     localStorage.setItem('equipment_upload_file', JSON.stringify(results))
-    // อัปเดตในหน้า (แสดงชื่อไฟล์)
     selectedFiles.value = results.map(f => ({
       name: f.fileName,
       type: f.mimeType,
-      size: f.fileData.length
+      size: f.fileData.length,
+      data: f.fileData
     }))
   })
 }
-
 
 function loadUploadedFiles() {
   const data = localStorage.getItem('equipment_upload_file')
@@ -403,7 +511,8 @@ function loadUploadedFiles() {
       selectedFiles.value = arr.map(f => ({
         name: f.fileName,
         size: f.fileData.length,
-        type: f.mimeType
+        type: f.mimeType,
+        data: f.fileData
       }))
     } catch (e) {
       selectedFiles.value = []
@@ -412,10 +521,10 @@ function loadUploadedFiles() {
     selectedFiles.value = []
   }
 }
+
 function validateBeforeSubmit() {
   if (!hasUploadedFile()) {
     fileError.value = true
-    alert('กรุณาแนบไฟล์อย่างน้อย 1 ไฟล์')
     return false
   }
   fileError.value = false
@@ -447,6 +556,7 @@ function canStepTo(index) {
   if (index === 2) return false
   return false
 }
+
 function goStep(index) {
   if (index === currentStep.value) return
   if (!canStepTo(index)) {
@@ -461,20 +571,17 @@ function goStep(index) {
   else if (index === 1) router.push('/form_equipment3')
   else if (index === 2) router.push('/form_equipment4')
 }
+
 function closeNotifications() {
   showNotifications.value = false
 }
 
 async function submitBooking() {
-  touched.value = true
-
-  // ตรวจสอบความถูกต้องข้อมูลฟอร์ม
+  touched.value = true   // ตั้งค่านี้เพื่อให้แสดงดอกจันและ error
   if (!validateFields() || !validateBeforeSubmit()) {
     Swal.fire('กรุณากรอกข้อมูลให้ครบถ้วน', '', 'warning')
     return
   }
-
-  // อัปโหลดไฟล์แนบทั้งหมดก่อน
   let uploadedFiles = []
   try {
     uploadedFiles = await uploadSelectedFiles()
@@ -482,15 +589,11 @@ async function submitBooking() {
     Swal.fire('อัปโหลดไฟล์ไม่สำเร็จ', err.message, 'error')
     return
   }
-
-  // === รวม items พร้อม remark ===
   const items = Object.entries(selectedQuantities).map(([name, amount]) => ({
     item_name: name,
     amount: amount,
     remark: equipmentRemarks[name] || ""
   }))
-
-  // เตรียมข้อมูลที่จะส่งไป backend
   const bookingPayload = {
     ...form,
     agency: agencyInput.value === 'อื่นๆ' ? customAgency.value : agencyInput.value,
@@ -498,13 +601,9 @@ async function submitBooking() {
     items,
     attachedFiles: uploadedFiles
   }
-
   try {
-    // ส่งข้อมูล booking + ไฟล์แนบไป backend
     const res = await axios.post(`${API_BASE}/api/booking_equipment`, bookingPayload)
     const booking = res.data?.booking || res.data
-
-    // บันทึกข้อมูลฟอร์ม + จำนวนอุปกรณ์ ลง localStorage เพื่อใช้ต่อในขั้นตอนถัดไป
     localStorage.setItem('equipmentFormData', JSON.stringify({
       form: { ...form,
         agency: agencyInput.value === 'อื่นๆ' ? customAgency.value : agencyInput.value,
@@ -517,8 +616,6 @@ async function submitBooking() {
       otherAgencyDetail: otherAgencyDetail.value,
       equipmentRemarks: { ...equipmentRemarks }
     }))
-
-    // ไปหน้า 3 เพื่อยืนยันข้อมูล
     router.push('/form_equipment3')
   } catch (err) {
     Swal.fire('บันทึกข้อมูลไม่สำเร็จ', err?.response?.data?.message || err.message, 'error')
@@ -531,13 +628,16 @@ function handleAgencyChange() {
     otherAgencyDetail.value = ''
   }
 }
+
 function findMaxAmount(name) {
   const eq = equipments.value.find(e => e.name === name)
   return eq ? eq.amount : undefined
 }
+
 function toggleSidebar() {
   isSidebarClosed.value = !isSidebarClosed.value
 }
+
 async function fetchNotifications() {
   if (!userId) return
   try {
@@ -590,15 +690,12 @@ onMounted(async () => {
   const newBookingId = "EQ" + Date.now() + Math.floor(Math.random() * 1000000)
   localStorage.setItem('equipment_booking_id', newBookingId)
   touched.value = false
-
-  // โหลดรายการอุปกรณ์
   try {
     const res = await axios.get(`${API_BASE}/api/equipments`)
     equipments.value = res.data.map(e => ({ ...e, amount: e.quantity }))
   } catch {
     equipments.value = []
   }
-  // โหลด agency
   try {
     const res = await axios.get(`${API_BASE}/api/information?type=equipment`)
     const uniqueUnits = [...new Set(res.data.map(item => item.unit))]
@@ -607,7 +704,6 @@ onMounted(async () => {
   } catch {
     agencyOptions.value = ['อื่นๆ']
   }
-  // ถ้ามี query parameter items (กรณีส่งมาจากหน้าอื่น)
   if (route.query.items) {
     try {
       const items = JSON.parse(route.query.items)
@@ -627,7 +723,6 @@ onMounted(async () => {
       console.error('Error parsing items from query:', e)
     }
   } else {
-    // โหลดข้อมูลที่เคยกรอกไว้
     const data = localStorage.getItem(LS_FORM_KEY)
     if (data) {
       const saved = JSON.parse(data)
@@ -643,10 +738,7 @@ onMounted(async () => {
       Object.assign(equipmentRemarks, saved.equipmentRemarks || {})
     }
   }
-  // โหลดไฟล์แนบที่เคยอัปไว้
   loadUploadedFiles()
-
-  // autofill user
   form.user_id = localStorage.getItem('user_id') || ''
   if (form.user_id) {
     try {
@@ -656,13 +748,15 @@ onMounted(async () => {
       console.error('โหลดชื่อผู้ใช้ไม่สำเร็จ', err)
     }
   }
-
   fetchNotifications()
   polling = setInterval(fetchNotifications, 30000)
+  await loadCart()
+
 })
 onBeforeUnmount(() => {
   clearInterval(polling)
 })
+
 function resetForm() {
   const name = form.name
   const userId = form.user_id
@@ -690,6 +784,7 @@ function resetForm() {
   touched.value = false
   showError.value = false
 }
+
 function removeFile(idx) {
   selectedFiles.value.splice(idx, 1)
   const arr = JSON.parse(localStorage.getItem('equipment_upload_file') || '[]')
@@ -700,6 +795,49 @@ function removeFile(idx) {
     localStorage.setItem('equipment_upload_file', JSON.stringify(arr))
   }
 }
+
+// ฟังก์ชัน preview
+function previewFile(file) {
+  const ext = file.name.split('.').pop().toLowerCase()
+  if (file.data) {
+    openFilePreview(file.data, ext, file.name)
+  } else {
+    Swal.fire('กรุณาเลือกไฟล์ใหม่อีกครั้งเพื่อดูตัวอย่าง', '', 'info')
+  }
+}
+function openFilePreview(dataUrl, ext, fileName) {
+  if (["png", "jpg", "jpeg", "pdf"].includes(ext)) {
+    const win = window.open()
+    win.document.write(
+      ext === "pdf"
+        ? `<iframe src="${dataUrl}" width="100%" height="100%" style="border:0;min-height:90vh"></iframe>`
+        : `<img src="${dataUrl}" style="max-width:90vw;max-height:90vh;display:block;margin:auto"/>`
+    )
+  } else {
+    // .doc .xls .xlsx → Download
+    const a = document.createElement('a')
+    a.href = dataUrl
+    a.download = fileName
+    a.click()
+  }
+}
+
+// ============ ส่วนนี้คือจุดแก้ไขหลัก ใช้ onBeforeRouteLeave (ดีที่สุด ไม่ต้อง watcher route) ============
+const FORM_ROUTES = [
+  '/form_equipment',
+  '/form_equipment3',
+  '/form_equipment4'
+]
+onBeforeRouteLeave((to, from, next) => {
+  if (!FORM_ROUTES.includes(to.path)) {
+    localStorage.removeItem('equipment_upload_file')
+    selectedFiles.value = []
+  }
+  next()
+})
+// =====================================================================================================
+
+// สำหรับ auto-save
 watch(
   [form, agencyInput, customAgency, otherAgencyDetail, selectedQuantities, equipmentRemarks],
   () => {
@@ -721,8 +859,6 @@ watch(
   { deep: true }
 )
 </script>
-
-
 
 
 
@@ -871,36 +1007,36 @@ watch(
   background: #ffeaea !important;
 }
 
+/* ============ ปุ่มแนบไฟล์ ============= */
 .file-upload-wrapper {
   display: flex;
-  align-items: center;
-  gap: 12px;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+  width: 100%;
 }
-.custom-file-label {
-  background: #f3f4f6;
-  padding: 7px 14px;
-  border-radius: 8px;
-  border: 1px solid #cbd5e1;
-  cursor: pointer;
+
+.file-upload-header {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 16px;
+  flex-wrap: wrap;
+  width: 100%;
 }
-.custom-file-button {
-  background: #3498db;
-  color: #fff;
-  border-radius: 5px;
-  padding: 5px 14px;
-  margin-right: 12px;
-  cursor: pointer;
+
+.accepted-file-info {
+  font-size: 12px;
+  color: #888;
+  font-style: italic;
+  font-family: inherit;
+  user-select: none;
+  white-space: nowrap;
 }
-.custom-file-name {
-  color: #333;
-  min-width: 120px;
-}
-.input-error {
-  border: 1.5px solid #ef4444 !important;
-  background: #ffeaea !important;
+
+.custom-file-list {
+  display: block;
+  margin: 6px 0 0 0;    /* <<<<<<<< เปลี่ยนจาก 90px เป็น 0 */
+  width: 100%;           /* <<<<<<<< เปลี่ยนจาก calc(...) เป็น 100% */
 }
 
 .file-list-item {
@@ -909,6 +1045,54 @@ watch(
   gap: 8px;
   margin-bottom: 4px;
 }
+
+.custom-file-button {
+  background: #3498db !important;
+  color: #fff !important;
+  border-radius: 5px;
+  padding: 3px 10px;
+  cursor: pointer;
+  border: none;
+  font-weight: bold;
+  font-size: 13px;
+  width: 82px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  margin-right: 6px;
+  transition: background 0.2s;
+}
+.custom-file-button:hover {
+  background: #1976d2 !important;
+}
+
+.custom-file-name {
+  color: #333;
+  min-width: 100px;
+  font-size: 15px;
+  margin-left: 0;       /* <<<<<<<< เปลี่ยนจาก 90px เป็น 0 */
+}
+
+/* Responsive (มือถือ) */
+
+.file-list-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.file-link {
+  color: #1976d2;
+  text-decoration: underline;
+  cursor: pointer;
+  font-size: 14px;
+  word-break: break-all;
+}
+.file-link:hover {
+  color: #ff4d4f;
+}
 .remove-file-btn {
   background: #ef4444;
   color: #fff;
@@ -916,7 +1100,7 @@ watch(
   border-radius: 4px;
   padding: 2px 8px;
   cursor: pointer;
-  font-size: 1.1em;
+  font-size: 1em;
 }
 .remove-file-btn:hover {
   background: #c82333;
@@ -943,9 +1127,8 @@ watch(
   transition: border 0.3s ease;
   font-family: inherit;
   min-height: 80px;
-  resize: vertical;  /* <---- สำคัญ! */
+  resize: vertical;
 }
-
 
 /* ===== CSS แจ้งเตือนแบบ history ===== */
 .notification-dropdown {
@@ -1042,23 +1225,58 @@ watch(
 .notification-item {
   transition: background 0.3s, border-color 0.3s, color 0.3s;
 }
-@media (max-width: 540px) {
-  .notification-dropdown {
-    min-width: 220px;
-    max-width: 99vw;
-  }
-  .notification-dropdown li {
-    font-size: 0.99rem;
-    padding: 0.7em 0.7em;
-  }
-}
+
 .notification-backdrop {
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
   background: transparent;
-  z-index: 1001; /* ต้องน้อยกว่า .notification-dropdown (1002) */
+  z-index: 1001;
 }
 
+.badge {
+  background-color: red;
+  color: white;
+  border-radius: 50%;
+  padding: 2px 6px;
+  font-size: 0.75rem;
+  vertical-align: top;
+  margin-left: 4px;
+}
+
+@media (max-width: 540px) {
+  .scroll-x-container {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    width: 100vw;
+    padding: 0;
+  }
+  .form-container {
+    min-width: 900px;
+    width: 900px;
+    max-width: 900px;
+    padding: 16px 24px !important;
+    border-radius: 10px !important;
+    box-sizing: border-box;
+  }
+  .form-row {
+    width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+  }
+  .custom-input,
+  .custom-textarea,
+  input[type="text"],
+  input[type="date"],
+  input[type="time"],
+  select,
+  textarea {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    overflow-x: auto;
+  }
+}
 
 
 </style>

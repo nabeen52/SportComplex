@@ -3,7 +3,7 @@
     <aside class="sidebar" :class="{ closed: isSidebarClosed }">
       <div class="sidebar-header">
         <img src="/img/logo.png" alt="logo" class="logo" />
-        <p class="sidebar-title">ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง</p>
+        <p class="sidebar-title">Sport Complex MFU</p>
       </div>
       <nav class="nav-links">
         <router-link to="/home_user" exact-active-class="active">
@@ -20,6 +20,13 @@
         </router-link>
       </nav>
     </aside>
+
+    <div
+      v-if="!isSidebarClosed"
+      class="sidebar-overlay"
+      @click="toggleSidebar"
+    ></div>
+
     <div class="main">
       <header class="topbar">
         <button class="menu-toggle" @click="toggleSidebar">☰</button>
@@ -46,6 +53,15 @@
                 <li v-if="notifications.length === 0" class="no-noti">ไม่มีแจ้งเตือน</li>
               </ul>
             </div>
+   <div v-if="isLightboxOpen" class="lightbox-backdrop" @click.self="closeLightbox">
+  <!-- กากบาทอยู่นอก content -->
+  <button class="lightbox-close" @click="closeLightbox">×</button>
+  <div class="lightbox-content">
+    <img :src="lightboxImage" alt="ขยายรูป" />
+  </div>
+</div>
+
+
           </div>
           <router-link to="/cart" class="cart-link">
             <i class="pi pi-shopping-cart"></i>
@@ -70,11 +86,20 @@
 
       <section class="hero">
         <div class="carousel-container" v-if="images.length > 0">
-          <button class="carousel-btn left" @click="prevImage">❮</button>
-          <img :src="images[currentImage]?.img" class="hero-image" alt="สนามกีฬา" />
+         <button class="carousel-btn left" @click="prevImage">❮</button>
+          <img :src="images[currentImage]?.img" class="hero-image" alt="สนามกีฬา" @click="openLightbox(images[currentImage]?.img)"
+  style="cursor: zoom-in" />
           <button class="carousel-btn right" @click="nextImage">❯</button>
         </div>
         <div v-else style="text-align:center; padding:2rem; color:gray;">ไม่มีรูปภาพ</div>
+         <div class="carousel-indicator">
+  <span
+    v-for="(img, idx) in images"
+    :key="idx"
+    :class="['carousel-dot', { active: currentImage === idx }]"
+    @click="goToImage(idx)"
+  ></span>
+</div>
       </section>
 
       <div class="title-group">
@@ -117,6 +142,7 @@ const API_BASE = import.meta.env.VITE_API_BASE
 export default {
   data() {
     return {
+      isSidebarOpen: false, 
       isSidebarClosed: false,
       currentImage: 0,
       images: [],
@@ -130,6 +156,8 @@ export default {
       lastCheckedIds: new Set(),
       polling: null,
       products: [],
+      isLightboxOpen: false,
+    lightboxImage: null
     }
   },
   computed: {
@@ -203,6 +231,14 @@ export default {
     toggleSidebar() {
       this.isSidebarClosed = !this.isSidebarClosed
     },
+    openLightbox(img) {
+    this.lightboxImage = img
+    this.isLightboxOpen = true
+  },
+  closeLightbox() {
+    this.isLightboxOpen = false
+    this.lightboxImage = null
+  },
     toggleNotifications() {
       this.showNotifications = !this.showNotifications
       if (this.showNotifications) {
@@ -271,12 +307,18 @@ export default {
         if (this.images.length) {
           this.currentImage = (this.currentImage + 1) % this.images.length
         }
-      }, 3000)
+      }, 5000)
     },
     resetAutoPlay() {
       clearInterval(this.intervalId)
       this.startAutoPlay()
     },
+
+    goToImage(idx) {
+  this.currentImage = idx
+  this.resetAutoPlay()
+}
+,
     async loadCart() {
       try {
         const res = await axios.get(`${API_BASE}/api/cart?user_id=${this.userId}`)
@@ -291,6 +333,7 @@ export default {
 
 
 <style scoped>
+
 .cart-icon {
   color: #facc15;
 }
@@ -310,8 +353,8 @@ export default {
 
 .hero-image {
   width: 100%;
-  max-width: 900px;
-  aspect-ratio: 18/10;  /* 900/500 */
+  max-width: 1000px;
+  aspect-ratio: 9/5;  /* 900/500 */
   height: auto;
   object-fit: cover;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
@@ -324,6 +367,8 @@ export default {
 .hero-image[src] {
   opacity: 1;
 }
+
+
 .carousel-container {
   width: 100%;
   max-width: 900px;
@@ -333,12 +378,7 @@ export default {
   justify-content: center;
   align-items: center;
 }
-@media (max-width: 1024px) {
-  .hero-image {
-    max-width: 98vw;
-    aspect-ratio: 18/10;
-  }
-}
+
 
 .title-group {
   text-align: center;
@@ -364,7 +404,7 @@ export default {
   justify-content: center;
   gap: 5rem;
   flex-wrap: wrap;
-  margin-bottom: 20rem;
+  margin-bottom: 10rem;
 }
 
 .card {
@@ -501,6 +541,29 @@ export default {
 }
 
 
+/* ===== ปุ่มรูป ===== */
+.carousel-indicator {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 15px;
+}
+
+.carousel-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #cfd8dc;
+  display: inline-block;
+  transition: background 0.3s;
+  cursor: pointer;
+  border: 1.5px solid #3549e5;
+}
+.carousel-dot.active {
+  background: #3549e5;
+  border-color: #3549e5;
+}
+
 
 /* ===== CSS แจ้งเตือนแบบ history ===== */
 .notification-dropdown {
@@ -597,22 +660,63 @@ export default {
 .notification-item {
   transition: background 0.3s, border-color 0.3s, color 0.3s;
 }
-@media (max-width: 540px) {
-  .notification-dropdown {
-    min-width: 220px;
-    max-width: 99vw;
-  }
-  .notification-dropdown li {
-    font-size: 0.99rem;
-    padding: 0.7em 0.7em;
-  }
-}
+
 .notification-backdrop {
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
   background: transparent;
   z-index: 1001; /* ต้องน้อยกว่า .notification-dropdown (1002) */
 }
+.lightbox-backdrop {
+  position: fixed;
+  z-index: 5000;
+  left: 0; top: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.18s;
+}
+
+.lightbox-content {
+  position: relative;
+  background: transparent;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 98vw;
+  max-height: 96vh;
+}
+
+.lightbox-content img {
+  max-width: 97vw;
+  max-height: 94vh;
+  object-fit: contain;
+  border-radius: 0;
+  box-shadow: 0 2px 28px rgba(30,40,80,0.13);
+}
+
+.lightbox-close {
+  position: fixed; 
+  top: 18px; right: 24px;
+  background: rgba(255,255,255,0.85);
+  border: none;
+  font-size: 2.7rem;
+  color: #222;
+  cursor: pointer;
+  z-index: 2;
+  border-radius: 50%;
+  width: 48px; height: 48px;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.2s, color 0.2s;
+}
+.lightbox-close:hover { background: #e53935; color: #fff; transform: scale(1.1);}
+
+
+
 </style>
 
 <style>

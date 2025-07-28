@@ -3,7 +3,7 @@
     <aside class="sidebar" :class="{ closed: isSidebarClosed }">
       <div class="sidebar-header">
         <img src="/img/logo.png" alt="logo" class="logo" />
-        <p class="sidebar-title">ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง</p>
+        <p class="sidebar-title">Sport Complex MFU</p>
       </div>
       <nav class="nav-links">
         <router-link to="/home_user" exact-active-class="active"><i class="pi pi-home"></i> Home</router-link>
@@ -12,41 +12,41 @@
         <router-link to="/history" active-class="active"><i class="pi pi-history"></i> History</router-link>
       </nav>
     </aside>
-    <div class="main">
-      <!-- header -->
-      <header class="topbar">
-  <button class="menu-toggle" @click="toggleSidebar">☰</button>
-  <div class="topbar-actions">
-    <!-- 🔔 START กระดิ่งแจ้งเตือน -->
-    <div>
-      <div
-        v-if="showNotifications"
-        class="notification-backdrop"
-        @click="closeNotifications"
-      ></div>
-      <button class="notification-btn" @click="toggleNotifications">
-        <i class="pi pi-bell"></i>
-        <span v-if="unreadCount > 0" class="badge">{{ unreadCount }}</span>
-      </button>
-      <div v-if="showNotifications" class="notification-dropdown">
-        <ul>
-          <li
-            v-for="(noti, idx) in notifications.slice(0, 10)"
-            :key="noti.id || idx"
-            :class="['notification-item', noti.type || '', { unread: idx === 0 }]"
-          >
-            {{ noti.message }}
-          </li>
-          <li v-if="notifications.length === 0" class="no-noti">ไม่มีแจ้งเตือน</li>
-        </ul>
-      </div>
-    </div>
-    <!-- 🔔 END กระดิ่งแจ้งเตือน -->
-    <router-link to="/cart"><i class="pi pi-shopping-cart"></i></router-link>
-    <router-link to="/profile"><i class="pi pi-user"></i></router-link>
-  </div>
-</header>
 
+    <div
+  v-if="!isSidebarClosed"
+  class="sidebar-overlay"
+  @click="toggleSidebar"
+    ></div>
+
+    <div class="main">
+      <header class="topbar">
+        <button class="menu-toggle" @click="toggleSidebar">☰</button>
+        <div class="topbar-actions">
+          <div>
+            <div v-if="showNotifications" class="notification-backdrop" @click="closeNotifications"></div>
+            <button class="notification-btn" @click="toggleNotifications">
+              <i class="pi pi-bell"></i>
+              <span v-if="unreadCount > 0" class="badge">{{ unreadCount }}</span>
+            </button>
+            <div v-if="showNotifications" class="notification-dropdown">
+              <ul>
+                <li v-for="(noti, idx) in notifications.slice(0, 10)" :key="noti.id || idx"
+                  :class="['notification-item', noti.type || '', { unread: idx === 0 }]">
+                  {{ noti.message }}
+                </li>
+                <li v-if="notifications.length === 0" class="no-noti">ไม่มีแจ้งเตือน</li>
+              </ul>
+            </div>
+          </div>
+          <router-link to="/cart" class="cart-link">
+            <i class="pi pi-shopping-cart"></i>
+            <span v-if="products.length > 0" class="badge">{{ products.length }}</span>
+          </router-link>
+
+          <router-link to="/profile"><i class="pi pi-user"></i></router-link>
+        </div>
+      </header>
       <!-- Stepper -->
       <div class="headStepper">
         <div class="stepper">
@@ -63,28 +63,15 @@
       </div>
 
 
-
-
-
-
-
-
-      
+      <div class="scroll-x-container">
       <div class="form-container">
         <h1 style="display: flex; justify-content: center;">ยืนยันข้อมูล</h1>
         <div class="form-header">
           <h3>แบบฟอร์มการยืมอุปกรณ์/วัสดุ/ครุภัณฑ์ ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง</h3>
-          <p>โทร 053-917820-1 E-mail Sport-complex@mfu.ac.th</p>
+          <p>โทร 053-917-8201 E-mail Sport-complex@mfu.ac.th</p>
         </div>
-        <!-- ================= ข้อมูลวันที่/ส่วนหัว ================= -->
+        <!-- ================= กลุ่มขวา วันที่ เวลารับของ ================ -->
         <div class="form-header-section">
-          <div class="center-form" style="padding-top: 50px;">
-            <span>วันที่</span>
-            <span class="line-field block-text" style="min-width: 130px;">
-              {{ booking?.start_date ? (new Date(booking.start_date)).toLocaleDateString('th-TH') : (new Date()).toLocaleDateString('th-TH') }}
-            </span>
-          </div>
-          <!-- ขวา: ศูนย์กีฬาและรายละเอียด -->
           <div class="right-form" style="align-items: flex-end;">
             <div class="form-row-title" style="font-size: 18px; font-weight: bold;">
               ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง
@@ -101,17 +88,16 @@
                 {{ booking?.receive_time || "" }}
               </span>
             </div>
-            <div class="form-row">
-              <span>หน่วยงาน</span>
-              <span class="line-field block-text" style="min-width: 140px;">
-                {{ booking?.agency || "" }}
-              </span>
-            </div>
           </div>
         </div>
-        <!-- ================= ข้อมูลผู้ขอ/รายละเอียด ================= -->
-        <div class="form-row" style="padding-top: 30px;">
-          <span>ส่วนที่1 สำหรับผู้ใช้</span>
+        <!-- =================== ข้อมูลผู้ขอ/รายละเอียด =================== -->
+        <div class="form-row" style="padding-top: 30px; flex-direction: column; align-items: flex-start;">
+          <span style="margin-bottom: 0;">
+            วันที่ {{ booking?.start_date ? (new Date(booking.start_date)).toLocaleDateString('th-TH') : (new Date()).toLocaleDateString('th-TH') }}
+          </span>
+          <span style="font-weight: bold; margin-top: 8px;">
+            ส่วนที่1 สำหรับผู้ใช้
+          </span>
         </div>
         <div class="form-row" style="padding-top: 30px;">
           <span>ข้าพเจ้า</span>
@@ -119,12 +105,14 @@
           <span>รหัสนักศึกษา</span>
           <span class="line-field block-text" style="min-width:120px;">{{ booking?.user_id || "" }}</span>
         </div>
-        <!-- เหตุผล/สถานที่ ขยายเส้นอัตโนมัติ -->
+        <div class="form-row" style="padding-top: 20px;">
+          <span>หน่วยงาน</span>
+          <span class="line-field block-text" style="min-width:180px;">{{ booking?.agency || "" }}</span>
+        </div>
         <div class="form-row" style="padding-top: 30px;">
-  <span>เหตุผลในการขอใช้เพื่อ</span>
-  <div class="reason-underline">{{ booking?.reason || "" }}</div>
-</div>
-
+          <span>เหตุผลในการขอใช้เพื่อ</span>
+          <div class="reason-underline">{{ booking?.reason || "" }}</div>
+        </div>
         <div class="form-row" style="padding-top: 30px; flex-wrap: wrap;">
           <span>สถานที่ใช้งาน</span>
           <span class="line-field block-text" style="margin-bottom: 3px;">
@@ -199,8 +187,7 @@
             </tbody>
           </table>
         </div>
-
-        <!-- ===== แสดงไฟล์ที่ user เพิ่งอัป (localStorage/base64) ===== -->
+        <!-- ===== แสดงไฟล์แนบ ===== -->
         <div v-if="uploadedFiles.length > 0" class="form-row" style="padding-top: 20px;">
           <span>ไฟล์แนบ:</span>
           <ul>
@@ -215,9 +202,6 @@
             </li>
           </ul>
         </div>
-
-       
-
         <div class="form-row" style="padding-top: 30px; justify-self: end;">
           <span>ลงชื่อ</span>
           <span class="line-field block-text" style="min-width:140px;">{{ booking?.name || "" }}</span>
@@ -226,6 +210,7 @@
           <button id="btnBack" @click="handleBack">Back</button>
           <button id="btnNext" @click="handleNext" :disabled="isLoading">Next</button>
         </div>
+      </div>
       </div>
       <footer class="foot">
         <div class="footer-left">
@@ -248,8 +233,6 @@ import axios from 'axios'
 
 const API_BASE = import.meta.env.VITE_API_BASE
 
-
-
 const router = useRouter()
 const booking = ref(null)
 const equipmentList = ref([])
@@ -258,9 +241,8 @@ const attachedFiles = ref([])
 const isLoading = ref(false)
 const isSidebarClosed = ref(false)
 const steps = ['กรอกข้อมูล', 'ยืนยันข้อมูล', 'สำเร็จ']
-const currentStep = ref(1) // ตอนนี้อยู่ step 2 (ยืนยันข้อมูล)
-
-// ======================= Notification State ========================
+const currentStep = ref(1)
+const products = ref([]) // จำนวนรายการในรถเข็น
 const showNotifications = ref(false)
 const notifications = ref([])
 const unreadCount = ref(0)
@@ -318,23 +300,17 @@ async function fetchNotifications() {
     unreadCount.value = 0
   }
 }
-// ===================================================================
 
 onMounted(async () => {
-  // โหลดข้อมูลฟอร์ม + รายการอุปกรณ์จาก localStorage
   const formDataRaw = localStorage.getItem('equipmentFormData')
   let bookingId = null
-
   if (formDataRaw) {
     const parsed = JSON.parse(formDataRaw)
     booking.value = parsed.form
-
     bookingId = booking.value.booking_id || booking.value._id || booking.value.id
     if (!booking.value.booking_id && (booking.value._id || booking.value.id)) {
       booking.value.booking_id = booking.value._id || booking.value.id
     }
-
-    // map จาก items (ที่มี remark) แทน selectedQuantities
     if (booking.value.items && Array.isArray(booking.value.items)) {
       equipmentList.value = booking.value.items.map(item => ({
         name: item.item_name,
@@ -343,22 +319,16 @@ onMounted(async () => {
       }))
     }
   }
-
-  // โหลดไฟล์แนบ base64 ที่ user เพิ่งอัป
   const fileData = localStorage.getItem('equipment_upload_file')
   if (fileData) {
     try {
       uploadedFiles.value = JSON.parse(fileData)
     } catch { uploadedFiles.value = [] }
   }
-
-  // โหลดไฟล์แนบจาก backend (ถ้ามี)
   if (bookingId) {
     try {
       const res = await axios.get(`${API_BASE}/api/booking_equipment/${bookingId}`)
       attachedFiles.value = res.data.attachedFiles || res.data.attachment || []
-
-      // อัปเดต equipmentList จาก backend ด้วย remark (กรณี edit หรือ reload)
       if (res.data.items && Array.isArray(res.data.items)) {
         equipmentList.value = res.data.items.map(item => ({
           name: item.item_name,
@@ -371,23 +341,33 @@ onMounted(async () => {
     }
     fetchNotifications()
     setInterval(fetchNotifications, 30000)
+    await loadCart()
+
   }
 })
-
 
 function toggleSidebar() {
   isSidebarClosed.value = !isSidebarClosed.value
 }
 
+async function loadCart() {
+  if (!userId) return
+  try {
+    const res = await axios.get(`${API_BASE}/api/cart?user_id=${userId}`)
+    products.value = res.data
+  } catch (err) {
+    products.value = []
+  }
+}
+
+
 function handleBack() {
-  // ข้อมูล (booking, uploadedFiles) จะค้างอยู่ใน localStorage
   router.push('/form_equipment')
 }
 
 function canGoToStep(index) {
   return index <= currentStep.value
 }
-
 function tryGoStep(index) {
   if (canGoToStep(index)) {
     if (index === 0) router.push('/form_equipment')
@@ -395,24 +375,18 @@ function tryGoStep(index) {
     else if (index === 2) router.push('/form_equipment4')
   }
 }
-
-// ยืนยัน (ส่งข้อมูล)
-// ปุ่ม Next: บันทึกประวัติทีละรายการ และไปหน้า 4
 async function handleNext() {
   if (!booking.value || equipmentList.value.length === 0) {
     alert('ไม่มีข้อมูลจะบันทึก')
     return
   }
-
   const bookingIdFromServer = booking.value.booking_id || booking.value._id || booking.value.id || ''
   if (!bookingIdFromServer) {
     alert('ไม่พบ booking_id กรุณากรอกข้อมูลใหม่อีกครั้ง')
     return
   }
-
   isLoading.value = true
   try {
-    // ส่งข้อมูลรายการอุปกรณ์ทีละชิ้น (เหมือนเดิม)
     for (const item of equipmentList.value) {
       await axios.post(`${API_BASE}/api/history`, {
         booking_id: bookingIdFromServer,
@@ -421,8 +395,7 @@ async function handleNext() {
         quantity: item.quantity,
         status: 'pending',
         agency: booking.value.agency || booking.value.school_of || '',
-        // === แนบไฟล์ base64 ไปด้วย ===
-        attachment: uploadedFiles.value.map(f => f.fileData),    // <-- base64 array
+        attachment: uploadedFiles.value.map(f => f.fileData),
         fileName: uploadedFiles.value.map(f => f.fileName),
         fileType: uploadedFiles.value.map(f => f.mimeType),
         reason: booking.value.reason || '',
@@ -432,20 +405,12 @@ async function handleNext() {
         receive_time: booking.value.receive_time || ''
       })
     }
-
-    // ลบข้อมูลตะกร้า
     await axios.delete(`${API_BASE}/api/cart`, {
       data: { user_id: booking.value.user_id }
     })
-
-    // ลบ localStorage ที่เกี่ยวข้อง
     localStorage.removeItem('equipment_upload_file')
     localStorage.removeItem('equipmentFormData')
-
-    // เก็บ booking id สำหรับหน้า 4
     localStorage.setItem('equipment_booking_id', bookingIdFromServer)
-
-    // ไปหน้า 4
     router.push('/form_equipment4')
   } catch (err) {
     alert('เกิดข้อผิดพลาด: ' + (err.response?.data?.message || err.message))
@@ -453,12 +418,7 @@ async function handleNext() {
     isLoading.value = false
   }
 }
-
-
-
-
 </script>
-
 
 <style scoped>
 .headStepper {
@@ -561,7 +521,7 @@ async function handleNext() {
 }
 .form-header-section {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 40px;
   margin-top: 30px;
 }
@@ -574,7 +534,7 @@ async function handleNext() {
 }
 .form-row {
   display: flex;
-  align-items: flex-end;   /* ชิดล่างตรงเส้น */
+  align-items: flex-end;
   gap: 10px;
   flex-wrap: wrap;
   margin-bottom: 16px;
@@ -583,8 +543,6 @@ async function handleNext() {
   font-weight: bold;
   margin-bottom: 10px;
 }
-
-/* --------- ปรับให้ทุก field ที่เป็นเส้นใต้เหมือนกัน ----------- */
 .line-field,
 .line-field.block-text,
 .line-field.block-expanding,
@@ -594,7 +552,7 @@ async function handleNext() {
   min-width: 140px;
   max-width: 100%;
   width: auto;
-  padding: 10px 8px 3px 8px;  /* top right bottom left */
+  padding: 10px 8px 3px 8px;
   margin-bottom: 6px;
   background: none;
   white-space: pre-wrap;
@@ -608,7 +566,6 @@ async function handleNext() {
   min-width: 160px;
   margin-bottom: 6px;
 }
-
 .equipment-table {
   width: 100%;
   border-collapse: collapse;
@@ -646,7 +603,6 @@ async function handleNext() {
   font-weight: bold;
   text-align: center;
 }
-
 /* ===== CSS แจ้งเตือนแบบ history ===== */
 .notification-dropdown {
   position: absolute;
@@ -742,21 +698,65 @@ async function handleNext() {
 .notification-item {
   transition: background 0.3s, border-color 0.3s, color 0.3s;
 }
-@media (max-width: 540px) {
-  .notification-dropdown {
-    min-width: 220px;
-    max-width: 99vw;
-  }
-  .notification-dropdown li {
-    font-size: 0.99rem;
-    padding: 0.7em 0.7em;
-  }
-}
+
 .notification-backdrop {
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
   background: transparent;
   z-index: 1001; /* ต้องน้อยกว่า .notification-dropdown (1002) */
 }
+
+.badge {
+  background-color: red;
+  color: white;
+  border-radius: 50%;
+  padding: 2px 6px;
+  font-size: 0.75rem;
+  vertical-align: top;
+  margin-left: 4px;
+}
+
+@media (max-width: 540px) {
+  .scroll-x-container {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    width: 100vw;
+    padding: 0;
+  }
+  .form-container {
+    min-width: 900px;
+    width: 900px;
+    max-width: 900px;
+    padding: 16px 24px !important;
+    border-radius: 10px !important;
+    box-sizing: border-box;
+  }
+  .form-row {
+    width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+  }
+  .custom-input,
+  .custom-textarea,
+  input[type="text"],
+  input[type="date"],
+  input[type="time"],
+  select,
+  textarea {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    overflow-x: auto;
+  }
+  .equipment-table,
+  .approval-table {
+    min-width: 700px;
+  }
+}
+
 </style>
 
+<style>
+@import '../css/style.css';
+</style>

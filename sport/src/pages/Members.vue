@@ -36,7 +36,11 @@
         </router-link>
       </nav>
     </aside>
-
+<div
+  v-if="isMobile && !isSidebarClosed"
+  class="sidebar-overlay"
+  @click="toggleSidebar"
+></div>
     <!-- Main Content -->
     <div class="main">
       <header class="topbar">
@@ -143,6 +147,7 @@ export default {
       unreadCount: 0,
       lastCheckedIds: new Set(),
       polling: null,
+      isMobile: window.innerWidth <= 600,
     };
   },
   computed: {
@@ -165,10 +170,14 @@ export default {
     this.polling = setInterval(this.fetchNotifications, 30000);
     // เพิ่ม event listener เพื่อปิดแจ้งเตือนเมื่อคลิกข้างนอก
     document.addEventListener('mousedown', this.handleClickOutside);
+    window.addEventListener('resize', this.handleResize);
+  this.handleResize();
   },
   beforeUnmount() {
     if (this.polling) clearInterval(this.polling);
     document.removeEventListener('mousedown', this.handleClickOutside);
+    window.removeEventListener('resize', this.handleResize);
+
   },
   methods: {
     normalizeEmail(email) {
@@ -181,6 +190,10 @@ export default {
       this.showNotifications = !this.showNotifications;
       if (this.showNotifications) this.unreadCount = 0;
     },
+    handleResize() {
+    this.isMobile = window.innerWidth <= 600;
+    if (!this.isMobile) this.isSidebarClosed = false;
+  },
     closeNotifications() {
       this.showNotifications = false;
     },
@@ -478,5 +491,85 @@ export default {
 .member-table tr:last-child td {
   border-bottom: none;
 }
+@media (max-width: 600px) {
+  .content {
+    padding: 0.8rem 0.3rem 0.5rem 0.3rem;
+    width: 100vw;
+  }
+  .title-row {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.4rem;
+    margin-bottom: 0.7rem;
+    padding-left: 0.1rem;
+  }
+  .content h2 {
+    text-align: left;
+    font-size: 1.1rem;
+    margin-bottom: 0.1rem;
+    color: #174178;
+    font-weight: 700;
+  }
+  .top-actions {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    width: 100%;
+  }
+  .filter-group {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    justify-content: flex-start;
+  }
+  .filter-btn {
+    padding: 0.25rem 0.7rem;
+    font-size: 0.98em;
+    border-radius: 8px;
+  }
+  .add-btn {
+    width: 44px;
+    height: 44px;
+    font-size: 1.7em;
+    margin: 0;
+    border-radius: 50%;
+    align-self: flex-end;
+    box-shadow: 0 2px 10px #0001;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .member-table-container {
+    width: 100vw !important;
+    overflow-x: auto !important;
+    padding: 0 0.1rem;
+    margin-bottom: 1rem;
+  }
+  .member-table {
+    min-width: 520px;
+    width: max-content;
+    font-size: 0.98em;
+  }
+}
 
+
+.sidebar-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.18);
+  z-index: 1100;
+}
+.sidebar {
+  z-index: 1200;
+}
+
+</style>
+
+
+<style>
+@import '../css/style.css';
 </style>

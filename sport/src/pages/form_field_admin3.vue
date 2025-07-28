@@ -36,7 +36,11 @@
         </router-link>
       </nav>
     </aside>
-
+<div
+  v-if="isMobile && !isSidebarClosed"
+  class="sidebar-overlay"
+  @click="toggleSidebar"
+></div>
     <!-- Main Content -->
     <div class="main">
       <!-- Topbar -->
@@ -90,48 +94,58 @@
       <div class="form-container">
         <h1 class="title">ยืนยันข้อมูล</h1>
         <div class="form-header">
-          <h3>แบบฟอร์มขออนุมัติใช้สถานที่ ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง</h3>
+          <h3>แบบฟอร์มขออนุมัติใช้สถานที่ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง</h3>
           <p>โทร 053-917820-1 | E-mail: sport-complex@mfu.ac.th</p>
         </div>
 
         <!-- Header Info -->
-        <div class="info-left">
+        <div class="info-left " >
           <span>ที่ อว.</span>
           <span class="line-field single-line">{{ info.aw }}</span>
-          <span>วันที่</span>
+          <span style="margin-left: 50px;">วันที่</span>
           <span class="line-field single-line">{{ formatDateOnly(info.date) }}</span>
-          <span>โทร</span>
+          <span style="margin-left: 50px;">โทร</span>
           <span class="line-field single-line">{{ info.tel }}</span>
         </div>
 
         <!-- Detail Content -->
         <div class="form-row mt-30">
-          <span>เรียน อธิการบดี</span>
+          <span style="margin-left: 80px;">เรื่อง ขออนุมัติใช้สถานที่</span>
         </div>
+        
+        <div class="form-row mt-30">
+          <span >เรียน อธิการบดี</span>
+        </div>
+
 <div class="form-row mt-30 block-row">
-  <span>ด้วย</span>
-  <span class="line-field block-text nowrap" style="min-width:160px; margin-right:40px;">{{ info.agency }}</span>
+  <span style="margin-left: 80px;">ด้วย</span>
+  <span class="line-field block-text nowrap" style="min-width:690px;  max-width: 690px;">{{ info.agency }}</span>
+  
+</div>
+<div class="form-row mt-30 block-row">
   <span>จะดำเนินกิจกรรม / โครงการ</span>
-  <span class="line-field block-text">{{ info.name_activity }}</span>
+  <span class="line-field block-text" style="min-width:620px;max-width: 620px;">{{ info.name_activity }}</span>
 </div>
 
         <div class="form-row mt-30 block-row">
-          <span>เหตุผลในการขอใช้เพื่อ</span>
-          <span class="line-field block-text">{{ info.reasons }}</span>
+          <span >เหตุผลในการขอใช้เพื่อ</span>
+          <span class="line-field single-line" style=" max-width: 650px; min-width: 650px;">{{ info.reasons }}</span>
+    
+        </div>
+        <div class="form-row mt-30 block-row">
           <span>ในวันที่</span>
           <span class="line-field single-line">{{ formatDateOnly(info.since) }}</span>
           <span>ถึงวันที่</span>
           <span class="line-field single-line">{{ formatDateOnly(info.uptodate) }}</span>
-        </div>
-
-        <div class="form-row mt-30 block-row">
           <span>ตั้งแต่เวลา</span>
           <span class="line-field single-line">{{ info.since_time || '-' }}</span>
           <span>ถึงเวลา</span>
           <span class="line-field single-line">{{ info.until_thetime || '-' }}</span>
+       
           <span>จำนวนผู้เข้าร่วม</span>
-          <span class="line-field single-line">{{ info.participants }}</span>
-        </div>
+          <span class="line-field single-line">{{ info.participants }}</span>        </div>
+
+       
 
         <div class="form-row mt-30">
           <span>และเพื่อให้การดำเนินงานเป็นไปด้วยความเรียบร้อย จึงเรียนมาเพื่อขออนุมัติ ดังนี้</span>
@@ -142,7 +156,7 @@
         </div>
 
       <div class="form-row mt-30 block-row">
-  <span>อาคาร</span>
+  <span style="margin-left: 80px;">อาคาร</span>
   <span class="line-field block-text">{{ info.building }}</span>
   <span>ระบุตำแหน่งพื้นที่/ห้องที่ต้องการใช้</span>
   <span class="line-field block-text">
@@ -153,32 +167,63 @@
 
         <div class="form-row mt-30 bold">
           <span>2. ขออนุมัติใช้ระบบสาธารณูปโภค</span>
+          <input type="radio" value="yes"
+  :checked="isUtilityYes(info.utilityRequest)"
+  disabled
+/>
+<label style="margin-right: 18px;">เลือก</label>
+<input type="radio" value="no"
+  :checked="isUtilityNo(info.utilityRequest)"
+  disabled
+/>
+<label>ไม่เลือก</label>
+
         </div>
+     <div class="form-row" style="margin: 10px 0 0 70px;">
+
+</div>
 
         <div class="form-row mt-30 block-row">
-          <span>เปิดเครื่องปรับอากาศตั้งแต่</span>
+          <span style="margin-left: 80px;">เปิดเครื่องปรับอากาศตั้งแต่</span>
           <span class="line-field single-line">{{ info.turnon_air || '-' }}</span>
           <span>ถึง</span>
           <span class="line-field single-line">{{ info.turnoff_air || '-' }}</span>
           <span>( เฉพาะอาคารเฉลิมพระเกียรติฯ )</span>
         </div>
 
-        <div class="form-row mt-15 block-row">
-          <span>ไฟฟ้าส่องสว่างตั้งแต่</span>
+        <div class="form-row mt-30 block-row">
+          <span style="margin-left: 80px;">ไฟฟ้าส่องสว่างตั้งแต่</span>
           <span class="line-field single-line">{{ info.turnon_lights || '-' }}</span>
           <span>ถึง</span>
           <span class="line-field single-line">{{ info.turnoff_lights || '-' }}</span>
           <span>( เฉพาะอาคารเฉลิมพระเกียรติฯ )</span>
         </div>
 
-        <div class="form-row mt-15 block-row">
-          <span>อื่นๆ</span>
+        <div class="form-row mt-30 block-row">
+          <span style="margin-left: 80px;">อื่นๆ</span>
           <span class="line-field block-text">{{ info.other }}</span>
         </div>
 
-        <div class="form-row mt-15 block-row">
-          <span>ดึงอัฒจันทร์ภายในอาคารเฉลิมพระเกียรติฯ</span>
-          <span class="line-field block-text">{{ info.amphitheater }}</span>
+        <div class="form-row mt-30 bold">
+          <span>3.ขออนุมัติรายการประกอบอาคาร   </span>
+          <input type="radio" value="yes"
+  :checked="isFacilityYes(info.facilityRequest)"
+  disabled
+/>
+<label style="margin-right: 18px;">เลือก</label>
+<input type="radio" value="no"
+  :checked="isFacilityNo(info.facilityRequest)"
+  disabled
+/>
+<label>ไม่เลือก</label>
+        </div>
+        <div class="form-row mt-30 block-row">
+          <span style="margin-left: 80px;">ดึงอัฒจันทร์ภายในอาคารเฉลิมพระเกียรติฯ</span>
+          <span class="line-field block-text" style=" max-width: 450px; min-width: 450px;">{{ info.amphitheater }}</span>
+        </div>
+        <div class="form-row mt-30 block-row">
+          <span style="margin-left: 80px;">อุปกรณ์กีฬา (โปรดระบุรายการและจำนวน)</span>
+          <span class="line-field block-text" style=" max-width: 450px; min-width: 450px;">{{ info.need_equipment}}</span>
         </div>
 
 
@@ -189,7 +234,9 @@
     <tr>
       <td>
         ลงชื่อ............................................<br><br>
-        <span > ( {{ info.requester }} ) </span><br><br>
+        <span style=" white-space: nowrap;">
+          ( {{ info.requester }} )
+        </span><br><br>
         นักศึกษา/ผู้รับผิดชอบ<br><br>
         วันที่............/............/............
       </td>
@@ -305,30 +352,30 @@
 
 <!-- โชว์ไฟล์แนบ -->
 <!-- ...ไฟล์แนบปกติ-->
-<div v-if="info.files && info.files.length > 0" class="form-row mt-30">
-  <span>ไฟล์แนบ (ปกติ)</span>
+<div v-if="fileAttachments && fileAttachments.length > 0" class="form-row mt-30">
+  <span>ไฟล์แนบ</span>
   <div class="attached-files-list">
     <div 
-      v-for="(file, idx) in info.files" 
+      v-for="(file, idx) in fileAttachments" 
       :key="idx"
       class="attached-file-item"
     >
       <a 
-        :href="file.fileUrl || file.url" 
-        target="_blank" 
-        :download="file.originalName || file.fileName"
+        :href="file.url"
+        target="_blank"
+        :download="file.fileName"
       >
-        {{ file.originalName || file.fileName || 'ไฟล์แนบ' }}
+        {{ file.fileName || 'ไฟล์แนบ' }}
       </a>
       <span v-if="file.size" style="color: #888; font-size:12px; margin-left:8px;">
-        ({{ Math.round(file.size/1024) }} KB)
+        ({{ file.size }} KB)
       </span>
     </div>
   </div>
 </div>
 
 <!-- ...ไฟล์แนบจาก uploadFiles (base64)-->
-<div v-if="fileAttachments && fileAttachments.length > 0" class="form-row mt-30">
+<!-- <div v-if="fileAttachments && fileAttachments.length > 0" class="form-row mt-30">
   <span>ไฟล์แนบ (UploadFile)</span>
   <div class="attached-files-list">
     <div 
@@ -348,7 +395,7 @@
       </span>
     </div>
   </div>
-</div>
+</div> -->
 
 
         <div class="button-wrapper mt-30">
@@ -362,14 +409,20 @@
     <footer class="foot">
       <div class="footer-left">
         <p>
-          Sport Complex – Mae Fah Luang University |
-          Tel. 0-5391-7821 | Facebook:
-          <a href="https://www.facebook.com/mfusportcomplex" target="_blank">MFU Sports Complex Center</a> |
-          Email: <a href="mailto:sport-complex@mfu.ac.th">sport-complex@mfu.ac.th</a>
+          Sport Complex – Mae Fah Luang University | Tel. 053-917-821 |
+          Facebook: 
+          <a href="https://www.facebook.com/mfusportcomplex" target="_blank">
+            MFU Sports Complex Center
+          </a> | 
+          Email: 
+          <a href="mailto:sport-complex@mfu.ac.th">
+            sport-complex@mfu.ac.th
+          </a>
         </p>
       </div>
     </footer>
   </div>
+  
 </template>
 
 <script setup>
@@ -379,7 +432,77 @@ import axios from 'axios'
 import Swal from 'sweetalert2'
 
 const API_BASE = import.meta.env.VITE_API_BASE
+const isMobile = ref(false)
+// --------------- แจ้งเตือน -----------------
+const showNotifications = ref(false)
+const notifications = ref([])
+const unreadCount = ref(0)
+const userId = localStorage.getItem('user_id') || ''
+const lastCheckedIds = new Set()
 
+function toggleNotifications() {
+  showNotifications.value = !showNotifications.value
+  if (showNotifications.value) unreadCount.value = 0
+}
+function checkMobile() {
+  isMobile.value = window.innerWidth <= 600
+}
+function closeNotifications() {
+  showNotifications.value = false
+}
+async function fetchNotifications() {
+  if (!userId) return
+  try {
+    const res = await axios.get(`${API_BASE}/api/history?user_id=${userId}`)
+    const newNotis = res.data.filter(item =>
+      (['approved', 'disapproved', 'cancel', 'canceled', 'returned'].includes((item.status || '').toLowerCase())) &&
+      !lastCheckedIds.has(item._id)
+    )
+    if (newNotis.length) {
+      const newMessages = newNotis.map(item => ({
+        id: item._id,
+        type: (item.status || '').toLowerCase(),
+        timestamp: item.returnedAt
+          ? new Date(item.returnedAt).getTime()
+          : item.updatedAt
+          ? new Date(item.updatedAt).getTime()
+          : item.approvedAt
+          ? new Date(item.approvedAt).getTime()
+          : item.date
+          ? new Date(item.date).getTime()
+          : Date.now(),
+        message: `รายการ '${item.name}' ของคุณ${
+          (item.status || '').toLowerCase() === 'approved'
+            ? ' ได้รับการอนุมัติ'
+            : (item.status || '').toLowerCase() === 'disapproved'
+            ? ' ไม่ได้รับการอนุมัติ'
+            : (item.status || '').toLowerCase() === 'cancel' || (item.status || '').toLowerCase() === 'canceled'
+            ? ' ถูกยกเลิก'
+            : (item.status || '').toLowerCase() === 'returned'
+            ? ' คืนของสำเร็จแล้ว'
+            : ''
+        }`
+      }))
+      notifications.value = [...notifications.value, ...newMessages]
+        .filter((v, i, arr) => arr.findIndex(x => x.id === v.id) === i)
+        .sort((a, b) => b.timestamp - a.timestamp)
+      newNotis.forEach(item => lastCheckedIds.add(item._id))
+      unreadCount.value = notifications.value.length
+    }
+  } catch (err) {
+    // ignore
+  }
+}
+onMounted(() => {
+  fetchNotifications()
+  setInterval(fetchNotifications, 30000)
+  checkMobile()
+  window.addEventListener('resize', checkMobile)
+})
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', checkMobile)
+})
+// -------------- Form Confirm + ดึงไฟล์แนบ ----------------
 const info = ref({})
 const fileAttachments = ref([])
 const isSidebarClosed = ref(false)
@@ -388,13 +511,6 @@ const router = useRouter()
 const steps = ['กรอกข้อมูล','ยืนยันข้อมูล','สำเร็จ']
 const currentStep = ref(1)
 const stepRoutes = ['/form_field_admin', '/form_field_admin3', '/form_field_admin4']
-
-// ---------- กระดิ่งแจ้งเตือน ----------
-const showNotifications = ref(false)
-const notifications = ref([])
-const unreadCount = ref(0)
-const lastCheckedIds = ref(new Set())
-let polling = null
 
 function toggleSidebar() {
   isSidebarClosed.value = !isSidebarClosed.value
@@ -415,75 +531,48 @@ function goBack() {
 }
 function formatDateOnly(dateTime) {
   if (!dateTime) return '-'
+  let dateStr = dateTime
   if (typeof dateTime === 'string' && dateTime.includes('T')) {
-    return dateTime.split('T')[0]
+    dateStr = dateTime.split('T')[0]
   }
-  return dateTime
+  if (dateStr.includes('/')) return dateStr // ถ้าเป็น dd/mm/yyyy อยู่แล้ว
+  const [y, m, d] = dateStr.split('-')
+  if (!y || !m || !d) return dateStr
+  return `${d.padStart(2, '0')}/${m.padStart(2, '0')}/${y}`
 }
 
-// ===== Notification (close on outside click) =====
-function toggleNotifications() {
-  showNotifications.value = !showNotifications.value
-  if (showNotifications.value) unreadCount.value = 0
+function isUtilityYes(val) {
+  return val === 'yes'
 }
-function closeNotifications() {
-  showNotifications.value = false
+function isUtilityNo(val) {
+  return val === 'no'
 }
-function handleClickOutside(event) {
-  const notifDropdown = document.querySelector('.notification-dropdown')
-  const notifBtn = document.querySelector('.notification-btn')
-  if (
-    notifDropdown &&
-    !notifDropdown.contains(event.target) &&
-    notifBtn &&
-    !notifBtn.contains(event.target)
-  ) {
-    closeNotifications()
-  }
+function isFacilityYes(val) {
+  return val === 'yes'
 }
-async function fetchNotifications() {
-  try {
-    const res = await axios.get(`${API_BASE}/api/history/approve_field`)
-    const data = Array.isArray(res.data) ? res.data : []
-
-    const pendings = data.filter(item =>
-      item.status === 'pending' &&
-      (item.type === 'field' || item.type === 'equipment') &&
-      !lastCheckedIds.value.has(item._id?.$oid || item._id)
-    )
-    if (pendings.length) {
-      const newMessages = pendings.map(item => {
-        if (item.type === 'field') {
-          return {
-            id: item._id?.$oid || item._id,
-            message: `สนาม '${item.name}' กำลังรอการอนุมัติ`
-          }
-        } else if (item.type === 'equipment') {
-          return {
-            id: item._id?.$oid || item._id,
-            message: `อุปกรณ์ '${item.name}' กำลังรอการอนุมัติ`
-          }
-        }
-      })
-      notifications.value = [...notifications.value, ...newMessages]
-      pendings.forEach(item => lastCheckedIds.value.add(item._id?.$oid || item._id))
-      unreadCount.value = notifications.value.length
-    }
-  } catch (err) { /* ไม่แจ้งเตือน error */ }
+function isFacilityNo(val) {
+  return val === 'no'
 }
 
+// -------------- Load ข้อมูล Booking + Attachments ----------------
 onMounted(async () => {
-  document.addEventListener('mousedown', handleClickOutside)
-
   const bookingId = localStorage.getItem('bookingId')
   if (!bookingId) {
     Swal.fire('ไม่พบ bookingId')
     return
   }
   try {
+    // 1. โหลดข้อมูล booking_field
     const res = await axios.get(`${API_BASE}/api/booking_field/${bookingId}`)
     info.value = res.data
 
+    // Normalize ค่า yes/no กรณีเจอ "เลือก"/"ไม่เลือก"
+    if (info.value.utilityRequest === 'เลือก') info.value.utilityRequest = 'yes'
+    if (info.value.utilityRequest === 'ไม่เลือก') info.value.utilityRequest = 'no'
+    if (info.value.facilityRequest === 'เลือก') info.value.facilityRequest = 'yes'
+    if (info.value.facilityRequest === 'ไม่เลือก') info.value.facilityRequest = 'no'
+
+    // โหลดชื่อผู้ขอใช้ (requester)
     if (info.value.user_id) {
       try {
         const userRes = await axios.get(`${API_BASE}/api/user/${info.value.user_id}`)
@@ -493,8 +582,21 @@ onMounted(async () => {
       }
     }
 
-    // ==== ดึงไฟล์แนบจริง ====
+    // ----- โหลดไฟล์แนบ -----
     fileAttachments.value = []
+
+    // 4.1 ดึงไฟล์แนบที่อัปโหลดผ่าน Multer (info.value.files)
+    if (info.value.files && info.value.files.length > 0) {
+      for (const file of info.value.files) {
+        fileAttachments.value.push({
+          fileName: file.originalName || file.fileName || 'ไฟล์แนบ',
+          url: file.fileUrl,
+          size: file.size ? Math.round(file.size / 1024) : null,
+        })
+      }
+    }
+
+    // 4.2 ดึงไฟล์แนบจาก uploadFiles (base64) เพิ่มต่อท้าย
     if (info.value.uploadFiles && info.value.uploadFiles.length > 0) {
       let fileListRes
       try {
@@ -517,17 +619,13 @@ onMounted(async () => {
     Swal.fire('ดึงข้อมูลไม่สำเร็จ')
     console.error(err)
   }
-
-  await fetchNotifications()
-  polling = setInterval(fetchNotifications, 30000)
-})
-
-onBeforeUnmount(() => {
-  if (polling) clearInterval(polling)
-  document.removeEventListener('mousedown', handleClickOutside)
+  fetchNotifications()
+  setInterval(fetchNotifications, 30000)
 })
 
 async function handleNext() {
+  
+
   try {
     const bookingId = localStorage.getItem('bookingId')
     if (!bookingId) {
@@ -535,7 +633,6 @@ async function handleNext() {
       return
     }
     const bookingData = { ...info.value }
-
     const attachments = (bookingData.files || []).map(f => f.fileUrl || f.url || null)
     const fileNames   = (bookingData.files || []).map(f => f.originalName || f.fileName || null)
     const fileTypes   = (bookingData.files || []).map(f => f.mimetype || null)
@@ -568,28 +665,42 @@ async function handleNext() {
       fileType: fileTypes,
       uploadFiles: uploadFiles,
       date: new Date(),
+      proxyStudentName: bookingData.proxyStudentName || '',   // <--- เพิ่ม
+      proxyStudentId: bookingData.proxyStudentId || '',       // <--- เพิ่ม
     }
+
+    console.log('PAYLOAD ส่งเข้า /api/history', payload)
 
     await axios.post(`${API_BASE}/api/history`, payload)
 
+    // ---- สำคัญ! ----
     sessionStorage.removeItem('form_field_save')
     window._tempSelectedFiles = []
 
     router.push('/form_field_admin4')
   } catch (err) {
-    Swal.fire('เกิดข้อผิดพลาดในการบันทึกข้อมูล', err?.response?.data?.message || err.message, 'error')
+    // เช็คว่า error มาจาก duplicate หรือไม่
+    if (err?.response?.status === 409) {
+      Swal.fire({
+        title: 'คำขอซ้ำ',
+        text: err.response.data.message || 'คุณมีรายการที่รออนุมัติอยู่แล้ว',
+        icon: 'warning'
+      })
+    } else {
+      Swal.fire('เกิดข้อผิดพลาดในการบันทึกข้อมูล', err?.response?.data?.message || err.message, 'error')
+    }
     console.error(err)
   }
 }
+
 </script>
 
 
 
 
 
-
-
 <style scoped>
+/* Stepper */
 .headStepper {
   background: #fff;
   margin: 15px auto;
@@ -634,6 +745,7 @@ async function handleNext() {
 }
 .line.filled { background: #ff4d4f; }
 
+/* Form */
 .title { text-align: center; margin-bottom: 20px; }
 .form-container {
   background: #fff;
@@ -646,8 +758,10 @@ async function handleNext() {
 .form-header { text-align: center; margin-bottom: 20px; }
 .info-left {
   display: flex; align-items: center; gap: 12px;
-  margin: 8px 0 20px;
+ margin-top: 60px;
   flex-wrap: wrap;
+ 
+
 }
 .form-row {
   display: flex;
@@ -665,10 +779,10 @@ async function handleNext() {
 .line-field {
   border-bottom: 2px solid #334155;
   padding: 0 6px;
-  min-width: 100px;
+  min-width: 50px;
   height: auto;
   min-height: 20px;
-  max-width: 2000px;
+  max-width: 650px;
   white-space: pre-wrap;
   word-wrap: break-word;
   overflow-wrap: break-word;
@@ -700,7 +814,6 @@ async function handleNext() {
   text-decoration: underline;
   word-break: break-all;
 }
-
 /* --- Signature Section --- */
 .signatures-row {
   display: flex;
@@ -770,15 +883,7 @@ async function handleNext() {
 .sign-inner-blank {
   margin: 7px 0 3px 0;
 }
-@media (max-width: 900px) {
-  .signatures-row {
-    flex-direction: column;
-    gap: 18px;
-  }
-  .signature-box {
-    margin: 0 0 12px 0;
-  }
-}
+
 .sign-inner-title {
   font-weight: bold;
   margin-bottom: 4px;
@@ -887,6 +992,7 @@ async function handleNext() {
   border-bottom: 1px dotted #222;
 }
 
+
 .sign-space {
   margin: 16px 0 0 0;
   font-size: 15px;
@@ -896,12 +1002,7 @@ async function handleNext() {
   gap: 7px;
 }
 
-/* Responsive */
-@media (max-width: 900px) {
-  .approval-sign-table th, .approval-sign-table td { font-size: 13.5px; }
-  .approval-sign-table td { height: 170px; }
-  .td-inner { padding: 9px 5px; }
-}
+
 
 /* ========================= */
 .sign-header-table {
@@ -922,13 +1023,11 @@ async function handleNext() {
 /* ======= ปุ่ม Back & Next ======= */
 .button-wrapper {
   display: flex;
-  justify-content: space-between; /* Back ซ้าย, Next ขวา */
+  justify-content: flex-end;
   gap: 16px;
   margin-top: 30px;
-  padding-left: 185px;
-  padding-right: 185px;
-  padding-bottom: 50px;
 }
+
 #btnBack, #btnNext {
   font-size: 1rem;
   font-weight: 500;
@@ -940,26 +1039,111 @@ async function handleNext() {
   transition: background 0.22s, color 0.22s, box-shadow 0.22s;
   box-shadow: 0 1px 6px 0 rgba(0,0,0,0.07);
 }
+.button-wrapper {
+  display: flex;
+  justify-content: space-between; /* แยก Back ไปซ้าย, Next ไปขวา */
+  gap: 16px;
+  margin-top: 30px;
+}
+
 #btnBack {
+  padding: 0.5rem 1rem;
   background-color: #6c757d;
   color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-block;
 }
+
 #btnNext {
   background: #007bff;
   color: #fff;
 }
+
 #btnBack:hover {
   background: #c9bfbf;
   color: #111;
 }
 
-@media (max-width: 900px) {
-  .sign-header-table td { font-size: 13.5px; }
+
+#btnBack:hover {
+  background-color: #5a6268;
+}
+
+
+
+/* ==== Notification styles ==== */
+.notification-dropdown {
+  position: absolute;
+  right: 0;
+  top: 36px;
+  background: white;
+  box-shadow: 0 4px 24px rgba(70, 70, 70, 0.14);
+  border-radius: 10px;
+  width: 320px;
+  max-width: 90vw;
+  z-index: 1500;
+  padding: 10px 0;
+  font-size: 1rem;
+}
+.notification-dropdown ul {
+  padding: 0 18px;
+  margin: 0;
+}
+.notification-dropdown li {
+  list-style: none;
+  padding: 10px 0;
+  border-bottom: 1px solid #eaeaea;
+  word-break: break-word;
+}
+.notification-dropdown li:last-child {
+  border-bottom: none;
+}
+.notification-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1.4rem;
+  position: relative;
+  margin-right: 8px;
+}
+.badge {
+  position: absolute;
+  top: 1px;
+  right: 3px;
+  background: #e11d48;
+  color: white;
+  border-radius: 8px;
+  padding: 1px 8px;
+  font-size: 0.83rem;
+  font-weight: bold;
+  min-width: 20px;
+  text-align: center;
+  z-index: 10;
+}
+.sidebar-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.18);
+  z-index: 1999;
+}
+@media (max-width: 600px) {
+  .main { 
+    overflow-x: auto !important;
+
+   }
+  .form-container, .form-grid {
+    min-width: 400px;
+    width: 100vw;
+    overflow-x: auto;
+    padding-right: 20px;  
+    box-sizing: border-box;
+  }
 }
 </style>
 
 <style>
 @import '../css/style.css';
 </style>
-
-  

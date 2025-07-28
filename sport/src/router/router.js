@@ -26,7 +26,7 @@ import Form_equipment from '@/pages/form_equipment.vue'
 import Form_equipment2 from '@/pages/form_equipment2.vue'
 import Form_equipement3 from '@/pages/form_equipement3.vue'
 import Form_equipment4 from '@/pages/form_equipment4.vue'
-import Select_role from '@/pages/select_role.vue'
+// import Select_role from '@/pages/select_role.vue'
 import Dashboard from '@/pages/dashboard.vue'
 import Edit_equipment from '@/pages/Edit_equipment.vue'
 import Edit_field from '@/pages/Edit_field.vue'
@@ -46,7 +46,8 @@ import Return_admin from '@/pages/return_admin.vue'
 import LoginSuccess from '@/pages/login-success.vue'
 
 const routes = [
-    { path: '/', component: Select_role },
+    // { path: '/', component: Select_role },
+    { path: '/', component: Login },
     { path: '/login', component: Login },
     { path: '/login-success', component: LoginSuccess }, // ← ที่ถูกต้อง!
     { path: '/register', component: Register },

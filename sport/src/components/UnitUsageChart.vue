@@ -1,196 +1,82 @@
 <template>
-  <div class="chart-container">
-    <div class="chart-box">
-      <Bar :data="barData" :options="chartOptions" />
+  <div style="width:100%;min-height:380px;">
+    <div
+      v-if="!hasData"
+      style="color:#888;text-align:center;font-size:1.15rem;margin-top:80px;">
+      ไม่มีข้อมูลตรงตามเงื่อนไขที่เลือก
     </div>
-    <div class="chart-box">
-      <Pie :data="pieData" :options="pieOptions" />
-    </div>
+    <Line v-else :data="chartData" :options="chartOptions" />
   </div>
 </template>
 
 <script setup>
 import { computed } from 'vue'
-import { Bar, Pie } from 'vue-chartjs'
+import { Line } from 'vue-chartjs'
 import {
-  Chart as ChartJS,
-  Title,
-  Tooltip,
-  Legend,
-  BarElement,
-  ArcElement,
-  CategoryScale,
-  LinearScale
+  Chart, LineElement, PointElement, LinearScale, CategoryScale, Title, Tooltip, Legend,
 } from 'chart.js'
 
-ChartJS.register(Title, Tooltip, Legend, BarElement, ArcElement, CategoryScale, LinearScale)
+Chart.register(LineElement, PointElement, LinearScale, CategoryScale, Title, Tooltip, Legend)
 
 const props = defineProps({
-  units:    { type: Array,  required: true },
-  unitType: { type: String, required: true }
+  units: { type: Array, default: () => [] },
+  unitType: { type: String, default: 'usage' }
 })
 
-// ฟังก์ชันสร้างสี HSL ไม่ซ้ำ สูงสุด 200 สี
-function generateColorPalette(n) {
-  const colors = []
-  for (let i = 0; i < n; i++) {
-    const hue = Math.round((360 * i) / n)
-    colors.push(`hsl(${hue}, 70%, 50%)`)
+const chartData = computed(() => {
+  // ตรวจสอบประเภท ถ้าเป็นกราฟอุปกรณ์กีฬา (unitType === 'equipment') ใช้ "จำนวนการใช้"
+  const usageLabel = props.unitType === 'equipment' ? 'จำนวนการใช้' : 'จำนวนครั้ง';
+  const datasets = [
+    {
+      label: usageLabel,
+      data: props.units.map(u => u.usage || 0),
+      borderColor: '#1976d2',
+      backgroundColor: 'rgba(25, 118, 210, .09)',
+      tension: 0.35,
+      fill: false,
+    }
+  ];
+  // เพิ่มเส้นจำนวนชั่วโมง ถ้ามี u.hours
+  if (props.units.some(u => u.hours !== undefined)) {
+    datasets.push({
+      label: 'จำนวนชั่วโมง',
+      data: props.units.map(u => u.hours || 0),
+      borderColor: '#d32f2f',
+      backgroundColor: 'rgba(211,47,47,.09)',
+      tension: 0.35,
+      fill: false,
+    });
   }
-  return colors
-}
+  return {
+    labels: props.units.map(u => u.unit),
+    datasets
+  }
+});
 
-const unitLabels  = computed(() => props.units.map(u => u.unit))
-// ทำให้ค่าหลักในกราฟเปลี่ยนตาม unitType (ชั่วโมง/ครั้ง)
-const mainValues = computed(() =>
-  props.unitType === 'hours'
-    ? props.units.map(u => u.hours)
-    : props.units.map(u => u.usage)
+
+
+// เช็คว่ามีข้อมูลหรือไม่
+const hasData = computed(() =>
+  props.units && Array.isArray(props.units) && props.units.length > 0
+  && props.units.some(u => (u.usage || 0) > 0 || (u.hours || 0) > 0)
 )
-const colors = computed(() => generateColorPalette(props.units.length))
 
-const barData = computed(() => ({
-  labels: unitLabels.value,
-  datasets: [
-    {
-      label: props.unitType === 'hours' ? 'ชั่วโมง/ครั้ง' : 'ครั้ง/ชั่วโมง',
-      data: mainValues.value,
-      backgroundColor: colors.value,
-      borderWidth: 1,
-      borderColor: '#fff'
-    }
-  ]
-}))
-
-const pieData = computed(() => ({
-  labels: unitLabels.value,
-  datasets: [
-    {
-      label: props.unitType === 'hours' ? 'ชั่วโมง/ครั้ง' : 'ครั้ง/ชั่วโมง',
-      data: mainValues.value,
-      backgroundColor: colors.value,
-      borderWidth: 1,
-      borderColor: '#fff'
-    }
-  ]
-}))
-
-const chartOptions = computed(() => ({
+const chartOptions = {
   responsive: true,
+  maintainAspectRatio: false,
   plugins: {
-    legend: { display: false },
+    legend: { display: true, labels: { font: { size: 15 } } },
+    title: { display: false },
     tooltip: {
+      enabled: true,
       callbacks: {
-        label: (ctx) => {
-          const u = props.units[ctx.dataIndex]
-          if (!u) return ctx.formattedValue
-          // โชว์ข้อมูลสลับตาม filter ที่เลือก
-          if (props.unitType === 'hours') {
-            return [
-              `จำนวนชั่วโมง: ${u.hours ?? 0}`,
-              `จำนวนครั้ง: ${u.usage ?? 0}`
-            ]
-          } else {
-            return [
-              `จำนวนครั้ง: ${u.usage ?? 0}`,
-              `จำนวนชั่วโมง: ${u.hours ?? 0}`
-            ]
-          }
-        }
+        label: (ctx) => `${ctx.dataset.label}: ${ctx.formattedValue}`
       }
-    },
-    title: {
-      display: true,
-      text: props.unitType === 'hours'
-        ? 'กราฟแท่ง: ชั่วโมง/ครั้ง การใช้งานแต่ละหน่วยงาน'
-        : 'กราฟแท่ง: ครั้ง/ชั่วโมง การใช้งานแต่ละหน่วยงาน'
     }
   },
   scales: {
-    x: { ticks: { font: { size: 12 }, autoSkip: false, maxRotation: 45 } },
-    y: { beginAtZero: true }
+    x: { title: { display: false } },
+    y: { beginAtZero: true, title: { display: false } }
   }
-}))
-
-const pieOptions = computed(() => ({
-  responsive: true,
-  plugins: {
-    legend: { position: 'bottom' },
-    tooltip: {
-      callbacks: {
-        label: (ctx) => {
-          const u = props.units[ctx.dataIndex]
-          if (!u) return ctx.formattedValue
-          if (props.unitType === 'hours') {
-            return [
-              `จำนวนชั่วโมง: ${u.hours ?? 0}`,
-              `จำนวนครั้ง: ${u.usage ?? 0}`
-            ]
-          } else {
-            return [
-              `จำนวนครั้ง: ${u.usage ?? 0}`,
-              `จำนวนชั่วโมง: ${u.hours ?? 0}`
-            ]
-          }
-        }
-      }
-    },
-    title: {
-      display: true,
-      text: props.unitType === 'hours'
-        ? 'กราฟวงกลม: ชั่วโมง/ครั้ง การใช้งานแต่ละหน่วยงาน'
-        : 'กราฟวงกลม: ครั้ง/ชั่วโมง การใช้งานแต่ละหน่วยงาน'
-    }
-  }
-}))
+}
 </script>
-
-<style scoped>
-.chart-container {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 2rem;
-  justify-content: stretch;   /* เดิม center => เป็น stretch */
-  align-items: stretch;       /* เดิม flex-start => stretch */
-  width: 100%;
-  height: 100%;               /* เพิ่ม! ให้กินเต็ม dashboard-section */
-  min-height: 350px;          /* ป้องกันสูงน้อยเกิน */
-}
-
-.chart-box {
-  flex: 1 1 0;
-  min-width: 0;
-  height: 100%;
-  background: none;
-  display: flex;
-  align-items: stretch;     /* แก้จาก center เป็น stretch */
-  justify-content: stretch; /* แก้จาก center เป็น stretch */
-}
-
-.chart-box canvas {
-  width: 100% !important;
-  height: 100% !important;
-  max-width: 100% !important;
-  max-height: 100% !important;
-  min-height: 320px;
-}
-
-/* Responsive */
-@media (max-width: 900px) {
-  .chart-container {
-    flex-direction: column;
-    gap: 1.5rem;
-    min-height: 260px;
-    height: auto;
-  }
-  .chart-box {
-    width: 100%;
-    min-width: 0;
-    height: 260px;
-    max-width: 100%;
-    align-items: center;
-    justify-content: center;
-  }
-}
-
-</style>

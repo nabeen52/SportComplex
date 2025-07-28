@@ -4,7 +4,7 @@
     <aside class="sidebar" :class="{ closed: isSidebarClosed }">
       <div class="sidebar-header">
         <img src="/img/logo.png" alt="logo" class="logo" />
-        <p class="sidebar-title">ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง</p>
+        <p class="sidebar-title">Sport Complex MFU</p>
       </div>
       <nav class="nav-links">
         <router-link to="/home_user" exact-active-class="active">
@@ -22,40 +22,46 @@
       </nav>
     </aside>
 
+    <div
+  v-if="!isSidebarClosed"
+  class="sidebar-overlay"
+  @click="toggleSidebar"
+    ></div>
+
     <div class="main">
       <!-- Topbar -->
       <header class="topbar">
-  <button class="menu-toggle" @click="toggleSidebar">☰</button>
-  <div class="topbar-actions">
-    <!-- 🔔 START กระดิ่งแจ้งเตือน -->
-    <div>
-      <div
-        v-if="showNotifications"
-        class="notification-backdrop"
-        @click="closeNotifications"
-      ></div>
-      <button class="notification-btn" @click="toggleNotifications">
-        <i class="pi pi-bell"></i>
-        <span v-if="unreadCount > 0" class="badge">{{ unreadCount }}</span>
-      </button>
-      <div v-if="showNotifications" class="notification-dropdown">
-        <ul>
-          <li
-            v-for="(noti, idx) in notifications.slice(0, 10)"
-            :key="noti.id || idx"
-            :class="['notification-item', noti.type || '', { unread: idx === 0 }]"
-          >
-            {{ noti.message }}
-          </li>
-          <li v-if="notifications.length === 0" class="no-noti">ไม่มีแจ้งเตือน</li>
-        </ul>
-      </div>
-    </div>
-    <!-- 🔔 END กระดิ่งแจ้งเตือน -->
-    <router-link to="/cart"><i class="pi pi-shopping-cart"></i></router-link>
-    <router-link to="/profile"><i class="pi pi-user"></i></router-link>
-  </div>
-</header>
+        <button class="menu-toggle" @click="toggleSidebar">☰</button>
+        <div class="topbar-actions">
+          <!-- 🔔 START กระดิ่งแจ้งเตือน -->
+          <div>
+            <div v-if="showNotifications" class="notification-backdrop" @click="closeNotifications"></div>
+            <button class="notification-btn" @click="toggleNotifications">
+              <i class="pi pi-bell"></i>
+              <span v-if="unreadCount > 0" class="badge">{{ unreadCount }}</span>
+            </button>
+            <div v-if="showNotifications" class="notification-dropdown">
+              <ul>
+                <li
+                  v-for="(noti, idx) in notifications.slice(0, 10)"
+                  :key="noti.id || idx"
+                  :class="['notification-item', noti.type || '', { unread: idx === 0 }]"
+                >
+                  {{ noti.message }}
+                </li>
+                <li v-if="notifications.length === 0" class="no-noti">ไม่มีแจ้งเตือน</li>
+              </ul>
+            </div>
+          </div>
+          <!-- 🔔 END กระดิ่งแจ้งเตือน -->
+          <router-link to="/cart" class="cart-link">
+              <i class="pi pi-shopping-cart"></i>
+              <span v-if="products.length > 0" class="badge">{{ products.length }}</span>
+          </router-link>
+
+          <router-link to="/profile"><i class="pi pi-user"></i></router-link>
+        </div>
+      </header>
 
       <!-- Stepper -->
       <div class="headStepper">
@@ -76,15 +82,10 @@
       <!-- Success Message -->
       <div class="form-container">
         <h1 style="display: flex; justify-content: center;">ส่งคำขอสำเร็จ ✅</h1>
-        <!-- ใน template -->
         <button class="pdfmake-btn" :disabled="!bookingInfo" @click="exportPdf(bookingInfo)">
-  ดาวน์โหลด PDF ฟอร์ม
-</button>
-
-
-
-        <br>
-        <br>
+          ดาวน์โหลด PDF ฟอร์ม
+        </button>
+        <br><br>
         <button id="btnNext" @click="handleNext">กลับหน้าแรก</button>
       </div>
     </div>
@@ -109,25 +110,22 @@ import Swal from 'sweetalert2'
 import axios from 'axios'
 import { useRouter } from 'vue-router'
 
-
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
-
-// (ถ้าจะใช้ภาษาไทย ต้อง import Sarabun font ที่ bundle มาแล้วใน public หรือ assets ตามตัวอย่างด้านล่าง)
 import '@/assets/fonts/Sarabun-Regular-normal.js'
 import '@/assets/fonts/Sarabun-Bold-normal.js'
 
 const API_BASE = import.meta.env.VITE_API_BASE
-
+const products = ref([])
 const router = useRouter()
 const equipmentList = ref([])
-const bookingInfo = ref(null) // ต้องเป็น null เพื่อเช็ค !bookingInfo ได้
+const bookingInfo = ref(null)
 const steps = ['กรอกข้อมูล', 'ยืนยันข้อมูล', 'สำเร็จ']
 const currentStep = ref(3)
 const isSidebarClosed = ref(false)
 
-// =============== Notification State (ยกมาจากหน้า 3) ================
+// Notification State
 const showNotifications = ref(false)
 const notifications = ref([])
 const unreadCount = ref(0)
@@ -185,26 +183,31 @@ async function fetchNotifications() {
     unreadCount.value = 0
   }
 }
-// ===================================================================
 
 function toggleSidebar() {
   isSidebarClosed.value = !isSidebarClosed.value
 }
 
-// -- ส่วนนี้ไม่ต้องแก้ (ตามโค้ดเดิม) --
+async function loadCart() {
+  if (!userId) return
+  try {
+    const res = await axios.get(`${API_BASE}/api/cart?user_id=${userId}`)
+    products.value = res.data
+  } catch {
+    products.value = []
+  }
+}
+
 async function loadBookingInfo() {
   const bookingId = localStorage.getItem('equipment_booking_id');
   if (!bookingId) {
     await Swal.fire('ไม่พบข้อมูลการจอง');
     return;
   }
-
   try {
-    // ดึงทุก record ที่ booking_id ตรงกัน
     const res = await axios.get(`${API_BASE}/api/history`, {
       params: { booking_id: bookingId }
     });
-    // filter เฉพาะ equipment + booking_id ตรงกัน
     const historyList = (res.data || []).filter(
       h => h.type === 'equipment' && String(h.booking_id) === String(bookingId)
     );
@@ -212,10 +215,7 @@ async function loadBookingInfo() {
       await Swal.fire('ไม่พบข้อมูลในประวัติ');
       return;
     }
-    // สมมุติ record ทุกตัวใน booking_id เดียวกันเป็นของ booking เดียวกันหมด
     bookingInfo.value = historyList[0];
-
-    // ชื่อผู้ขอ ใช้จาก record แรก
     let userName = historyList[0].requester || '-';
     if ((!userName || userName === '-') && historyList[0].user_id) {
       try {
@@ -225,13 +225,9 @@ async function loadBookingInfo() {
         userName = historyList[0].user_id;
       }
     }
-
-    // แสดงอุปกรณ์ทุกอันที่ booking_id เดียวกัน
-    // ถ้าแต่ละ record มี name, quantity, remark
     const itemList = historyList.map(h => {
       return h.quantity ? `${h.name} (${h.quantity})` : h.name;
     }).join(', ');
-
     await Swal.fire({
       title: 'ส่งคำขอสำเร็จ!',
       html: `
@@ -250,13 +246,11 @@ async function loadBookingInfo() {
   }
 }
 
-
-
-
 onMounted(() => {
   loadBookingInfo()
   fetchNotifications()
   setInterval(fetchNotifications, 30000)
+  loadCart()
 })
 
 function handleNext() {
@@ -265,6 +259,7 @@ function handleNext() {
   router.push('/home_user')
 }
 
+// --- exportPdf: วาดลายเซ็นและชื่อชิดซ้าย/ลดขนาด/บรรทัดถัดจาก "ลงชื่อ (....)" ---
 async function exportPdf(item) {
   if (item && item.value) item = item.value;
   if (!item) {
@@ -303,7 +298,6 @@ async function exportPdf(item) {
   }
 
   try {
-    // 1. ดึง booking_equipment (เพื่อเอา remark)
     const resBooking = await axios.get(`${API_BASE}/api/booking_equipment?id=${mainBookingId}`);
     const bookingData = Array.isArray(resBooking.data) ? resBooking.data[0] : resBooking.data;
     const itemRemarks = Array.isArray(bookingData.items)
@@ -313,13 +307,11 @@ async function exportPdf(item) {
         }))
       : [];
 
-    // 2. ดึงรายการ /api/history ของ booking นี้ (ที่ไม่ใช่ returned)
     const historyRes = await axios.get(`${API_BASE}/api/history`);
     const allItems = historyRes.data
       .filter(d => String(d.booking_id) === String(mainBookingId))
       .filter(d => !d.status || d.status.toLowerCase() !== 'returned');
 
-    // 3. Join remark เข้ากับรายการ
     const mergedItems = allItems.map((row, idx) => {
       const matched = itemRemarks.find(it => it.name === row.name);
       return {
@@ -328,11 +320,12 @@ async function exportPdf(item) {
       };
     });
 
-    // 4. สร้าง PDF
     const doc = new jsPDF({ unit: 'pt', format: 'a4' });
     doc.setFont('Sarabun', 'normal');
-
     const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+
+    // Header
     doc.setFontSize(16);
     const title = 'แบบฟอร์มการยืมอุปกรณ์/วัสดุ/ครุภัณฑ์ ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง';
     const subTitle = 'โทร 053-917820-1 E-mail sport-complex@mfu.ac.th';
@@ -340,35 +333,75 @@ async function exportPdf(item) {
     doc.setFontSize(11);
     doc.text(subTitle, (pageWidth - doc.getTextWidth(subTitle)) / 2, 69);
 
-    // --- รายละเอียด ---
-    doc.setFontSize(11);
-    doc.text(`ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง`, 380, 100);
-      doc.text(`วันที่ ${formatDate(bookingData.start_date || bookingData.since || bookingData.date) || '-'}`, 400, 125);
-      doc.text(`วันที่มารับของ ${formatDate(bookingData.receive_date) || '-'}`, 400, 145);
-      doc.text(`เวลาที่มารับของ ${formatTime(bookingData.receive_time) || '-'} น.`, 400, 165);
-      doc.text(`หน่วยงาน ${bookingData.agency || '-'}`, 380, 185);
+    // ส่วนหัวด้านขวา
+    const headerRightX = pageWidth - 50;
+    const headerLines = [
+      "ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง",
+      `วันที่ ${formatDate(bookingData.start_date || bookingData.since || bookingData.date) || '-'}`,
+      `วันที่มารับของ ${formatDate(bookingData.receive_date) || '-'}`,
+      `เวลาที่มารับของ ${formatTime(bookingData.receive_time) || '-'} น.`
+    ];
+    let headerY = 100;
+    const lineSpacing = 20;
+    headerLines.forEach(line => {
+      const textWidth = doc.getTextWidth(line);
+      doc.text(line, headerRightX - textWidth, headerY);
+      headerY += lineSpacing;
+    });
 
-      doc.text(`ข้าพเจ้า ${bookingData.name || '-'}`, 50, 250);
-      doc.text(`รหัสนักศึกษา/พนักงาน ${bookingData.user_id || '-'}`, 260, 250);
-
-      const reasonText = `เหตุผลในการขอใช้เพื่อ: ${bookingData.reason || '-'}`;
-      const reasonLines = doc.splitTextToSize(reasonText, pageWidth - 100);
-      let yReason = 275;
-      const lineSpacing = 30;
-      for (let i = 0; i < reasonLines.length; i++) {
-        doc.text(reasonLines[i], 30, yReason + (i * lineSpacing));
+    // ฟังก์ชันเช็ค y (ขึ้นหน้าใหม่ถ้าจำเป็น)
+    function checkAddPage(nextY, space = 20) {
+      if (nextY + space > pageHeight - 60) {
+        doc.addPage();
+        return 80;
       }
+      return nextY;
+    }
 
-      doc.text(`สถานที่ใช้งาน: ${bookingData.location || '-'}`, 30, 300);
-      doc.text(
-        `ในวันที่         ${formatDate(bookingData.start_date || bookingData.since || bookingData.date) || '-'}         ถึงวันที่         ${formatDate(bookingData.end_date || bookingData.uptodate) || '-'}`,
-        30, 330
-      );
-      doc.text(`โดยมีรายการดังต่อไปนี้ `,30, 360);
+    // ข้อมูลรายละเอียด
+    let y = headerY + 20;
+    const leftMargin = 50;
+    doc.setFont('Sarabun', 'normal');
+    doc.setFontSize(12);
 
-    // ตารางรายการ
+    // ข้อมูลทั่วไป
+    y = checkAddPage(y, 16);
+    doc.text(`ข้าพเจ้า ${bookingData.name || '-'}`, leftMargin, y);
+    doc.text(`รหัสนักศึกษา/พนักงาน ${bookingData.user_id || '-'}`, leftMargin + 270, y);
+
+    y += 28;
+    y = checkAddPage(y, 16);
+    doc.text(`หน่วยงาน ${bookingData.agency || '-'}`, leftMargin, y);
+
+    // เหตุผล (ข้อความยาว)
+    y += 28;
+    const reasonText = `เหตุผลในการขอใช้เพื่อ: ${bookingData.reason || '-'}`;
+    const reasonLines = doc.splitTextToSize(reasonText, pageWidth - 80);
+    doc.setFontSize(12);
+    for (const line of reasonLines) {
+      y = checkAddPage(y, 16);
+      doc.text(line, leftMargin-20, y);
+      y += 20;
+    }
+
+    y = checkAddPage(y, 16);
+    doc.text(`สถานที่ใช้งาน: ${bookingData.location || '-'}`, leftMargin-20, y);
+    y += 25;
+    y = checkAddPage(y, 16);
+
+    doc.text(
+      `ในวันที่ ${formatDate(bookingData.start_date || bookingData.since || bookingData.date) || '-'} ถึงวันที่ ${formatDate(bookingData.end_date || bookingData.uptodate) || '-'}`,
+      leftMargin-20, y
+    );
+    y += 25;
+    y = checkAddPage(y, 16);
+
+    doc.text(`โดยมีรายการดังต่อไปนี้`, leftMargin-20, y);
+    y += 25;
+
+    // ตาราง (autoTable จะจัดการขึ้นหน้าให้เอง)
     autoTable(doc, {
-      startY: 390,
+      startY: y,
       head: [['ลำดับ', 'รายการ', 'จำนวน', 'หมายเหตุ']],
       body: mergedItems.map((row, idx) => [
         idx + 1,
@@ -380,53 +413,75 @@ async function exportPdf(item) {
       styles: { font: 'Sarabun', fontSize: 11, halign: 'center', cellPadding: 4 }
     });
 
-    // ช่องเซ็นชื่อ
-    const marginRight = 60;
-    const signText = 'ลงชื่อ  (...........................................................)';
-    const nameText = bookingData.name || '-';
-    const signTextWidth = doc.getTextWidth(signText);
-    const nameTextWidth = doc.getTextWidth(nameText);
-    doc.text(signText, pageWidth - signTextWidth - marginRight, 800);
-    doc.text(nameText, pageWidth - nameTextWidth - marginRight -15, 820);
-
-    let signY = doc.lastAutoTable.finalY + 100;
-    const boxWidth = (pageWidth - 40) / 2;
-    const boxHeight = 140;
-    const marginLeft = 20;
-    const pageHeight = doc.internal.pageSize.getHeight();
-    if (signY + boxHeight > pageHeight - 30) {
-      signY = pageHeight - boxHeight - 40;
+    // กล่องลายเซ็น
+    let signY = doc.lastAutoTable.finalY + 40;
+    if (signY + 150 > pageHeight - 40) {
+      doc.addPage();
+      signY = 80;
     }
+    const boxWidth = (pageWidth - 60) / 2;
+    const boxHeight = 110;
+    const marginLeft = 30;
 
-    for (let i = 0; i < 2; i++) {
-      doc.setDrawColor(30, 30, 30);
-      doc.setLineWidth(1);
-      doc.rect(marginLeft + i * boxWidth, signY, boxWidth, boxHeight);
-    }
-
-    // หัวข้อในช่องเซ็น
-    const headerY = signY + 28;
-    const lineY = headerY + 10;
-    const boxHeaderPad = 0;
-    doc.setFont('Sarabun', 'bold');
-    doc.text('ความคิดเห็น/คำสั่ง/ผลการพิจารณา', marginLeft + 50, headerY);
-    doc.setDrawColor(0,0,0);
+    // Draw outer rectangles
     doc.setLineWidth(1);
-    doc.line(marginLeft + boxHeaderPad, lineY, marginLeft + boxWidth - boxHeaderPad, lineY);
+    doc.setDrawColor(50,50,50);
+    doc.rect(marginLeft, signY, boxWidth, boxHeight);
+    doc.rect(marginLeft + boxWidth, signY, boxWidth, boxHeight);
 
-    doc.text('ผลการดำเนินการ/ผลการปฏิบัติงาน', marginLeft + boxWidth + 50, headerY);
-    doc.line(marginLeft + boxWidth + boxHeaderPad, lineY, marginLeft + 2*boxWidth - boxHeaderPad, lineY);
+    // Draw column titles
+    doc.setFont('Sarabun', 'bold');
+    doc.setFontSize(12);
+    doc.text('ความคิดเห็น/คำสั่ง/ผลการพิจารณา', marginLeft + boxWidth/2, signY + 18, { align: 'center' });
+    doc.text('ผลการดำเนินการ/ผลการปฏิบัติงาน', marginLeft + boxWidth + boxWidth/2, signY + 18, { align: 'center' });
+
+    // Thin lines under headers
+    doc.setDrawColor(200,200,200);
+    doc.setLineWidth(0.7);
+    doc.line(marginLeft + 10, signY + 25, marginLeft + boxWidth - 10, signY + 25);
+    doc.line(marginLeft + boxWidth + 10, signY + 25, marginLeft + 2*boxWidth - 10, signY + 25);
 
     doc.setFont('Sarabun', 'normal');
-    doc.text('...........................................................................................', marginLeft + 12, signY + 65);
-    doc.text('...........................................................................................', marginLeft + 12, signY + 90);
-    doc.text('ลงชื่อ.....................................................................หัวหน้าส่วน', marginLeft + 6, signY + 110);
-    doc.text('วันที่....................../....................../....................', marginLeft + 16, signY + 130);
+    doc.setFontSize(11);
 
-    doc.text('...........................................................................................', marginLeft + boxWidth + 12, signY + 65);
-    doc.text('...........................................................................................', marginLeft + boxWidth + 12, signY + 90);
-    doc.text('ลงชื่อ................................................ผู้ปฏิบัติงาน/ผู้รับผิดชอบ', marginLeft + boxWidth + 7, signY + 110);
-    doc.text('วันที่....................../....................../....................', marginLeft + boxWidth + 16, signY + 130);
+    // Left box lines
+    doc.text('.................................................................', marginLeft + 17, signY + 40);
+    doc.text('.................................................................', marginLeft + 17, signY + 54);
+    doc.text('ลงชื่อ.............................................หัวหน้าส่วน', marginLeft + 17, signY + 70);
+    doc.text('วันที่................./................./.................', marginLeft + 22, signY + 100);
+
+    // Right box lines
+    doc.text('.................................................................', marginLeft + boxWidth + 17, signY + 40);
+    doc.text('.................................................................', marginLeft + boxWidth + 17, signY + 54);
+    doc.text('ลงชื่อ.................................ผู้ปฏิบัติงาน/ผู้รับผิดชอบ', marginLeft + boxWidth + 17, signY + 70);
+    doc.text('วันที่................./................./.................', marginLeft + boxWidth + 22, signY + 100);
+
+    // ===== ลายเซ็นผู้ขอ (ชิดซ้าย ลดขนาด ชื่ออยู่บรรทัดถัดไป) =====
+    const userName = bookingData.name || '-';
+    const signX = marginLeft + boxWidth + 20;  // ชิดขวาของกล่อง
+    let signTextY = signY + boxHeight + 40; // ใต้กล่อง
+
+    // ถ้าพื้นที่ไม่พอสำหรับลายเซ็น+ชื่อ ขึ้นหน้าใหม่อีก
+    if (signTextY + 32 > pageHeight - 40) {
+      doc.addPage();
+      signTextY = 80;
+    }
+
+    // วาด "ลงชื่อ (......)"
+    const nameWidth = doc.getTextWidth(userName);
+    const minParenWidth = 140;
+    const parenWidth = Math.max(nameWidth + 20, minParenWidth);
+    const parenDots = '.'.repeat(Math.round(parenWidth / doc.getTextWidth('.')));
+    const parenText = `( ${parenDots} )`;
+
+    doc.setFont('Sarabun', 'normal');
+    doc.setFontSize(11);
+    doc.text(`ลงชื่อ ${parenText}`, signX, signTextY, { align: 'left' });
+
+    // ชื่ออยู่บรรทัดใหม่
+    doc.setFont('Sarabun', 'normal');
+    doc.setFontSize(12);
+    doc.text(userName, signX + 35, signTextY + 16, { align: 'left' });
 
     doc.save('user_form.pdf');
   } catch (err) {
@@ -435,11 +490,13 @@ async function exportPdf(item) {
   }
 }
 
-
 </script>
 
 
+
+
 <style scoped>
+/* ...style เดิมของคุณ... */
 .headStepper{
   background-color: white;
   margin: 15px auto;
@@ -517,9 +574,6 @@ async function exportPdf(item) {
   text-decoration: none; 
   display: inline-block;
 }
-
-
-
 /* ===== CSS แจ้งเตือนแบบ history ===== */
 .notification-dropdown {
   position: absolute;
@@ -615,16 +669,7 @@ async function exportPdf(item) {
 .notification-item {
   transition: background 0.3s, border-color 0.3s, color 0.3s;
 }
-@media (max-width: 540px) {
-  .notification-dropdown {
-    min-width: 220px;
-    max-width: 99vw;
-  }
-  .notification-dropdown li {
-    font-size: 0.99rem;
-    padding: 0.7em 0.7em;
-  }
-}
+
 .notification-backdrop {
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
@@ -646,4 +691,18 @@ async function exportPdf(item) {
 .pdfmake-btn:hover {
   background-color: #7e0f0fdf;
 }
+
+.badge {
+  background-color: red;
+  color: white;
+  border-radius: 50%;
+  padding: 2px 6px;
+  font-size: 0.75rem;
+  vertical-align: top;
+  margin-left: 4px;
+}
+
+</style>
+<style>
+@import '../css/style.css';
 </style>

@@ -4,7 +4,7 @@
     <aside class="sidebar" :class="{ closed: isSidebarClosed }">
       <div class="sidebar-header">
         <img src="/img/logo.png" alt="logo" class="logo" />
-        <p class="sidebar-title">ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง</p>
+        <p class="sidebar-title">Sport Complex MFU</p>
       </div>
       <nav class="nav-links">
         <router-link to="/home_user" exact-active-class="active">
@@ -21,6 +21,19 @@
         </router-link>
       </nav>
     </aside>
+
+
+<!-- <div v-if="isSidebarOpen" class="sidebar-mask" @click="isSidebarOpen = false"></div> -->
+
+<div
+  v-if="!isSidebarClosed"
+  class="sidebar-overlay"
+  @click="toggleSidebar"
+></div>
+
+
+
+
 
     <!-- Content ทางขวา -->
     <div class="main">
@@ -51,14 +64,17 @@
 </div>
 
           </div>
-          <router-link to="/cart"><i class="pi pi-shopping-cart"></i></router-link>
+          <router-link to="/cart" class="cart-link">
+            <i class="pi pi-shopping-cart"></i>
+            <span v-if="products.length > 0" class="badge">{{ products.length }}</span>
+          </router-link>
           <router-link to="/profile"><i class="pi pi-user"></i></router-link>
         </div>
       </header>
 
       <section class="content">
         <!-- แถบประกาศ แบบเลื่อนลง -->
-        <transition name="slide-down">
+        <!-- <transition name="slide-down">
           <div class="announcement-bar" v-if="showAnnouncementBar">
             <i class="pi pi-megaphone announcement-icon"></i>
             <div class="announcement-bar-text">{{ announcement }}</div>
@@ -66,7 +82,7 @@
               <i class="pi pi-times" style="color: red;"></i>
             </button>
           </div>
-        </transition>
+        </transition> -->
 
         <p style="padding-top: 5px;"></p>
 
@@ -110,12 +126,15 @@ import axios from 'axios'
 const API_BASE = import.meta.env.VITE_API_BASE
 // const API_BASE = "http://localhost:8020"
 
+
+
+
 // ตัวแปร Reactive
 const showAnnouncementBar = ref(false)
 const announcement = ref('')
 const fields = ref([])
-const isSidebarClosed = ref(false)
-
+const isSidebarClosed = ref(false) // เหมือน booking_equipment.vue
+const products = ref([]) // เพิ่มบรรทัดนี้
 const showNotifications = ref(false)
 const notifications = ref([])
 const unreadCount = ref(0)
@@ -125,8 +144,8 @@ const lastCheckedIds = new Set()
 const router = useRouter()
 
 // สลับแถบ Sidebar
-const toggleSidebar = () => {
-  isSidebarClosed.value = !isSidebarClosed.value
+function toggleSidebar() {
+  isSidebarClosed.value = !isSidebarClosed.value;
 }
 
 // สลับแจ้งเตือน
@@ -136,6 +155,17 @@ function toggleNotifications() {
     unreadCount.value = 0
   }
 }
+
+async function loadCart() {
+  if (!userId) return
+  try {
+    const res = await axios.get(`${API_BASE}/api/cart?user_id=${userId}`)
+    products.value = res.data
+  } catch (err) {
+    products.value = []
+  }
+}
+
 
 // โหลดแจ้งเตือนใหม่
 async function fetchNotifications() {
@@ -222,6 +252,8 @@ onMounted(async () => {
   // โหลดแจ้งเตือนครั้งแรกและตั้ง poll ทุก 30 วินาที
   fetchNotifications()
   setInterval(fetchNotifications, 30000)
+
+  await loadCart()
 })
 
 // ไปหน้าจองสนาม พร้อมส่ง query
@@ -236,21 +268,24 @@ function goToBooking(field) {
     }
   })
 }
+
+
 </script>
 
 <style scoped>
-.field-image {
+
+.field-image, .card img {
   width: 100%;
-  max-width: 200px;
   height: 120px;
-  object-fit: contain !important;
-  /* <--- สำคัญ */
-  border-radius: 6px;
+  object-fit: cover !important;
+  border-radius: 8px;
   margin-bottom: 0.5rem;
   background: #fff;
   display: block;
   margin-left: auto;
   margin-right: auto;
+  box-shadow: 0 1px 4px #c7d6ed2a;
+  border: 1px solid #e0e0e0;
 }
 
 .content {
@@ -259,7 +294,15 @@ function goToBooking(field) {
   background-color: #dbe9f4;
   overflow-y: auto;
 }
-
+.badge {
+  background-color: red;
+  color: white;
+  border-radius: 50%;
+  padding: 2px 6px;
+  font-size: 0.75rem;
+  vertical-align: top;
+  margin-left: 4px;
+}
 .block {
   background-color: #ffffff;
   border-radius: 10px;
@@ -292,17 +335,6 @@ function goToBooking(field) {
 
 .card:hover {
   transform: translateY(-4px);
-}
-
-.card img {
-  width: 200px;
-  height: 120px;
-  object-fit: contain;
-  /* เปลี่ยนจาก cover เป็น contain */
-  border-radius: 6px;
-  margin-bottom: 0.5rem;
-  background: #fff;
-  /* เพิ่มพื้นหลังขาวเพื่อความเนียนตอนรูปไม่เต็ม */
 }
 
 .card h4 {
@@ -517,5 +549,39 @@ function goToBooking(field) {
   background: transparent;
   z-index: 1001; /* ต้องน้อยกว่า .notification-dropdown (1002) */
 }
+@media (max-width: 900px) {
+  .sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 80vw;
+    max-width: 320px;
+    height: 100vh;
+    z-index: 3000;
+    transform: translateX(-100%);
+    transition: transform 0.3s;
+    box-shadow: 2px 0 12px rgba(0,0,0,0.11);
+  }
+  .sidebar.open {
+    transform: translateX(0);
+  }
+  .main {
+    margin-left: 0 !important;
+    max-width: 100vw;
+    min-width: 0;
+    padding: 8px;
+  }
+}
+.sidebar-mask {
+  position: fixed;
+  left: 0; right: 0; top: 0; bottom: 0;
+  z-index: 2999;
+  background: rgba(0,0,0,0.2);
+}
 
+
+</style>
+
+<style>
+@import '../css/style.css';
 </style>

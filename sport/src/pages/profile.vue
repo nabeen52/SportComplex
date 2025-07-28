@@ -4,7 +4,7 @@
     <aside class="sidebar" :class="{ closed: isSidebarClosed }">
       <div class="sidebar-header">
         <img src="/img/logo.png" alt="logo" class="logo" />
-        <p class="sidebar-title">ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง</p>
+        <p class="sidebar-title">Sport Complex MFU</p>
       </div>
       <nav class="nav-links">
         <router-link to="/home_user" exact-active-class="active"><i class="pi pi-home"></i> Home</router-link>
@@ -13,7 +13,11 @@
         <router-link to="/history" active-class="active"><i class="pi pi-history"></i> History</router-link>
       </nav>
     </aside>
-
+<div
+  v-if="!isSidebarClosed"
+  class="sidebar-overlay"
+  @click="toggleSidebar"
+></div>
     <!-- Content -->
     <div class="main">
       <header class="topbar">
@@ -430,22 +434,27 @@ onUnmounted(() => clearInterval(polling))
 .notification-item {
   transition: background 0.3s, border-color 0.3s, color 0.3s;
 }
-@media (max-width: 540px) {
-  .notification-dropdown {
-    min-width: 220px;
-    max-width: 99vw;
-  }
-  .notification-dropdown li {
-    font-size: 0.99rem;
-    padding: 0.7em 0.7em;
-  }
-}
+
 .notification-backdrop {
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
   background: transparent;
   z-index: 1001; /* ต้องน้อยกว่า .notification-dropdown (1002) */
 }
+.proinfo {
+  background-color: white;
+  border-radius: 20px;
+  padding: 30px 60px 30px 40px; /* padding-top 30, right 60, bottom 30, left 40 */
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+  width: 100%;
+  min-height: 160px;
+
+  overflow-x: auto;
+  max-width: 100%;
+}
+
 </style>
 
 <style>

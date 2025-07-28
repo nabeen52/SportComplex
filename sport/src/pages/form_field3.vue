@@ -4,7 +4,7 @@
     <aside class="sidebar" :class="{ closed: isSidebarClosed }">
       <div class="sidebar-header">
         <img src="/img/logo.png" alt="logo" class="logo" />
-        <p class="sidebar-title">ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง</p>
+        <p class="sidebar-title">Sport Complex MFU</p>
       </div>
       <nav class="nav-links">
         <router-link to="/home_user" exact-active-class="active">
@@ -21,6 +21,8 @@
         </router-link>
       </nav>
     </aside>
+
+     <div v-if="!isSidebarClosed" class="sidebar-overlay" @click="toggleSidebar"></div>
 
     <!-- Main Content -->
     <div class="main">
@@ -52,7 +54,10 @@
 </div>
 
           </div>
-          <router-link to="/cart"><i class="pi pi-shopping-cart"></i></router-link>
+         <router-link to="/cart" class="cart-link">
+            <i class="pi pi-shopping-cart"></i>
+            <span v-if="products.length > 0" class="badge">{{ products.length }}</span>
+          </router-link>
           <router-link to="/profile"><i class="pi pi-user"></i></router-link>
         </div>
       </header>
@@ -82,11 +87,12 @@
       </div>
     
 
+      <div class="scroll-x-container">
       <!-- Confirm Form -->
       <div class="form-container">
         <h1 class="title">ยืนยันข้อมูล</h1>
         <div class="form-header">
-          <h3>แบบฟอร์มขออนุมัติใช้สถานที่ ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง</h3>
+          <h3>แบบฟอร์มขออนุมัติใช้สถานที่ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง</h3>
           <p>โทร 053-917820-1 | E-mail: sport-complex@mfu.ac.th</p>
         </div>
 
@@ -108,6 +114,8 @@
         <div class="form-row mt-30">
           <span >เรียน อธิการบดี</span>
         </div>
+
+        
 
 <div class="form-row mt-30 block-row">
   <span style="margin-left: 80px;">ด้วย</span>
@@ -219,7 +227,6 @@
         </div>
 
 
-
         <!-- ตารางเซ็นชื่อ 3 ช่อง (ด้านบน) -->
 <table class="sign-header-table">
   <tbody>
@@ -327,7 +334,9 @@
     <div style="margin-bottom: 6px;">
       วันที่ <span class="dot-line date"></span>
     </div>
+    
   </div>
+  
 </td>
 
 
@@ -396,7 +405,7 @@
         </div>
       </div>
     </div>
-
+</div>
     <!-- Footer -->
     <footer class="foot">
       <div class="footer-left">
@@ -428,6 +437,7 @@ const API_BASE = import.meta.env.VITE_API_BASE
 // --------------- แจ้งเตือน -----------------
 const showNotifications = ref(false)
 const notifications = ref([])
+const products = ref([])
 const unreadCount = ref(0)
 const userId = localStorage.getItem('user_id') || ''
 const lastCheckedIds = new Set()
@@ -482,9 +492,21 @@ async function fetchNotifications() {
     // ignore
   }
 }
+
+async function loadCart() {
+  const userId = localStorage.getItem('user_id') || ''
+  if (!userId) return
+  try {
+    const res = await axios.get(`${API_BASE}/api/cart?user_id=${userId}`)
+    products.value = res.data
+  } catch (err) {
+    products.value = []
+  }
+}
 onMounted(() => {
   fetchNotifications()
   setInterval(fetchNotifications, 30000)
+  loadCart()
 })
 
 // -------------- Form Confirm + ดึงไฟล์แนบ ----------------
@@ -516,12 +538,16 @@ function goBack() {
 }
 function formatDateOnly(dateTime) {
   if (!dateTime) return '-'
+  let dateStr = dateTime
   if (typeof dateTime === 'string' && dateTime.includes('T')) {
-    // yyyy-mm-ddTHH:mm:ss -> yyyy-mm-dd
-    return dateTime.split('T')[0]
+    dateStr = dateTime.split('T')[0]
   }
-  return dateTime
+  if (dateStr.includes('/')) return dateStr // ถ้าเป็น dd/mm/yyyy อยู่แล้ว
+  const [y, m, d] = dateStr.split('-')
+  if (!y || !m || !d) return dateStr
+  return `${d.padStart(2, '0')}/${m.padStart(2, '0')}/${y}`
 }
+
 
 function isUtilityYes(val) {
   return val === 'yes'
@@ -606,6 +632,8 @@ onMounted(async () => {
 })
 
 async function handleNext() {
+  
+
   try {
     const bookingId = localStorage.getItem('bookingId')
     if (!bookingId) {
@@ -645,7 +673,11 @@ async function handleNext() {
       fileType: fileTypes,
       uploadFiles: uploadFiles,
       date: new Date(),
+      proxyStudentName: bookingData.proxyStudentName || '',   // <--- เพิ่ม
+      proxyStudentId: bookingData.proxyStudentId || '',       // <--- เพิ่ม
     }
+
+    console.log('PAYLOAD ส่งเข้า /api/history', payload)
 
     await axios.post(`${API_BASE}/api/history`, payload)
 
@@ -859,15 +891,7 @@ async function handleNext() {
 .sign-inner-blank {
   margin: 7px 0 3px 0;
 }
-@media (max-width: 900px) {
-  .signatures-row {
-    flex-direction: column;
-    gap: 18px;
-  }
-  .signature-box {
-    margin: 0 0 12px 0;
-  }
-}
+
 .sign-inner-title {
   font-weight: bold;
   margin-bottom: 4px;
@@ -986,12 +1010,6 @@ async function handleNext() {
   gap: 7px;
 }
 
-/* Responsive */
-@media (max-width: 900px) {
-  .approval-sign-table th, .approval-sign-table td { font-size: 13.5px; }
-  .approval-sign-table td { height: 170px; }
-  .td-inner { padding: 9px 5px; }
-}
 
 /* ========================= */
 .sign-header-table {
@@ -1061,9 +1079,6 @@ async function handleNext() {
   background-color: #5a6268;
 }
 
-@media (max-width: 900px) {
-  .sign-header-table td { font-size: 13.5px; }
-}
 
 
 /* ===== CSS แจ้งเตือนแบบ history ===== */
@@ -1161,22 +1176,31 @@ async function handleNext() {
 .notification-item {
   transition: background 0.3s, border-color 0.3s, color 0.3s;
 }
-@media (max-width: 540px) {
-  .notification-dropdown {
-    min-width: 220px;
-    max-width: 99vw;
-  }
-  .notification-dropdown li {
-    font-size: 0.99rem;
-    padding: 0.7em 0.7em;
-  }
-}
+
 .notification-backdrop {
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
   background: transparent;
   z-index: 1001; /* ต้องน้อยกว่า .notification-dropdown (1002) */
 }
+
+@media (max-width: 540px) {
+  .scroll-x-container {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    width: 100vw;
+    padding: 0;
+  }
+  .form-container {
+    min-width: 900px;   /* หรือเท่ากับ desktop */
+    width: 900px;
+    max-width: 900px;
+    padding: 16px 24px !important;
+    border-radius: 10px !important;
+    box-sizing: border-box;
+  }
+}
+
 </style>
 
 <style>

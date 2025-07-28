@@ -36,7 +36,11 @@
         </router-link>
       </nav>
     </aside>
-
+<div
+  v-if="isMobile && !isSidebarClosed"
+  class="sidebar-overlay"
+  @click="toggleSidebar"
+></div>
     <div class="main">
       <header class="topbar">
         <button class="menu-toggle" @click="toggleSidebar">☰</button>
@@ -92,31 +96,38 @@
                 <span class="center" v-else-if="hist.type === 'equipment'">
                   จำนวน : {{ hist.quantity }}
                 </span>
-                <span class="left status-group">
-  {{ hist.status }}
-  <span v-if="hist.status === 'Approved'">
-    ✅ รายการถูกอนุมัติ <!-- {{ hist.approvedBy || '-' }} ({{ hist.approvedById || '-' }})  --->
+<span class="left status-group">
+  <!-- สถานะ -->
+  <span class="status-label">
+    <template v-if="hist.status === 'Approved'">
+      ✅ รายการถูกอนุมัติ
+    </template>
+    <template v-else-if="hist.status === 'Disapproved'">
+      ❌ รายการไม่ถูกอนุมัติ
+    </template>
+    <template v-else-if="hist.status === 'Cancel'">
+      🚫 รายการถูกยกเลิก
+    </template>
+    <template v-else-if="hist.status === 'Returned'">
+      ✅ คืนของสำเร็จแล้ว
+    </template>
+    <template v-else-if="hist.status === 'Pending'">
+      ⏳ กำลังรออนุมัติ
+    </template>
+    <template v-else>
+      {{ hist.status }}
+    </template>
   </span>
-  <span v-else-if="hist.status === 'Disapproved'">
-    ❌ รายการไม่ถูกอนุมัติ <!-- {{ hist.disapprovedBy || '-' }} ({{ hist.disapprovedById || '-' }}) --->
-  </span>
-  <span v-else-if="hist.status === 'Cancel'">
-    🚫 รายการถูกยกเลิก <!-- {{ hist.canceledBy || '-' }} ({{ hist.canceledById || '-' }})  --->
-  </span>
-  <span v-else-if="hist.status === 'Pending'">
-    ⏳ กำลังรออนุมัติ
-    <button class="cancel-btn" @click="cancelItem(hist.id)" style="margin-left:12px;">Cancel</button>
-  </span>
-  <span v-else-if="hist.status === 'Returned'">
-    ✅ คืนของสำเร็จแล้ว  <!-- {{ hist.returnedBy || '-' }} ({{ hist.returnedById || '-' }}) --->
-  </span>
-  
-  <span v-else>
-    {{ hist.status }}
-  </span>
-  <span><button class="remark-btn" @click="detailGroup([hist])">Detail</button>
+
+  <!-- ปุ่ม -->
+  <span class="action-buttons">
+    <template v-if="hist.status === 'Pending'">
+      <button class="cancel-btn" @click="cancelItem(hist.id)">Cancel</button>
+    </template>
+    <button class="remark-btn" @click="detailGroup([hist])">Detail</button>
   </span>
 </span>
+
 
               </div>
             </div>
@@ -160,6 +171,8 @@ const router = useRouter()
 const userStore = useUserStore()
 
 
+
+const isMobile = ref(window.innerWidth <= 600)
 const info = ref({ id: "-", name: "-", email: "-", picture: null })
 
 const history = ref([])
@@ -307,6 +320,8 @@ async function fetchNotifications() {
 // ===============================
 
 onMounted(async () => {
+   window.addEventListener('resize', handleResize)
+  handleResize()
   document.addEventListener('mousedown', handleClickOutside)
   try {
     // 1. ดึงข้อมูล user login ปัจจุบัน (session จริง)
@@ -399,6 +414,7 @@ onMounted(async () => {
 onUnmounted(() => {
   document.removeEventListener('mousedown', handleClickOutside)
   clearInterval(polling)
+  window.removeEventListener('resize', handleResize)
 })
 
 function statusLabel(status) {
@@ -452,6 +468,11 @@ async function logout() {
 const isSidebarClosed = ref(false)
 function toggleSidebar() {
   isSidebarClosed.value = !isSidebarClosed.value
+}
+
+function handleResize() {
+  isMobile.value = window.innerWidth <= 600
+  if (!isMobile.value) isSidebarClosed.value = false
 }
 </script>
 
@@ -536,6 +557,29 @@ function toggleSidebar() {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 260px;
+}
+.pending-status {
+  /* สถานะอยู่ซ้ายสุด */
+  flex-shrink: 0;
+  margin-right: 16px;
+}
+.pending-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+  /* ทำให้ปุ่มไปขวาสุด */
+}
+
+.status-label {
+  flex-shrink: 0;
+  /* สถานะติดซ้าย */
+}
+.action-buttons {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+  /* ปุ่มไปขวาสุด */
 }
 
 .logout-container {
@@ -607,6 +651,69 @@ function toggleSidebar() {
 .remark-btn:hover {
   background-color: #4268a3;
 }
+
+.sidebar-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.16);
+  z-index: 1100;
+}
+.sidebar {
+  z-index: 1200;
+}
+
+@media (max-width: 600px) {
+  .profile-container {
+    overflow-x: auto;
+    padding: 0 !important;
+    margin-bottom: 8px;
+    width: 100vw;
+  }
+  .proinfo {
+    min-width: 370px;
+    width: max-content;
+    padding: 20px 20px;
+    box-sizing: border-box;
+    overflow-x: auto;
+  }
+  .profile-grid {
+    padding: 0 2px !important;
+  }
+  .profile-card {
+    padding: 1rem 1.5rem;
+    margin-bottom: 8px;
+    overflow-x: auto;
+    width: 100vw;
+    box-sizing: border-box;
+  }
+  .profile-row {
+    min-width: 650px; /* ลองเพิ่มเป็น 650px ถ้ายังไม่พอ */
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .status-group {
+    min-width: 180px;
+    flex-shrink: 0;
+  }
+  .remark-btn {
+    margin-left: 8px;
+    white-space: nowrap;
+  }
+  .pending-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .pending-row .remark-btn,
+  .pending-row .cancel-btn {
+    margin-left: 0;
+    margin-right: 0;
+  }
+}
+
+
+
 </style>
 <style>
 @import '../css/style.css';

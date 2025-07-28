@@ -10,6 +10,20 @@
             <h2 style="font-size: 1.05rem;">Mae Fah Luang University Sport Complex Center</h2>
           </div>
         </div>
+        
+   <!-- User Manual link (top-right corner) -->
+        <div style="position: absolute; top: 2rem; right: 2rem;">
+  <button style="
+    border-radius: 12px;
+    padding: 8px 16px;
+    border: none;
+    background: #546e7a;   /* น้ำเงินเข้ม   #7285A5 */
+    cursor: pointer;
+  ">
+    <a href="#" style="color: #fff; text-decoration: none;">User Manual</a>
+  </button>
+</div>
+
   
         <!-- User Manual link (top-right corner) -->
         <div style="position: absolute; top: 2rem; right: 2rem;">
@@ -70,8 +84,8 @@
               Email: <a href="mailto:sport-complex@mfu.ac.th" style="text-decoration: underline; color: #BDAE00;">sport-complex@mfu.ac.th</a>
             </span> -->
             <span>
-    Email: <a href="mailto:sport-complex@mfu.ac.th" style="text-decoration: underline; color: #FFFFFF;">sport-complex@mfu.ac.th</a>
-  </span>
+              Email: <a href="mailto:sport-complex@mfu.ac.th" style="text-decoration: underline; color: #FFFFFF;">sport-complex@mfu.ac.th</a>
+               </span>
   
           </p>
         </div>

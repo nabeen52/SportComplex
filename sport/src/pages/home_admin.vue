@@ -35,7 +35,11 @@
         </router-link>
       </nav>
     </aside>
-
+<div 
+  v-if="!isSidebarClosed && isMobile" 
+  class="sidebar-overlay" 
+  @click="toggleSidebar"
+></div>
     <div class="main">
       <header class="topbar">
         <button class="menu-toggle" @click="toggleSidebar">☰</button>
@@ -80,8 +84,7 @@
 
       <div class="hero-row">
         <div>
-          <p>Width 900 px</p>
-          <p>Hight 500 px</p>
+          <p>*อัตราส่วนภาพควรเป็น 9:5 </p>
         </div>
         <div class="hero-wrapper">
           <img v-if="images.length && images[currentImageIndex]?.img" :src="images[currentImageIndex]?.img"
@@ -137,6 +140,7 @@ export default {
       unreadCount: 0,
       lastCheckedIds: new Set(),
       polling: null,
+     isMobile: window.innerWidth <= 600,
     };
   },
   async mounted() {
@@ -145,16 +149,22 @@ export default {
     await this.reloadAnnouncement();
     await this.fetchNotifications();
     this.polling = setInterval(this.fetchNotifications, 30000);
+    window.addEventListener('resize', this.handleResize)
   },
   beforeUnmount() { // ถ้า Vue2 ให้ใช้ beforeDestroy
     clearInterval(this.polling);
     document.removeEventListener('mousedown', this.handleClickOutside);
+     window.removeEventListener('resize', this.handleResize)
   },
   methods: {
     toggleSidebar() {
       this.isSidebarClosed = !this.isSidebarClosed;
     },
-
+ handleResize() {
+    this.isMobile = window.innerWidth <= 600
+    // เมื่อจาก mobile → desktop ปิด sidebar ไปด้วย (กัน sidebar ค้าง)
+    if (!this.isMobile) this.isSidebarClosed = false
+  },
     // ---------------------------
     // ===== Notification ========
     // ---------------------------
@@ -372,7 +382,7 @@ export default {
 }
 .announcement {
   width: 100%;
-  max-width: 1200px;
+  max-width: 900px;
 }
 .announcement-label-wrapper {
   text-align: left;
@@ -505,7 +515,38 @@ export default {
   padding: 1rem;
   border-radius: 8px;
 }
+@media (max-width: 600px) {
+  .main {
+    min-width: 0;
+    max-width: 100vw;
+  }
+  .sidebar-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.22);
+    z-index: 2999;
+  }
+  .sidebar {
+    z-index: 3000;
+  }
+  .hero-image {
+    width: 95vw !important;
+    max-width: 95vw;
+    height: auto !important;
+    aspect-ratio: 9 / 5;
+    object-fit: contain !important;
+    display: block;
+    margin: 0 auto;
+  }
+  .hero-row {
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+}
+
 </style>
+
 <style>
 @import '../css/style.css';
 </style>

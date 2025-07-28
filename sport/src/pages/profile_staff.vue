@@ -8,19 +8,25 @@
       </div>
       <nav class="nav-links">
         <router-link to="/approve_equipment" exact-active-class="active">
-          <i class="pi pi-home"></i> Approve
+          <i class="pi pi-home"></i> อนุมัติ/รับคืนอุปกรณ์
         </router-link>
         <router-link to="/equipment" active-class="active">
-          <i class="pi pi-map-marker"></i> Equipment
+          <i class="pi pi-map-marker"></i> อุปกรณ์
         </router-link>
-        <router-link to="/return" active-class="active">
+        <!-- <router-link to="/return" active-class="active">
           <i class="pi pi-box"></i> Return
-        </router-link>
+        </router-link> -->
         <router-link to="/history_staff" active-class="active">
-          <i class="pi pi-history"></i> History
+          <i class="pi pi-history"></i> ประวัติการทำรายการ
         </router-link>
       </nav>
     </aside>
+
+    <div
+      v-if="!isSidebarClosed && isMobile"
+      class="sidebar-overlay"
+      @click="isSidebarClosed = true"
+    ></div>
 
     <!-- Content ทางขวา -->
     <div class="main">
@@ -57,21 +63,31 @@
         <!-- Profile -->
         <div>
           <h1 style="padding-left: 50px;">Profile</h1>
-          <div class="profile-container">
-  <div class="proinfo">
-    <!-- ใช้ dynamic src -->
-   <img :src="profileImageUrl" alt="profile" class="profile-img" @error="imgError" />
 
-    <div class="profile-details" v-if="info">
-      <p>Username : {{ info.name }}</p>
-      <p>ID : {{ info.id }}</p>
-      <p>Email : {{ info.email }}</p>
-    </div>
-  </div>
-</div>
+          <div class="profile-scroll-container">
+            <div class="profile-container">
+              <div class="proinfo">
+                <!-- ใช้ dynamic src -->
+                <img :src="profileImageUrl" alt="profile" class="profile-img" @error="imgError" />
+
+                <div class="profile-details" v-if="info">
+                 <p class="info-line">
+  <span class="label">Username :</span>
+  <span class="value">{{ info.name }}</span>
+</p>
+                  <p>ID : {{ info.id }}</p>
+                  <p class="info-line">
+  <span class="label">Email :</span>
+  <span class="value">{{ info.email }}</span>
+</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
         </div>
         <div class="logout-container">
-          <button @click="logout" class="logout-btn">Logout</button>
+          <button @click="logout" class="logout-btn">ออกจากระบบ</button>
         </div>
       </div>
 
@@ -90,6 +106,7 @@
   </div>
 </template>
 
+
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
@@ -97,7 +114,7 @@ import Swal from 'sweetalert2'
 import axios from 'axios'
 
 const API_BASE = import.meta.env.VITE_API_BASE // ให้ตรงกับ backend
-
+const isMobile = ref(window.innerWidth <= 600)
 const isSidebarClosed = ref(false)
 const router = useRouter()
 
@@ -122,6 +139,13 @@ function imgError(event) {
 
 function toggleSidebar() {
   isSidebarClosed.value = !isSidebarClosed.value
+}
+
+function checkMobile() {
+  isMobile.value = window.innerWidth <= 600
+  if (isMobile.value) {
+    isSidebarClosed.value = true
+  }
 }
 
 // LOGOUT
@@ -201,8 +225,15 @@ onMounted(async () => {
 
   await fetchNotifications()
   polling = setInterval(fetchNotifications, 30000)
+  window.addEventListener('resize', checkMobile)
 })
-onUnmounted(() => clearInterval(polling))
+onUnmounted(() => {
+  clearInterval(polling)
+  window.removeEventListener('resize', checkMobile)
+}
+
+
+)
 </script>
 
 
@@ -222,9 +253,25 @@ onUnmounted(() => clearInterval(polling))
   display: flex;
   align-items: center;
   gap: 2rem;
-  width: 100%;
-  min-height: 160px;
+  min-width: 400px; /* กำหนดความกว้างขั้นต่ำ */
+  max-width: 100%;  /* จำกัดไม่ให้เกินพื้นที่ของ container */
+  box-sizing: border-box; /* นับ padding ในความกว้าง */
+  overflow-x: auto; /* ให้เลื่อนแนวนอนได้ ถ้ากว้างเกิน */
+  word-break: break-word; /* ตัดคำเมื่อยาวเกิน */
 }
+
+.profile-details {
+  color: #333;
+  font-size: 1.07rem;
+  padding-left: 12px;
+
+  white-space: normal;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  max-width: 300px; /* ลดขนาดเพื่อให้ข้อความไม่ล้น */
+  box-sizing: border-box;
+}
+
 .profile-img {
   height: 120px;
   width: 120px;
@@ -238,9 +285,17 @@ onUnmounted(() => clearInterval(polling))
   color: #333;
   font-size: 1.07rem;
   padding-left: 12px;
+
+  white-space: normal;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  max-width: 300px; /* ลดขนาดเพื่อให้ข้อความไม่ล้น */
+  box-sizing: border-box;
 }
+
 .profile-container {
-  padding: 1rem 70px;
+  min-width: 360px; /* กำหนดความกว้างขั้นต่ำ */
+  padding: 1rem 0;
 }
 .profile-grid {
   display: flex;
@@ -342,6 +397,32 @@ onUnmounted(() => clearInterval(polling))
   background: transparent;
   z-index: 1400;
 }
+
+.profile-scroll-container {
+  overflow-x: auto;
+  padding: 0 70px;  /* ระยะขอบเหมือนหน้า approve_equipment */
+  box-sizing: border-box;
+}
+
+.info-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 4px 0;
+}
+
+/* ทำให้แสดงบรรทัดเดียวเฉพาะ desktop */
+@media screen and (min-width: 601px) {
+  .info-line {
+    flex-wrap: nowrap;
+  }
+
+  .info-line .label,
+  .info-line .value {
+    white-space: nowrap;
+  }
+}
+
 </style>
 
 <style>
