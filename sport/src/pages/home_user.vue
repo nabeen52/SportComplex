@@ -71,18 +71,18 @@
         </div>
       </header>
 
-      <!-- แถบประกาศ -->
-      <transition name="slide-down">
-        <div class="announcement-bar" v-if="showAnnouncementBar">
-          <span class="announcement-bar-text">
-            <i class="pi pi-megaphone"></i>
-            {{ announcement }}
-          </span>
-          <button class="close-announcement-btn" @click="showAnnouncementBar = false">
-            <i class="pi pi-times" style="color: red;"></i>
-          </button>
-        </div>
-      </transition>
+      <!-- ปรับ layout ใน template -->
+<transition name="slide-down">
+  <div class="announcement-bar" v-if="showAnnouncementBar">
+    <i class="pi pi-megaphone" style="color: red; font-size: 1.5rem;"></i>
+    <span class="announcement-bar-text">
+      {{ announcement }}
+    </span>
+    <button class="close-announcement-btn" @click="showAnnouncementBar = false">
+      <i class="pi pi-times" style="color: red;"></i>
+    </button>
+  </div>
+</transition>
 
       <section class="hero">
         <div class="carousel-container" v-if="images.length > 0">
@@ -503,8 +503,8 @@ export default {
   margin-right: auto;
   left: 0;
   right: 0;
-  background: linear-gradient(90deg, #ff0000 60%, #ffd6c0 100%);
-  color: #ffffff;
+  background: rgba(255, 216, 216, 0.911);
+  color: #ff0000;
   padding: 1rem 2rem;
   font-size: 1.15rem;
   font-weight: bold;

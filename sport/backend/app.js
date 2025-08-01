@@ -726,6 +726,61 @@ const bookingFieldUpload = multer({
 
 
 
+// สมมติว่าใช้ mongoose model History
+
+app.get('/api/history/pdf', async (req, res) => {
+    const bookingId = req.query.booking_id;
+    if (!bookingId) return res.status(400).json({ error: 'booking_id required' });
+
+    try {
+        // ค้นหา history ที่มี booking_id นั้น
+        const historyItem = await History.findOne({ booking_id: bookingId }).lean();
+
+        if (!historyItem || !historyItem.bookingPdf) {
+            return res.status(404).json({ error: 'PDF not found' });
+        }
+
+        // bookingPdf อาจเก็บเป็น base64 string หรือ Buffer
+        // ถ้าเป็น base64 string:
+        // const pdfBuffer = Buffer.from(historyItem.bookingPdf, 'base64');
+        // หรือถ้าเก็บเป็น Buffer ใน MongoDB แล้วใช้ตรง ๆ ได้เลย
+
+        let pdfBuffer;
+        if (typeof historyItem.bookingPdf === 'string') {
+            pdfBuffer = Buffer.from(historyItem.bookingPdf, 'base64');
+        } else {
+            pdfBuffer = historyItem.bookingPdf;
+        }
+
+        res.set({
+            'Content-Type': 'application/pdf',
+            'Content-Disposition': `attachment; filename=booking_${bookingId}.pdf`,
+            'Content-Length': pdfBuffer.length,
+        });
+
+        res.send(pdfBuffer);
+
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// PDF download by booking_id or _id
+app.get('/api/history/pdf/:anyid', async (req, res) => {
+    try {
+        let doc = await History.findById(req.params.anyid);
+        if (!doc) doc = await History.findOne({ booking_id: req.params.anyid });
+        if (!doc || !doc.bookingPdf) return res.status(404).send('Not found');
+        const pdfBuffer = Buffer.from(doc.bookingPdf, 'base64');
+        res.set('Content-Type', 'application/pdf');
+        res.set('Content-Disposition', 'inline; filename="booking-form.pdf"');
+        res.send(pdfBuffer);
+    } catch (err) {
+        console.log('Error download pdf:', err);
+        res.status(500).send('Server error');
+    }
+});
 
 
 
@@ -1130,6 +1185,35 @@ app.delete('/api/cart/delete', async (req, res) => {
         res.status(500).json({ error: e.message });
     }
 });
+app.patch('/api/users/update_id', async (req, res) => {
+    try {
+        const { old_user_id, new_user_id } = req.body;
+        if (!old_user_id || !new_user_id) {
+            return res.status(400).json({ success: false, message: 'กรุณาระบุ user_id เดิมและใหม่' });
+        }
+
+        // หา user เดิม
+        const user = await User.findOne({ user_id: old_user_id });
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'ไม่พบผู้ใช้งาน' });
+        }
+
+        // เช็คว่า user_id ใหม่ ซ้ำกับคนอื่นไหม
+        const exist = await User.findOne({ user_id: new_user_id });
+        if (exist) {
+            return res.status(400).json({ success: false, message: 'user_id นี้ถูกใช้ไปแล้ว' });
+        }
+
+        // อัปเดต user_id
+        user.user_id = new_user_id;
+        await user.save();
+
+        res.json({ success: true, message: 'อัปเดต user_id สำเร็จ', user });
+    } catch (err) {
+        console.error('Update user_id error:', err);
+        res.status(500).json({ success: false, message: 'เกิดข้อผิดพลาดในระบบ' });
+    }
+});
 
 // ==================== History (Borrow/Return/Approve/Disapprove) ====================
 app.post('/api/history', async (req, res) => {
@@ -1184,6 +1268,7 @@ app.post('/api/history', async (req, res) => {
                 date: req.body.date || new Date(),
                 proxyStudentName: req.body.proxyStudentName || '',
                 proxyStudentId: req.body.proxyStudentId || '',
+                bookingPdf: req.body.bookingPdf || null,  
             });
             await newHistory.save();
 
@@ -1233,6 +1318,7 @@ app.post('/api/history', async (req, res) => {
                 fileType: req.body.fileType || null,
                 agency: req.body.agency || '',
                 booking_id: req.body.booking_id || '',
+                bookingPdf: req.body.bookingPdf || null,  
             });
             await newHistory.save();
 

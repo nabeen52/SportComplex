@@ -91,9 +91,10 @@
       <!-- Confirm Form -->
       <div class="form-container">
         <h1 class="title">ยืนยันข้อมูล</h1>
+        <div id="pdf-section"> 
         <div class="form-header">
           <h3>แบบฟอร์มขออนุมัติใช้สถานที่ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง</h3>
-          <p>โทร 053-917820-1 | E-mail: sport-complex@mfu.ac.th</p>
+          <p>โทร 053-917-8201 | E-mail: sport-complex@mfu.ac.th</p>
         </div>
 
         <!-- Header Info -->
@@ -107,56 +108,34 @@
         </div>
 
         <!-- Detail Content -->
-        <div class="form-row mt-30">
-          <span style="margin-left: 80px;">เรื่อง ขออนุมัติใช้สถานที่</span>
-        </div>
-        
-        <div class="form-row mt-30">
-          <span >เรียน อธิการบดี</span>
-        </div>
-
-        
-
-<div class="form-row mt-30 block-row">
-  <span style="margin-left: 80px;">ด้วย</span>
-  <span class="line-field block-text nowrap" style="min-width:690px;  max-width: 690px;">{{ info.agency }}</span>
-  
+     <!-- "เรื่อง..." ชิดซ้าย (ตรงกับ "ที่ อว.") -->
+<div class="form-row mt-30" style="margin-left: 0;">
+  <span>เรื่อง ขออนุมัติใช้สถานที่</span>
 </div>
-<div class="form-row mt-30 block-row">
-  <span>จะดำเนินกิจกรรม / โครงการ</span>
-  <span class="line-field block-text" style="min-width:620px;max-width: 620px;">{{ info.name_activity }}</span>
+        
+      <div class="form-row mt-30" style="margin-left: 0px;">
+  <span>เรียน อธิการบดี</span>
 </div>
 
-        <div class="form-row mt-30 block-row">
-          <span >เหตุผลในการขอใช้เพื่อ</span>
-          <span class="line-field single-line" style=" max-width: 650px; min-width: 650px;">{{ info.reasons }}</span>
-    
-        </div>
-        <div class="form-row mt-30 block-row">
-          <span>ในวันที่</span>
-          <span class="line-field single-line">{{ formatDateOnly(info.since) }}</span>
-          <span>ถึงวันที่</span>
-          <span class="line-field single-line">{{ formatDateOnly(info.uptodate) }}</span>
-          <span>ตั้งแต่เวลา</span>
-          <span class="line-field single-line">{{ info.since_time || '-' }}</span>
-          <span>ถึงเวลา</span>
-          <span class="line-field single-line">{{ info.until_thetime || '-' }}</span>
-       
-          <span>จำนวนผู้เข้าร่วม</span>
-          <span class="line-field single-line">{{ info.participants }}</span>        </div>
+        
 
-       
+<!-- ย่อหน้าเดียว -->
+<div class="form-row mt-30" style="text-indent: 80px; text-align: left; line-height: 2.0;">
+  ด้วย {{ info.agency }}
+  จะดำเนินกิจกรรม/โครงการ {{ info.name_activity }}
+  เหตุผลในการขอใช้เพื่อ {{ info.reasons }}
+  ในช่วงวันที่ {{ formatDateOnly(info.since) }} ถึงวันที่ {{ formatDateOnly(info.uptodate) }}
+  ช่วงเวลา {{ info.since_time || '-' }} ถึงเวลา {{ info.until_thetime || '-' }}
+  จำนวนผู้เข้าร่วม {{ info.participants }} คน
+  และ เพื่อให้การดำเนินงานเป็นไปด้วยความเรียบร้อย จึงเรียนมาเพื่อขออนุมัติ ดังนี้
+</div>
 
-        <div class="form-row mt-30">
-          <span>และเพื่อให้การดำเนินงานเป็นไปด้วยความเรียบร้อย จึงเรียนมาเพื่อขออนุมัติ ดังนี้</span>
-        </div>
-
-        <div class="form-row mt-30 bold">
-          <span>1. ขออนุมัติใช้สถานที่</span>
-        </div>
-
-      <div class="form-row mt-30 block-row">
-  <span style="margin-left: 80px;">อาคาร</span>
+<!-- ข้อ 1 -->
+<div class="form-row mt-30 bold" style="margin-left: 0; margin-bottom: 6px;">
+  <span>1. ขออนุมัติใช้สถานที่</span>
+</div>
+<div class="form-row block-row" style="margin-left: 80px; margin-bottom: 22px;">
+  <span>อาคาร</span>
   <span class="line-field block-text">{{ info.building }}</span>
   <span>ระบุตำแหน่งพื้นที่/ห้องที่ต้องการใช้</span>
   <span class="line-field block-text">
@@ -164,71 +143,52 @@
   </span>
 </div>
 
-
-        <div class="form-row mt-30 bold">
-          <span>2. ขออนุมัติใช้ระบบสาธารณูปโภค</span>
-          <input type="radio" value="yes"
-  :checked="isUtilityYes(info.utilityRequest)"
-  disabled
-/>
-<label style="margin-right: 18px;">เลือก</label>
-<input type="radio" value="no"
-  :checked="isUtilityNo(info.utilityRequest)"
-  disabled
-/>
-<label>ไม่เลือก</label>
-
-        </div>
-     <div class="form-row" style="margin: 10px 0 0 70px;">
-
+<!-- ข้อ 2 -->
+<div class="form-row mt-30 bold" style="margin-left: 0; margin-bottom: 8px;">
+  <span>2. ขออนุมัติใช้ระบบสาธารณูปโภค</span>
+  <input type="radio" value="yes" :checked="isUtilityYes(info.utilityRequest)" disabled/>
+  <label style="margin-right: 18px;">เลือก</label>
+  <input type="radio" value="no" :checked="isUtilityNo(info.utilityRequest)" disabled/>
+  <label>ไม่เลือก</label>
+</div>
+<div class="form-row block-row" style="margin-left: 80px; margin-bottom: 5px;">
+  <span>เปิดเครื่องปรับอากาศตั้งแต่</span>
+  <span class="line-field single-line">{{ info.turnon_air || '-' }}</span>
+  <span>ถึง</span>
+  <span class="line-field single-line">{{ info.turnoff_air || '-' }}</span>
+</div>
+<div class="form-row block-row" style="margin-left: 80px; margin-bottom: 5px;">
+  <span>ไฟฟ้าส่องสว่างตั้งแต่</span>
+  <span class="line-field single-line">{{ info.turnon_lights || '-' }}</span>
+  <span>ถึง</span>
+  <span class="line-field single-line">{{ info.turnoff_lights || '-' }}</span>
+</div>
+<div class="form-row block-row" style="margin-left: 80px; margin-bottom: 22px;">
+  <span>อื่นๆ</span>
+  <span class="line-field block-text">{{ info.other }}</span>
 </div>
 
-        <div class="form-row mt-30 block-row">
-          <span style="margin-left: 80px;">เปิดเครื่องปรับอากาศตั้งแต่</span>
-          <span class="line-field single-line">{{ info.turnon_air || '-' }}</span>
-          <span>ถึง</span>
-          <span class="line-field single-line">{{ info.turnoff_air || '-' }}</span>
-          <span>( เฉพาะอาคารเฉลิมพระเกียรติฯ )</span>
-        </div>
-
-        <div class="form-row mt-30 block-row">
-          <span style="margin-left: 80px;">ไฟฟ้าส่องสว่างตั้งแต่</span>
-          <span class="line-field single-line">{{ info.turnon_lights || '-' }}</span>
-          <span>ถึง</span>
-          <span class="line-field single-line">{{ info.turnoff_lights || '-' }}</span>
-          <span>( เฉพาะอาคารเฉลิมพระเกียรติฯ )</span>
-        </div>
-
-        <div class="form-row mt-30 block-row">
-          <span style="margin-left: 80px;">อื่นๆ</span>
-          <span class="line-field block-text">{{ info.other }}</span>
-        </div>
-
-        <div class="form-row mt-30 bold">
-          <span>3.ขออนุมัติรายการประกอบอาคาร   </span>
-          <input type="radio" value="yes"
-  :checked="isFacilityYes(info.facilityRequest)"
-  disabled
-/>
-<label style="margin-right: 18px;">เลือก</label>
-<input type="radio" value="no"
-  :checked="isFacilityNo(info.facilityRequest)"
-  disabled
-/>
-<label>ไม่เลือก</label>
-        </div>
-        <div class="form-row mt-30 block-row">
-          <span style="margin-left: 80px;">ดึงอัฒจันทร์ภายในอาคารเฉลิมพระเกียรติฯ</span>
-          <span class="line-field block-text" style=" max-width: 450px; min-width: 450px;">{{ info.amphitheater }}</span>
-        </div>
-        <div class="form-row mt-30 block-row">
-          <span style="margin-left: 80px;">อุปกรณ์กีฬา (โปรดระบุรายการและจำนวน)</span>
-          <span class="line-field block-text" style=" max-width: 450px; min-width: 450px;">{{ info.need_equipment}}</span>
-        </div>
+<!-- ข้อ 3 -->
+<div class="form-row mt-30 bold" style="margin-left: 0; margin-bottom: 8px;">
+  <span>3. ขออนุมัติรายการประกอบอาคาร</span>
+  <input type="radio" value="yes" :checked="isFacilityYes(info.facilityRequest)" disabled/>
+  <label style="margin-right: 18px;">เลือก</label>
+  <input type="radio" value="no" :checked="isFacilityNo(info.facilityRequest)" disabled/>
+  <label>ไม่เลือก</label>
+</div>
+<div class="form-row block-row" style="margin-left: 80px; margin-bottom: 5px;">
+  <span style="white-space: nowrap;">ดึงอัฒจันทร์ภายในอาคารเฉลิมพระเกียรติฯ</span>
+  <span class="line-field block-text force-inline">{{ info.amphitheater }}</span>
+</div>
+<div class="form-row block-row" style="margin-left: 80px; margin-bottom: 22px;">
+  <span style="white-space: nowrap;">อุปกรณ์กีฬา (โปรดระบุรายการและจำนวน)</span>
+  <span class="line-field block-text force-inline">{{ info.need_equipment }}</span>
+</div>
 
 
         <!-- ตารางเซ็นชื่อ 3 ช่อง (ด้านบน) -->
-<table class="sign-header-table">
+
+  <table class="sign-header-table">
   <tbody>
     <tr>
       <td>
@@ -254,10 +214,9 @@
     </tr>
   </tbody>
 </table>
-
-<div class="form-row" style="padding-top: 10px;">
-          <!-- ตารางลายเซ็น 3 ช่อง -->
-<table class="approval-sign-table">
+<div class="avoid-break">
+  <div class="form-row" style="padding-top: 10px;">
+    <table class="approval-sign-table avoid-break">
   <thead>
     <tr>
       <th>1. เลขานุการศูนย์กีฬาฯ</th>
@@ -270,15 +229,15 @@
       <!-- ช่อง 1 -->
       <td>
         <div class="td-inner">
-          <div class="checkbox-line">
-            <input type="checkbox" id="chk1-1"><label for="chk1-1">เรียน หัวหน้าศูนย์กีฬาฯ</label>
-          </div>
-          <div class="checkbox-line">
-            <input type="checkbox" id="chk1-2"><label for="chk1-2">เพื่อโปรดพิจารณา</label>
-          </div>
-          <div class="checkbox-line">
-            <input type="checkbox" id="chk1-3"><label for="chk1-3">อื่นๆ</label><span class="dot-line mid"></span>
-          </div>
+           <div class="checkbox-line">
+     <input type="checkbox" id="chk1-1" disabled><label for="chk1-1">เรียน หัวหน้าศูนย์กีฬาฯ</label>
+   </div>
+   <div class="checkbox-line">
+     <input type="checkbox" id="chk1-2" disabled><label for="chk1-2">เพื่อโปรดพิจารณา</label>
+   </div>
+   <div class="checkbox-line">
+     <input type="checkbox" id="chk1-3" disabled><label for="chk1-3">อื่นๆ</label><span class="dot-line mid"></span>
+   </div>
           <div class="dot-line"></div>
           <div style="margin:12px 0 6px;">
             (<span class="dot-line short"></span>)
@@ -292,13 +251,13 @@
       <td>
         <div class="td-inner">
           <div class="checkbox-line">
-            <input type="checkbox" id="chk2-1"><label for="chk2-1">เรียนท่านรองอธิการบดี</label>
+            <input type="checkbox" id="chk2-1"disabled><label for="chk2-1">เรียนท่านรองอธิการบดี</label>
           </div>
           <div class="checkbox-line">
-            <input type="checkbox" id="chk2-2"><label for="chk2-2">เพื่อโปรดพิจารณา</label>
+            <input type="checkbox" id="chk2-2"disabled><label for="chk2-2">เพื่อโปรดพิจารณา</label>
           </div>
           <div class="checkbox-line">
-            <input type="checkbox" id="chk2-3"><label for="chk2-3">อื่นๆ</label><span class="dot-line mid"></span>
+            <input type="checkbox" id="chk2-3"disabled><label for="chk2-3">อื่นๆ</label><span class="dot-line mid"></span>
           </div>
           <div class="dot-line"></div>
           <div style="margin:12px 0 6px;">
@@ -315,11 +274,11 @@
 <td>
   <div class="td-inner">
     <div class="checkbox-line">
-      <input type="checkbox" id="chk3-1">
+      <input type="checkbox" id="chk3-1"disabled>
       <label for="chk3-1">อนุมัติข้อ</label>
     </div>
     <div class="checkbox-line">
-      <input type="checkbox" id="chk3-2">
+      <input type="checkbox" id="chk3-2"disabled>
       <label for="chk3-2">อื่นๆ</label>
       <span class="dot-line mid"></span>
     </div>
@@ -347,9 +306,9 @@
     </tr>
   </tbody>
 </table>
-
-
-        </div>
+ </div>
+</div>
+ </div>
 
 <!-- โชว์ไฟล์แนบ -->
 <!-- ...ไฟล์แนบปกติ-->
@@ -403,6 +362,7 @@
           <button id="btnBack" @click="goBack">Back</button>
           <button id="btnNext" @click="handleNext">Next</button>
         </div>
+        
       </div>
     </div>
 </div>
@@ -431,6 +391,7 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 import Swal from 'sweetalert2'
+import html2pdf from 'html2pdf.js'
 
 const API_BASE = import.meta.env.VITE_API_BASE
 
@@ -449,6 +410,38 @@ function toggleNotifications() {
 function closeNotifications() {
   showNotifications.value = false
 }
+function exportToPDF() {
+  const element = document.getElementById('pdf-section');
+  // ตั้งค่ารูปแบบไฟล์ PDF
+  const opt = {
+    margin:       0.2,
+    filename:     `booking-form.pdf`,
+    image:        { type: 'jpeg', quality: 0.98 },
+    html2canvas:  { scale: 2, useCORS: true },
+    jsPDF:        { unit: 'in', format: 'a4', orientation: 'portrait' }
+  };
+  html2pdf().from(element).set(opt).save();
+}
+// รับ element id, return Blob ของไฟล์ pdf
+function htmlToPdfBlob(elementId) {
+  return new Promise((resolve, reject) => {
+    const element = document.getElementById(elementId)
+    const opt = {
+      margin:       0.2,
+      filename:     `booking-form.pdf`,
+      image:        { type: 'jpeg', quality: 0.98 },
+      html2canvas:  { scale: 2, useCORS: true },
+      jsPDF:        { unit: 'in', format: 'a4', orientation: 'portrait' }
+    }
+    html2pdf()
+      .from(element)
+      .set(opt)
+      .outputPdf('blob')
+      .then(resolve)
+      .catch(reject)
+  })
+}
+
 async function fetchNotifications() {
   if (!userId) return
   try {
@@ -561,6 +554,15 @@ function isFacilityYes(val) {
 function isFacilityNo(val) {
   return val === 'no'
 }
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onloadend = () => resolve(reader.result.split(',')[1]) // เอาเฉพาะ base64
+    reader.onerror = reject
+    reader.readAsDataURL(blob)
+  })
+}
+
 
 // -------------- Load ข้อมูล Booking + Attachments ----------------
 onMounted(async () => {
@@ -640,6 +642,25 @@ async function handleNext() {
       Swal.fire('ไม่พบ bookingId')
       return
     }
+    // 1. สร้าง PDF
+    const pdfBlob = await htmlToPdfBlob('pdf-section')
+
+    // 2. ดาวน์โหลด PDF ให้ user
+    // -- download แบบ JS:
+    const url = window.URL.createObjectURL(pdfBlob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'booking-form.pdf'
+    document.body.appendChild(link)
+    link.click()
+    setTimeout(() => {
+      window.URL.revokeObjectURL(url)
+      link.remove()
+    }, 100)
+
+    // 3. แปลงเป็น base64 เพื่อเก็บลง db
+    const pdfBase64 = await blobToBase64(pdfBlob) // เพิ่มฟังก์ชันนี้ด้านล่าง
+
     const bookingData = { ...info.value }
     const attachments = (bookingData.files || []).map(f => f.fileUrl || f.url || null)
     const fileNames   = (bookingData.files || []).map(f => f.originalName || f.fileName || null)
@@ -648,11 +669,16 @@ async function handleNext() {
 
     const allFileNames = [
       ...fileNames,
-      ...fileAttachments.value.map(f => f.fileName)
+      ...fileAttachments.value.map(f => f.fileName),
+
     ]
-    const allAttachments = [
+     const allAttachments = [
       ...attachments,
-      ...fileAttachments.value.map(f => f.url)
+      ...fileAttachments.value.map(f => f.url),
+    ]
+    const allFileTypes = [
+      ...fileTypes,
+      ...fileAttachments.value.map(f => f.fileType || 'application/pdf'), // กรณีมีไฟล์อื่น
     ]
 
     const payload = {
@@ -674,7 +700,8 @@ async function handleNext() {
       uploadFiles: uploadFiles,
       date: new Date(),
       proxyStudentName: bookingData.proxyStudentName || '',   // <--- เพิ่ม
-      proxyStudentId: bookingData.proxyStudentId || '',       // <--- เพิ่ม
+      proxyStudentId: bookingData.proxyStudentId || '', 
+      bookingPdf: pdfBase64,       // <--- เพิ่ม
     }
 
     console.log('PAYLOAD ส่งเข้า /api/history', payload)
@@ -727,6 +754,16 @@ async function handleNext() {
   align-items: center;
   position: relative;
 }
+/* เพิ่ม style นี้ใน <style scoped> หรือ style global ก็ได้ */
+.avoid-break, .approval-sign-table, .sign-header-table {
+  page-break-inside: avoid;
+  break-inside: avoid;
+  /* สำหรับความเข้ากันได้สูงสุด */
+  -webkit-column-break-inside: avoid;
+  -webkit-break-inside: avoid;
+  -moz-break-inside: avoid;
+}
+
 .circle {
   width: 30px; height: 30px;
   border-radius: 50%;
@@ -785,7 +822,7 @@ async function handleNext() {
 .mt-15 { margin-top: 15px; }
 .bold { font-weight: bold; }
 .line-field {
-  border-bottom: 2px solid #334155;
+ 
   padding: 0 6px;
   min-width: 50px;
   height: auto;
@@ -1200,6 +1237,15 @@ async function handleNext() {
     box-sizing: border-box;
   }
 }
+.force-inline {
+  display: inline-block !important;
+  min-width: unset !important;
+  max-width: unset !important;
+  width: auto !important;
+  white-space: nowrap !important;
+  vertical-align: middle;
+}
+
 
 </style>
 

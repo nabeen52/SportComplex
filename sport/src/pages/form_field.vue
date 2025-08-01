@@ -15,8 +15,6 @@
     </aside>
     
     <div v-if="!isSidebarClosed" class="sidebar-overlay" @click="toggleSidebar"></div>
-
-<button class="menu-toggle" @click="toggleSidebar">☰</button>
     <div class="main">
       <header class="topbar">
         <button class="menu-toggle" @click="toggleSidebar">☰</button>
@@ -69,7 +67,7 @@
         <div class="form-container">
           <div class="form-header">
             <h3>แบบฟอร์มขออนุมัติใช้สถานที่ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง</h3>
-            <p>โทร 053-917820-1 E-mail Sport-complex@mfu.ac.th</p>
+            <p>โทร 053-917-8201 E-mail Sport-complex@mfu.ac.th</p>
           </div>
           <form @submit.prevent="handleSubmit" enctype="multipart/form-data" class="booking-form">
             <div class="form-grid">
@@ -83,9 +81,9 @@
                   type="text"
                   :class="inputClass('aw')"
                   v-model="formData.aw"
-                  maxlength="10"
                   @input="onlyAwInput"
                 />
+
               </div>
               <div class="form-row">
                 <label>
@@ -99,65 +97,69 @@
                   เบอร์โทรติดต่อ
                   <span v-if="showValidate && missingFields.tel" class="required-star">*</span>
                 </label>
-                <input
-                  type="text"
-                  :class="inputClass('tel')"
-                  v-model="formData.tel"
-                  maxlength="10"
-                  @input="onlyNumbersLimit('tel')"
-                />
+              <input
+                type="text"
+                :class="inputClass('tel')"
+                v-model="formData.tel"
+                maxlength="10"
+                @input="onlyTelNumbers"
+              />
               </div>
 
-              <div class="form-row">
-              <label>
-                ชื่อหน่วยงาน
-                <span v-if="showValidate && missingFields.agency" class="required-star">*</span>
-              </label>
-              <div style="display:flex;gap:6px;align-items:center;">
-                <input
-                  class="custom-input"
-                  list="agency-list"
-                  v-model="agencyInput"
-                  placeholder="ค้นหาหรือเลือกหน่วยงาน"
-                  @change="handleAgencyChange"
-                  :readonly="isAgencySelected"
-                  :class="{ 'is-invalid': showValidate && missingFields.agency }"
-                  style="flex:1"
-                />
-                <button
-                  v-if="isAgencySelected"
-                  type="button"
-                  @click="clearAgency"
-                  style="background:#eee;padding:3px 10px;border-radius:6px;border:none;cursor:pointer"
-                  title="ลบ"
-                >ลบ</button>
-                <datalist id="agency-list">
-                  <option v-for="option in agencyOptions" :key="option" :value="option" />
-                </datalist>
-              </div>
-            </div>
-            <div class="form-row" v-if="agencyInput === 'อื่นๆ'">
-              <label>
-                โปรดระบุหน่วยงาน
-                <span v-if="showValidate && missingFields.agencyOther" class="required-star">*</span>
-              </label>
-              <input
-                type="text"
-                class="custom-input"
-                v-model="customAgency"
-                placeholder="กรอกชื่อหน่วยงาน"
-                :class="{ 'is-invalid': showValidate && missingFields.agencyOther }"
-              />
-            </div>
-            <div class="form-row" v-if="agencyInput === 'อื่นๆ'">
-              <label>รายละเอียดเพิ่มเติม (ถ้ามี)</label>
-              <input
-                type="text"
-                class="custom-input"
-                v-model="otherAgencyDetail"
-                placeholder="รายละเอียดเพิ่มเติม"
-              />
-              </div>
+              <div class="form-row" style="position:relative;">
+          <label>
+            ชื่อหน่วยงาน
+            <span v-if="touched && (showError && !agencyInput)" style="color:red">*</span>
+          </label>
+          <input
+            class="custom-input"
+            type="text"
+            v-model="agencySearch"
+            @input="filterAgency"
+            @focus="onAgencyFocus"
+            @blur="onAgencyBlur"
+            :readonly="isFormLocked || (isAgencySelected && agencyInput)"
+            placeholder="ค้นหาหรือเลือกหน่วยงาน"
+            autocomplete="off"
+            :class="{ 'is-invalid': touched && showError && !agencyInput }"
+            style="flex:1"
+          />
+
+  <ul v-if="agencyDropdownOpen && filteredAgencyOptions.length" class="agency-dropdown">
+    <li
+      v-for="option in filteredAgencyOptions"
+      :key="option"
+      @mousedown.prevent="selectAgency(option)"
+      style="cursor:pointer;padding:7px 16px;"
+    >{{ option }}</li>
+  </ul>
+</div>
+
+
+<div class="form-row" v-if="agencyInput === 'อื่นๆ'">
+  <label>
+    โปรดระบุหน่วยงาน
+    <span v-if="touched && (showError && !customAgency)" style="color:red">*</span>
+  </label>
+  <input
+    type="text"
+    class="custom-input"
+    v-model="customAgency"
+    placeholder="กรอกชื่อหน่วยงาน"
+    :readonly="isFormLocked"
+    :class="{ 'is-invalid': touched && showError && !customAgency }"
+  />
+</div>
+<div class="form-row" v-if="agencyInput === 'อื่นๆ'">
+  <label>รายละเอียดเพิ่มเติม (ถ้ามี)</label>
+  <input
+    type="text"
+    class="custom-input"
+    v-model="otherAgencyDetail"
+    placeholder="รายละเอียดเพิ่มเติม"
+    :readonly="isFormLocked"
+  />
+</div>
 
 
               <div class="form-row">
@@ -208,35 +210,30 @@
                 </div>
                 <small class="note-text">* กรุณาจองก่อนใช้งานจริง 5 วัน</small>
               </div>
-              <div class="form-row">
-                <label>
-                  ตั้งแต่เวลา
-                  <span v-if="showValidate && missingFields.since_time" class="required-star">*</span>
-                </label>
-                <input type="time" :class="inputClass('since_time')" v-model="formData.since_time" />
-              </div>
-              <div class="form-row">
-                <label>
-                  ถึงเวลา
-                  <span v-if="showValidate && missingFields.until_thetime" class="required-star">*</span>
-                </label>
-                <input type="time" :class="inputClass('until_thetime')" v-model="formData.until_thetime" :min="minUntilTime" />
-              </div>
-              <div class="form-row">
-                <label>
-                  จำนวนผู้เข้าร่วม
-                  <span v-if="showValidate && missingFields.participants" class="required-star">*</span>
-                </label>
-                <input
-                  type="text"
-                  :class="inputClass('participants')"
-                  v-model="formData.participants"
-                  maxlength="10"
-                  @input="onlyNumbersLimit('participants')"
-                />
-              </div>
+              <div class="form-row time-range-row">
+  <label>
+    ช่วงเวลา
+    <span v-if="showValidate && (missingFields.since_time || missingFields.until_thetime)" class="required-star">*</span>
+  </label>
+  <div class="time-range-group">
+    <input
+      type="time"
+      :class="inputClass('since_time')"
+      v-model="formData.since_time"
+    />
+    <span>-</span>
+    <input
+      type="time"
+      :class="inputClass('until_thetime')"
+      v-model="formData.until_thetime"
+      :min="minUntilTime"
+    />
+  </div>
+</div>
 
+            
               <!-- เพิ่มใน <form> ตำแหน่งใกล้ๆ requester/proxyUserId -->
+<!-- ชื่อผู้ขอใช้สถานที่ / รหัสนักศึกษา/พนักงาน -->
 <div class="form-row">
   <label>
     ชื่อผู้ขอใช้สถานที่
@@ -255,10 +252,9 @@
   </div>
 </div>
 
-<!-- ช่องสำหรับรหัสผู้จอง (เดิม) -->
 <div class="form-row">
   <label>
-    รหัสนักศึกษา/รหัสพนักงาน
+    รหัสนักศึกษา/พนักงาน
     <span v-if="showValidate && missingFields.userId" class="required-star">*</span>
   </label>
   <input
@@ -270,7 +266,7 @@
   />
 </div>
 
-<!-- ✅ เพิ่มสองช่องใหม่สำหรับข้อมูลผู้ที่จองแทน -->
+<!-- เฉพาะถ้า isProxyBooking === true -->
 <div class="form-row" v-if="isProxyBooking">
   <label>
     ชื่อของผู้ที่จองแทน
@@ -296,6 +292,21 @@
     :class="{ 'input-error': showValidate && missingFields.proxyStudentId }"
     v-model="proxyStudentId"
     placeholder="กรอกรหัสนักศึกษาของผู้ที่คุณจองแทน"
+  />
+</div>
+
+<!-- จำนวนผู้เข้าร่วม (อยู่ท้าย) -->
+<div class="form-row">
+  <label>
+    จำนวนผู้เข้าร่วม
+    <span v-if="showValidate && missingFields.participants" class="required-star">*</span>
+  </label>
+  <input
+    type="text"
+    :class="inputClass('participants')"
+    v-model="formData.participants"
+    maxlength="10"
+    @input="onlyNumbersLimit('participants')"
   />
 </div>
 
@@ -474,13 +485,83 @@ import Swal from 'sweetalert2'
 
 const API_BASE = import.meta.env.VITE_API_BASE
 
-// --- Notification ---
+// Router
+const router = useRouter()
+const route = useRoute()
+
+// Notification
 const showNotifications = ref(false)
 const notifications = ref([])
 const unreadCount = ref(0)
 const products = ref([])
-const userId = localStorage.getItem('user_id') || ''
+
+const userIdRef = ref(localStorage.getItem('user_id') || '')
+const studentId = ref(localStorage.getItem('student_id') || '')
+const loginName = ref('')
+const loginStudentId = ref('')
+const proxyUserId = ref(localStorage.getItem('student_id') || localStorage.getItem('user_id') || '')
+const isProxyBooking = ref(false)
+const proxyStudentName = ref('')
+const proxyStudentId = ref('')
 const lastCheckedIds = new Set()
+
+// Agency
+const agencyOptions = ref([])
+const agencyInput = ref('')
+const customAgency = ref('')
+const otherAgencyDetail = ref('')
+const agencySearch = ref('')
+const agencyDropdownOpen = ref(false)
+const isFormLocked = ref(false)
+
+const filteredAgencyOptions = computed(() => {
+  const search = agencySearch.value.trim().toLowerCase()
+  if (!search) return agencyOptions.value
+  return agencyOptions.value.filter(option =>
+    option.toLowerCase().includes(search)
+  )
+})
+
+
+function filterAgency() {
+  agencyDropdownOpen.value = true
+}
+function selectAgency(option) {
+  agencyInput.value = option
+  agencySearch.value = option
+  agencyDropdownOpen.value = false
+  handleAgencyChange()
+}
+
+
+function onAgencyFocus() {
+  // ถ้าเลือกแล้ว ให้เคลียร์ค่า search แต่ไม่ลบ agencyInput
+  agencyDropdownOpen.value = true;
+  // ถ้าเลือกหน่วยงานไปแล้ว ให้โชว์ list ทั้งหมด (ไม่ต้องลบ agencyInput)
+  if (agencyInput.value) {
+    agencySearch.value = ''; // <<<<<< KEY
+  }
+}
+
+function onAgencyBlur() {
+  setTimeout(() => {
+    agencyDropdownOpen.value = false
+  }, 200)
+}
+
+function handleAgencyChange() {
+  if (agencyInput.value !== 'อื่นๆ') {
+    customAgency.value = ''
+    otherAgencyDetail.value = ''
+  }
+}
+
+const isSidebarClosed = ref(false)
+function toggleSidebar() {
+  isSidebarClosed.value = !isSidebarClosed.value
+}
+
+// Notification functions
 function toggleNotifications() {
   showNotifications.value = !showNotifications.value
   if (showNotifications.value) unreadCount.value = 0
@@ -489,9 +570,10 @@ function closeNotifications() {
   showNotifications.value = false
 }
 async function fetchNotifications() {
-  if (!userId) return
+  const uid = localStorage.getItem('user_id') || ''
+  if (!uid) return
   try {
-    const res = await axios.get(`${API_BASE}/api/history?user_id=${userId}`)
+    const res = await axios.get(`${API_BASE}/api/history?user_id=${uid}`)
     const newNotis = res.data.filter(item =>
       (['approved', 'disapproved', 'cancel', 'canceled', 'returned'].includes((item.status || '').toLowerCase())) &&
       !lastCheckedIds.has(item._id)
@@ -531,63 +613,34 @@ async function fetchNotifications() {
     // ignore
   }
 }
-
 async function loadCart() {
-  const userId = localStorage.getItem('user_id') || ''
-  if (!userId) return
+  const uid = localStorage.getItem('user_id') || ''
+  if (!uid) return
   try {
-    const res = await axios.get(`${API_BASE}/api/cart?user_id=${userId}`)
+    const res = await axios.get(`${API_BASE}/api/cart?user_id=${uid}`)
     products.value = res.data
   } catch (err) {
     products.value = []
   }
 }
 
-onMounted(() => {
-  fetchNotifications()
-  setInterval(fetchNotifications, 30000)
-  loadCart()
-})
-
-// --- Form Main ---
+// Stepper
 const steps = ['กรอกข้อมูล', 'ยืนยันข้อมูล', 'สำเร็จ']
 const stepRoutes = ['/form_field1', '/form_field3', '/form_field4']
 const currentStep = 0
 
-const router = useRouter()
-const route = useRoute()
-
-const isSidebarClosed = ref(false)
-function toggleSidebar() { isSidebarClosed.value = !isSidebarClosed.value }
-
-const userIdRef = ref(localStorage.getItem('user_id') || '')
-const studentId = ref(localStorage.getItem('student_id') || '')
-const loginName = ref('')
-const loginStudentId = ref('')
-const proxyUserId = ref(localStorage.getItem('student_id') || localStorage.getItem('user_id') || '')
-const isProxyBooking = ref(false)
-
-// script setup ส่วนบน
-const proxyStudentName = ref('')
-const proxyStudentId = ref('')
-
-
+// Form
 const formData = ref({
   aw: '', date: '', tel: '', name_activity: '', reasons: '',
   since: '', uptodate: '', since_time: '', until_thetime: '', participants: '',
   requester: '', building: '', zone: '', selectedUtility: '',
   turnon_air: '', turnoff_air: '', turnon_lights: '', turnoff_lights: '',
   other: '', amphitheater: '', need_equipment: '',
-   utilityRequest: 'no',
+  utilityRequest: 'no',
   facilityRequest: 'no',
   proxyStudentName: '',
-  proxyStudentId: '',
-
+  proxyStudentId: ''
 })
-const agencyOptions = ref([])
-const agencyInput = ref('')
-const customAgency = ref('')
-const otherAgencyDetail = ref('')
 
 // Zone
 const hasZone = ref(false)
@@ -645,7 +698,7 @@ function syncDateRange(type) {
   }
 }
 
-// ไฟล์แนบ
+// File Attach
 const selectedFiles = ref([])
 const fileError = ref(false)
 function handleFileChange(event) {
@@ -672,7 +725,7 @@ function removeFile(idx) {
   fileError.value = selectedFiles.value.length === 0
 }
 
-// ดูไฟล์แนบ (Preview Image)
+// Modal Preview
 const showImageModal = ref(false)
 const modalImageUrl = ref('')
 function viewImage(idx) {
@@ -690,7 +743,6 @@ function viewImage(idx) {
   }
 }
 
-// ถึงเวลา
 const minUntilTime = computed(() => {
   if (!formData.value.since_time) return ''
   const [h, m] = formData.value.since_time.split(':').map(Number)
@@ -710,79 +762,7 @@ watch(() => formData.value.since_time, () => {
   }
 })
 
-onMounted(async () => {
-  if (studentId.value) {
-    loginStudentId.value = studentId.value
-    proxyUserId.value = studentId.value
-  } else if (userIdRef.value) {
-    loginStudentId.value = userIdRef.value
-    proxyUserId.value = userIdRef.value
-  } else {
-    loginStudentId.value = 'รหัสผู้ใช้ระบบ'
-    proxyUserId.value = ''
-  }
-  const storedRequester = localStorage.getItem('requesterName') || ''
-  if (storedRequester) {
-    formData.value.requester = storedRequester
-    loginName.value = storedRequester
-  } else if (userIdRef.value) {
-    try {
-      const res = await axios.get(`${API_BASE}/api/user/${userIdRef.value}`)
-      if (res.data && res.data.name) {
-        formData.value.requester = res.data.name
-        loginName.value = res.data.name
-      }
-    } catch {
-      loginName.value = 'ชื่อผู้ใช้ระบบ'
-    }
-  } else {
-    loginName.value = 'ชื่อผู้ใช้ระบบ'
-  }
-  if (route.query.restore === 'true') {
-    loadFormFromSession()
-    loadFilesFromGlobal()
-    if (!formData.value.building) {
-      const storedBuilding = sessionStorage.getItem('fieldName') || localStorage.getItem('fieldName') || localStorage.getItem('buildingSelected')
-      if (storedBuilding) formData.value.building = storedBuilding
-    }
-    if (!formData.value.zone) {
-      const storedZone = sessionStorage.getItem('zone') || localStorage.getItem('zone') || localStorage.getItem('zoneSelected')
-      if (storedZone) formData.value.zone = storedZone
-    }
-    if (route.query.fieldName) formData.value.building = route.query.fieldName
-    if (route.query.zone) formData.value.zone = route.query.zone
-    return
-  }
-  if (route.query.fieldName) formData.value.building = route.query.fieldName
-  if (route.query.zone) formData.value.zone = route.query.zone
-  if (!formData.value.building) {
-    const storedBuilding = sessionStorage.getItem('fieldName') || localStorage.getItem('fieldName') || localStorage.getItem('buildingSelected')
-    if (storedBuilding) formData.value.building = storedBuilding
-  }
-  if (!formData.value.zone) {
-    const storedZone = sessionStorage.getItem('zone') || localStorage.getItem('zone') || localStorage.getItem('zoneSelected')
-    if (storedZone) formData.value.zone = storedZone
-  }
-  try {
-    const res = await axios.get(`${API_BASE}/api/information`)
-    const uniqueUnits = [...new Set(res.data.map(item => item.unit))]
-    agencyOptions.value = uniqueUnits
-    if (!agencyOptions.value.includes('อื่นๆ')) agencyOptions.value.push('อื่นๆ')
-  } catch (e) {
-    agencyOptions.value = ['อื่นๆ']
-  }
-  loadFormFromSession()
-  loadFilesFromGlobal()
-})
-
-// watch(isProxyBooking, (val) => {
-//   if (!val) {
-//     proxyUserId.value = loginStudentId.value
-//   } else {
-//     proxyUserId.value = ''
-//   }
-// })
-
+// Watch & Save
 watch(formData, saveFormToSession, { deep: true })
 watch(agencyInput, saveFormToSession)
 watch(customAgency, saveFormToSession)
@@ -791,11 +771,18 @@ watch(proxyUserId, saveFormToSession)
 watch(isProxyBooking, saveFormToSession)
 watch(proxyStudentName, saveFormToSession)
 watch(proxyStudentId, saveFormToSession)
+watch(agencyInput, (v) => { agencySearch.value = v || '' })
+watch(agencySearch, (v) => {
+  if (v !== agencyInput.value && agencyOptions.value.includes(v)) {
+    agencyInput.value = v
+  }
+})
 watch(selectedFiles, () => {
   window._tempSelectedFiles = selectedFiles.value
   saveFormToSession()
 }, { deep: true })
 
+// Form Session
 function saveFormToSession() {
   sessionStorage.setItem(
     'form_field_save',
@@ -807,7 +794,7 @@ function saveFormToSession() {
       proxyUserId: proxyUserId.value,
       isProxyBooking: isProxyBooking.value,
       selectedFileNames: selectedFiles.value.map(f => f.name),
-      proxyStudentName: proxyStudentName.value,     
+      proxyStudentName: proxyStudentName.value,
       proxyStudentId: proxyStudentId.value,
     })
   )
@@ -838,6 +825,7 @@ function loadFilesFromGlobal() {
   }
 }
 
+// Step Navigation
 async function goStep(targetStep) {
   saveFormToSession()
   window._tempSelectedFiles = selectedFiles.value
@@ -899,21 +887,13 @@ async function goStep(targetStep) {
     return
   }
 }
-const finalAgency = computed(() => (agencyInput.value === 'อื่นๆ' ? customAgency.value : agencyInput.value))
-function handleAgencyChange() {
-  if (agencyInput.value !== 'อื่นๆ') {
-    customAgency.value = ''
-    otherAgencyDetail.value = ''
-  }
-}
-
-const isAgencySelected = computed(() =>
-  !!agencyInput.value &&
-  agencyOptions.value.includes(agencyInput.value) &&
-  agencyInput.value !== 'อื่นๆ'
+const finalAgency = computed(() =>
+  agencyInput.value === 'อื่นๆ'
+    ? customAgency.value
+    : agencyInput.value
 )
 
-
+// Input Validation
 const missingFields = ref({})
 const showValidate = ref(false)
 function inputClass(field) {
@@ -930,13 +910,11 @@ function inputClass(field) {
   if (field === 'building') return 'custom-input building-readonly'
   return 'custom-input'
 }
-
 function clearAgency() {
   agencyInput.value = ''
   customAgency.value = ''
   otherAgencyDetail.value = ''
 }
-
 function validateFields() {
   const fields = {}
   const requiredFields = [
@@ -951,17 +929,13 @@ function validateFields() {
     if (!formData.value.requester || String(formData.value.requester).trim() === '') {
       fields['requester'] = true
     }
+    if (!proxyStudentName.value || proxyStudentName.value.trim() === '') {
+      fields['proxyStudentName'] = true
+    }
+    if (!proxyStudentId.value || proxyStudentId.value.trim() === '') {
+      fields['proxyStudentId'] = true
+    }
   }
-
-  if (isProxyBooking.value) {
-  if (!proxyStudentName.value || proxyStudentName.value.trim() === '') {
-    fields['proxyStudentName'] = true
-  }
-  if (!proxyStudentId.value || proxyStudentId.value.trim() === '') {
-    fields['proxyStudentId'] = true
-  }
-}
-
   if (!finalAgency.value || String(finalAgency.value).trim() === '') fields['agency'] = true
   if (agencyInput.value === 'อื่นๆ' && (!customAgency.value || String(customAgency.value).trim() === ''))
     fields['agencyOther'] = true
@@ -1068,13 +1042,13 @@ onBeforeRouteLeave((to, from, next) => {
   }
   next()
 })
+
+// Input helper
 function onlyNumbersLimit(field) {
-  formData.value[field] = formData.value[field].replace(/[^0-9]/g, '').slice(0, 10)
-}
-function onlyAwInput(e) {
-  // อนุญาตแค่เลขและ / - _
-  let val = e.target.value.replace(/[^0-9/_-]/g, '').slice(0, 10)
-  formData.value.aw = val
+  let val = formData.value[field].replace(/[^0-9]/g, '')
+  val = val.replace(/^0+/, '')
+  val = val.slice(0, 10)
+  formData.value[field] = val
 }
 function shortenFileName(name) {
   if (!name) return ''
@@ -1095,7 +1069,6 @@ function viewPdf(idx) {
   }
   reader.readAsArrayBuffer(file)
 }
-
 function viewFile(idx) {
   const file = selectedFiles.value[idx]
   const reader = new FileReader()
@@ -1112,8 +1085,103 @@ function viewFile(idx) {
   }
   reader.readAsArrayBuffer(file)
 }
+function onlyTelNumbers(e) {
+  let val = e.target.value.replace(/[^0-9]/g, '')
+  val = val.slice(0, 10)
+  formData.value.tel = val
+}
+function onlyNumbersNoLeadingZero(e) {
+  let val = e.target.value.replace(/[^0-9]/g, '')
+  val = val.replace(/^0+/, '')
+  val = val.slice(0, 10)
+  formData.value.participants = val
+}
+function onlyAwInput(e) {
+  formData.value.aw = e.target.value.replace(/[A-Za-z\u0E00-\u0E7F]/g, '')
+}
+
+// onMounted: โหลดข้อมูลเริ่มต้น
+onMounted(async () => {
+  // 1. ตั้งค่าข้อมูลผู้ใช้จาก localStorage
+  if (studentId.value) {
+    loginStudentId.value = studentId.value
+    proxyUserId.value = studentId.value
+  } else if (userIdRef.value) {
+    loginStudentId.value = userIdRef.value
+    proxyUserId.value = userIdRef.value
+  } else {
+    loginStudentId.value = 'รหัสผู้ใช้ระบบ'
+    proxyUserId.value = ''
+  }
+
+  // 2. ตั้งค่าชื่อ requester
+  const storedRequester = localStorage.getItem('requesterName') || ''
+  if (storedRequester) {
+    formData.value.requester = storedRequester
+    loginName.value = storedRequester
+  } else if (userIdRef.value) {
+    try {
+      const res = await axios.get(`${API_BASE}/api/user/${userIdRef.value}`)
+      if (res.data && res.data.name) {
+        formData.value.requester = res.data.name
+        loginName.value = res.data.name
+      }
+    } catch {
+      loginName.value = 'ชื่อผู้ใช้ระบบ'
+    }
+  } else {
+    loginName.value = 'ชื่อผู้ใช้ระบบ'
+  }
+
+  // 3. restore ฟอร์มจาก sessionStorage หรือ query
+  if (route.query.restore === 'true') {
+    loadFormFromSession()
+    loadFilesFromGlobal()
+    if (!formData.value.building) {
+      const storedBuilding = sessionStorage.getItem('fieldName') || localStorage.getItem('fieldName') || localStorage.getItem('buildingSelected')
+      if (storedBuilding) formData.value.building = storedBuilding
+    }
+    if (!formData.value.zone) {
+      const storedZone = sessionStorage.getItem('zone') || localStorage.getItem('zone') || localStorage.getItem('zoneSelected')
+      if (storedZone) formData.value.zone = storedZone
+    }
+    if (route.query.fieldName) formData.value.building = route.query.fieldName
+    if (route.query.zone) formData.value.zone = route.query.zone
+    return
+  }
+  if (route.query.fieldName) formData.value.building = route.query.fieldName
+  if (route.query.zone) formData.value.zone = route.query.zone
+  if (!formData.value.building) {
+    const storedBuilding = sessionStorage.getItem('fieldName') || localStorage.getItem('fieldName') || localStorage.getItem('buildingSelected')
+    if (storedBuilding) formData.value.building = storedBuilding
+  }
+  if (!formData.value.zone) {
+    const storedZone = sessionStorage.getItem('zone') || localStorage.getItem('zone') || localStorage.getItem('zoneSelected')
+    if (storedZone) formData.value.zone = storedZone
+  }
+
+  // 4. โหลด agencyOptions (ข้อมูลหน่วยงาน)
+   try {
+    const res = await axios.get(`${API_BASE}/api/information?type=equipment`)
+    const uniqueUnits = [...new Set(res.data.map(item => item.unit))]
+    agencyOptions.value = uniqueUnits
+    if (!agencyOptions.value.includes('อื่นๆ')) agencyOptions.value.push('อื่นๆ')
+  } catch (e) {
+    agencyOptions.value = ['อื่นๆ']
+  }
+
+  // 5. โหลด notification, cart
+  fetchNotifications()
+  setInterval(fetchNotifications, 30000)
+  loadCart()
+
+  // 6. โหลดข้อมูลฟอร์มจาก session (ถ้ายังไม่โหลด)
+  loadFormFromSession()
+  loadFilesFromGlobal()
+})
 
 </script>
+
 
 <style scoped>
 /* ... วาง style ของคุณที่นี่ ... */
@@ -1524,8 +1592,25 @@ function viewFile(idx) {
   background: #ffeaea !important;
 }
 
-
-
+.agency-dropdown {
+  position: absolute;
+  top: 54px;
+  left: 0;
+  right: 0;
+  z-index: 11;
+  background: #fff;
+  border: 1.5px solid #ddd;
+  border-radius: 8px;
+  max-height: 170px;
+  overflow-y: auto;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.09);
+  margin-top: 0.2em;
+  padding: 0;
+  list-style: none;
+}
+.agency-dropdown li:hover {
+  background: #f5f7fa;
+}
 
 @media (max-width: 540px) {
   /* ตัวครอบ card ให้ scroll-x */
@@ -1570,6 +1655,56 @@ function viewFile(idx) {
   .form-header h3 {
     font-size: 1.1rem;
   }
+}
+/* ปรับช่วงวันที่ให้สองช่อง input ขยายออกเท่าๆกัน */
+.date-range-group {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: 10px; /* ระยะห่างระหว่างสองช่อง */
+}
+
+.date-range-group input[type="date"] {
+  flex: 1 1 0;
+  min-width: 0;
+  box-sizing: border-box;
+  /* เพิ่มความสูง/ขอบให้เหมือน input ช่องอื่น */
+  padding: 10px 14px;
+  border: 2px solid #94a3b8;
+  border-radius: 8px;
+  background-color: #f9fafb;
+  font-size: 14px;
+  transition: border 0.3s;
+}
+
+/* ขีดตรงกลาง */
+.date-range-group span {
+  margin: 0 5px;
+  font-size: 20px;
+}
+.time-range-group {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: 10px;
+}
+
+.time-range-group input[type="time"] {
+  flex: 1 1 0;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 10px 14px;
+  border: 2px solid #94a3b8;
+  border-radius: 8px;
+  background-color: #f9fafb;
+  font-size: 14px;
+  transition: border 0.3s;
+}
+
+/* ขีดกลาง */
+.time-range-group span {
+  margin: 0 5px;
+  font-size: 20px;
 }
 
 </style>

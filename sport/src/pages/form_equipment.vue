@@ -89,8 +89,9 @@
               class="custom-input"
               v-model="form.name"
               :class="{ 'is-invalid': touched && showError && !form.name }"
-              :readonly="isFormLocked"
+              :readonly="true"
             />
+
           </div>
           <!-- Student ID -->
           <div class="form-row">
@@ -103,37 +104,40 @@
               class="custom-input"
               v-model="form.user_id"
               :class="{ 'is-invalid': touched && showError && !form.user_id }"
-              :readonly="isFormLocked"
+              :readonly="true"
             />
+
           </div>
           <!-- Agency (หน่วยงาน) -->
-          <div class="form-row">
-  <label>
-    ชื่อหน่วยงาน
-    <span v-if="touched && (showError && !agencyInput)" style="color:red">*</span>
-  </label>
-   <input
-    class="custom-input"
-    list="agency-list"
-    v-model="agencyInput"
-    placeholder="ค้นหาหรือเลือกหน่วยงาน"
-    @change="handleAgencyChange"
-    :readonly="isAgencySelected"
-    :class="{ 'is-invalid': touched && showError && !agencyInput }"
-    style="flex:1"
-  />
-  <button
-    v-if="isAgencySelected && !isFormLocked"
-    type="button"
-    @click="clearAgency"
-    style="background:#eee;padding:3px 10px;border-radius:6px;border:none;cursor:pointer"
-    title="ลบ"
-  >ลบ</button>
-  <datalist id="agency-list">
-    <option v-for="option in agencyOptions" :key="option" :value="option" />
-  </datalist>
+          <div class="form-row" style="position:relative;">
+          <label>
+            ชื่อหน่วยงาน
+            <span v-if="touched && (showError && !agencyInput)" style="color:red">*</span>
+          </label>
+          <input
+            class="custom-input"
+            type="text"
+            v-model="agencySearch"
+            @input="filterAgency"
+            @focus="onAgencyFocus"
+            @blur="onAgencyBlur"
+            :readonly="isFormLocked || (isAgencySelected && agencyInput)"
+            placeholder="ค้นหาหรือเลือกหน่วยงาน"
+            autocomplete="off"
+            :class="{ 'is-invalid': touched && showError && !agencyInput }"
+            style="flex:1"
+          />
 
+  <ul v-if="agencyDropdownOpen && filteredAgencyOptions.length" class="agency-dropdown">
+    <li
+      v-for="option in filteredAgencyOptions"
+      :key="option"
+      @mousedown.prevent="selectAgency(option)"
+      style="cursor:pointer;padding:7px 16px;"
+    >{{ option }}</li>
+  </ul>
 </div>
+
 <div class="form-row" v-if="agencyInput === 'อื่นๆ'">
   <label>
     โปรดระบุหน่วยงาน
@@ -148,7 +152,6 @@
     :class="{ 'is-invalid': touched && showError && !customAgency }"
   />
 </div>
-
           <div class="form-row" v-if="agencyInput === 'อื่นๆ'">
             <label>รายละเอียดเพิ่มเติม (ถ้ามี)</label>
             <input
@@ -209,50 +212,68 @@
           </div>
 
           <!-- Date range -->
-          <div class="form-row">
-            <label>
-              ตั้งแต่วันที่
-              <span v-if="touched && (showError && !form.start_date)" style="color:red">*</span>
-            </label>
-            <input
-              type="date"
-              class="custom-input"
-              v-model="form.start_date"
-              :min="today"
-              :class="{ 'is-invalid': touched && showError && !form.start_date }"
-              :readonly="isFormLocked"
-            />
-          </div>
-          <div class="form-row">
-            <label>
-              ถึงวันที่
-              <span v-if="touched && (showError && !form.end_date)" style="color:red">*</span>
-            </label>
-            <input
-              type="date"
-              class="custom-input"
-              v-model="form.end_date"
-              :min="form.start_date || today"
-              :class="{ 'is-invalid': touched && showError && !form.end_date }"
-              :readonly="isFormLocked"
-            />
-          </div>
-          <div class="form-row">
-            <label>วันที่มารับของ:</label>
-            <input
-              v-model="form.receive_date"
-              type="date"
-              class="custom-input"
-              :readonly="isFormLocked"
-              :min="form.start_date || today"
-              :max="form.end_date || ''"
-              :disabled="!form.start_date || !form.end_date || isFormLocked"
-            />
-          </div>
-          <div class="form-row">
-            <label>เวลาที่มารับของ:</label>
-            <input v-model="form.receive_time" type="time" :readonly="isFormLocked" class="custom-input" />
-          </div>
+          <div class="form-row date-range-row">
+  <label>
+    ช่วงวันที่
+    <span v-if="touched && (showError && (!form.start_date || !form.end_date))" style="color:red">*</span>
+  </label>
+  <div class="date-range-group">
+    <input
+      type="date"
+      :min="today"
+      v-model="form.start_date"
+      @change="syncDateRange('start')"
+      class="custom-input"
+      :readonly="isFormLocked"
+      :class="{ 'is-invalid': touched && showError && !form.start_date }"
+      style="width: 48%;"
+    />
+    <span style="margin: 0 6px;">-</span>
+    <input
+      type="date"
+      :min="form.start_date || today"
+      v-model="form.end_date"
+      @change="syncDateRange('end')"
+      class="custom-input"
+      :readonly="isFormLocked"
+      :class="{ 'is-invalid': touched && showError && !form.end_date }"
+      style="width: 48%;"
+    />
+  </div>
+  <small class="note-text">* กรุณาจองก่อนใช้งานจริง 5 วัน</small>
+</div>
+
+          <!-- รับของวันไหนเวลาไหน: แถวเดียวเหมือนช่วงวันที่ -->
+<div class="form-row date-range-row">
+  <label>
+    วันที่และเวลาที่มารับของ
+  </label>
+  <div class="date-range-group">
+    <input
+      type="date"
+      v-model="form.receive_date"
+      class="custom-input"
+      :class="{ 'is-invalid': touched && showError && !form.receive_date }"
+      :readonly="isFormLocked"
+      :min="form.start_date || today"
+      :max="form.end_date || ''"
+      :disabled="!form.start_date || !form.end_date || isFormLocked"
+      style="width: 48%;"
+    />
+    <span style="margin: 0 6px;">-</span>
+    <input
+      type="time"
+      v-model="form.receive_time"
+      class="custom-input"
+      :class="{ 'is-invalid': touched && showError && !form.receive_time }"
+      :readonly="isFormLocked"
+      :disabled="!form.start_date || !form.end_date || isFormLocked"
+      style="width: 48%;"
+    />
+  </div>
+</div>
+
+
          <!-- เฉพาะ block แนบไฟล์ใน template -->
 <div class="form-row">
   <label>
@@ -303,39 +324,58 @@
   </div>
 </div>
 
-
-
           <!-- Equipment cart -->
           <div class="form-section-title">รายการอุปกรณ์/วัสดุ/ครุภัณฑ์</div>
-          <div class="equipment-list">
-            <div
-              v-for="(qty, name) in cartMap"
-              :key="name"
-              class="equipment-item"
-            >
-              <span>{{ name }}</span>
-              <input
-                type="number"
-                min="1"
-                :max="findMaxAmount(name)"
-                class="equipment-amount-input"
-                v-model.number="selectedQuantities[name]"
-                placeholder="จำนวน"
-                :disabled="isFormLocked"
-                :class="{ 'is-invalid': touched && showError && (!selectedQuantities[name] || selectedQuantities[name] <= 0) }"
-              />
-              <input
-                type="text"
-                class="equipment-remark-input"
-                v-model="equipmentRemarks[name]"
-                :readonly="isFormLocked"
-                placeholder="หมายเหตุ"
-                style="margin-left: 12px; width: 140px"
-              />
-            </div>
-          </div>
         </div>
+
+         <div class="equipment-table-wrapper">
+  <table class="equipment-table">
+    <thead>
+      <tr>
+        <th style="width:40%">ชื่ออุปกรณ์</th>
+        <th style="width:20%">จำนวน</th>
+        <th style="width:40%">หมายเหตุ</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr v-for="(qty, name) in cartMap" :key="name">
+        <td>{{ name }}</td>
+        <td>
+          <input
+            type="number"
+            min="1"
+            :max="findMaxAmount(name)"
+            class="equipment-amount-input"
+            v-model.number="selectedQuantities[name]"
+            placeholder="จำนวน"
+            :disabled="isFormLocked"
+            :class="{ 'is-invalid': touched && showError && (!selectedQuantities[name] || selectedQuantities[name] <= 0) }"
+            style="width: 60px;"
+          />
+        </td>
+        <td>
+          <input
+            type="text"
+            class="equipment-remark-input"
+            v-model="equipmentRemarks[name]"
+            :readonly="isFormLocked"
+            placeholder="หมายเหตุ"
+            style="width: 100%;"
+          />
+        </td>
+      </tr>
+      <tr v-if="Object.keys(cartMap).length === 0">
+        <td colspan="3" style="text-align: center; color: #888;">ไม่มีรายการ</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
       </div>
+
+      
+
+
+
       <div class="button-wrapper" style="padding-bottom: 20px;">
         <button id="btnReset" @click="resetForm" type="button">ล้างฟอร์ม</button>
         <button id="btnNext" @click="submitBooking" :disabled="isFormLocked">Next</button>
@@ -376,6 +416,47 @@ const isFormLocked = ref(false)
 const selectedFiles = ref([])       // ใช้สำหรับแสดงรายชื่อไฟล์แนบ
 const fileError = ref(false)
 
+const agencySearch = ref('');
+const agencyDropdownOpen = ref(false);
+
+const filteredAgencyOptions = computed(() => {
+  const search = agencySearch.value.trim().toLowerCase();
+  if (!search) return agencyOptions.value;
+  return agencyOptions.value.filter(option =>
+    option.toLowerCase().includes(search)
+  );
+});
+
+
+function filterAgency() {
+  if (isAgencySelected.value) {
+    agencySearch.value = '';
+  }
+  agencyDropdownOpen.value = true;
+}
+
+function onAgencyFocus() {
+  if (isAgencySelected.value) {
+    agencySearch.value = '';
+  }
+  agencyDropdownOpen.value = true;
+}
+
+function selectAgency(option) {
+  agencyInput.value = option;
+  agencySearch.value = option;
+  agencyDropdownOpen.value = false;
+  handleAgencyChange();
+}
+
+// ปิด dropdown เมื่อหลุด focus (รอสักนิดป้องกันกดเลือกหาย)
+function onAgencyBlur() {
+  setTimeout(() => {
+    agencyDropdownOpen.value = false;
+  }, 180);
+}
+
+
 const form = reactive({
   name: '',
   user_id: '',
@@ -414,7 +495,8 @@ const isAgencySelected = computed(() =>
   !!agencyInput.value &&
   agencyOptions.value.includes(agencyInput.value) &&
   agencyInput.value !== 'อื่นๆ'
-)
+);
+
 function clearAgency() {
   agencyInput.value = ''
   customAgency.value = ''
@@ -443,6 +525,19 @@ function onPhoneInput(e) {
   form.number = digits
 }
 
+function syncDateRange(type) {
+  if (type === 'start') {
+    if (form.end_date && form.end_date < form.start_date) {
+      form.end_date = form.start_date
+    }
+  } else if (type === 'end') {
+    if (form.start_date && form.end_date < form.start_date) {
+      form.start_date = form.end_date
+    }
+  }
+}
+
+
 function validateFields() {
   const fields = {}
   if (!form.name) fields['name'] = true
@@ -455,6 +550,8 @@ function validateFields() {
   if (!form.start_date) fields['start_date'] = true
   if (!form.end_date) fields['end_date'] = true
   if (!selectedFiles.value.length) fields['file'] = true
+  if (!form.receive_date) fields['receive_date'] = true
+  if (!form.receive_time) fields['receive_time'] = true
 
   let invalidQty = false
   for (const name in cartMap) {
@@ -778,9 +875,9 @@ function resetForm() {
   fileError.value = false
   selectedFiles.value = []
   localStorage.removeItem('equipment_upload_file')
-  Object.keys(selectedQuantities).forEach(key => delete selectedQuantities[key])
-  Object.keys(cartMap).forEach(key => delete cartMap[key])
-  Object.keys(equipmentRemarks).forEach(key => delete equipmentRemarks[key])
+  // Object.keys(selectedQuantities).forEach(key => delete selectedQuantities[key])
+  // Object.keys(cartMap).forEach(key => delete cartMap[key])
+  // Object.keys(equipmentRemarks).forEach(key => delete equipmentRemarks[key])
   touched.value = false
   showError.value = false
 }
@@ -858,6 +955,14 @@ watch(
   },
   { deep: true }
 )
+
+watch(agencyInput, (v) => { agencySearch.value = v || '' });
+watch(agencySearch, (v) => {
+  if (v !== agencyInput.value && agencyOptions.value.includes(v)) {
+    agencyInput.value = v;
+  }
+});
+
 </script>
 
 
@@ -1242,6 +1347,81 @@ watch(
   vertical-align: top;
   margin-left: 4px;
 }
+
+.date-range-row .date-range-group {
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.note-text {
+  font-size: 12px;
+  color: #666;
+  margin-top: 4px;
+  margin-left: 4px;
+  font-style: italic;
+}
+
+.agency-dropdown {
+  position: absolute;
+  top: 54px;
+  left: 0;
+  right: 0;
+  z-index: 11;
+  background: #fff;
+  border: 1.5px solid #ddd;
+  border-radius: 8px;
+  max-height: 170px;
+  overflow-y: auto;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.09);
+  margin-top: 0.2em;
+  padding: 0;
+  list-style: none;
+}
+.agency-dropdown li:hover {
+  background: #f5f7fa;
+}
+
+
+.equipment-table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+  margin-bottom: 10px;
+}
+.equipment-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+  background: #f9fafb;
+  border-radius: 8px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.03);
+}
+.equipment-table th, .equipment-table td {
+  border: 1px solid #e5e7eb;
+  padding: 8px 10px;
+  font-size: 15px;
+  text-align: left;
+  background: #fff;
+}
+.equipment-table th {
+  background: #d8dfe6;
+  font-weight: 600;
+}
+.equipment-table input {
+  padding: 6px 10px;
+  font-size: 14px;
+  border: 1.5px solid #c9d0df;
+  border-radius: 5px;
+  background: #fff;
+}
+.equipment-table input:disabled,
+.equipment-table input[readonly] {
+  background: #f4f6fa;
+}
+
+
+
+
 
 @media (max-width: 540px) {
   .scroll-x-container {

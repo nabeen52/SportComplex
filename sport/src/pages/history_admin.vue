@@ -46,12 +46,32 @@
 
       <div style="background-color: #dbe9f4;">
         <div class="histbody">
-          <h1 style="display: flex; justify-content: center;">History (Admin/Staff)</h1>
+<!-- ตรง h1 -->
+<h1 style="display: flex; justify-content: center;">System history</h1>
+
           <div class="history-filter">
             <button :class="{ active: historyFilter === 'all' }" @click="setHistoryFilter('all')">ทั้งหมด</button>
             <button :class="{ active: historyFilter === 'field' }" @click="setHistoryFilter('field')">สถานที่</button>
             <button :class="{ active: historyFilter === 'equipment' }" @click="setHistoryFilter('equipment')">อุปกรณ์กีฬา</button>
           </div>
+<div class="date-filter-row">
+  <label>ตั้งแต่</label>
+  <input
+    type="date"
+    v-model="dateFilterStart"
+    @change="onDateFilterChange"
+    :max="dateFilterEnd"
+  >
+  <label>ถึง</label>
+  <input
+    type="date"
+    v-model="dateFilterEnd"
+    @change="onDateFilterChange"
+    :min="dateFilterStart"
+  >
+</div>
+
+
           <div class="hist-grid" :class="{ 'sidebar-closed': isSidebarClosed }">
             <template v-for="group in paginatedGroups" :key="group.type + '_' + (group.items[0].booking_id || group.items[0].id)">
               
@@ -81,10 +101,15 @@
                       <span v-else>-</span>
                     </span>
                     <span class="hist-file">
-                      <button class="toggle-btn" @click="toggleExpand(group.items[0].id)">
-                        รายละเอียดไฟล์ ▾
-                      </button>
-                    </span>
+  <button class="toggle-btn" @click="toggleExpand(group.items[0].id)">
+    <i class="pi pi-paperclip"></i>
+  </button>
+  <button class="pdfmake-btn small-btn" @click="downloadBookingPdf(group.items[0])" style="margin-left:8px;" title="ดาวน์โหลด PDF">
+  <i class="pi pi-file-pdf"></i>
+</button>
+
+</span>
+
                     <span class="hist-action">
                       <button class="remark-btn" @click="showDetailGroup(group)">Detail</button>
                       <button v-if="group.items[0].status && group.items[0].status.toLowerCase() === 'approved'"
@@ -98,7 +123,6 @@
                     <div class="hist-file-detail-box" v-show="expandedRows.includes(group.items[0].id)">
                       <div class="hist-file-header">
                         <b>ไฟล์แนบ</b>
-                        <button class="pdfmake-btn" @click="exportPdf(group.items[0])">ดาวน์โหลด PDF ฟอร์ม</button>
                       </div>
                       <div v-if="Array.isArray(group.items[0].fileName) && group.items[0].fileName.length">
                         <table class="attached-files-table">
@@ -106,7 +130,7 @@
                             <tr>
                               <th>#</th>
                               <th>ชื่อไฟล์</th>
-                              <th>ดาวน์โหลด/เปิด</th>
+                              <th>ดาวน์โหลด</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -115,11 +139,13 @@
                               <td>{{ fname }}</td>
                               <td>
                                 <a
-                                  :href="`${API_BASE}/api/history/file/${group.items[0].id}?fileIdx=${idx}`"
-                                  target="_blank"
-                                  class="download-link"
-                                  download
-                                >ดาวน์โหลด/เปิด</a>
+  :href="`${API_BASE}/api/history/file/${group.items[0].id}?fileIdx=${idx}`"
+  target="_blank"
+  class="download-link"
+  download
+>
+  ดาวน์โหลด
+</a>
                               </td>
                             </tr>
                           </tbody>
@@ -174,11 +200,16 @@
                       <span v-else-if="item.status">- {{ item.status }}</span>
                       <span v-else>-</span>
                     </span>
-                    <span class="hist-file">
-                      <button class="toggle-btn" @click="toggleExpand(item.id)">
-                        รายละเอียดไฟล์ ▾
-                      </button>
-                    </span>
+                     <span class="hist-file">
+  <button class="toggle-btn" @click="toggleExpand(group.items[0].id)">
+    <i class="pi pi-paperclip"></i>
+  </button>
+  <button class="pdfmake-btn small-btn" @click="downloadBookingPdf(item)" style="margin-left:8px;" title="ดาวน์โหลด PDF">
+  <i class="pi pi-file-pdf"></i>
+</button>
+
+
+</span>
                     <span class="hist-action"></span>
                   </div>
                   <div v-for="item in group.items" :key="item.id + '-file-detail'">
@@ -186,7 +217,7 @@
                       <div class="hist-file-detail-box" v-show="expandedRows.includes(item.id)">
                         <div class="hist-file-header">
                           <b>ไฟล์แนบ</b>
-                          <button class="pdfmake-btn" @click="exportPdf(item)">ดาวน์โหลด PDF ฟอร์ม</button>
+                          
                         </div>
                         <div v-if="Array.isArray(item.attachment) && item.attachment.length">
                           <table class="attached-files-table">
@@ -194,7 +225,7 @@
                               <tr>
                                 <th>#</th>
                                 <th>ชื่อไฟล์</th>
-                                <th>ดาวน์โหลด/เปิด</th>
+                                <th>ดาวน์โหลด</th>
                               </tr>
                             </thead>
                             <tbody>
@@ -207,7 +238,7 @@
                                     target="_blank"
                                     class="download-link"
                                     download
-                                  >ดาวน์โหลด/เปิด</a>
+                                  >ดาวน์โหลด</a>
                                 </td>
                               </tr>
                             </tbody>
@@ -317,50 +348,119 @@ export default {
       polling: null,
       isMobile: window.innerWidth <= 600,
       API_BASE: API_BASE,
+      dateFilterStart: '',
+dateFilterEnd: '',
+dateFilterApplied: false,
+dateFilterStart: '',
+    dateFilterEnd: '',
+
     }
   },
   computed: {
     fieldGroups() {
-      return this.filteredHistory
-        .filter(h => h.type === 'field')
-        .map(item => ({ type: 'field', items: [item] }))
-    },
-    equipmentGroups() {
-      const eqList = this.filteredHistory.filter(h => h.type === 'equipment')
-      const groups = {}
-      for (const item of eqList) {
-        const key = item.booking_id || `single_${item.id}`
-        if (!groups[key]) groups[key] = []
-        groups[key].push(item)
-      }
-      return Object.values(groups).map(list => ({ type: 'equipment', items: list }))
-    },
-    allGroupsSorted() {
-      const all = [
-        ...this.fieldGroups.map(g => ({
-          ...g,
-          sortDate: new Date(g.items[0].approvedAt || g.items[0].date || 0)
-        })),
-        ...this.equipmentGroups.map(g => ({
-          ...g,
-          sortDate: getEquipmentGroupSortDate(g)
-        })),
-      ]
-      return all.sort((a, b) => b.sortDate - a.sortDate)
-    },
+    return this.filteredHistory
+      .filter(h => h.type === 'field')
+      .map(item => ({ type: 'field', items: [item] }))
+  },
+  equipmentGroups() {
+    const eqList = this.filteredHistory.filter(h => h.type === 'equipment')
+    const groups = {}
+    for (const item of eqList) {
+      const key = item.booking_id || `single_${item.id}`
+      if (!groups[key]) groups[key] = []
+      groups[key].push(item)
+    }
+    return Object.values(groups).map(list => ({ type: 'equipment', items: list }))
+  },
+  allGroupsSorted() {
+    const all = [
+      ...this.fieldGroups.map(g => ({
+        ...g,
+        sortDate: new Date(g.items[0].approvedAt || g.items[0].date || 0)
+      })),
+      ...this.equipmentGroups.map(g => ({
+        ...g,
+        sortDate: getEquipmentGroupSortDate(g)
+      })),
+    ]
+    return all.sort((a, b) => b.sortDate - a.sortDate)
+  },
+  paginatedGroups() {
+    const start = (this.currentPage - 1) * this.itemsPerPage
+    return this.allGroupsSorted.slice(start, start + this.itemsPerPage)
+  },
+  totalPages() {
+    return Math.ceil(this.allGroupsSorted.length / this.itemsPerPage) || 1
+  },
+    filteredHistory() {
+    let arr = this.historyFilter === 'all'
+      ? this.historys
+      : this.historys.filter(h => h.type === this.historyFilter);
+
+    if (this.dateFilterStart) {
+      const start = new Date(this.dateFilterStart + 'T00:00:00');
+      arr = arr.filter(h => {
+        const d = h.approvedAt || h.returnedAt || h.date;
+        if (!d) return false;
+        return new Date(d) >= start;
+      });
+    }
+    if (this.dateFilterEnd) {
+      const end = new Date(this.dateFilterEnd + 'T23:59:59');
+      arr = arr.filter(h => {
+        const d = h.approvedAt || h.returnedAt || h.date;
+        if (!d) return false;
+        return new Date(d) <= end;
+      });
+    }
+    return arr;
+  },
+
     paginatedGroups() {
       const start = (this.currentPage - 1) * this.itemsPerPage
       return this.allGroupsSorted.slice(start, start + this.itemsPerPage)
-    },
-    filteredHistory() {
-      if (this.historyFilter === 'all') return this.historys
-      return this.historys.filter(h => h.type === this.historyFilter)
     },
     totalPages() {
       return Math.ceil(this.allGroupsSorted.length / this.itemsPerPage) || 1
     },
   },
   methods: {
+    onDateFilterChange() {
+    this.currentPage = 1 // ถ้าใช้ pagination
+    // filter จะถูกทำงานอัตโนมัติผ่าน computed
+  },
+  
+  async downloadBookingPdf(item) {
+    try {
+      const bookingId = item.booking_id || item.booking_field_id || item.booking_equipment_id;
+      if (!bookingId) {
+        Swal.fire('ผิดพลาด', 'ไม่พบ booking_id สำหรับรายการนี้', 'error');
+        return;
+      }
+
+      // ขอไฟล์ PDF จาก backend เป็น blob
+      const response = await axios.get(`${API_BASE}/api/history/pdf/${bookingId}`, {
+        responseType: 'blob'
+      });
+
+      // สร้าง URL สำหรับดาวน์โหลดไฟล์
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+
+      // สร้างลิงก์ดาวน์โหลดชั่วคราวและคลิก
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `booking-${bookingId}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+
+    } catch (error) {
+      console.error(error);
+      Swal.fire('ผิดพลาด', 'ไม่สามารถดาวน์โหลดไฟล์ PDF ได้', 'error');
+    }
+  },
     toggleSidebar() {
       this.isSidebarClosed = !this.isSidebarClosed
     },
@@ -368,6 +468,17 @@ export default {
       this.historyFilter = type
       this.currentPage = 1
     },
+    applyDateFilter() {
+  this.currentPage = 1;
+  this.dateFilterApplied = true;
+},
+clearDateFilter() {
+  this.dateFilterStart = '';
+  this.dateFilterEnd = '';
+  this.dateFilterApplied = false;
+  this.currentPage = 1;
+},
+
     nextPage() {
       if (this.currentPage < this.totalPages) this.currentPage++
     },
@@ -380,12 +491,12 @@ export default {
       else this.expandedRows.push(id)
     },
     formatDate(date) {
-      if (!date) return ''
-      const d = new Date(date)
-      return `${d.getDate().toString().padStart(2, '0')}/${
-        (d.getMonth() + 1).toString().padStart(2, '0')
-      }/${(d.getFullYear() % 100).toString().padStart(2, '0')}`
-    },
+  if (!date) return ''
+  const d = new Date(date)
+  return `${d.getDate().toString().padStart(2, '0')}/${
+    (d.getMonth() + 1).toString().padStart(2, '0')
+  }/${d.getFullYear()}`
+},
     showDetailGroup(group) {
       let html = ''
       if (group.type === 'field') {
@@ -1105,6 +1216,20 @@ doc.text(`โทร ${data.tel || '-'}`, 430, 100);
 
 
 <style scoped>
+
+.small-btn, .pdfmake-btn, .toggle-btn, .download-link {
+  font-size: 0.89rem !important;
+  padding: 5px 10px !important;
+  min-height: 26px !important;
+  border-radius: 5px !important;
+  line-height: 1.2 !important;
+}
+.pdfmake-btn i,
+.toggle-btn i,
+.download-link i {
+  font-size: 1.13em;
+}
+
 .histbody {
   width: 100%;
   min-height: 100vh;
@@ -1273,7 +1398,7 @@ doc.text(`โทร ${data.tel || '-'}`, 430, 100);
   font-weight: 500;
 }
 .pdfmake-btn {
-  background-color: #11ff00;
+  background-color: #ff2600;
   color: #fff;
   border: none;
   border-radius: 6px;
@@ -1284,7 +1409,7 @@ doc.text(`โทร ${data.tel || '-'}`, 430, 100);
   font-weight: 500;
 }
 .pdfmake-btn:hover {
-  background-color: #099710df;
+  background-color: #970909df;
 }
 .pagination-control {
   display: flex;
@@ -1352,6 +1477,33 @@ doc.text(`โทร ${data.tel || '-'}`, 430, 100);
   text-align: left;
   font-size: 1em;
 }
+.date-filter-row {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 12px;
+  margin-right: 18px;
+}
+.date-filter-row label { font-weight: 500; }
+.date-filter-row input[type="date"] {
+  border-radius: 7px;
+  border: 1px solid #a5b4fc;
+  padding: 4px 7px;
+  font-size: 1em;
+}
+.date-filter-row button {
+  border-radius: 6px;
+  border: none;
+  padding: 5px 13px;
+  background: #1d4ed8;
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.16s;
+}
+.date-filter-row button:hover { background: #25396f; }
+
 .attached-files-table {
   width: 100%;
   border-collapse: collapse;
@@ -1402,7 +1554,7 @@ doc.text(`โทร ${data.tel || '-'}`, 430, 100);
 
 /* toggle/cancel */
 .toggle-btn {
-  background: #2563eb;
+  background: #5deb2593;
   color: #fff;
   border: none;
   border-radius: 6px;
@@ -1411,7 +1563,7 @@ doc.text(`โทร ${data.tel || '-'}`, 430, 100);
   font-weight: 500;
 }
 .toggle-btn:hover {
-  background: #1e40af;
+  background: #0e5017c5;
 }
 .cancel-btn {
   background-color: #f59e42;

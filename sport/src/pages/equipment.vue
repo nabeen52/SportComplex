@@ -58,18 +58,6 @@
   </div>
 </header>
 
-
-      <!-- แถบประกาศ slide-down -->
-      <!-- <transition name="slide-down">
-        <div class="announcement-bar" v-if="showAnnouncementBar">
-          <i class="pi pi-megaphone announcement-icon"></i>
-          <div class="announcement-bar-text">{{ announcement }}</div>
-          <button class="close-announcement-btn" @click="showAnnouncementBar = false">
-            <i class="pi pi-times" style="color: red;"></i>
-          </button>
-        </div>
-      </transition> -->
-
       <!-- Body -->
       <div style="background-color: #dbe9f4;">
         <h1 style="display: flex; justify-content: center;">อุปกรณ์กีฬา (Equipment)</h1>
@@ -218,9 +206,10 @@ async function confirmToggle(item) {
   display: flex;
   flex-wrap: wrap;
   gap: 2rem;
-  justify-content: flex-start;
+  justify-content: center; /* เปลี่ยนจาก flex-start เป็น center */
   padding: 1rem 70px;
 }
+
 .equipment-card {
   background-color: white;
   border-radius: 16px;

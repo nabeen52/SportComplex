@@ -127,12 +127,9 @@
     <div style="text-align:center; width:100%;">{{ group.items[0].name }}</div>
   </template>
   <template v-else>
-    <div>
-      <ul style="padding-left: 20px; margin: 0;">
-        <li v-for="item in group.items" :key="item.id" style="font-size: 0.9rem; text-align:center;">
-          {{ item.name }}
-        </li>
-      </ul>
+    <div style="text-align:center;">
+      <!-- รวมชื่อและจำนวนใน 1 บรรทัด -->
+      {{ group.items.map(item => item.name).join(', ') }}
     </div>
   </template>
 </td>
@@ -142,11 +139,9 @@
     เวลา: {{ formatTimeRange(group.items[0].startTime, group.items[0].endTime) }}
   </template>
   <template v-else-if="group.type === 'equipment'">
-    <ul style="list-style:none; padding:0; margin:0;">
-      <li v-for="item in group.items" :key="item.id">
-        {{ item.quantity || '-' }}
-      </li>
-    </ul>
+    <span>
+  {{ group.items.map(item => item.quantity || '-').join(', ') }}
+</span>
   </template>
 </td>
       <td style="padding: 8px; text-align: center;">
@@ -256,9 +251,11 @@
           >
             <button
               @click="submitReturnPhoto"
+              :disabled="isSubmittingReturnPhoto"
               style="background: #22c55e; color: white; border: none; padding: 14px 48px; border-radius: 30px; font-weight: 700; font-size: 1.2rem; cursor: pointer;"
             >
-              ส่งรูปคืน
+              <span v-if="isSubmittingReturnPhoto">กำลังส่ง...</span>
+  <span v-else>ส่งรูปคืน</span>
             </button>
             <button
               @click="retakePhoto"
@@ -321,6 +318,7 @@ export default {
       cameraImage: null,
       returnGroupBookingId: null, // booking_id ของกลุ่มที่จะ return
       filterType: 'all', // 'all', 'field', 'equipment'
+       isSubmittingReturnPhoto: false, // <<== ตัวแปรป้องกันการส่งซ้ำ
     }
   },
   
@@ -350,15 +348,17 @@ groupedHistories() {
     groupMap[groupKey].items.push(item);
   });
 
-  // กรอง item ในแต่ละกลุ่ม: ถ้ามี returned ให้ตัด approved ทิ้ง
+  // ถ้า booking_id เดียวกัน มี status 'returned' อย่างน้อย 1 ชิ้น ให้โชว์เฉพาะ 'returned' เท่านั้น
   Object.values(groupMap).forEach(group => {
-    const hasReturned = group.items.some(item => item.status === 'Returned');
+    const hasReturned = group.items.some(item => (item.status || '').toLowerCase() === 'returned');
     if (hasReturned) {
-      group.items = group.items.filter(item => item.status !== 'Approved');
+      group.items = group.items.filter(item => (item.status || '').toLowerCase() === 'returned');
     }
   });
 
-  // ฟังก์ชันเลือกวันที่ "ใหม่สุด" ของกลุ่ม
+  
+
+  // ฟังก์ชันเลือกวันที่ "ใหม่สุด" ของกลุ่ม (เหมือนเดิม)
   function getGroupLatestDate(group) {
     const dates = group.items.map(it =>
       new Date(
@@ -378,6 +378,7 @@ groupedHistories() {
 
   return Object.values(groupMap).sort((a, b) => getGroupLatestDate(b) - getGroupLatestDate(a));
 },
+
 
 
 paginatedHistory() {
@@ -427,6 +428,33 @@ paginatedHistory() {
       }
       return '-';
     },
+    async downloadBookingPdf(bookingId) {
+    if (!bookingId) {
+      Swal.fire('ผิดพลาด', 'ไม่พบ booking_id สำหรับดาวน์โหลด PDF', 'error');
+      return;
+    }
+    try {
+      const response = await axios.get(`${API_BASE}/api/history/pdf`, {
+        params: { booking_id: bookingId },
+        responseType: 'blob'  // ให้ axios รู้ว่าเป็นไฟล์
+      });
+      
+      // สร้างลิงก์ดาวน์โหลด
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `booking_${bookingId}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      
+    } catch (err) {
+      Swal.fire('ผิดพลาด', 'ดาวน์โหลด PDF ไม่สำเร็จ', 'error');
+      console.error(err);
+    }
+  },
     formatDateOnly(dateStr) {
       const d = new Date(dateStr);
       if (isNaN(d.getTime())) return '-';
@@ -516,51 +544,57 @@ paginatedHistory() {
   });
 },
 
-
-
+async reloadHistories() {
+  try {
+    const userId = localStorage.getItem('user_id');
+    const res = await axios.get(`${API_BASE}/api/history?user_id=${userId}`);
+    this.histories = this.addSortDateToHistories(res.data);
+    this.currentPage = 1;
+  } catch (err) {
+    this.histories = [];
+  }
+},
     async cancelGroup(group) {
-      const confirmed = await Swal.fire({
-        title: 'ยืนยันการยกเลิกทั้งหมด?',
-        text: 'คุณแน่ใจหรือไม่ว่าต้องการยกเลิกการจองอุปกรณ์นี้ทั้งหมด?',
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#d33',
-        cancelButtonColor: '#9e9e9e',
-        confirmButtonText: 'ใช่, ยกเลิก!',
-        cancelButtonText: 'ไม่'
-      });
-      if (confirmed.isConfirmed) {
-        try {
-          await Promise.all(group.items.map(item =>
-            axios.delete(`${API_BASE}/api/history/${item.id}`)
-          ));
-          this.histories = this.histories.filter(h => !group.items.some(i => i.id === h.id));
-          Swal.fire('ยกเลิกแล้ว!', 'รายการของคุณถูกยกเลิกเรียบร้อยแล้ว', 'success');
-        } catch (err) {
-          Swal.fire('ผิดพลาด', 'ลบข้อมูลไม่สำเร็จ', 'error');
-        }
-      }
-    },
+  const confirmed = await Swal.fire({
+    title: 'ยืนยันการยกเลิกทั้งหมด?',
+    text: 'คุณแน่ใจหรือไม่ว่าต้องการยกเลิกการจองอุปกรณ์นี้ทั้งหมด?',
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: '#d33',
+    cancelButtonColor: '#9e9e9e',
+    confirmButtonText: 'ใช่, ยกเลิก!',
+    cancelButtonText: 'ไม่'
+  });
+  if (confirmed.isConfirmed) {
+    try {
+      await Promise.all(group.items.map(item =>
+        axios.delete(`${API_BASE}/api/history/${item.id}`)
+      ));
+      await this.reloadHistories(); // <<--- เพิ่มบรรทัดนี้
+      Swal.fire('ยกเลิกแล้ว!', 'รายการของคุณถูกยกเลิกเรียบร้อยแล้ว', 'success');
+    } catch (err) {
+      Swal.fire('ผิดพลาด', 'ลบข้อมูลไม่สำเร็จ', 'error');
+    }
+  }
+},
 
     async cancelItem(itemId) {
-  console.log("กำลังจะยกเลิก", itemId); // <-- เพิ่มตรงนี้
   const confirmed = await Swal.fire({
     title: 'ยืนยันการยกเลิกการจอง?',
-        text: 'คุณแน่ใจหรือไม่ว่าต้องการยกเลิกการจองสนาม?',
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#d33',
-        cancelButtonColor: '#3085d6',
-        confirmButtonText: 'ใช่, ยกเลิก!',
-        cancelButtonText: 'ไม่'
+    text: 'คุณแน่ใจหรือไม่ว่าต้องการยกเลิกการจองสนาม?',
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: '#d33',
+    cancelButtonColor: '#3085d6',
+    confirmButtonText: 'ใช่, ยกเลิก!',
+    cancelButtonText: 'ไม่'
   });
   if (confirmed.isConfirmed) {
     try {
       await axios.delete(`${API_BASE}/api/history/${itemId}`);
-      this.histories = this.histories.filter(h => h.id !== itemId);
+      await this.reloadHistories(); // <<--- เพิ่มบรรทัดนี้
       Swal.fire('ยกเลิกแล้ว!', 'รายการของคุณถูกยกเลิกเรียบร้อยแล้ว', 'success');
     } catch (err) {
-      console.log(err); // <-- ดู error
       Swal.fire('ผิดพลาด', 'ลบข้อมูลไม่สำเร็จ', 'error');
     }
   }
@@ -678,12 +712,12 @@ paginatedHistory() {
     confirmButtonColor: '#3085d6',
     didOpen: () => {
       // BIND CLICK ให้ปุ่ม PDF เฉพาะกรณีที่ปุ่มมีอยู่จริง
-      const pdfBtn = document.getElementById('pdf-btn');
-      if (pdfBtn) {
-        pdfBtn.addEventListener('click', () => {
-          this.exportPdf(group.items[0]);
-        });
-      }
+     const pdfBtn = document.getElementById('pdf-btn');
+    if (pdfBtn) {
+      pdfBtn.addEventListener('click', () => {
+        this.downloadBookingPdf(group.booking_id);
+      });
+    }
       // ฟังก์ชันดูรูปเต็มจอ
       window.__showFullReturnPhoto = (img) => {
         const imgWin = window.open("", "_blank");
@@ -707,461 +741,6 @@ paginatedHistory() {
       window.__showFullReturnPhoto = undefined;
     }
   });
-},
-
-
-
-
-
-
-
-
-  // ==== PDF DOWNLOAD BUTTON ====
-  async  exportPdf(item) {
-  // --------- ฟังก์ชันย่อยสำหรับ field ---------
-  function formatDate(date) {
-    if (!date) return '-';
-    if (typeof date === 'string' && date.includes('T')) {
-      const d = new Date(date);
-      if (!isNaN(d)) {
-        return `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`;
-      }
-      return date.split('T')[0].split('-').reverse().join('/');
-    }
-    if (typeof date === 'string' && date.match(/^\d{4}-\d{2}-\d{2}$/)) {
-      const [y, m, d] = date.split('-');
-      return `${d}/${m}/${y}`;
-    }
-    return date;
-  }
-  function formatTime(time) {
-    if (!time) return '-';
-    if (typeof time === 'string' && time.match(/^\d{2}:\d{2}/)) return time;
-    const t = new Date(`2000-01-01T${time}`);
-    if (!isNaN(t.getTime())) return t.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
-    return time;
-  }
-  function checkY(doc, y, minY = 50, maxY = 780) {
-    if (y > maxY) {
-      doc.addPage();
-      return minY;
-    }
-    return y;
-  }
-  function drawLines(doc, lines, x, y, lineHeight = 15, minY = 50, maxY = 780) {
-    for (const line of lines) {
-      y = checkY(doc, y, minY, maxY);
-      doc.text(line, x, y);
-      y += lineHeight;
-    }
-    return y;
-  }
-
-  const mainBookingId = item.booking_field_id || item.booking_equipment_id || item.booking_id;
-  const mainId = item.id || item._id;
-  if (!mainBookingId) {
-    Swal.fire('ผิดพลาด', 'ไม่พบ booking_id สำหรับรายการนี้', 'error');
-    return;
-  }
-
-  try {
-    if (item.type === 'field') {
-      // ------------------ FIELD (แบบใหม่) --------------------
-      const res = await axios.get(`${API_BASE}/api/booking_field?id=${mainBookingId}`);
-      let data;
-      if (Array.isArray(res.data)) {
-        data = res.data.find(d => String(d.booking_id) === String(mainBookingId));
-        if (!data && mainId) {
-          data = res.data.find(d => String(d._id) === String(mainId));
-        }
-        if (!data && res.data.length === 1) data = res.data[0];
-      } else {
-        data = res.data;
-      }
-
-      if (!data) {
-        Swal.fire('ไม่พบข้อมูล', 'ไม่พบข้อมูลการจอง', 'warning');
-        return;
-      }
-
-      const doc = new jsPDF({ unit: 'pt', format: 'a4' });
-      doc.setFont('Sarabun');
-
-      // ------- ใช้รูปแบบ field จาก form_field4 ---------
-      doc.setFont('Sarabun', 'bold');
-      doc.setFontSize(17);
-      doc.text('แบบฟอร์มขออนุมัติใช้สถานที่ ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง', 80, 48);
-
-      doc.setFont('Sarabun', 'normal');
-      doc.setFontSize(11);
-      doc.text('โทร 053-917820-1 | E-mail: sport-complex@mfu.ac.th', 180, 68);
-
-      doc.setFont('Sarabun', 'normal');
-      doc.setFontSize(12);
-      doc.text('เรื่อง  ขออนุมัติใช้สถานที่', 25, 121);
-      doc.text('เรียน  ผู้อำนวยการศูนย์กีฬา', 25, 146);
-
-      doc.setFontSize(12);
-
-      let y = 171;
-      y = checkY(doc, y);
-      const activityLines = doc.splitTextToSize('ด้วย ' + (data.agency || '-'), 500);
-      y = drawLines(doc, activityLines, 55, y);
-
-      const projectLines = doc.splitTextToSize('จะดำเนินกิจกรรม / โครงการ ' + (data.name_activity || '-'), 500);
-      y = drawLines(doc, projectLines, 25, y);
-
-      const reasonLabel = 'เหตุผลในการขอใช้คือ';
-      const reasonValue = data.reasons || '-';
-      y = checkY(doc, y);
-      doc.text(reasonLabel, 25, y);
-      y += 20;
-      const reasonsLines = doc.splitTextToSize(reasonValue, 480);
-      y = drawLines(doc, reasonsLines, 40, y);
-
-      y = checkY(doc, y);
-      doc.text(`ในวันที่ ${formatDate(data.since) || '-'}`, 25, y + 10);
-      doc.text(`ถึงวันที่ ${formatDate(data.uptodate) || '-'}`, 175, y + 10);
-      doc.text(`ตั้งแต่เวลา ${formatTime(data.since_time) || '-'} น.`, 325, y + 10);
-      doc.text(`ถึงเวลา ${formatTime(data.until_thetime) || '-'} น.`, 475, y + 10);
-      y += 30;
-
-      y = checkY(doc, y);
-      doc.text(`จำนวนผู้เข้าร่วม ${data.participants || '-'}`, 25, y);
-      y += 25;
-
-      y = checkY(doc, y);
-      doc.text('และมีความประสงค์ขออนุญาตใช้ห้อง/สนาม ดังรายละเอียดต่อไปนี้', 25, y);
-      y += 30;
-
-      y = checkY(doc, y);
-      doc.setFontSize(12);
-      doc.setFont('Sarabun', 'bold');
-      doc.text('1. ข้อมูลผู้ใช้สถานที่', 25, y);
-      doc.setFont('Sarabun', 'normal');
-      y += 25;
-
-      const buildingLines = doc.splitTextToSize('อาคาร ' + (data.building || '-'), 200);
-      const zoneLines = doc.splitTextToSize('ระบุหมายเลขพื้นที่/ห้องที่ต้องการใช้ ' + (data.zone || '-'), 250);
-      y = checkY(doc, y);
-      drawLines(doc, buildingLines, 55, y);
-      drawLines(doc, zoneLines, 280, y);
-      y += Math.max(buildingLines.length, zoneLines.length) * 15;
-
-      y = checkY(doc, y);
-      doc.setFont('Sarabun', 'bold');
-      doc.text('2. ขออนุญาตใช้ระบบสาธารณูปโภค', 25, y + 10);
-      doc.setFont('Sarabun', 'normal');
-      y += 30;
-
-      const airLines = doc.splitTextToSize(`เปิดเครื่องปรับอากาศตั้งแต่ ${data.turnon_air || '-'} น. ถึง ${data.turnoff_air || '-'} น. ( เฉพาะอาคารเฉลิมพระเกียรติฯ)`, 500);
-      const lightLines = doc.splitTextToSize(`ไฟฟ้าส่องสว่างตั้งแต่ ${data.turnon_lights || '-'} น. ถึง ${data.turnoff_lights || '-'} น. ( เฉพาะอาคารเฉลิมพระเกียรติฯ)`, 500);
-      y = drawLines(doc, airLines, 55, y);
-      y = drawLines(doc, lightLines, 55, y);
-
-      const otherLines = doc.splitTextToSize('อื่นๆ ' + (data.other || '-'), 480);
-      y = drawLines(doc, otherLines, 55, y);
-
-      y = checkY(doc, y);
-      doc.setFont('Sarabun', 'bold');
-      doc.text('3.ขออนุมัติรายการประกอบอาคาร', 25, y + 10);
-      doc.setFont('Sarabun', 'normal');
-      y += 25;
-
-      const amphitheaterLines = doc.splitTextToSize('ดึงอัฒจันทร์ภายในอาคารเฉลิมพระเกียรติฯ ' + (data.amphitheater || '-'), 480);
-      y = drawLines(doc, amphitheaterLines, 55, y + 10);
-
-      const needEquipmentLines = doc.splitTextToSize('อุปกรณ์กีฬา (โปรดระบุรายการและจำนวน) ' + (data.need_equipment || '-'), 480);
-      y = drawLines(doc, needEquipmentLines, 55, y + 10);
-      y += 25;
-
-      // ----------------- เซ็นชื่อ ---------------------
-      const signNameHeight = 45;
-      if (y + signNameHeight > doc.internal.pageSize.getHeight()) {
-        doc.addPage();
-        y = 50;
-      }
-      let signY = y;
-
-      doc.setFontSize(12);
-      doc.text('ลงชื่อ................................................', 25, signY);
-      doc.text('ลงชื่อ................................................', 210, signY);
-      doc.text('ลงชื่อ................................................', 395, signY);
-
-      doc.text(`(  ${data.requester}  )`, 35, signY + 25);
-      doc.text('(..................................................)', 220, signY + 25);
-      doc.text('(..................................................)', 405, signY + 25);
-
-      doc.text('นักศึกษา/ผู้รับผิดชอบ', 65, signY + 45);
-      doc.text('อาจารย์/ที่ปรึกษาโครงการ', 235, signY + 45);
-      doc.text('คณะ/หัวหน้าหน่วยงาน', 434, signY + 45);
-
-      y = signY + 65; // กล่องกรอบล่าง
-
-      // ----------------- กรอบล่าง ---------------------
-      const signBoxHeight = 190;
-      if (y + signBoxHeight > doc.internal.pageSize.getHeight()) {
-        doc.addPage();
-        y = 50;
-      }
-
-      const boxY = y;
-      const pageWidth2 = doc.internal.pageSize.getWidth();
-      const boxWidth = (pageWidth2 - 40) / 3;
-      const boxHeight = signBoxHeight;
-      const marginLeft = 20;
-
-      for (let i = 0; i < 3; i++) {
-        doc.setDrawColor(30, 30, 30);
-        doc.setLineWidth(1);
-        doc.rect(marginLeft + i * boxWidth, boxY, boxWidth, boxHeight);
-      }
-
-      let x1 = marginLeft;
-      doc.setFont('Sarabun', 'bold');
-      doc.setFontSize(12);
-      doc.text('1. เลขานุการศูนย์กีฬา', x1 + 28, boxY + 22);
-      doc.setFont('Sarabun', 'normal');
-      doc.setFontSize(11.5);
-      doc.rect(x1 + 16, boxY + 40, 10, 10);
-      doc.text('เรียน หัวหน้าศูนย์กีฬา', x1 + 16 + 14, boxY + 50);
-      doc.rect(x1 + 16, boxY + 65, 10, 10);
-      doc.text('เพื่อโปรดพิจารณา', x1 + 16 + 14, boxY + 75);
-      doc.rect(x1 + 16, boxY + 90, 10, 10);
-      doc.text('อื่นๆ ___________________________', x1 + 16 + 14, boxY + 100);
-      doc.text('.......................................................', x1 + 12, boxY + 125);
-      doc.text('(....................................................)', x1 + 12, boxY + 150);
-      doc.text('วันที่ ..........................................', x1 + 16, boxY + 175);
-
-      let x2 = marginLeft + boxWidth;
-      doc.setFont('Sarabun', 'bold');
-      doc.setFontSize(12);
-      doc.text('2. หัวหน้าศูนย์กีฬา', x2 + 40, boxY + 22);
-      doc.setFont('Sarabun', 'normal');
-      doc.setFontSize(11.5);
-      doc.rect(x2 + 16, boxY + 40, 10, 10);
-      doc.text('เรียนท่านรองอธิการบดี', x2 + 16 + 14, boxY + 50);
-      doc.rect(x2 + 16, boxY + 65, 10, 10);
-      doc.text('เพื่อโปรดพิจารณา', x2 + 16 + 14, boxY + 75);
-      doc.rect(x2 + 16, boxY + 90, 10, 10);
-      doc.text('อื่นๆ ___________________________', x2 + 16 + 14, boxY + 100);
-      doc.text('.......................................................', x2 + 12, boxY + 125);
-      doc.text('(....................................................)', x2 + 12, boxY + 150);
-      doc.text('วันที่ ..........................................', x2 + 16, boxY + 175);
-
-      let x3 = marginLeft + boxWidth * 2;
-      doc.setFont('Sarabun', 'bold');
-      doc.setFontSize(12);
-      doc.text('3. อธิการบดี', x3 + 60, boxY + 22);
-      doc.setFont('Sarabun', 'normal');
-      doc.setFontSize(11.5);
-      doc.rect(x3 + 16, boxY + 40, 10, 10);
-      doc.text('อนุมัติข้อ', x3 + 16 + 14, boxY + 50);
-      doc.rect(x3 + 16, boxY + 65, 10, 10);
-      doc.text('อื่นๆ ___________________________', x3 + 16 + 14, boxY + 75);
-      doc.text('.......................................................', x3 + 12, boxY + 100);
-      doc.text('.......................................................', x3 + 12, boxY + 125);
-      doc.text('(....................................................)', x3 + 12, boxY + 150);
-      doc.text('วันที่ ..........................................', x3 + 16, boxY + 175);
-
-      for (let i = 0; i < 3; i++) {
-        doc.setDrawColor(30, 30, 30);
-        doc.setLineWidth(1);
-        doc.line(marginLeft + i * boxWidth, boxY + 32, marginLeft + (i + 1) * boxWidth, boxY + 32);
-      }
-
-      doc.save('user_form.pdf');
-      return;
-    }
-
-    // ------------------ EQUIPMENT (แบบเดิม) ------------------
-    if (item.type === 'equipment') {
-      const resBooking = await axios.get(`${API_BASE}/api/booking_equipment?id=${mainBookingId}`);
-      const bookingData = Array.isArray(resBooking.data) ? resBooking.data[0] : resBooking.data;
-      const itemRemarks = Array.isArray(bookingData.items)
-        ? bookingData.items.map(i => ({
-          name: i.item_name,
-          remark: i.remark || ''
-        }))
-        : [];
-
-      const historyRes = await axios.get(`${API_BASE}/api/history`);
-      const allItems = historyRes.data
-        .filter(d => String(d.booking_id) === String(mainBookingId))
-        .filter(d => !d.status || d.status.toLowerCase() !== 'returned');
-
-      const mergedItems = allItems.map((row, idx) => {
-        const matched = itemRemarks.find(it => it.name === row.name);
-        return {
-          ...row,
-          remark: matched ? matched.remark : '-'
-        };
-      });
-
-      const doc = new jsPDF({ unit: 'pt', format: 'a4' });
-      doc.setFont('Sarabun', 'normal');
-      const pageWidth = doc.internal.pageSize.getWidth();
-      const pageHeight = doc.internal.pageSize.getHeight();
-
-      // Header
-      doc.setFontSize(16);
-      const title = 'แบบฟอร์มการยืมอุปกรณ์/วัสดุ/ครุภัณฑ์ ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง';
-      const subTitle = 'โทร 053-917820-1 E-mail sport-complex@mfu.ac.th';
-      doc.text(title, (pageWidth - doc.getTextWidth(title)) / 2, 45);
-      doc.setFontSize(11);
-      doc.text(subTitle, (pageWidth - doc.getTextWidth(subTitle)) / 2, 69);
-
-      // ส่วนหัวด้านขวา
-      const headerRightX = pageWidth - 50;
-      const headerLines = [
-        "ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง",
-        `วันที่ ${formatDate(bookingData.start_date || bookingData.since || bookingData.date) || '-'}`,
-        `วันที่มารับของ ${formatDate(bookingData.receive_date) || '-'}`,
-        `เวลาที่มารับของ ${formatTime(bookingData.receive_time) || '-'} น.`
-      ];
-      let headerY = 100;
-      const lineSpacing = 20;
-      headerLines.forEach(line => {
-        const textWidth = doc.getTextWidth(line);
-        doc.text(line, headerRightX - textWidth, headerY);
-        headerY += lineSpacing;
-      });
-
-      // ฟังก์ชันเช็ค y (ขึ้นหน้าใหม่ถ้าจำเป็น)
-      function checkAddPage(nextY, space = 20) {
-        if (nextY + space > pageHeight - 60) {
-          doc.addPage();
-          return 80;
-        }
-        return nextY;
-      }
-
-      // ข้อมูลรายละเอียด
-      let y = headerY + 20;
-      const leftMargin = 50;
-      doc.setFont('Sarabun', 'normal');
-      doc.setFontSize(12);
-
-      // ข้อมูลทั่วไป
-      y = checkAddPage(y, 16);
-      doc.text(`ข้าพเจ้า ${bookingData.name || '-'}`, leftMargin, y);
-      doc.text(`รหัสนักศึกษา/พนักงาน ${bookingData.user_id || '-'}`, leftMargin + 270, y);
-
-      y += 28;
-      y = checkAddPage(y, 16);
-      doc.text(`หน่วยงาน ${bookingData.agency || '-'}`, leftMargin, y);
-
-      // เหตุผล (ข้อความยาว)
-      y += 28;
-      const reasonText = `เหตุผลในการขอใช้เพื่อ: ${bookingData.reason || '-'}`;
-      const reasonLines = doc.splitTextToSize(reasonText, pageWidth - 80);
-      doc.setFontSize(12);
-      for (const line of reasonLines) {
-        y = checkAddPage(y, 16);
-        doc.text(line, leftMargin - 20, y);
-        y += 20;
-      }
-
-      y = checkAddPage(y, 16);
-      doc.text(`สถานที่ใช้งาน: ${bookingData.location || '-'}`, leftMargin - 20, y);
-      y += 25;
-      y = checkAddPage(y, 16);
-
-      doc.text(
-        `ในวันที่ ${formatDate(bookingData.start_date || bookingData.since || bookingData.date) || '-'} ถึงวันที่ ${formatDate(bookingData.end_date || bookingData.uptodate) || '-'}`,
-        leftMargin - 20, y
-      );
-      y += 25;
-      y = checkAddPage(y, 16);
-
-      doc.text(`โดยมีรายการดังต่อไปนี้`, leftMargin - 20, y);
-      y += 25;
-
-      // ตาราง (autoTable จะจัดการขึ้นหน้าให้เอง)
-      autoTable(doc, {
-        startY: y,
-        head: [['ลำดับ', 'รายการ', 'จำนวน', 'หมายเหตุ']],
-        body: mergedItems.map((row, idx) => [
-          idx + 1,
-          row.name || '-',
-          row.quantity || '-',
-          row.remark || '-'
-        ]),
-        headStyles: { fillColor: [40, 63, 125], textColor: 255, font: 'Sarabun', halign: 'center', fontSize: 11 },
-        styles: { font: 'Sarabun', fontSize: 11, halign: 'center', cellPadding: 4 }
-      });
-
-      // กล่องลายเซ็น
-      let signY = doc.lastAutoTable.finalY + 40;
-      if (signY + 150 > pageHeight - 40) {
-        doc.addPage();
-        signY = 80;
-      }
-      const boxWidth = (pageWidth - 60) / 2;
-      const boxHeight = 110;
-      const marginLeft = 30;
-
-      // Draw outer rectangles
-      doc.setLineWidth(1);
-      doc.setDrawColor(50, 50, 50);
-      doc.rect(marginLeft, signY, boxWidth, boxHeight);
-      doc.rect(marginLeft + boxWidth, signY, boxWidth, boxHeight);
-
-      // Draw column titles
-      doc.setFont('Sarabun', 'bold');
-      doc.setFontSize(12);
-      doc.text('ความคิดเห็น/คำสั่ง/ผลการพิจารณา', marginLeft + boxWidth / 2, signY + 18, { align: 'center' });
-      doc.text('ผลการดำเนินการ/ผลการปฏิบัติงาน', marginLeft + boxWidth + boxWidth / 2, signY + 18, { align: 'center' });
-
-      // Thin lines under headers
-      doc.setDrawColor(200, 200, 200);
-      doc.setLineWidth(0.7);
-      doc.line(marginLeft + 10, signY + 25, marginLeft + boxWidth - 10, signY + 25);
-      doc.line(marginLeft + boxWidth + 10, signY + 25, marginLeft + 2 * boxWidth - 10, signY + 25);
-
-      doc.setFont('Sarabun', 'normal');
-      doc.setFontSize(11);
-
-      // Left box lines
-      doc.text('.................................................................', marginLeft + 17, signY + 40);
-      doc.text('.................................................................', marginLeft + 17, signY + 54);
-      doc.text('ลงชื่อ.............................................หัวหน้าส่วน', marginLeft + 17, signY + 70);
-      doc.text('วันที่................./................./.................', marginLeft + 22, signY + 100);
-
-      // Right box lines
-      doc.text('.................................................................', marginLeft + boxWidth + 17, signY + 40);
-      doc.text('.................................................................', marginLeft + boxWidth + 17, signY + 54);
-      doc.text('ลงชื่อ.................................ผู้ปฏิบัติงาน/ผู้รับผิดชอบ', marginLeft + boxWidth + 17, signY + 70);
-      doc.text('วันที่................./................./.................', marginLeft + boxWidth + 22, signY + 100);
-
-      // ===== ลายเซ็นผู้ขอ (ชิดซ้าย ลดขนาด ชื่ออยู่บรรทัดถัดไป) =====
-      const userName = bookingData.name || '-';
-      const signX = marginLeft + boxWidth + 20;
-      let signTextY = signY + boxHeight + 40;
-      if (signTextY + 32 > pageHeight - 40) {
-        doc.addPage();
-        signTextY = 80;
-      }
-      const nameWidth = doc.getTextWidth(userName);
-      const minParenWidth = 140;
-      const parenWidth = Math.max(nameWidth + 20, minParenWidth);
-      const parenDots = '.'.repeat(Math.round(parenWidth / doc.getTextWidth('.')));
-      const parenText = `( ${parenDots} )`;
-      doc.setFont('Sarabun', 'normal');
-      doc.setFontSize(11);
-      doc.text(`ลงชื่อ ${parenText}`, signX, signTextY, { align: 'left' });
-      doc.setFont('Sarabun', 'normal');
-      doc.setFontSize(12);
-      doc.text(userName, signX + 35, signTextY + 16, { align: 'left' });
-
-      doc.save('user_form.pdf');
-      return;
-    }
-
-  } catch (err) {
-    Swal.fire('ผิดพลาด', 'เกิดข้อผิดพลาดในการดาวน์โหลด PDF', 'error');
-    console.error(err);
-  }
 },
     async returnItemGroup(group) {
       this.showCamera = true;
@@ -1203,35 +782,47 @@ paginatedHistory() {
       this.showCamera = false;
       this.cameraImage = null;
       this.returnGroupBookingId = null;
-    },async submitReturnPhoto() {
-      if (!this.cameraImage || !this.returnGroupBookingId) return;
-      const ids = this.histories
-        .filter(h => h.booking_id === this.returnGroupBookingId)
-        .map(h => h.id);
-      try {
-        await Promise.all(
-          ids.map(id =>
-            axios.patch(
-              `${API_BASE}/api/history/${id}/request-return`,
-              {
-                attachment: this.cameraImage,
-                fileName: "return_photo.png",
-                fileType: "image/png"
-              }
-            )
-          )
-        );
-        this.histories = this.histories.map(h =>
-          ids.includes(h.id) ? { ...h, status: 'Return-pending' } : h
-        );
-        this.showCamera = false;
-        this.cameraImage = null;
-        this.returnGroupBookingId = null;
-        this.$swal('ส่งสำเร็จ!', 'ขอคืนอุปกรณ์เรียบร้อย', 'success');
-      } catch (err) {
-        this.$swal('ผิดพลาด', 'ส่งข้อมูลไม่สำเร็จ', 'error');
-      }
     },
+    
+    async submitReturnPhoto() {
+  if (this.isSubmittingReturnPhoto) return;
+  this.isSubmittingReturnPhoto = true;
+
+  if (!this.cameraImage || !this.returnGroupBookingId) {
+    this.isSubmittingReturnPhoto = false;
+    return;
+  }
+  const ids = this.histories
+    .filter(h => h.booking_id === this.returnGroupBookingId)
+    .map(h => h.id);
+  try {
+    // PATCH ทุก id ที่ booking_id ตรงกัน
+    if (ids.length > 0) {
+      await Promise.all(
+        ids.map(id =>
+          axios.patch(
+            `${API_BASE}/api/history/${id}/request-return`,
+            {
+              attachment: this.cameraImage,
+              fileName: "return_photo.png",
+              fileType: "image/png"
+            }
+          )
+        )
+      );
+      this.histories = this.histories.map(h =>
+        ids.includes(h.id) ? { ...h, status: 'Return-pending' } : h
+      );
+    }
+    this.showCamera = false;
+    this.cameraImage = null;
+    this.returnGroupBookingId = null;
+    this.$swal('ส่งสำเร็จ!', 'ขอคืนอุปกรณ์เรียบร้อย', 'success');
+  } catch (err) {
+    this.$swal('ผิดพลาด', 'ส่งข้อมูลไม่สำเร็จ', 'error');
+  }
+  this.isSubmittingReturnPhoto = false;
+},
 
     async fetchNotifications() {
   if (!this.userId) return;

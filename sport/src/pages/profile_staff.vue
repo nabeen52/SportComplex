@@ -13,9 +13,6 @@
         <router-link to="/equipment" active-class="active">
           <i class="pi pi-map-marker"></i> อุปกรณ์
         </router-link>
-        <!-- <router-link to="/return" active-class="active">
-          <i class="pi pi-box"></i> Return
-        </router-link> -->
         <router-link to="/history_staff" active-class="active">
           <i class="pi pi-history"></i> ประวัติการทำรายการ
         </router-link>
@@ -63,7 +60,6 @@
         <!-- Profile -->
         <div>
           <h1 style="padding-left: 50px;">Profile</h1>
-
           <div class="profile-scroll-container">
             <div class="profile-container">
               <div class="proinfo">
@@ -71,20 +67,35 @@
                 <img :src="profileImageUrl" alt="profile" class="profile-img" @error="imgError" />
 
                 <div class="profile-details" v-if="info">
-                 <p class="info-line">
-  <span class="label">Username :</span>
-  <span class="value">{{ info.name }}</span>
-</p>
-                  <p>ID : {{ info.id }}</p>
                   <p class="info-line">
-  <span class="label">Email :</span>
-  <span class="value">{{ info.email }}</span>
-</p>
+                    <span class="label">Username :</span>
+                    <span class="value">{{ info.name }}</span>
+                  </p>
+                  <div class="editable-row">
+  <span>ID :</span>
+  <template v-if="!editId">
+    <span>{{ info.id }}</span>
+    <button
+      v-if="canEditUserId"
+      class="edit-btn"
+      @click="startEdit"
+    >แก้ไข</button>
+  </template>
+  <template v-else>
+    <input v-model="editUserId" style="padding:6px 12px;font-size:1rem;border-radius:4px;border:1px solid #d1d5db;" />
+    <button class="save-btn" @click="saveUserId">บันทึก</button>
+    <button class="cancel-btn" @click="cancelEdit">ยกเลิก</button>
+  </template>
+</div>
+
+                  <p class="info-line">
+                    <span class="label">Email :</span>
+                    <span class="value">{{ info.email }}</span>
+                  </p>
                 </div>
               </div>
             </div>
           </div>
-
         </div>
         <div class="logout-container">
           <button @click="logout" class="logout-btn">ออกจากระบบ</button>
@@ -105,6 +116,7 @@
     </div>
   </div>
 </template>
+
 
 
 <script setup>
@@ -203,6 +215,49 @@ async function fetchNotifications() {
   } catch (err) {}
 }
 
+// ---------- ส่วนของ "แก้ไข user_id" ----------
+
+// ตัวแปรควบคุมโหมด edit และค่าใหม่
+const editId = ref(false)
+const editUserId = ref('')
+
+// เฉพาะ email @mfu.ac.th เท่านั้นถึงจะแก้ user_id ได้
+const canEditUserId = computed(() => {
+  return info.value?.email?.toLowerCase().endsWith('@mfu.ac.th')
+})
+
+function startEdit() {
+  editUserId.value = info.value.id
+  editId.value = true
+}
+function cancelEdit() {
+  editId.value = false
+}
+async function saveUserId() {
+  if (!editUserId.value.trim()) {
+    Swal.fire('กรุณากรอก user id', '', 'warning')
+    return
+  }
+  try {
+    // ตัวอย่าง API ปรับให้ตรง backend จริง
+    const res = await axios.patch(`${API_BASE}/api/users/update_id`, {
+      old_user_id: info.value.id,
+      new_user_id: editUserId.value.trim(),
+    }, { withCredentials: true })
+    if (res.data && res.data.success) {
+      info.value.id = editUserId.value.trim()
+      Swal.fire('บันทึกสำเร็จ', '', 'success')
+      editId.value = false
+    } else {
+      Swal.fire('เกิดข้อผิดพลาด', res.data?.message || '', 'error')
+    }
+  } catch (e) {
+    Swal.fire('เกิดข้อผิดพลาด', e.response?.data?.message || e.message, 'error')
+  }
+}
+
+// ---------- END ส่วนของ "แก้ไข user_id" ----------
+
 onMounted(async () => {
   // ดึง user profile สดใหม่เสมอ
   try {
@@ -230,11 +285,10 @@ onMounted(async () => {
 onUnmounted(() => {
   clearInterval(polling)
   window.removeEventListener('resize', checkMobile)
-}
+})
 
-
-)
 </script>
+
 
 
 <style scoped>
@@ -410,6 +464,50 @@ onUnmounted(() => {
   gap: 6px;
   margin: 4px 0;
 }
+
+.edit-btn, .save-btn, .cancel-btn {
+  margin-left: 8px;
+  background: #f59e42;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 18px;
+  
+  cursor: pointer;
+  transition: background 0.2s;
+  /* ขนาดเท่ากันทุกปุ่ม */
+  min-width: 80px;
+  min-height: 20px;
+  box-sizing: border-box;
+  outline: none;
+  display: inline-block;
+}
+
+.save-btn { background: #22c55e; }
+.save-btn:hover { background: #15803d; }
+
+.cancel-btn { background: #ef4444; }
+.cancel-btn:hover { background: #dc2626; }
+
+.edit-btn { background: #f59e42; }
+.edit-btn:hover { background: #ea580c; }
+
+/* เพิ่ม gap ระหว่าง input กับปุ่ม */
+
+
+.editable-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: nowrap;
+  /* ป้องกันเคาะขึ้นบรรทัด */
+}
+.editable-row > * {
+  white-space: nowrap;
+}
+
+
+
 
 /* ทำให้แสดงบรรทัดเดียวเฉพาะ desktop */
 @media screen and (min-width: 601px) {

@@ -66,11 +66,13 @@
         </div>
       </div>
 
-      <div>
-         <div class="form-container">
+
+      <div class="scroll-x-container">
+
+        <div class="form-container">
           <div class="form-header">
             <h3>แบบฟอร์มขออนุมัติใช้สถานที่ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง</h3>
-            <p>โทร 053-917820-1 E-mail Sport-complex@mfu.ac.th</p>
+            <p>โทร 053-917-8201 E-mail Sport-complex@mfu.ac.th</p>
           </div>
           <form @submit.prevent="handleSubmit" enctype="multipart/form-data" class="booking-form">
             <div class="form-grid">
@@ -84,9 +86,9 @@
                   type="text"
                   :class="inputClass('aw')"
                   v-model="formData.aw"
-                  maxlength="10"
                   @input="onlyAwInput"
                 />
+
               </div>
               <div class="form-row">
                 <label>
@@ -100,53 +102,57 @@
                   เบอร์โทรติดต่อ
                   <span v-if="showValidate && missingFields.tel" class="required-star">*</span>
                 </label>
-                <input
-                  type="text"
-                  :class="inputClass('tel')"
-                  v-model="formData.tel"
-                  maxlength="10"
-                  @input="onlyNumbersLimit('tel')"
-                />
+              <input
+                type="text"
+                :class="inputClass('tel')"
+                v-model="formData.tel"
+                maxlength="10"
+                @input="onlyTelNumbers"
+              />
               </div>
-              <div class="form-row">
-  <label>
-    ชื่อหน่วยงาน
-    <span v-if="showValidate && missingFields.agency" class="required-star">*</span>
-  </label>
-  <div style="display:flex;gap:6px;align-items:center;">
-    <input
-      class="custom-input"
-      list="agency-list"
-      v-model="agencyInput"
-      placeholder="ค้นหาหรือเลือกหน่วยงาน"
-      @change="handleAgencyChange"
-      :readonly="isAgencySelected"
-      :class="{ 'is-invalid': showValidate && missingFields.agency }"
-      style="flex:1"
-    />
-    <button
-      v-if="isAgencySelected"
-      type="button"
-      @click="clearAgency"
-      style="background:#eee;padding:3px 10px;border-radius:6px;border:none;cursor:pointer"
-      title="ลบ"
-    >ลบ</button>
-    <datalist id="agency-list">
-      <option v-for="option in agencyOptions" :key="option" :value="option" />
-    </datalist>
-  </div>
+
+              <div class="form-row" style="position:relative;">
+          <label>
+            ชื่อหน่วยงาน
+            <span v-if="touched && (showError && !agencyInput)" style="color:red">*</span>
+          </label>
+          <input
+            class="custom-input"
+            type="text"
+            v-model="agencySearch"
+            @input="filterAgency"
+            @focus="onAgencyFocus"
+            @blur="onAgencyBlur"
+            :readonly="isFormLocked || (isAgencySelected && agencyInput)"
+            placeholder="ค้นหาหรือเลือกหน่วยงาน"
+            autocomplete="off"
+            :class="{ 'is-invalid': touched && showError && !agencyInput }"
+            style="flex:1"
+          />
+
+  <ul v-if="agencyDropdownOpen && filteredAgencyOptions.length" class="agency-dropdown">
+    <li
+      v-for="option in filteredAgencyOptions"
+      :key="option"
+      @mousedown.prevent="selectAgency(option)"
+      style="cursor:pointer;padding:7px 16px;"
+    >{{ option }}</li>
+  </ul>
 </div>
+
+
 <div class="form-row" v-if="agencyInput === 'อื่นๆ'">
   <label>
     โปรดระบุหน่วยงาน
-    <span v-if="showValidate && missingFields.agencyOther" class="required-star">*</span>
+    <span v-if="touched && (showError && !customAgency)" style="color:red">*</span>
   </label>
   <input
     type="text"
     class="custom-input"
     v-model="customAgency"
     placeholder="กรอกชื่อหน่วยงาน"
-    :class="{ 'is-invalid': showValidate && missingFields.agencyOther }"
+    :readonly="isFormLocked"
+    :class="{ 'is-invalid': touched && showError && !customAgency }"
   />
 </div>
 <div class="form-row" v-if="agencyInput === 'อื่นๆ'">
@@ -156,8 +162,10 @@
     class="custom-input"
     v-model="otherAgencyDetail"
     placeholder="รายละเอียดเพิ่มเติม"
+    :readonly="isFormLocked"
   />
 </div>
+
 
               <div class="form-row">
                 <label>
@@ -207,35 +215,30 @@
                 </div>
                 <small class="note-text">* กรุณาจองก่อนใช้งานจริง 5 วัน</small>
               </div>
-              <div class="form-row">
-                <label>
-                  ตั้งแต่เวลา
-                  <span v-if="showValidate && missingFields.since_time" class="required-star">*</span>
-                </label>
-                <input type="time" :class="inputClass('since_time')" v-model="formData.since_time" />
-              </div>
-              <div class="form-row">
-                <label>
-                  ถึงเวลา
-                  <span v-if="showValidate && missingFields.until_thetime" class="required-star">*</span>
-                </label>
-                <input type="time" :class="inputClass('until_thetime')" v-model="formData.until_thetime" :min="minUntilTime" />
-              </div>
-              <div class="form-row">
-                <label>
-                  จำนวนผู้เข้าร่วม
-                  <span v-if="showValidate && missingFields.participants" class="required-star">*</span>
-                </label>
-                <input
-                  type="text"
-                  :class="inputClass('participants')"
-                  v-model="formData.participants"
-                  maxlength="10"
-                  @input="onlyNumbersLimit('participants')"
-                />
-              </div>
+              <div class="form-row time-range-row">
+  <label>
+    ช่วงเวลา
+    <span v-if="showValidate && (missingFields.since_time || missingFields.until_thetime)" class="required-star">*</span>
+  </label>
+  <div class="time-range-group">
+    <input
+      type="time"
+      :class="inputClass('since_time')"
+      v-model="formData.since_time"
+    />
+    <span>-</span>
+    <input
+      type="time"
+      :class="inputClass('until_thetime')"
+      v-model="formData.until_thetime"
+      :min="minUntilTime"
+    />
+  </div>
+</div>
 
+            
               <!-- เพิ่มใน <form> ตำแหน่งใกล้ๆ requester/proxyUserId -->
+<!-- ชื่อผู้ขอใช้สถานที่ / รหัสนักศึกษา/พนักงาน -->
 <div class="form-row">
   <label>
     ชื่อผู้ขอใช้สถานที่
@@ -254,10 +257,9 @@
   </div>
 </div>
 
-<!-- ช่องสำหรับรหัสผู้จอง (เดิม) -->
 <div class="form-row">
   <label>
-    รหัสนักศึกษา/รหัสพนักงาน
+    รหัสนักศึกษา/พนักงาน
     <span v-if="showValidate && missingFields.userId" class="required-star">*</span>
   </label>
   <input
@@ -269,7 +271,7 @@
   />
 </div>
 
-<!-- ✅ เพิ่มสองช่องใหม่สำหรับข้อมูลผู้ที่จองแทน -->
+<!-- เฉพาะถ้า isProxyBooking === true -->
 <div class="form-row" v-if="isProxyBooking">
   <label>
     ชื่อของผู้ที่จองแทน
@@ -295,6 +297,21 @@
     :class="{ 'input-error': showValidate && missingFields.proxyStudentId }"
     v-model="proxyStudentId"
     placeholder="กรอกรหัสนักศึกษาของผู้ที่คุณจองแทน"
+  />
+</div>
+
+<!-- จำนวนผู้เข้าร่วม (อยู่ท้าย) -->
+<div class="form-row">
+  <label>
+    จำนวนผู้เข้าร่วม
+    <span v-if="showValidate && missingFields.participants" class="required-star">*</span>
+  </label>
+  <input
+    type="text"
+    :class="inputClass('participants')"
+    v-model="formData.participants"
+    maxlength="10"
+    @input="onlyNumbersLimit('participants')"
   />
 </div>
 
@@ -486,11 +503,11 @@ function checkMobile() {
   isMobile.value = window.innerWidth <= 600
 }
 
-const isAgencySelected = computed(() =>
-  !!agencyInput.value &&
-  agencyOptions.value.includes(agencyInput.value) &&
-  agencyInput.value !== 'อื่นๆ'
-)
+// const isAgencySelected = computed(() =>
+//   !!agencyInput.value &&
+//   agencyOptions.value.includes(agencyInput.value) &&
+//   agencyInput.value !== 'อื่นๆ'
+// )
 
 function clearAgency() {
   agencyInput.value = ''
@@ -577,6 +594,40 @@ const isProxyBooking = ref(false)
 const proxyStudentName = ref('')
 const proxyStudentId = ref('')
 
+const agencySearch = ref('')
+const agencyDropdownOpen = ref(false)
+const isFormLocked = ref(false)
+
+function filterAgency() {
+  agencyDropdownOpen.value = true
+}
+function selectAgency(option) {
+  agencyInput.value = option
+  agencySearch.value = option
+  agencyDropdownOpen.value = false
+  handleAgencyChange()
+}
+function onAgencyFocus() {
+  agencyDropdownOpen.value = true
+  if (agencyInput.value) {
+    agencySearch.value = ''
+  }
+}
+function onAgencyBlur() {
+  setTimeout(() => {
+    agencyDropdownOpen.value = false
+  }, 200)
+}
+function handleAgencyChange() {
+  if (agencyInput.value !== 'อื่นๆ') {
+    customAgency.value = ''
+    otherAgencyDetail.value = ''
+  }
+}
+
+
+
+
 
 const formData = ref({
   aw: '', date: '', tel: '', name_activity: '', reasons: '',
@@ -594,6 +645,20 @@ const agencyOptions = ref([])
 const agencyInput = ref('')
 const customAgency = ref('')
 const otherAgencyDetail = ref('')
+
+const filteredAgencyOptions = computed(() => {
+  const search = agencySearch.value.trim().toLowerCase()
+  if (!search) return agencyOptions.value
+  return agencyOptions.value.filter(option =>
+    option.toLowerCase().includes(search)
+  )
+})
+
+const isAgencySelected = computed(() =>
+  !!agencyInput.value &&
+  agencyOptions.value.includes(agencyInput.value) &&
+  agencyInput.value !== 'อื่นๆ'
+)
 
 // Zone
 const hasZone = ref(false)
@@ -797,6 +862,15 @@ watch(proxyUserId, saveFormToSession)
 watch(isProxyBooking, saveFormToSession)
 watch(proxyStudentName, saveFormToSession)
 watch(proxyStudentId, saveFormToSession)
+watch(agencyInput, (v) => { agencySearch.value = v || '' })
+watch(agencySearch, (v) => {
+  if (v !== agencyInput.value && agencyOptions.value.includes(v)) {
+    agencyInput.value = v
+  }
+})
+
+
+
 watch(selectedFiles, () => {
   window._tempSelectedFiles = selectedFiles.value
   saveFormToSession()
@@ -906,12 +980,7 @@ async function goStep(targetStep) {
   }
 }
 const finalAgency = computed(() => (agencyInput.value === 'อื่นๆ' ? customAgency.value : agencyInput.value))
-function handleAgencyChange() {
-  if (agencyInput.value !== 'อื่นๆ') {
-    customAgency.value = ''
-    otherAgencyDetail.value = ''
-  }
-}
+
 const missingFields = ref({})
 const showValidate = ref(false)
 function inputClass(field) {
@@ -1063,9 +1132,7 @@ function onlyNumbersLimit(field) {
   formData.value[field] = formData.value[field].replace(/[^0-9]/g, '').slice(0, 10)
 }
 function onlyAwInput(e) {
-  // อนุญาตแค่เลขและ / - _
-  let val = e.target.value.replace(/[^0-9/_-]/g, '').slice(0, 10)
-  formData.value.aw = val
+  formData.value.aw = e.target.value.replace(/[A-Za-z\u0E00-\u0E7F]/g, '')
 }
 function shortenFileName(name) {
   if (!name) return ''
@@ -1462,6 +1529,80 @@ function viewFile(idx) {
   background: rgba(0,0,0,0.18);
   z-index: 1999;
 }
+
+.agency-dropdown {
+  position: absolute;
+  top: 54px;
+  left: 0;
+  right: 0;
+  z-index: 11;
+  background: #fff;
+  border: 1.5px solid #ddd;
+  border-radius: 8px;
+  max-height: 170px;
+  overflow-y: auto;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.09);
+  margin-top: 0.2em;
+  padding: 0;
+  list-style: none;
+}
+.agency-dropdown li:hover {
+  background: #f5f7fa;
+}
+
+/* ปรับช่วงวันที่ให้สองช่อง input ขยายออกเท่าๆกัน */
+.date-range-group {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: 10px; /* ระยะห่างระหว่างสองช่อง */
+}
+
+.date-range-group input[type="date"] {
+  flex: 1 1 0;
+  min-width: 0;
+  box-sizing: border-box;
+  /* เพิ่มความสูง/ขอบให้เหมือน input ช่องอื่น */
+  padding: 10px 14px;
+  border: 2px solid #94a3b8;
+  border-radius: 8px;
+  background-color: #f9fafb;
+  font-size: 14px;
+  transition: border 0.3s;
+}
+
+/* ขีดตรงกลาง */
+.date-range-group span {
+  margin: 0 5px;
+  font-size: 20px;
+}
+.time-range-group {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: 10px;
+}
+
+.time-range-group input[type="time"] {
+  flex: 1 1 0;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 10px 14px;
+  border: 2px solid #94a3b8;
+  border-radius: 8px;
+  background-color: #f9fafb;
+  font-size: 14px;
+  transition: border 0.3s;
+}
+
+/* ขีดกลาง */
+.time-range-group span {
+  margin: 0 5px;
+  font-size: 20px;
+}
+
+
+
 @media (max-width: 600px) {
   .main { 
     overflow-x: auto !important;

@@ -17,11 +17,8 @@
         <router-link to="/history_admin" active-class="active"><i class="pi pi-history"></i> History System</router-link>
       </nav>
     </aside>
-<div
-  v-if="isMobile && !isSidebarClosed"
-  class="sidebar-overlay"
-  @click="toggleSidebar"
-></div>
+
+    <div v-if="isMobile && !isSidebarClosed" class="sidebar-overlay" @click="toggleSidebar"></div>
 
     <div class="main">
       <header class="topbar">
@@ -43,7 +40,7 @@
         </div>
       </header>
       <div class="histbody">
-        <h1 style="padding-left: 50px; display: flex; justify-content: center;">Approve Field / Equipment</h1>
+        <h1 style="padding-left: 50px; display: flex; justify-content: center;">อนุมัติสนาม/อุปกรณ์</h1>
 
         <!-- ปุ่มกรอง -->
         <div class="history-filter" style="display: flex; justify-content: center;">
@@ -52,58 +49,74 @@
           <button :class="{ active: filterType === 'equipment' }" @click="filterType = 'equipment'">อุปกรณ์</button>
         </div>
 
-        <div class="hist-grid">
-          <div
-            class="hist-card"
-            v-for="group in filteredGrouped"
-            :key="group.type + '_' + (group.booking_id || group.items[0].id)"
-          >
-            <!-- Field -->
-            <template v-if="group.type === 'field'">
-              <div class="card-scroll-x">
-              <div class="hist-row">
-                <span class="item-name">{{ group.items[0].name }}</span>
-                <span class="item-amount">
-                  <template v-if="group.items[0].since && group.items[0].uptodate">
-                    <template v-if="group.items[0].since === group.items[0].uptodate">
-                      {{ formatDate(group.items[0].since) }}
+        <!-- ตารางอนุมัติ (table) -->
+        <div class="table-container">
+          <table class="approve-table">
+            <thead>
+              <tr>
+                <th>วันที่ทำรายการ</th>
+                <th>ประเภท</th>
+                <th>ชื่อ สนาม/อุปกรณ์</th>
+                <th>เวลา/จำนวน</th>
+                <th>การกระทำ</th>
+                <th>รายละเอียด</th>
+              </tr>
+            </thead>
+            <tbody>
+              <template v-for="group in filteredGrouped" :key="group.type + '_' + (group.booking_id || group.items[0].id)">
+                <!-- สนาม -->
+                <tr v-if="group.type === 'field'">
+                  <td>{{ formatDate(group.items[0].date) }}</td>
+                  <td>สนาม</td>
+                  <td>
+                    {{ group.items[0].name }}
+                    <template v-if="group.items[0].zone && group.items[0].zone !== '-' && group.items[0].zone !== ''">
+                      (โซน: {{ group.items[0].zone }})
                     </template>
-                    <template v-else>
-                      {{ formatDate(group.items[0].since) }} - {{ formatDate(group.items[0].uptodate) }}
-                    </template>
+                  </td>
+                  <td>
+                    <!-- แสดงเวลา ถ้ามีข้อมูล -->
+                    <template v-if="group.items[0].startTime && group.items[0].endTime">
+                    {{ group.items[0].startTime }} - {{ group.items[0].endTime }}
                   </template>
-                  <template v-else>-</template>
-                </span>
-                <span class="left status-group">
-                  <button class="detail-btn" @click="detailGroup(group)">Detail</button>
-                  <button class="approve-btn" @click="approveGroup(group)">Approve</button>
-                  <button class="cancel-btn" @click="cancelGroup(group)">Cancel</button>
-                </span>
-              </div>
-              </div>
-            </template>
-            <!-- Equipment กลุ่ม booking_id เดียวกัน -->
-            <template v-else>
-              <div class="hist-row" style="border-bottom:1px solid #eee;">
-                <span class="item-name" style="font-weight:600;">
-                  รายการอุปกรณ์  
-                </span>
-                <span class="item-amount" style="font-size:0.9em;">
-                 
-                </span>
-                <span class="status-group">
-                  <button class="detail-btn" @click="detailGroup(group)">Detail</button>
-                  <button class="approve-btn" @click="approveGroup(group)">Approve</button>
-                  <button class="cancel-btn" @click="cancelGroup(group)">Cancel</button>
-                </span>
-              </div>
-              <div v-for="(item, i) in group.items" :key="item.id" class="hist-row" style="border-bottom:1px dashed #ccc;">
-                <span class="item-name">อุปกรณ์ที่ {{ i+1 }}: {{ item.name }}</span>
-                <span class="item-amount">จำนวน: {{ item.quantity }}</span>
-                <span class="item-amount"></span>
-              </div>
-            </template>
-          </div>
+                    <template v-else>
+                      -
+                    </template>
+                  </td>
+                  <td>
+                    <button class="approve-btn" @click="approveGroup(group)">อนุมัติ</button>
+                    <button class="cancel-btn" @click="cancelGroup(group)">ไม่อนุมัติ</button>
+                  </td>
+                  <td>
+                    <button class="detail-btn" @click="detailGroup(group)">รายละเอียด</button>
+                  </td>
+                </tr>
+
+                <!-- อุปกรณ์ -->
+                <tr v-else>
+                  <td>{{ formatDate(group.items[0].date) }}</td>
+                  <td>อุปกรณ์</td>
+                  <td>
+                    <span v-for="(item, idx) in group.items" :key="item.id">
+                      {{ item.name }}<span v-if="idx < group.items.length - 1">, </span>
+                    </span>
+                  </td>
+                  <td>
+                    <span v-for="(item, idx) in group.items" :key="item.id">
+                      {{ item.quantity }}<span v-if="idx < group.items.length - 1">, </span>
+                    </span>
+                  </td>
+                  <td>
+                    <button class="approve-btn" @click="approveGroup(group)">อนุมัติ</button>
+                    <button class="cancel-btn" @click="cancelGroup(group)">ไม่อนุมัติ</button>
+                  </td>
+                  <td>
+                    <button class="detail-btn" @click="detailGroup(group)">รายละเอียด</button>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
         </div>
       </div>
       <footer class="foot">
@@ -119,6 +132,7 @@
     </div>
   </div>
 </template>
+
 
 <script>
 import Swal from 'sweetalert2'
@@ -168,6 +182,33 @@ export default {
     toggleSidebar() {
       this.isSidebarClosed = !this.isSidebarClosed
     },
+     async downloadBookingPdf(bookingId) {
+    if (!bookingId) {
+      Swal.fire('ผิดพลาด', 'ไม่พบ booking_id สำหรับดาวน์โหลด PDF', 'error');
+      return;
+    }
+    try {
+      const response = await axios.get(`${API_BASE}/api/history/pdf`, {
+        params: { booking_id: bookingId },
+        responseType: 'blob'  // ให้ axios รู้ว่าเป็นไฟล์
+      });
+      
+      // สร้างลิงก์ดาวน์โหลด
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `booking_${bookingId}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      
+    } catch (err) {
+      Swal.fire('ผิดพลาด', 'ดาวน์โหลด PDF ไม่สำเร็จ', 'error');
+      console.error(err);
+    }
+  },
     toggleNotifications() {
       this.showNotifications = !this.showNotifications;
       if (this.showNotifications) this.unreadCount = 0;
@@ -317,9 +358,13 @@ handleResize() {
       confirmButtonText: "ปิด",
       confirmButtonColor: "#3085d6",
       didOpen: () => {
-        document.getElementById('pdf-btn')?.addEventListener('click', () => {
-          this.exportPdf(group.items[0]);
-        });
+         // BIND CLICK ให้ปุ่ม PDF เฉพาะกรณีที่ปุ่มมีอยู่จริง
+     const pdfBtn = document.getElementById('pdf-btn');
+    if (pdfBtn) {
+      pdfBtn.addEventListener('click', () => {
+        this.downloadBookingPdf(group.booking_id);
+      });
+    }
       }
     });
   } else {
@@ -347,9 +392,11 @@ handleResize() {
       confirmButtonText: "ปิด",
       confirmButtonColor: "#3085d6",
       didOpen: () => {
-        document.getElementById('pdf-btn')?.addEventListener('click', () => {
-          this.exportPdf(group.items[0]);
-        });
+    document.getElementById('pdf-btn')?.addEventListener('click', () => {
+      // ส่ง booking_id ของ group ไปโหลด PDF
+      this.downloadBookingPdf(group.booking_id);
+    });
+
       }
     });
   }
@@ -851,12 +898,15 @@ doc.text(`โทร ${data.tel || '-'}`, 430, 100);
         zone: h.zone || "-",
         quantity: h.quantity || "-",
         date: h.date || "-",
+        startTime: h.startTime || "",
+        endTime: h.endTime || "",
       }));
 
       // 2.1 group: fields แต่ละรายการ, equipment ตาม booking_id
       const fields = bookings.filter(b => b.type === 'field').map(f => ({
         type: 'field',
-        items: [f]
+        items: [f],
+        booking_id: f.booking_id || ''  // เพิ่มบรรทัดนี้
       }));
 
       const equipmentsArr = bookings.filter(b => b.type === 'equipment');
@@ -963,7 +1013,7 @@ doc.text(`โทร ${data.tel || '-'}`, 430, 100);
 }
 .approve-btn {
   padding: 4px 10px;
-  background-color: #0cad00;
+  background-color: #80e479d8;
   color: white;
   border: none;
   border-radius: 6px;
@@ -972,20 +1022,21 @@ doc.text(`โทร ${data.tel || '-'}`, 430, 100);
   transition: background-color 0.3s;
 }
 .approve-btn:hover {
-  background-color: #25cd28;
+  background-color: #478a48;
 }
 .cancel-btn {
   padding: 4px 10px;
-  background-color: #d90004;
+  background-color: #f54c4fd5;
   color: white;
   border: none;
   border-radius: 6px;
   cursor: pointer;
   font-size: 0.8rem;
   transition: background-color 0.3s;
+  margin-left: 10px;
 }
 .cancel-btn:hover {
-  background-color: #d9363e;
+  background-color: #7a292d;
 }
 .detail-btn {
   padding: 4px 10px;
@@ -1010,6 +1061,35 @@ doc.text(`โทร ${data.tel || '-'}`, 430, 100);
 .sidebar {
   z-index: 1200;
 }
+
+.table-container {
+  padding: 0 70px;
+  overflow-x: auto;
+}
+.approve-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+.approve-table th, .approve-table td {
+  padding: 0.75rem 1rem;
+  text-align: center;
+  border-bottom: 1px solid #e2e8f0;
+}
+.approve-table th {
+  background: #1e3a8a;
+  color: #fff;
+  font-weight: bold;
+}
+.approve-table tr:last-child td {
+  border-bottom: none;
+}
+
+
+
+
 @media (max-width: 600px) {
  .item-name {
     white-space: normal !important;

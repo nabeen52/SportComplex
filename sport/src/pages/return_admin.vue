@@ -35,11 +35,12 @@
         </router-link>
       </nav>
     </aside>
-<div
-  v-if="isMobile && !isSidebarClosed"
-  class="sidebar-overlay"
-  @click="toggleSidebar"
-></div>
+
+    <div
+      v-if="isMobile && !isSidebarClosed"
+      class="sidebar-overlay"
+      @click="toggleSidebar"
+    ></div>
 
     <div class="main">
       <header class="topbar">
@@ -62,46 +63,41 @@
       </header>
 
       <div class="histbody">
-        <h1 style="padding-left: 50px; display: flex; justify-content: center;">Return Pending Equipment</h1>
-        <div class="hist-grid">
-          <div
-            class="hist-card"
-            v-for="(group, idx) in equipmentGroups"
-            :key="group.booking_id || 'noid_' + idx"
-          >
-            <!-- Mobile: 2 ช่อง (ชื่อ|ปุ่ม) -->
-<div 
-  class="hist-row hist-row-mobile" 
-  style="font-weight:600;" 
-  v-if="isMobile"
->
-  <span class="item-name">รายการอุปกรณ์</span>
-  <button class="return-btn" @click="returnGroup(group)">Return</button>
-</div>
+        <h1 style="padding-left: 50px; display: flex; justify-content: center;">
+          Return Pending Equipment
+        </h1>
 
-<!-- Desktop: 3 ช่อง (ชื่อ|ช่องว่าง|ปุ่ม) -->
-<div 
-  class="hist-row hist-row-desktop" 
-  style="font-weight:600;" 
-  v-else
->
-  <span class="item-name">รายการอุปกรณ์</span>
-  <span class="item-amount"></span>
-  <button class="return-btn" @click="returnGroup(group)">Return</button>
-</div>
-            <div
-              class="hist-row"
-              v-for="(item, i) in group.items"
-              :key="item.id"
-              style="border-bottom:1px dashed #ccc;"
-            >
-              <span class="item-name">{{ item.name }}</span>
-              <span class="item-amount">จำนวน: {{ item.amount }}</span>
-            </div>
-          </div>
-          <div v-if="equipmentGroups.length === 0" style="color:#999;padding:2em;text-align:center;">
-            ไม่พบรายการยืมหลายวันที่รอคืน
-          </div>
+        <div class="table-container">
+          <table class="approve-table">
+            <thead>
+              <tr>
+                <th>ชื่ออุปกรณ์</th>
+                <th>จำนวน</th>
+                <th>การกระทำ</th>
+              </tr>
+            </thead>
+            <tbody>
+              <template
+                v-for="group in equipmentGroups"
+                :key="group.booking_id || 'noid_' + group.items[0].id"
+              >
+                <tr v-for="item in group.items" :key="item.id">
+                  <td style="text-align:left;">{{ item.name }}</td>
+                  <td>{{ item.amount }}</td>
+                  <td>
+                    <button class="return-btn" @click="returnGroup(group)">
+                      Return
+                    </button>
+                  </td>
+                </tr>
+              </template>
+              <tr v-if="equipmentGroups.length === 0">
+                <td colspan="3" style="color:#999; text-align:center;">
+                  ไม่พบรายการยืมที่รอคืน
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
 
@@ -118,6 +114,7 @@
     </div>
   </div>
 </template>
+
 
 <script>
 import Swal from 'sweetalert2'
@@ -150,19 +147,23 @@ export default {
       return Object.values(map);
     }
   },
-  mounted() {
-    this.fetchEquipments();
-    this.fetchNotifications();
-    this.polling = setInterval(this.fetchNotifications, 30000);
-    // เพิ่ม event listener เพื่อปิดแจ้งเตือนเมื่อคลิกข้างนอก dropdown
+  async mounted() {
+    await this.fetchEquipments();
+    await this.fetchNotifications();
+    // Auto-refresh ทั้งอุปกรณ์และ noti ทุก 20 วินาที
+    this.polling = setInterval(async () => {
+      await this.fetchEquipments();
+      await this.fetchNotifications();
+    }, 20000);
+
     document.addEventListener('mousedown', this.handleClickOutside);
-     window.addEventListener('resize', this.handleResize);
-  this.handleResize();
+    window.addEventListener('resize', this.handleResize);
+    this.handleResize();
   },
   beforeUnmount() {
     clearInterval(this.polling);
     document.removeEventListener('mousedown', this.handleClickOutside);
-     window.removeEventListener('resize', this.handleResize);
+    window.removeEventListener('resize', this.handleResize);
   },
   methods: {
     toggleSidebar() {
@@ -172,10 +173,10 @@ export default {
       this.showNotifications = !this.showNotifications;
       if (this.showNotifications) this.unreadCount = 0;
     },
-     handleResize() {
-    this.isMobile = window.innerWidth <= 600;
-    if (!this.isMobile) this.isSidebarClosed = false;
-  },
+    handleResize() {
+      this.isMobile = window.innerWidth <= 600;
+      if (!this.isMobile) this.isSidebarClosed = false;
+    },
     closeNotifications() {
       this.showNotifications = false;
     },
@@ -191,28 +192,27 @@ export default {
         this.closeNotifications();
       }
     },
-    fetchEquipments() {
-      axios.get(`${API_BASE}/api/equipments/return-pending`)
-        .then(res => {
-          this.equipments = (res.data || [])
-            .filter(e =>
-              e.since && e.uptodate &&
-              String(e.since).trim() !== "" && String(e.uptodate).trim() !== ""
-            )
-            .map(e => ({
-              id: e._id?.$oid || e._id,
-              name: e.name,
-              amount: e.quantity,
-              booking_id: e.booking_id || null,
-              returnPhoto: Array.isArray(e.returnPhoto) ? e.returnPhoto[0] : e.returnPhoto, // รูปคืน
-              fileData: e.attachment || null,
-              fileName: e.fileName || null
-            }))
-        })
-        .catch(() => {
-          this.equipments = []
-          Swal.fire('Error', 'โหลดข้อมูลอุปกรณ์ล้มเหลว', 'error')
-        })
+    async fetchEquipments() {
+      try {
+        const res = await axios.get(`${API_BASE}/api/equipments/return-pending`)
+        this.equipments = (res.data || [])
+          .filter(e =>
+            e.since && e.uptodate &&
+            String(e.since).trim() !== "" && String(e.uptodate).trim() !== ""
+          )
+          .map(e => ({
+            id: e._id?.$oid || e._id,
+            name: e.name,
+            amount: e.quantity,
+            booking_id: e.booking_id || null,
+            returnPhoto: Array.isArray(e.returnPhoto) ? e.returnPhoto[0] : e.returnPhoto,
+            fileData: e.attachment || null,
+            fileName: e.fileName || null
+          }))
+      } catch (e) {
+        this.equipments = []
+        Swal.fire('Error', 'โหลดข้อมูลอุปกรณ์ล้มเหลว', 'error')
+      }
     },
     async fetchNotifications() {
       try {
@@ -246,7 +246,6 @@ export default {
     },
     async returnGroup(group) {
       const staffId = localStorage.getItem('user_id');
-      // เอารูปเดียว (จาก item แรกที่มี returnPhoto ในกลุ่ม)
       const itemWithPhoto = group.items.find(item => !!item.returnPhoto);
 
       let photoHtml = '';
@@ -357,7 +356,8 @@ export default {
           timer: 1500,
           showConfirmButton: false
         });
-        this.fetchEquipments();
+        // โหลดข้อมูลใหม่หลังจากคืนสำเร็จ
+        await this.fetchEquipments();
       } catch {
         Swal.fire('Error', 'คืนอุปกรณ์ไม่สำเร็จ', 'error');
       }
@@ -365,6 +365,7 @@ export default {
   }
 }
 </script>
+
 
 
 <style scoped>
@@ -427,6 +428,50 @@ export default {
 .return-btn:hover{
   background-color: #178129;
 }
+
+.table-container {
+  padding: 0 70px;
+  overflow-x: auto;
+}
+.approve-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+.approve-table th, .approve-table td {
+  padding: 0.75rem 1rem;
+  text-align: center;
+  border-bottom: 1px solid #e2e8f0;
+}
+.approve-table th {
+  background: #1e3a8a;
+  color: #fff;
+  font-weight: bold;
+}
+.approve-table tr:last-child td {
+  border-bottom: none;
+}
+.return-btn {
+  padding: 4px 10px;
+  background-color: #1eac36;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.75rem;
+  transition: background-color 0.3s;
+  max-width: 70px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.return-btn:hover{
+  background-color: #178129;
+}
+
+
 @media (max-width: 600px) {
   .histbody {
     padding: 14px 0 0 0 !important;

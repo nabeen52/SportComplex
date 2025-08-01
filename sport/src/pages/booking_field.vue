@@ -533,45 +533,13 @@ function goToBooking(field) {
 .notification-item {
   transition: background 0.3s, border-color 0.3s, color 0.3s;
 }
-@media (max-width: 540px) {
-  .notification-dropdown {
-    min-width: 220px;
-    max-width: 99vw;
-  }
-  .notification-dropdown li {
-    font-size: 0.99rem;
-    padding: 0.7em 0.7em;
-  }
-}
 .notification-backdrop {
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
   background: transparent;
   z-index: 1001; /* ต้องน้อยกว่า .notification-dropdown (1002) */
 }
-@media (max-width: 900px) {
-  .sidebar {
-    position: fixed;
-    left: 0;
-    top: 0;
-    width: 80vw;
-    max-width: 320px;
-    height: 100vh;
-    z-index: 3000;
-    transform: translateX(-100%);
-    transition: transform 0.3s;
-    box-shadow: 2px 0 12px rgba(0,0,0,0.11);
-  }
-  .sidebar.open {
-    transform: translateX(0);
-  }
-  .main {
-    margin-left: 0 !important;
-    max-width: 100vw;
-    min-width: 0;
-    padding: 8px;
-  }
-}
+
 .sidebar-mask {
   position: fixed;
   left: 0; right: 0; top: 0; bottom: 0;

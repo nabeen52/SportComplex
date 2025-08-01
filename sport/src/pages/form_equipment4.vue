@@ -259,234 +259,28 @@ function handleNext() {
   router.push('/home_user')
 }
 
-// --- exportPdf: วาดลายเซ็นและชื่อชิดซ้าย/ลดขนาด/บรรทัดถัดจาก "ลงชื่อ (....)" ---
+// ------------------ PDF MULTI-PAGE -------------------
+// --- ใน <script setup>
 async function exportPdf(item) {
-  if (item && item.value) item = item.value;
-  if (!item) {
-    Swal.fire('ผิดพลาด', 'ไม่พบข้อมูลที่จะออก PDF', 'error');
-    return;
-  }
-
-  function formatDate(date) {
-    if (!date) return '-';
-    if (typeof date === 'string' && date.includes('T')) {
-      const d = new Date(date);
-      if (!isNaN(d)) {
-        return `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`;
-      }
-      return date.split('T')[0].split('-').reverse().join('/');
-    }
-    if (typeof date === 'string' && date.match(/^\d{4}-\d{2}-\d{2}$/)) {
-      const [y, m, d] = date.split('-');
-      return `${d}/${m}/${y}`;
-    }
-    return date;
-  }
-
-  function formatTime(time) {
-    if (!time) return '-';
-    if (typeof time === 'string' && time.match(/^\d{2}:\d{2}/)) return time;
-    const t = new Date(`2000-01-01T${time}`);
-    if (!isNaN(t.getTime())) return t.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
-    return time;
-  }
-
-  const mainBookingId = item.booking_field_id || item.booking_equipment_id || item.booking_id;
-  if (!mainBookingId) {
+  const bookingId = item.booking_field_id || item.booking_equipment_id || item.booking_id;
+  if (!bookingId) {
     Swal.fire('ผิดพลาด', 'ไม่พบ booking_id สำหรับรายการนี้', 'error');
     return;
   }
-
   try {
-    const resBooking = await axios.get(`${API_BASE}/api/booking_equipment?id=${mainBookingId}`);
-    const bookingData = Array.isArray(resBooking.data) ? resBooking.data[0] : resBooking.data;
-    const itemRemarks = Array.isArray(bookingData.items)
-      ? bookingData.items.map(i => ({
-          name: i.item_name,
-          remark: i.remark || ''
-        }))
-      : [];
-
-    const historyRes = await axios.get(`${API_BASE}/api/history`);
-    const allItems = historyRes.data
-      .filter(d => String(d.booking_id) === String(mainBookingId))
-      .filter(d => !d.status || d.status.toLowerCase() !== 'returned');
-
-    const mergedItems = allItems.map((row, idx) => {
-      const matched = itemRemarks.find(it => it.name === row.name);
-      return {
-        ...row,
-        remark: matched ? matched.remark : '-'
-      };
+    const res = await axios.get(`${API_BASE}/api/history/pdf/${bookingId}`, {
+      responseType: 'blob'
     });
-
-    const doc = new jsPDF({ unit: 'pt', format: 'a4' });
-    doc.setFont('Sarabun', 'normal');
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const pageHeight = doc.internal.pageSize.getHeight();
-
-    // Header
-    doc.setFontSize(16);
-    const title = 'แบบฟอร์มการยืมอุปกรณ์/วัสดุ/ครุภัณฑ์ ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง';
-    const subTitle = 'โทร 053-917820-1 E-mail sport-complex@mfu.ac.th';
-    doc.text(title, (pageWidth - doc.getTextWidth(title)) / 2, 45);
-    doc.setFontSize(11);
-    doc.text(subTitle, (pageWidth - doc.getTextWidth(subTitle)) / 2, 69);
-
-    // ส่วนหัวด้านขวา
-    const headerRightX = pageWidth - 50;
-    const headerLines = [
-      "ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง",
-      `วันที่ ${formatDate(bookingData.start_date || bookingData.since || bookingData.date) || '-'}`,
-      `วันที่มารับของ ${formatDate(bookingData.receive_date) || '-'}`,
-      `เวลาที่มารับของ ${formatTime(bookingData.receive_time) || '-'} น.`
-    ];
-    let headerY = 100;
-    const lineSpacing = 20;
-    headerLines.forEach(line => {
-      const textWidth = doc.getTextWidth(line);
-      doc.text(line, headerRightX - textWidth, headerY);
-      headerY += lineSpacing;
-    });
-
-    // ฟังก์ชันเช็ค y (ขึ้นหน้าใหม่ถ้าจำเป็น)
-    function checkAddPage(nextY, space = 20) {
-      if (nextY + space > pageHeight - 60) {
-        doc.addPage();
-        return 80;
-      }
-      return nextY;
-    }
-
-    // ข้อมูลรายละเอียด
-    let y = headerY + 20;
-    const leftMargin = 50;
-    doc.setFont('Sarabun', 'normal');
-    doc.setFontSize(12);
-
-    // ข้อมูลทั่วไป
-    y = checkAddPage(y, 16);
-    doc.text(`ข้าพเจ้า ${bookingData.name || '-'}`, leftMargin, y);
-    doc.text(`รหัสนักศึกษา/พนักงาน ${bookingData.user_id || '-'}`, leftMargin + 270, y);
-
-    y += 28;
-    y = checkAddPage(y, 16);
-    doc.text(`หน่วยงาน ${bookingData.agency || '-'}`, leftMargin, y);
-
-    // เหตุผล (ข้อความยาว)
-    y += 28;
-    const reasonText = `เหตุผลในการขอใช้เพื่อ: ${bookingData.reason || '-'}`;
-    const reasonLines = doc.splitTextToSize(reasonText, pageWidth - 80);
-    doc.setFontSize(12);
-    for (const line of reasonLines) {
-      y = checkAddPage(y, 16);
-      doc.text(line, leftMargin-20, y);
-      y += 20;
-    }
-
-    y = checkAddPage(y, 16);
-    doc.text(`สถานที่ใช้งาน: ${bookingData.location || '-'}`, leftMargin-20, y);
-    y += 25;
-    y = checkAddPage(y, 16);
-
-    doc.text(
-      `ในวันที่ ${formatDate(bookingData.start_date || bookingData.since || bookingData.date) || '-'} ถึงวันที่ ${formatDate(bookingData.end_date || bookingData.uptodate) || '-'}`,
-      leftMargin-20, y
-    );
-    y += 25;
-    y = checkAddPage(y, 16);
-
-    doc.text(`โดยมีรายการดังต่อไปนี้`, leftMargin-20, y);
-    y += 25;
-
-    // ตาราง (autoTable จะจัดการขึ้นหน้าให้เอง)
-    autoTable(doc, {
-      startY: y,
-      head: [['ลำดับ', 'รายการ', 'จำนวน', 'หมายเหตุ']],
-      body: mergedItems.map((row, idx) => [
-        idx + 1,
-        row.name || '-',
-        row.quantity || '-',
-        row.remark || '-'
-      ]),
-      headStyles: { fillColor: [40, 63, 125], textColor: 255, font: 'Sarabun', halign: 'center', fontSize: 11 },
-      styles: { font: 'Sarabun', fontSize: 11, halign: 'center', cellPadding: 4 }
-    });
-
-    // กล่องลายเซ็น
-    let signY = doc.lastAutoTable.finalY + 40;
-    if (signY + 150 > pageHeight - 40) {
-      doc.addPage();
-      signY = 80;
-    }
-    const boxWidth = (pageWidth - 60) / 2;
-    const boxHeight = 110;
-    const marginLeft = 30;
-
-    // Draw outer rectangles
-    doc.setLineWidth(1);
-    doc.setDrawColor(50,50,50);
-    doc.rect(marginLeft, signY, boxWidth, boxHeight);
-    doc.rect(marginLeft + boxWidth, signY, boxWidth, boxHeight);
-
-    // Draw column titles
-    doc.setFont('Sarabun', 'bold');
-    doc.setFontSize(12);
-    doc.text('ความคิดเห็น/คำสั่ง/ผลการพิจารณา', marginLeft + boxWidth/2, signY + 18, { align: 'center' });
-    doc.text('ผลการดำเนินการ/ผลการปฏิบัติงาน', marginLeft + boxWidth + boxWidth/2, signY + 18, { align: 'center' });
-
-    // Thin lines under headers
-    doc.setDrawColor(200,200,200);
-    doc.setLineWidth(0.7);
-    doc.line(marginLeft + 10, signY + 25, marginLeft + boxWidth - 10, signY + 25);
-    doc.line(marginLeft + boxWidth + 10, signY + 25, marginLeft + 2*boxWidth - 10, signY + 25);
-
-    doc.setFont('Sarabun', 'normal');
-    doc.setFontSize(11);
-
-    // Left box lines
-    doc.text('.................................................................', marginLeft + 17, signY + 40);
-    doc.text('.................................................................', marginLeft + 17, signY + 54);
-    doc.text('ลงชื่อ.............................................หัวหน้าส่วน', marginLeft + 17, signY + 70);
-    doc.text('วันที่................./................./.................', marginLeft + 22, signY + 100);
-
-    // Right box lines
-    doc.text('.................................................................', marginLeft + boxWidth + 17, signY + 40);
-    doc.text('.................................................................', marginLeft + boxWidth + 17, signY + 54);
-    doc.text('ลงชื่อ.................................ผู้ปฏิบัติงาน/ผู้รับผิดชอบ', marginLeft + boxWidth + 17, signY + 70);
-    doc.text('วันที่................./................./.................', marginLeft + boxWidth + 22, signY + 100);
-
-    // ===== ลายเซ็นผู้ขอ (ชิดซ้าย ลดขนาด ชื่ออยู่บรรทัดถัดไป) =====
-    const userName = bookingData.name || '-';
-    const signX = marginLeft + boxWidth + 20;  // ชิดขวาของกล่อง
-    let signTextY = signY + boxHeight + 40; // ใต้กล่อง
-
-    // ถ้าพื้นที่ไม่พอสำหรับลายเซ็น+ชื่อ ขึ้นหน้าใหม่อีก
-    if (signTextY + 32 > pageHeight - 40) {
-      doc.addPage();
-      signTextY = 80;
-    }
-
-    // วาด "ลงชื่อ (......)"
-    const nameWidth = doc.getTextWidth(userName);
-    const minParenWidth = 140;
-    const parenWidth = Math.max(nameWidth + 20, minParenWidth);
-    const parenDots = '.'.repeat(Math.round(parenWidth / doc.getTextWidth('.')));
-    const parenText = `( ${parenDots} )`;
-
-    doc.setFont('Sarabun', 'normal');
-    doc.setFontSize(11);
-    doc.text(`ลงชื่อ ${parenText}`, signX, signTextY, { align: 'left' });
-
-    // ชื่ออยู่บรรทัดใหม่
-    doc.setFont('Sarabun', 'normal');
-    doc.setFontSize(12);
-    doc.text(userName, signX + 35, signTextY + 16, { align: 'left' });
-
-    doc.save('user_form.pdf');
+    const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `booking_${bookingId}.pdf`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
   } catch (err) {
-    Swal.fire('ผิดพลาด', 'เกิดข้อผิดพลาดในการดาวน์โหลด PDF', 'error');
-    console.error(err);
+    Swal.fire('ผิดพลาด', 'ไม่พบไฟล์ PDF', 'error');
   }
 }
 

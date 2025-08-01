@@ -51,18 +51,23 @@
       <div class="probody-flex">
         <!-- Left -->
         <div class="left-column">
-          <img :src="currentImage" alt="Field" class="field-image" />
-          <div class="calendar-wrapper">
-            <iframe
-              src="https://calendar.google.com/calendar/embed?src=gpt.lumduanfriend%40gmail.com&ctz=Asia%2FBangkok"
-              style="border: 0"
-              width="100%"
-              height="600"
-              frameborder="0"
-              scrolling="no"
-            ></iframe>
-          </div>
-        </div>
+  <img :src="currentImage" alt="Field" class="field-image" />
+  <!-- Overlay ชื่อโซนที่เลือก (จะแสดงเฉพาะเมื่อเลือก zone) -->
+  <div v-if="selectedZoneName" class="zone-overlay-label">
+    {{ selectedZoneName }}
+  </div>
+  <div class="calendar-wrapper">
+    <iframe
+      src="https://calendar.google.com/calendar/embed?src=gpt.lumduanfriend%40gmail.com&ctz=Asia%2FBangkok"
+      style="border: 0"
+      width="100%"
+      height="600"
+      frameborder="0"
+      scrolling="no"
+    ></iframe>
+  </div>
+</div>
+
         <!-- Right -->
         <div class="right-column" @click.self="clearZone">
           <!-- กรณีมีโซน -->
@@ -314,7 +319,9 @@ onMounted(async () => {
 .left-column {
   flex: 1 1 60%;
   max-width: 60%;
+  position: relative; /* เพิ่มตรงนี้ */
 }
+
 .right-column {
   flex: 1 1 35%;
   max-width: 35%;
@@ -520,6 +527,24 @@ onMounted(async () => {
 .notification-item {
   transition: background 0.3s, border-color 0.3s, color 0.3s;
 }
+
+.zone-overlay-label {
+  position: absolute;
+  top: 32px;
+  left: 32px;
+  background: rgba(0, 123, 255, 0.658);
+  color: #fff;
+  padding: 10px 22px;
+  font-size: 1.25rem;
+  font-weight: bold;
+  border-radius: 18px;
+  box-shadow: 0 3px 10px rgba(60,60,100,0.08);
+  z-index: 5;
+  pointer-events: none;
+  letter-spacing: 1px;
+}
+
+
 
 </style>
 <style>

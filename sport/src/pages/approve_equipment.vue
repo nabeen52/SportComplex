@@ -49,14 +49,16 @@
 
       <!-- แถบประกาศ -->
       <transition name="slide-down">
-        <div class="announcement-bar" v-if="showAnnouncementBar">
-          <i class="pi pi-megaphone announcement-icon"></i>
-          <div class="announcement-bar-text">{{ announcement }}</div>
-          <button class="close-announcement-btn" @click="showAnnouncementBar = false">
-            <i class="pi pi-times" style="color: red;"></i>
-          </button>
-        </div>
-      </transition>
+  <div class="announcement-bar" v-if="showAnnouncementBar">
+    <i class="pi pi-megaphone" style="color: red; font-size: 1.5rem;"></i>
+    <span class="announcement-bar-text">
+      {{ announcement }}
+    </span>
+    <button class="close-announcement-btn" @click="showAnnouncementBar = false">
+      <i class="pi pi-times" style="color: red;"></i>
+    </button>
+  </div>
+</transition>
       
 
       <div class="histbody">
@@ -163,7 +165,7 @@ export default {
       usersMap: {},
       equipmentGroups: [],
       polling: null,
-      
+      pollingNotif: null
     }
   },
  computed: {
@@ -604,26 +606,34 @@ export default {
     },
   },
   async mounted() {
-    await this.fetchUsers();
-    // await this.fetchPendingEquipments();
+  await this.fetchUsers();
+  this.fetchAllEquipments();  // โหลดรอบแรกทันที
 
-    this.fetchAllEquipments();
-    try {
-      const annRes = await axios.get(`${API_BASE}/api/announcement`);
-      this.announcement = annRes.data?.announce || "";
-      this.showAnnouncementBar = !!this.announcement;
-    } catch (err) {
-      this.announcement = "";
-      this.showAnnouncementBar = false;
-    }
-    this.fetchNotifications();
-    this.polling = setInterval(this.fetchNotifications, 30000);
-     window.addEventListener('resize', this.checkMobile)
-  },
-  beforeUnmount() {
-    clearInterval(this.polling)
-    window.removeEventListener('resize', this.checkMobile)
+  // ✅ โหลดข้อมูลใหม่ทุก 5 วินาที
+  this.polling = setInterval(this.fetchAllEquipments, 5000);
+
+  // ✅ โหลดประกาศ
+  try {
+    const annRes = await axios.get(`${API_BASE}/api/announcement`);
+    this.announcement = annRes.data?.announce || "";
+    this.showAnnouncementBar = !!this.announcement;
+  } catch (err) {
+    this.announcement = "";
+    this.showAnnouncementBar = false;
   }
+
+  // ✅ โหลดแจ้งเตือน
+  this.fetchNotifications();
+  this.pollingNotif = setInterval(this.fetchNotifications, 30000);
+
+  window.addEventListener('resize', this.checkMobile);
+},
+
+  beforeUnmount() {
+  clearInterval(this.polling);       // ✅ หยุด auto refresh
+  clearInterval(this.pollingNotif);  // ✅ หยุดเช็คแจ้งเตือน
+  window.removeEventListener('resize', this.checkMobile);
+  },
 }
 </script>
 
@@ -732,18 +742,20 @@ export default {
   opacity: 1;
 }
 
-/* แถบประกาศ */
+/* ตัวแถบประกาศ */
 .announcement-bar {
   position: fixed;
   left: 0;
   top: 0;
   z-index: 3000;
-  max-width: var(--announcement-width, 100vw);
+  width: px;
+  max-width: var(--announcement-width);
   margin-left: auto;
   margin-right: auto;
+  left: 0;
   right: 0;
-  background: linear-gradient(90deg, #ff0000 60%, #ffd6c0 100%);
-  color: #ffffff;
+  background: rgba(255, 216, 216, 0.911);
+  color: #ff0000;
   padding: 1rem 2rem;
   font-size: 1.15rem;
   font-weight: bold;
@@ -753,15 +765,18 @@ export default {
   box-shadow: 0 4px 18px rgba(255, 80, 80, 0.13);
   border-radius: 12px;
 }
+
 .announcement-bar-text {
   flex: 1;
   display: flex;
   align-items: center;
   gap: 0.8rem;
   white-space: pre-wrap;
-  word-break: break-word;
+    /* แปลง \n เป็น break line ตามที่พิมพ์ไว้ */
+    word-break: break-word;
   overflow-wrap: anywhere;
 }
+
 .close-announcement-btn {
   background: none;
   border: none;
@@ -771,6 +786,7 @@ export default {
   margin-left: 0.5rem;
   transition: color 0.15s;
 }
+
 .close-announcement-btn:hover {
   color: #222;
 }

@@ -57,29 +57,22 @@
       <div class="probody-flex">
         <!-- Left -->
         <div class="left-column">
-          <img :src="currentImage" alt="Field" class="field-image" />
-          <div class="calendar-wrapper">
-            <iframe
-              src="https://calendar.google.com/calendar/embed?src=gpt.lumduanfriend%40gmail.com&ctz=Asia%2FBangkok"
-              style="border: 0"
-              width="100%"
-              height="600"
-              frameborder="0"
-              scrolling="no"
-            ></iframe>
-          </div>
-          <!-- ปุ่ม BOOKING เฉพาะ mobile -->
-  <div v-if="isMobile" class="booking-btn-wrapper">
-    <button
-      class="booking-btn"
-      @click="bookZone"
-      :disabled="zoneRequired && !selectedZoneName"
-    >
-      <i class="pi pi-check-circle" style="margin-right: 8px"></i>
-      BOOKING
-    </button>
+  <img :src="currentImage" alt="Field" class="field-image" />
+  <!-- Overlay ชื่อโซนที่เลือก (จะแสดงเฉพาะเมื่อเลือก zone) -->
+  <div v-if="selectedZoneName" class="zone-overlay-label">
+    {{ selectedZoneName }}
   </div>
-        </div>
+  <div class="calendar-wrapper">
+    <iframe
+      src="https://calendar.google.com/calendar/embed?src=gpt.lumduanfriend%40gmail.com&ctz=Asia%2FBangkok"
+      style="border: 0"
+      width="100%"
+      height="600"
+      frameborder="0"
+      scrolling="no"
+    ></iframe>
+  </div>
+</div>
 
         <!-- Right -->
         <div class="right-column" @click.self="clearZone">
@@ -164,6 +157,7 @@ const notifications = ref([])
 const unreadCount = ref(0)
 const lastCheckedIds = ref(new Set())
 let polling = null
+
 function checkMobile() {
   isMobile.value = window.innerWidth <= 600
 }
@@ -328,6 +322,7 @@ window.removeEventListener('resize', checkMobile)
 .left-column {
   flex: 1 1 60%;
   max-width: 60%;
+  position: relative;  /* << เพิ่มบรรทัดนี้ */
 }
 .right-column {
   flex: 1 1 35%;
@@ -426,6 +421,23 @@ window.removeEventListener('resize', checkMobile)
   cursor: not-allowed !important;
   opacity: 0.7;
 }
+
+.zone-overlay-label {
+  position: absolute;
+  top: 32px;
+  left: 32px;
+  background: rgba(0, 123, 255, 0.767);
+  color: #fff;
+  padding: 10px 22px;
+  font-size: 1.25rem;
+  font-weight: bold;
+  border-radius: 18px;
+  box-shadow: 0 3px 10px rgba(60,60,100,0.08);
+  z-index: 5;
+  pointer-events: none;
+  letter-spacing: 1px;
+}
+
 /* =============================================== */
 @media (max-width: 600px) {
   .probody-flex {

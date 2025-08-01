@@ -14,9 +14,9 @@
     </aside>
 
     <div
-  v-if="!isSidebarClosed"
-  class="sidebar-overlay"
-  @click="toggleSidebar"
+      v-if="!isSidebarClosed"
+      class="sidebar-overlay"
+      @click="toggleSidebar"
     ></div>
 
     <div class="main">
@@ -43,7 +43,6 @@
             <i class="pi pi-shopping-cart"></i>
             <span v-if="products.length > 0" class="badge">{{ products.length }}</span>
           </router-link>
-
           <router-link to="/profile"><i class="pi pi-user"></i></router-link>
         </div>
       </header>
@@ -62,34 +61,35 @@
         </div>
       </div>
 
-
       <div class="scroll-x-container">
       <div class="form-container">
         <h1 style="display: flex; justify-content: center;">ยืนยันข้อมูล</h1>
+        <div id="pdf-section"> 
         <div class="form-header">
           <h3>แบบฟอร์มการยืมอุปกรณ์/วัสดุ/ครุภัณฑ์ ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง</h3>
           <p>โทร 053-917-8201 E-mail Sport-complex@mfu.ac.th</p>
         </div>
-        <!-- ================= กลุ่มขวา วันที่ เวลารับของ ================ -->
-        <div class="form-header-section">
-          <div class="right-form" style="align-items: flex-end;">
-            <div class="form-row-title" style="font-size: 18px; font-weight: bold;">
-              ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง
-            </div>
-            <div class="form-row">
-              <span>วันที่มารับของ</span>
-              <span class="line-field block-text" style="min-width: 110px;">
-                {{ booking?.receive_date ? new Date(booking.receive_date).toLocaleDateString('th-TH') : "" }}
-              </span>
-            </div>
-            <div class="form-row">
-              <span>เวลาที่มารับของ</span>
-              <span class="line-field block-text" style="min-width: 80px;">
-                {{ booking?.receive_time || "" }}
-              </span>
-            </div>
-          </div>
-        </div>
+
+      <!-- กลุ่มขวา: วันที่มารับของ ชิดขวา, เวลาที่มารับของอยู่บรรทัดล่าง -->
+<div class="form-header-section">
+  <div class="right-form" style="align-items: flex-end; text-align: right;">
+    <div class="form-row-title" style="font-size: 18px; font-weight: bold;">
+      ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง
+    </div>
+    <div>
+      
+      <div style="display: flex; justify-content: flex-end; align-items: center; gap: 2px;">
+        <span>วันที่มารับของ</span>
+        <span>{{ booking?.receive_date ? new Date(booking.receive_date).toLocaleDateString('th-TH') : "" }}</span>
+      </div>
+      <div style="display: flex; justify-content: flex-end; align-items: center; gap: 2px; margin-top:2px;">
+        <span>เวลาที่มารับของ</span>
+        <span>{{ booking?.receive_time || "" }}</span>
+      </div>
+    </div>
+  </div>
+</div>
+
         <!-- =================== ข้อมูลผู้ขอ/รายละเอียด =================== -->
         <div class="form-row" style="padding-top: 30px; flex-direction: column; align-items: flex-start;">
           <span style="margin-bottom: 0;">
@@ -99,40 +99,30 @@
             ส่วนที่1 สำหรับผู้ใช้
           </span>
         </div>
-        <div class="form-row" style="padding-top: 30px;">
-          <span>ข้าพเจ้า</span>
-          <span class="line-field block-text" style="min-width:160px;">{{ booking?.name || "" }}</span>
-          <span>รหัสนักศึกษา</span>
-          <span class="line-field block-text" style="min-width:120px;">{{ booking?.user_id || "" }}</span>
-        </div>
-        <div class="form-row" style="padding-top: 20px;">
-          <span>หน่วยงาน</span>
-          <span class="line-field block-text" style="min-width:180px;">{{ booking?.agency || "" }}</span>
-        </div>
-        <div class="form-row" style="padding-top: 30px;">
-          <span>เหตุผลในการขอใช้เพื่อ</span>
-          <div class="reason-underline">{{ booking?.reason || "" }}</div>
-        </div>
-        <div class="form-row" style="padding-top: 30px; flex-wrap: wrap;">
-          <span>สถานที่ใช้งาน</span>
-          <span class="line-field block-text" style="margin-bottom: 3px;">
-            {{ booking?.location || "" }}
-          </span>
-          <br style="flex-basis: 100%; height: 0;" />
-          <span>ในวันที่</span>
-          <span class="line-field block-text" style="min-width: 100px;">
-            {{ booking?.start_date ? (new Date(booking.start_date)).toLocaleDateString('th-TH') : "" }}
-          </span>
-          <span>ถึงวันที่</span>
-          <span class="line-field block-text" style="min-width: 100px;">
-            {{ booking?.end_date ? (new Date(booking.end_date)).toLocaleDateString('th-TH') : "" }}
-          </span>
-        </div>
-        <div class="form-row" style="padding-top: 30px;">
-          <span>โดยมีรายการดังต่อไปนี้</span>
-        </div>
+
+        <!-- ========== ข้าพเจ้า ... รหัสนักศึกษา ... หน่วยงาน ========== -->
+      <!-- จุดนี้คือส่วนที่ต้องการจัดให้อยู่ "แนวเดียวกับคำว่าสำหรับผู้ใช้" -->
+<!-- อยู่ใน <div class="form-container"> ... -->
+
+<!-- ย่อหน้าเดียวกันทั้งหมด -->
+<div class="form-row mt-30"
+     style="text-indent: 80px; text-align: left; line-height: 2.0;">
+  ข้าพเจ้า {{ booking?.name || "-" }}
+  รหัสนักศึกษา {{ booking?.user_id || "-" }}
+  หน่วยงาน {{ booking?.agency || "-" }}
+  เหตุผลในการขอใช้เพื่อ {{ booking?.reason || "-" }}
+  สถานที่ใช้งาน {{ booking?.location || "-" }}
+  ในวันที่ {{ booking?.start_date ? (new Date(booking.start_date)).toLocaleDateString('th-TH') : "-" }}
+  ถึงวันที่ {{ booking?.end_date ? (new Date(booking.end_date)).toLocaleDateString('th-TH') : "-" }}
+</div>
+
+<div class="form-row" style="padding-top: 5px; justify-content: flex-start !important;">
+  <span>โดยมีรายการดังต่อไปนี้</span>
+</div>
+
+
         <!-- ================= ตารางรายการอุปกรณ์ ================= -->
-        <div class="form-row" style="padding-top: 30px;">
+        <div class="form-row" style="padding-top: 10px;">
           <table class="equipment-table">
             <thead>
               <tr>
@@ -163,10 +153,10 @@
             </thead>
             <tbody>
               <tr>
-                <td style="vertical-align: top;">
+                <td style="vertical-align: top; ">
                   <div style="min-height:50px; margin-bottom: 10px;">
-                    .................................................................<br>
-                    .................................................................<br>
+                    ............................................................................................<br>
+                    ............................................................................................<br>
                   </div>
                   <div style="margin-top: 8px;">
                     ลงชื่อ.......................................................หัวหน้าส่วน<br>
@@ -175,8 +165,8 @@
                 </td>
                 <td style="vertical-align: top;">
                   <div style="min-height:50px; margin-bottom: 10px;">
-                    .................................................................<br>
-                    .................................................................<br>
+                    ............................................................................................<br>
+                    ............................................................................................<br>
                   </div>
                   <div style="margin-top: 8px;">
                     ลงชื่อ...........................................ผู้ปฏิบัติงาน/ผู้รับผิดชอบ<br>
@@ -187,25 +177,30 @@
             </tbody>
           </table>
         </div>
+        </div>
         <!-- ===== แสดงไฟล์แนบ ===== -->
-        <div v-if="uploadedFiles.length > 0" class="form-row" style="padding-top: 20px;">
-          <span>ไฟล์แนบ:</span>
-          <ul>
-            <li v-for="(file, idx) in uploadedFiles" :key="file.fileName || idx">
-              <span style="font-weight: 500;">{{ file.fileName }}</span>
-              <span style="font-size: 12px; color: #888; margin-left: 10px;">
-                ({{ file.mimeType }})
-              </span>
-              <span v-if="file.fileData" style="margin-left:10px;">
-                <a :href="file.fileData" :download="file.fileName" target="_blank">ดูไฟล์</a>
-              </span>
-            </li>
-          </ul>
-        </div>
-        <div class="form-row" style="padding-top: 30px; justify-self: end;">
-          <span>ลงชื่อ</span>
-          <span class="line-field block-text" style="min-width:140px;">{{ booking?.name || "" }}</span>
-        </div>
+        <!-- ไฟล์แนบ -->
+         <div class="form-row-sign" style="padding-top: 30px; display: flex; align-items: center; gap: 10px;">
+  <span style="white-space: nowrap;">ลงชื่อ</span>
+  <span class="line-field block-text" style="min-width:140px;">{{ booking?.name || "" }}</span>
+</div>
+<div v-if="uploadedFiles.length > 0" class="form-row" style="flex-direction: column; align-items: flex-start; padding-top: 20px;">
+  <span style="font-weight: bold; margin-bottom: 6px;">ไฟล์แนบ:</span>
+  <ul style="list-style-type: disc; padding-left: 20px; margin: 0;">
+    <li v-for="(file, idx) in uploadedFiles" :key="file.fileName || idx" style="margin-bottom: 4px;">
+      <span style="font-weight: 500;">{{ file.fileName }}</span>
+      <span style="font-size: 12px; color: #888; margin-left: 10px;">
+        ({{ file.mimeType }})
+      </span>
+      <span v-if="file.fileData" style="margin-left:10px;">
+        <a :href="file.fileData" :download="file.fileName" target="_blank">ดูไฟล์</a>
+      </span>
+    </li>
+  </ul>
+</div>
+
+
+
         <div class="button-wrapper">
           <button id="btnBack" @click="handleBack">Back</button>
           <button id="btnNext" @click="handleNext" :disabled="isLoading">Next</button>
@@ -230,6 +225,7 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
+import html2pdf from 'html2pdf.js'
 
 const API_BASE = import.meta.env.VITE_API_BASE
 
@@ -251,6 +247,46 @@ const userId = localStorage.getItem('user_id') || ''
 function toggleNotifications() {
   showNotifications.value = !showNotifications.value
   if (showNotifications.value) unreadCount.value = 0
+}
+
+function exportToPDF() {
+  const element = document.getElementById('pdf-section');
+  // ตั้งค่ารูปแบบไฟล์ PDF
+  const opt = {
+    margin:       0.2,
+    filename:     `booking-form.pdf`,
+    image:        { type: 'jpeg', quality: 0.98 },
+    html2canvas:  { scale: 2, useCORS: true },
+    jsPDF:        { unit: 'in', format: 'a4', orientation: 'portrait' }
+  };
+  html2pdf().from(element).set(opt).save();
+}
+// รับ element id, return Blob ของไฟล์ pdf
+function htmlToPdfBlob(elementId) {
+  return new Promise((resolve, reject) => {
+    const element = document.getElementById(elementId)
+    const opt = {
+      margin:       0.2,
+      filename:     `booking-form.pdf`,
+      image:        { type: 'jpeg', quality: 0.98 },
+      html2canvas:  { scale: 2, useCORS: true },
+      jsPDF:        { unit: 'in', format: 'a4', orientation: 'portrait' }
+    }
+    html2pdf()
+      .from(element)
+      .set(opt)
+      .outputPdf('blob')
+      .then(resolve)
+      .catch(reject)
+  })
+}
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onloadend = () => resolve(reader.result.split(',')[1]) // เอาเฉพาะ base64
+    reader.onerror = reject
+    reader.readAsDataURL(blob)
+  })
 }
 function closeNotifications() {
   showNotifications.value = false
@@ -387,6 +423,14 @@ async function handleNext() {
   }
   isLoading.value = true
   try {
+     // สร้าง PDF Blob จาก html
+    const pdfBlob = await htmlToPdfBlob('pdf-section')
+    // แปลง Blob เป็น base64 string
+    const pdfBase64 = await blobToBase64(pdfBlob)
+    
+    // บันทึกข้อมูล history พร้อม PDF ลง DB
+    // สมมติว่า API /api/history รองรับ field bookingPdf (base64)
+    // และบันทึกข้อมูลแยกเป็น 1 record ต่อ 1 รายการ item
     for (const item of equipmentList.value) {
       await axios.post(`${API_BASE}/api/history`, {
         booking_id: bookingIdFromServer,
@@ -402,9 +446,18 @@ async function handleNext() {
         since: booking.value.start_date || '',
         uptodate: booking.value.end_date || '',
         receive_date: booking.value.receive_date || '',
-        receive_time: booking.value.receive_time || ''
+        receive_time: booking.value.receive_time || '',
+        bookingPdf: pdfBase64 
       })
     }
+     // ดาวน์โหลด PDF ให้ผู้ใช้ด้วย
+    const link = document.createElement('a')
+    link.href = URL.createObjectURL(pdfBlob)
+    link.download = 'booking-form.pdf'
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+
     await axios.delete(`${API_BASE}/api/cart`, {
       data: { user_id: booking.value.user_id }
     })
@@ -534,11 +587,13 @@ async function handleNext() {
 }
 .form-row {
   display: flex;
-  align-items: flex-end;
-  gap: 10px;
-  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px; /* ระยะห่าง */
   margin-bottom: 16px;
+  flex-wrap: wrap;
+  justify-content: flex-start; /* ทำให้ชิดซ้าย */
 }
+
 .form-row-title {
   font-weight: bold;
   margin-bottom: 10px;
@@ -754,6 +809,99 @@ async function handleNext() {
     min-width: 700px;
   }
 }
+/* ลบเส้นใต้เฉพาะในโซนฟอร์ม */
+.form-container .line-field,
+.form-container .reason-underline {
+  border-bottom: none !important;
+  background: none !important;
+  padding-bottom: 0 !important;
+}
+.form-row-align {
+  display: flex;
+  align-items: center;
+  gap: 8px; /* ระยะห่างแต่ละช่อง */
+  flex-wrap: wrap;
+}
+.align-field {
+  min-width: 120px;
+  max-width: 220px;
+  display: inline-block;
+  vertical-align: middle;
+  margin-right: 18px;
+  /* ไม่มีเส้นใต้ */
+  border-bottom: none !important;
+  background: none !important;
+  padding-bottom: 0 !important;
+  font-weight: 500;
+}
+.form-row-align > span:not(.align-field) {
+  min-width: 80px;
+  text-align: right;
+  font-weight: 400;
+}
+@media (max-width: 540px) {
+  .form-row-align {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+  }
+  .align-field {
+    margin-right: 0;
+    min-width: 120px;
+    max-width: 100%;
+  }
+}
+.form-user-row {
+  margin-left: 30px !important;      /* ให้ชิดซ้ายสุด */
+  padding-left: 0px !important;
+  gap: 10px;
+  margin-top: 4px;                 /* ลดความห่าง */
+  margin-bottom: 8px;              /* ลดความห่าง */
+  font-size: 16px;                 /* ขนาดตัวอักษร */
+  line-height: 1.35;               /* ความสูงแต่ละบรรทัด */
+}
+.form-row, .form-row-align {
+  margin-bottom: 6px !important;   /* ลดความห่างระหว่างบรรทัด */
+  line-height: 1.5;
+}
+.user-info-row {
+  margin-top: 24px;
+  margin-bottom: 8px;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  line-height: 1.4;
+}
+.user-info-row > span {
+  /* เพิ่ม spacing เฉพาะตัวหัวข้อให้โดดเด่น */
+  margin-right: 8px;
+}
+.user-info-row > span[style*="font-weight: bold"] {
+  font-size: 18px;
+  margin-right: 20px;
+}
+.form-row {
+  display: flex;
+  align-items: center;
+  gap: 12px; /* ระยะห่างระหว่าง "ลงชื่อ" กับชื่อ */
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  justify-content: flex-end; /* ชิดขวา */
+}
+.form-row-sign {
+  display: flex;
+  align-items: center;
+  gap: 10px;           /* ระยะห่างระหว่าง "ลงชื่อ" กับชื่อ */
+  justify-content: flex-end; /* ชิดขวา */
+}
+
+.form-row-sign .label {
+  white-space: nowrap; /* ป้องกันคำว่า "ลงชื่อ" หักบรรทัด */
+}
+
+
 
 </style>
 

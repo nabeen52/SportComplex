@@ -389,9 +389,9 @@ export default {
   margin-bottom: 0.5rem;
 }
 .announcement-label {
-  background: rgb(253, 170, 170);
+  background: rgb(255, 231, 231);
   border: 2px solid red;
-  color: black;
+  color: rgb(255, 0, 0);
   font-weight: bold;
   border-radius: 20px;
   padding: 0.3rem 1rem;

@@ -70,43 +70,117 @@
 </header>
 
 
-        <!-- Card 1: สนามกีฬา -->
-      <div class="dashboard-grid">
-        <div class="dashboard-section">
-         <div class="dashboard-section-header">
-  <div class="header-spacer"></div>
-  <h2 class="dashboard-title">สถิติการใช้งาน "สนามกีฬา"</h2>
-  <button @click="exportFieldPDF" class="export-btn">ExportPDF</button>
+<!-- สถิติการใช้งานสนามกีฬาโดยภาพรวม -->
+ <div class="dashboard-grid">
+       <div class="dashboard-section">
+        <div class="dashboard-section-header">
+    <div class="header-spacer"></div>
+    <h2 class="dashboard-title">สถิติการใช้งาน "สนามกีฬาโดยภาพรวม"</h2>
+    <button @click="exportOverallFieldPDF" class="export-btn">ExportPDF</button>
+
+    
+  </div>
+  <div class="filter-options" style="margin-bottom:0;">
+    <label>ตั้งแต่:
+      <select v-model="overallFieldStartMonth">
+        <option v-for="(m, i) in months" :key="i" :value="i+1">{{ m }}</option>
+      </select>
+      <select v-model="overallFieldStartYear">
+        <option v-for="y in years" :key="y" :value="y">{{ y }}</option>
+      </select>
+    </label>
+    <label>ถึง:
+      <select v-model="overallFieldEndMonth">
+        <option v-for="(m, i) in months" :key="i" :value="i+1">{{ m }}</option>
+      </select>
+      <select v-model="overallFieldEndYear">
+        <option v-for="y in years" :key="y" :value="y">{{ y }}</option>
+      </select>
+    </label>
+  </div>
+    <div class="chart-container overall">
+    <Line :data="overallFieldChartData" :options="overallFieldChartOptions" :key="overallChartUpdateKey" />
+    <!-- ใต้ Line chart -->
+    <div class="chart-legend">
+         <span
+      v-for="(ds, idx) in overallFieldChartData.datasets"
+      :key="ds.label"
+       class="legend-item"
+      :style="{
+      color: ds._hidden ? '#ccc' : ds.borderColor,
+      cursor: 'pointer',
+      marginRight: '22px',
+      fontWeight: ds._hidden ? 'normal' : 'bold'
+    }"
+    @click="toggleOverallLine(idx)"
+  >
+    <span
+      class="legend-color"
+      :style="{
+        background: ds.borderColor,
+        border: ds._hidden ? '2px solid #ccc' : `2px solid ${ds.borderColor}`,
+        opacity: ds._hidden ? 0.33 : 1
+      }"
+    ></span>
+    {{ ds.label }}
+      </span>
+   </div>
+  </div>
 </div>
 
-          <div class="filter-options">
-            <label>ชื่อสนาม:
-              <select v-model="selectedFieldName">
-                <option value="">ทั้งหมด</option>
-                <option v-for="name in allFieldNames" :key="name" :value="name">{{ name }}</option>
-              </select>
-            </label>
-            <label>เดือน:
-              <select v-model="selectedFieldMonth">
-                <option value="">ทั้งหมด</option>
-                <option v-for="(m, i) in months" :key="i" :value="i+1">{{ m }}</option>
-              </select>
-            </label>
-            <label>ปี:
-              <select v-model="selectedFieldYear">
-                <option value="">ทั้งหมด</option>
-                <option v-for="y in years" :key="y" :value="y">{{ y }}</option>
-              </select>
-            </label>
-            <label>แสดงสูงสุด:
-              <select v-model="fieldShowLimit">
-                <option :value="null">ทั้งหมด</option>
-                <option v-for="n in [5,10,15,20,50,100]" :key="n" :value="n">{{ n }} รายการ</option>
-              </select>
-            </label>
-          </div>
+        <!-- Card 1: สนามกีฬา -->
+      
+        <div class="dashboard-section">
+         <div class="dashboard-section-header">
+             <div class="header-spacer"></div>
+           <h2 class="dashboard-title">สถิติการใช้งาน "สนามกีฬาของหน่วยงาน"</h2>
+  <button @click="exportFieldPDF" class="export-btn sum">ExportPDF</button>
+</div>
+
+         <div class="filter-options">
+  <label>ชื่อสนาม:
+    <select v-model="selectedFieldName">
+      <option value="">ทั้งหมด</option>
+      <option v-for="name in allFieldNames" :key="name" :value="name">{{ name }}</option>
+    </select>
+  </label>
+
+  <label>เดือน:
+    <select v-model="fieldStartMonth">
+      <option v-for="(m, i) in months" :key="i" :value="i+1">{{ m }}</option>
+    </select>
+  </label>
+  <label>ปี:
+    <select v-model="fieldStartYear">
+      <option v-for="y in years" :key="y" :value="y">{{ y }}</option>
+    </select>
+  </label>
+  <span>ถึง</span>
+  <label>เดือน:
+    <select v-model="fieldEndMonth">
+      <option v-for="(m, i) in months" :key="i" :value="i+1">{{ m }}</option>
+    </select>
+  </label>
+  <label>ปี:
+    <select v-model="fieldEndYear">
+      <option v-for="y in years" :key="y" :value="y">{{ y }}</option>
+    </select>
+  </label>
+
+  <label>แสดงสูงสุด:
+    <select v-model="fieldShowLimit">
+      <option :value="null">ทั้งหมด</option>
+      <option v-for="n in [5,10,15,20,50,100]" :key="n" :value="n">{{ n }} รายการ</option>
+    </select>
+  </label>
+</div>
+
          
-          <UnitUsageChart :units="filteredFieldUnits" unitType="usage" />
+          <UnitUsageChart
+  :units="filteredFieldUnits"
+  unitType="usage"
+  yLabel="จำนวนชั่วโมงการใช้งาน"
+/>
         </div>
 
         <!-- Card 2: อุปกรณ์กีฬา -->
@@ -118,34 +192,49 @@
 </div>
 
           <div class="filter-options">
-            <label>ชื่ออุปกรณ์:
-              <select v-model="selectedEquipName">
-                <option value="">ทั้งหมด</option>
-                <option v-for="name in allEquipNames" :key="name" :value="name">{{ name }}</option>
-              </select>
-            </label>
-            <label>เดือน:
-              <select v-model="selectedEquipMonth">
-                <option value="">ทั้งหมด</option>
-                <option v-for="(m, i) in months" :key="i" :value="i+1">{{ m }}</option>
-              </select>
-            </label>
-            <label>ปี:
-              <select v-model="selectedEquipYear">
-                <option value="">ทั้งหมด</option>
-                <option v-for="y in years" :key="y" :value="y">{{ y }}</option>
-              </select>
-            </label>
-            <label v-if="!isSingleEquipMode">
-  แสดงสูงสุด:
-  <select v-model="equipShowLimit">
-    <option :value="null">ทั้งหมด</option>
-    <option v-for="n in [5,10,15,20,50,100]" :key="n" :value="n">{{ n }} รายการ</option>
-  </select>
-</label>
-          </div>
+  <label>ชื่ออุปกรณ์:
+    <select v-model="selectedEquipName">
+      <option value="">ทั้งหมด</option>
+      <option v-for="name in allEquipNames" :key="name" :value="name">{{ name }}</option>
+    </select>
+  </label>
+
+  <label>เดือน:
+    <select v-model="equipStartMonth">
+      <option v-for="(m, i) in months" :key="i" :value="i+1">{{ m }}</option>
+    </select>
+  </label>
+  <label>ปี:
+    <select v-model="equipStartYear">
+      <option v-for="y in years" :key="y" :value="y">{{ y }}</option>
+    </select>
+  </label>
+  <span>ถึง</span>
+  <label>เดือน:
+    <select v-model="equipEndMonth">
+      <option v-for="(m, i) in months" :key="i" :value="i+1">{{ m }}</option>
+    </select>
+  </label>
+  <label>ปี:
+    <select v-model="equipEndYear">
+      <option v-for="y in years" :key="y" :value="y">{{ y }}</option>
+    </select>
+  </label>
+
+  <label>แสดงสูงสุด:
+    <select v-model="equipShowLimit">
+      <option :value="null">ทั้งหมด</option>
+      <option v-for="n in [5,10,15,20,50,100]" :key="n" :value="n">{{ n }} รายการ</option>
+    </select>
+  </label>
+</div>
+
          
-          <UnitUsageChart :units="filteredEquipUnits" unitType="equipment" />
+         <UnitUsageChart
+  :units="filteredEquipUnits"
+  unitType="equipment"
+  yLabel="จำนวนการใช้งาน"
+/>
         </div>
       </div>
 
@@ -169,6 +258,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import axios from 'axios'
 import UnitUsageChart from '@/components/UnitUsageChart.vue'
 import jsPDF from 'jspdf'
+import { Line } from 'vue-chartjs'
 
 import '@/assets/fonts/Sarabun-Regular-normal.js'
 import '@/assets/fonts/Sarabun-Bold-normal.js'
@@ -188,16 +278,42 @@ import '@/assets/fonts/Sarabun-Thin-normal.js'
 import '@/assets/fonts/Sarabun-ThinItalic-normal.js'
 
 const API_BASE = import.meta.env.VITE_API_BASE
+const currentYear = new Date().getFullYear()
+const fieldStartMonth = ref(1)
+const fieldStartYear = ref(currentYear)
+const fieldEndMonth = ref(12)
+const fieldEndYear = ref(currentYear)
+
+const equipStartMonth = ref(1)
+const equipStartYear = ref(currentYear)
+const equipEndMonth = ref(12)
+const equipEndYear = ref(currentYear)
 
 // State
 const fieldUnits = ref([])
 const equipUnits = ref([])
 const isSidebarClosed = ref(false)
 
+
+const overallChartUpdateKey = ref(0)
+
+const months = [
+  'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
+  'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'
+]
+// ---- กราฟ "สนามกีฬา" ----
+
+const overallFieldStartMonth = ref(1)
+const overallFieldStartYear = ref(currentYear)
+const overallFieldEndMonth = ref(12)
+const overallFieldEndYear = ref(currentYear)
+
+const overallMonths = months  // ["มกราคม", ... "ธันวาคม"]
+
 // ---- Filter "สนามกีฬา" ----
 const selectedFieldName = ref('')
 const selectedFieldMonth = ref('')
-const currentYear = new Date().getFullYear()
+
 const years = [currentYear, currentYear - 1, currentYear - 2]
 const selectedFieldYear = ref(currentYear)
 const fieldShowLimit = ref(5)
@@ -208,22 +324,117 @@ const selectedEquipMonth = ref('')
 const selectedEquipYear = ref(currentYear)
 const equipShowLimit = ref(5)
 
-const months = [
-  'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
-  'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'
-]
+const allFields = ref([]) // รายชื่อสนามทั้งหมด (master)
 const isSingleEquipMode = computed(() => !!selectedEquipName.value);
 
+// สำหรับดึงชื่อสนามทั้งหมด
+const allFieldNamesOverall = computed(() =>
+  allFields.value.map(f => f.name)
+)
 
+// DATA สำหรับ overall chart
+const overallFieldChartData = computed(() => {
+  // --- 1. สร้างช่วงเดือนที่เลือกแบบละเอียด ---
+  let xLabels = []
+  let monthYearList = []
+  let yStart = overallFieldStartYear.value
+  let yEnd = overallFieldEndYear.value
+  let mStart = overallFieldStartMonth.value
+  let mEnd = overallFieldEndMonth.value
 
+  // handle กรณีเลือกข้ามปี (เช่น พ.ย. 2024 ถึง ก.พ. 2025)
+  let countMonth = (yEnd - yStart) * 12 + (mEnd - mStart) + 1
+  for (let i = 0; i < countMonth; i++) {
+    let y = yStart + Math.floor((mStart - 1 + i) / 12)
+    let m = ((mStart - 1 + i) % 12) + 1
+    xLabels.push(`${months[m - 1]} ${y}`)
+    monthYearList.push({ m, y })
+  }
+
+  // --- 2. เตรียม dataset สำหรับแต่ละสนาม ---
+  let fieldNames = allFieldNamesOverall.value
+  let colorList = [
+    "#e57373","#64b5f6","#81c784","#ffd54f","#ba68c8","#7986cb","#4db6ac","#ff8a65","#a1887f",
+    "#f06292","#9575cd","#4fc3f7","#aed581","#fff176","#dce775","#ffd54f","#a1887f"
+  ]
+
+  let datasets = fieldNames.map((field, i) => {
+    // สร้าง array ตามจำนวนเดือนในช่วงที่เลือก
+    let dataArr = []
+    for (let idx = 0; idx < countMonth; idx++) {
+      let { m, y } = monthYearList[idx]
+      // รวมชั่วโมงของ field ในเดือน/ปี นั้นๆ
+      let sum = 0
+      fieldUnits.value.forEach(unit => {
+        if (!unit.usageByMonthYear) return
+        unit.usageByMonthYear.forEach(row => {
+          if (row.fieldName === field && row.year === y && row.month === m) {
+            sum += row.hours || 0
+          }
+        })
+      })
+      dataArr.push(sum)
+    }
+    return {
+      label: field,
+      data: dataArr,
+      borderColor: colorList[i % colorList.length],
+      backgroundColor: colorList[i % colorList.length] + "22",
+      fill: false,
+      tension: 0.32,
+      pointRadius: 2,
+      borderWidth: 2,
+      _hidden: false, // สำหรับ legend toggle
+      hidden: false, // **เพิ่ม**
+    }
+  })
+  return {
+    labels: xLabels,
+    datasets
+  }
+})
 const isMobile = ref(window.innerWidth <= 600)
 
 function handleResize() { isMobile.value = window.innerWidth <= 600 }
 onMounted(() => window.addEventListener('resize', handleResize))
 onUnmounted(() => window.removeEventListener('resize', handleResize))
 
-
-
+function toggleOverallLine(idx) {
+  // toggle _hidden
+  const ds = overallFieldChartData.value.datasets[idx]
+  ds._hidden = !ds._hidden
+  ds.hidden = ds._hidden // **เพิ่มบรรทัดนี้**
+  overallChartUpdateKey.value++
+}
+const overallFieldChartOptions = computed(() => ({
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: { display: false }, // เอา legend ออกจากกราฟ, มาอยู่ใต้กราฟแทน
+    title: { display: false },
+    tooltip: {
+      enabled: true,
+      callbacks: {
+        label: (ctx) => `${ctx.dataset.label}: ${ctx.formattedValue} ชม.`
+      }
+    }
+  },
+  scales: {
+    x: { title: { display: false } },
+    y: {
+      beginAtZero: true,
+      title: { display: true, text: "จำนวนชั่วโมงการใช้งาน" }
+    }
+  },
+  datasets: {
+    line: {
+      hidden: function(context) {
+        // ใช้ ds._hidden ถ้ามี
+        return context.dataset._hidden === true
+      }
+    }
+  }
+}))
 
 // ==== กระดิ่งแจ้งเตือน ====
 const showNotifications = ref(false)
@@ -288,14 +499,22 @@ onMounted(async () => {
   fetchNotifications()
   polling = setInterval(fetchNotifications, 30000)
 
-  // ดึงข้อมูล usage
+try {
+    const resFields = await axios.get(`${API_BASE}/api/fields`)
+    allFields.value = resFields.data
+  } catch { allFields.value = [] }
+    // ดึงข้อมูล usage
   try {
     const resField = await axios.get(`${API_BASE}/api/information?type=field`)
     fieldUnits.value = resField.data
+    // แทรก log ตรงนี้
+    console.log('fieldUnits', JSON.stringify(fieldUnits.value, null, 2))
   } catch { fieldUnits.value = [] }
   try {
     const resEquip = await axios.get(`${API_BASE}/api/equipments`)
-equipUnits.value = resEquip.data
+    equipUnits.value = resEquip.data
+    // log ข้อมูลอุปกรณ์
+    console.log('equipUnits', JSON.stringify(equipUnits.value, null, 2))
   } catch { equipUnits.value = [] }
 })
 onUnmounted(() => {
@@ -304,44 +523,44 @@ onUnmounted(() => {
 })
 
 // ======= สนามกีฬา =======
-const allFieldNames = computed(() => {
-  const names = new Set()
-  fieldUnits.value.forEach(unit => {
-    if (unit.usageByMonthYear) {
-      unit.usageByMonthYear.forEach(row => {
-        if (row.fieldName) names.add(row.fieldName)
-      })
-    }
-  })
-  return Array.from(names)
-})
+const allFieldNames = computed(() => allFields.value.map(f => f.name))
+
 
 const filteredFieldUnits = computed(() => {
   let result = []
   fieldUnits.value.forEach(unit => {
     if (!unit.usageByMonthYear) return
+
     let filtered = unit.usageByMonthYear.filter(row => {
+      // ตรงนี้ใช้ค่าจาก filter ทั้งหมด
       if (selectedFieldName.value && row.fieldName.trim() !== selectedFieldName.value.trim()) return false
-      if (selectedFieldMonth.value && row.month !== Number(selectedFieldMonth.value)) return false
-      if (selectedFieldYear.value && row.year !== Number(selectedFieldYear.value)) return false
+      if (fieldStartYear.value && row.year < Number(fieldStartYear.value)) return false
+      if (fieldEndYear.value && row.year > Number(fieldEndYear.value)) return false
+      if (fieldStartMonth.value && (
+        (row.year === Number(fieldStartYear.value) && row.month < Number(fieldStartMonth.value)) ||
+        (row.year === Number(fieldEndYear.value) && row.month > Number(fieldEndMonth.value))
+      )) return false
       return true
     })
+
     let sumUsage = filtered.reduce((acc, f) => acc + (f.usage || 0), 0)
     let sumHours = filtered.reduce((acc, f) => acc + (f.hours || 0), 0)
     if (sumUsage > 0 || sumHours > 0) {
       result.push({
-        unit: unit.unit,
+        unit: unit.unit || unit.fieldName,
         usage: sumUsage,
         hours: sumHours
       })
     }
   })
+  // Sort & Limit
   result = result.sort((a, b) => b.usage - a.usage)
   if (fieldShowLimit.value != null && typeof fieldShowLimit.value === 'number') {
     result = result.slice(0, fieldShowLimit.value)
   }
   return result
 })
+
 
 // ======= อุปกรณ์กีฬา =======
 const allEquipNames = computed(() => {
@@ -355,71 +574,66 @@ const allEquipNames = computed(() => {
 
 
 const filteredEquipUnits = computed(() => {
-  // ถ้าเลือกชื่ออุปกรณ์แล้ว
-  if (selectedEquipName.value) {
-    // กราฟ X = เดือน, Y = จำนวนการใช้ ในปีที่เลือก (หรือปีปัจจุบันถ้าไม่ได้เลือกปี)
-    const targetYear = selectedEquipYear.value || currentYear;
-    // หาอุปกรณ์
-    const equip = equipUnits.value.find(u => u.name === selectedEquipName.value);
-    if (!equip || !equip.usageByMonthYear) return [];
+  let data = []
+  equipUnits.value.forEach(unit => {
+    if (!unit.usageByMonthYear) return
 
-    // ถ้าเลือกเดือนด้วย → แสดงแค่เดือนนั้น
-    if (selectedEquipMonth.value) {
-      const usage = equip.usageByMonthYear.find(u =>
-        u.year === Number(targetYear) && u.month === Number(selectedEquipMonth.value)
-      )?.usage || 0;
-      return [{
-        unit: `${months[selectedEquipMonth.value - 1]}`,
-        usage,
-      }];
-    } else {
-      // ไม่เลือกเดือน แสดงทุกเดือนของปี
-      const monthArr = Array.from({ length: 12 }, (_, i) => i + 1);
-      return monthArr.map(m => {
-        const usage = equip.usageByMonthYear.find(u =>
-          u.year === Number(targetYear) && u.month === m
-        )?.usage || 0;
-        return {
-          unit: months[m - 1], // ชื่อเดือน
-          usage,
-        }
-      });
+    let filtered = unit.usageByMonthYear.filter(row => {
+      if (selectedEquipName.value && row.name !== selectedEquipName.value) return false
+      if (equipStartYear.value && row.year < Number(equipStartYear.value)) return false
+      if (equipEndYear.value && row.year > Number(equipEndYear.value)) return false
+      if (equipStartMonth.value && (
+        (row.year === Number(equipStartYear.value) && row.month < Number(equipStartMonth.value)) ||
+        (row.year === Number(equipEndYear.value) && row.month > Number(equipEndMonth.value))
+      )) return false
+      return true
+    })
+    let sumUsage = filtered.reduce((acc, f) => acc + (f.usage || 0), 0)
+    if (sumUsage > 0) {
+      data.push({
+        unit: unit.name,
+        usage: sumUsage,
+      })
     }
-  }
+  })
 
-  // ========== ด้านล่างนี้คือกรณี "ทั้งหมด" ==========
-  let data = equipUnits.value.map(unit => {
-    let usage = 0;
-    if (selectedEquipYear.value && selectedEquipMonth.value && unit.usageByMonthYear) {
-      usage = unit.usageByMonthYear.find(u =>
-        u.year === Number(selectedEquipYear.value) && u.month === Number(selectedEquipMonth.value)
-      )?.usage || 0
-    } else if (!selectedEquipYear.value && selectedEquipMonth.value && unit.usageByMonthYear) {
-      usage = unit.usageByMonthYear.filter(u => u.month === Number(selectedEquipMonth.value))
-        .reduce((sum, u) => sum + u.usage, 0) || 0
-    } else if (selectedEquipYear.value && !selectedEquipMonth.value && unit.usageByMonthYear) {
-      usage = unit.usageByMonthYear.filter(u => u.year === Number(selectedEquipYear.value))
-        .reduce((sum, u) => sum + u.usage, 0) || 0
-    } else if (unit.usageCount !== undefined) {
-      usage = unit.usageCount
-    }
-    return usage > 0 ? { unit: unit.name, usage } : null
-  }).filter(u => u !== null);
-
-  // "แสดงสูงสุด" ใช้ได้เฉพาะกรณีนี้
+  // Sort & Limit
   if (equipShowLimit.value != null && typeof equipShowLimit.value === 'number') {
-    data = data.sort((a, b) => b.usage - a.usage).slice(0, equipShowLimit.value);
+    data = data.sort((a, b) => b.usage - a.usage).slice(0, equipShowLimit.value)
   }
-  return data;
-});
+  return data
+})
 
+
+function exportOverallFieldPDF() {
+  // เตรียม data เป็น summary ของแต่ละสนาม (sum ตามช่วงเดือน)
+  const chartData = overallFieldChartData.value;
+  const fieldSummaries = chartData.datasets.map(ds => {
+    // หาผลรวมชั่วโมงช่วงนี้
+    const totalHours = ds.data.reduce((a, b) => a + (b || 0), 0);
+    return {
+      unit: ds.label,    // ชื่อสนาม
+      hours: totalHours, // ผลรวมชั่วโมง
+    }
+  })
+
+  // สร้าง summary text
+  const periodText = `ช่วง: ${months[overallFieldStartMonth.value - 1]} ${overallFieldStartYear.value} ถึง ${months[overallFieldEndMonth.value - 1]} ${overallFieldEndYear.value}`;
+  exportPDF(
+    fieldSummaries,
+    'รายงานสถิติการใช้ "สนามกีฬาโดยภาพรวม"',
+    'overall-field-usage-report.pdf',
+    periodText,
+    'overall'
+  );
+}
 
 
 // ====== Export PDF ======
 function exportFieldPDF() {
   exportPDF(
     filteredFieldUnits.value,
-    'รายงานสถิติการใช้สนามกีฬา',
+    'รายงานสถิติการใช้สนามกีฬาของหน่วยงาน',
     'field-usage-report.pdf',
     [
       `ชื่อสนาม: ${selectedFieldName.value || 'ทั้งหมด'}`,
@@ -493,20 +707,25 @@ function exportPDF(data, header, filename, filterSummary, type = 'field') {
           pdf.text('ต่อจากหน้าเดิม', leftX, y); y += 10
           pdf.setFontSize(13)
         }
-        pdf.text(`${i + 1}. ${u.unit}`, leftX, y)
+         pdf.text(`${i + 1}. ${u.unit}`, leftX, y)
         let rightText = ''
         if (type === 'equipment') {
           rightText = `จำนวนการใช้งาน: ${u.usage || 0} ครั้ง`
+        } else if (type === 'overall') {
+          rightText = `จำนวนชั่วโมง: ${u.hours || 0}`
         } else {
           rightText = `จำนวนครั้ง: ${u.usage || 0} | จำนวนชั่วโมง: ${u.hours || 0}`
         }
         pdf.text(rightText, rightX, y, { align: 'right' }); y += lineHeight
-        totalUsage += u.usage || 0
-        totalHours += u.hours || 0
+        if (type === 'equipment') totalUsage += u.usage || 0
+        else totalHours += u.hours || 0
+        if (type !== 'overall') totalUsage += u.usage || 0 // เฉพาะ non-overall
       })
-      y += 4
+       y += 4
       if (type === 'equipment') {
         pdf.text(`รวมการใช้งาน: ${totalUsage} ครั้ง`, leftX, y)
+      } else if (type === 'overall') {
+        pdf.text(`รวมชั่วโมง: ${totalHours}`, leftX, y)
       } else {
         pdf.text(`รวมครั้ง: ${totalUsage} | รวมชั่วโมง: ${totalHours}`, leftX, y)
       }
@@ -535,6 +754,16 @@ function exportPDF(data, header, filename, filterSummary, type = 'field') {
   padding: 1.5rem 1rem 0 1rem;
   margin-bottom: 32px;
 }
+.dashboard-section.overall {
+  min-height: unset !important;
+  padding-bottom: 1.5rem !important;
+}
+.chart-container.overall {
+  height: 320px;
+  min-height: 0;
+  max-height: 350px;
+  overflow: visible !important;
+}
 
 .filter-options {
   display: flex;
@@ -560,6 +789,7 @@ function exportPDF(data, header, filename, filterSummary, type = 'field') {
   max-width: 135px;
 }
 
+
 .dashboard-grid {
   flex: 1 1 0;
   display: flex;
@@ -573,14 +803,41 @@ function exportPDF(data, header, filename, filterSummary, type = 'field') {
   background: #fff;
   border-radius: 16px;
   box-shadow: 0 6px 24px rgba(30, 58, 138, 0.09);
-  padding: 2.5rem 1.8rem 2rem 1.8rem;
+  padding: 2.5rem 1.8rem 2.5rem 1.8rem;   /* ขยาย padding ล่าง */
   width: 100%;
+  max-width: 100%;
   min-width: 0;
   margin-bottom: 0;
   display: flex;
   flex-direction: column;
   align-items: stretch;
+  box-sizing: border-box;
+
 }
+.chart-legend {
+  margin-top: 12px;
+  text-align: center;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px 16px;
+  font-size: 1rem;
+}
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: color 0.15s;
+}
+.legend-color {
+  display: inline-block;
+  width: 16px;
+  height: 10px;
+  border-radius: 4px;
+  margin-right: 2px;
+  vertical-align: middle;
+}
+
 .dashboard-title {
   color: #153477;
   font-size: 1.35rem;
@@ -619,6 +876,13 @@ function exportPDF(data, header, filename, filterSummary, type = 'field') {
   align-items: center;
   gap: 4px;
   transition: background 0.2s;
+}
+.export-btn.sum{
+background: #39b844;
+}
+.export-btn.sum:hover{
+  background: #307722;
+
 }
 .export-btn.equip {
   background: #488bff;
@@ -679,7 +943,15 @@ function exportPDF(data, header, filename, filterSummary, type = 'field') {
   text-align: center;
   z-index: 10;
 }
-
+.chart-container {
+    height: 440px; 
+  position: relative;
+  margin: 0;
+  width: 100%;
+  max-width: 100%;    /* เพิ่มบรรทัดนี้ */
+  overflow-x: auto;   /* เพิ่มบรรทัดนี้ ป้องกันล้น */
+  box-sizing: border-box; /* เพิ่มบรรทัดนี้ */
+}
 .filter-summary {
   margin-bottom: 14px;
   color: #333;
@@ -733,11 +1005,22 @@ function exportPDF(data, header, filename, filterSummary, type = 'field') {
     padding: 1rem 0.5rem;
   }
   /* ป้องกัน main/container เลื่อนซ้ายขวา */
-  .main {
-    margin-left: 0 !important;
-    width: 100vw !important;
-    min-width: 0;
-    overflow-x: hidden;
+ .main {
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+ .dashboard-section {
+    padding: 1rem 0.5rem;
+    max-width: 100vw;      /* ป้องกันล้นหน้าจอ */
+    box-sizing: border-box;
+  }
+  .chart-container {
+    height: 180px;
+    max-width: 100vw;
+    box-sizing: border-box;
+    overflow-x: auto;
   }
 }
 

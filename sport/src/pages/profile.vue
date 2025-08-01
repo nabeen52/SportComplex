@@ -68,7 +68,23 @@
 
     <div class="profile-details" v-if="info">
       <p>Username : {{ info.name }}</p>
-      <p>ID : {{ info.id }}</p>
+      <div class="editable-row">
+      <span>ID :</span>
+      <template v-if="!editId">
+        <span>{{ info.id }}</span>
+        <button
+          v-if="canEditUserId"
+          class="edit-btn"
+          @click="startEdit"
+        >แก้ไข</button>
+      </template>
+      <template v-else>
+        <input v-model="editUserId" style="padding:6px 12px;font-size:1rem;border-radius:4px;border:1px solid #d1d5db;" />
+        <button class="save-btn" @click="saveUserId">บันทึก</button>
+        <button class="cancel-btn" @click="cancelEdit">ยกเลิก</button>
+      </template>
+    </div>
+
       <p>Email : {{ info.email }}</p>
     </div>
   </div>
@@ -106,6 +122,12 @@ const isSidebarClosed = ref(false)
 const router = useRouter()
 const userId = localStorage.getItem('user_id') || ''
 
+const editId = ref(false)
+const editUserId = ref('')
+const canEditUserId = computed(() => {
+  return info.value?.email?.toLowerCase().endsWith('@mfu.ac.th')
+})
+
 
 // ดึงข้อมูล user จาก API (ไม่ใช้ userStore.user แล้ว)
 const info = ref({ id: "-", name: "-", email: "-", picture: null })
@@ -125,6 +147,39 @@ const profileImageUrl = computed(() => {
 })
 function imgError(event) {
   event.target.src = '/img/user.png'
+}
+
+
+function startEdit() {
+  editUserId.value = info.value.id
+  editId.value = true
+}
+
+function cancelEdit() {
+  editId.value = false
+}
+
+async function saveUserId() {
+  if (!editUserId.value.trim()) {
+    Swal.fire('กรุณากรอก user id', '', 'warning')
+    return
+  }
+  try {
+    const res = await axios.patch(`${API_BASE}/api/users/update_id`, {
+      old_user_id: info.value.id,
+      new_user_id: editUserId.value.trim(),
+    }, { withCredentials: true })
+
+    if (res.data && res.data.success) {
+      info.value.id = editUserId.value.trim()
+      Swal.fire('บันทึกสำเร็จ', '', 'success')
+      editId.value = false
+    } else {
+      Swal.fire('เกิดข้อผิดพลาด', res.data?.message || '', 'error')
+    }
+  } catch (e) {
+    Swal.fire('เกิดข้อผิดพลาด', e.response?.data?.message || e.message, 'error')
+  }
 }
 
 
@@ -454,6 +509,44 @@ onUnmounted(() => clearInterval(polling))
   overflow-x: auto;
   max-width: 100%;
 }
+
+
+.edit-btn, .save-btn, .cancel-btn {
+  margin-left: 8px;
+  background: #f59e42;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 18px;
+  cursor: pointer;
+  transition: background 0.2s;
+  min-width: 80px;
+  min-height: 20px;
+  box-sizing: border-box;
+  outline: none;
+  display: inline-block;
+}
+
+.save-btn { background: #22c55e; }
+.save-btn:hover { background: #15803d; }
+
+.cancel-btn { background: #ef4444; }
+.cancel-btn:hover { background: #dc2626; }
+
+.edit-btn { background: #f59e42; }
+.edit-btn:hover { background: #ea580c; }
+
+.editable-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: nowrap;
+}
+
+.editable-row > * {
+  white-space: nowrap;
+}
+
 
 </style>
 

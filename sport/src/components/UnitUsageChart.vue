@@ -20,7 +20,8 @@ Chart.register(LineElement, PointElement, LinearScale, CategoryScale, Title, Too
 
 const props = defineProps({
   units: { type: Array, default: () => [] },
-  unitType: { type: String, default: 'usage' }
+  unitType: { type: String, default: 'usage' },
+  yLabel: { type: String, default: '' }    // << เพิ่มตรงนี้
 })
 
 const chartData = computed(() => {
@@ -61,7 +62,7 @@ const hasData = computed(() =>
   && props.units.some(u => (u.usage || 0) > 0 || (u.hours || 0) > 0)
 )
 
-const chartOptions = {
+const chartOptions = computed(() => ({
   responsive: true,
   maintainAspectRatio: false,
   plugins: {
@@ -76,7 +77,15 @@ const chartOptions = {
   },
   scales: {
     x: { title: { display: false } },
-    y: { beginAtZero: true, title: { display: false } }
+    y: {
+      beginAtZero: true,
+      title: {
+        display: !!props.yLabel,
+        text: props.yLabel || '',   // << ใช้ yLabel ที่ส่งมา
+        font: { size: 15 }
+      }
+    }
   }
-}
+}))
+
 </script>
