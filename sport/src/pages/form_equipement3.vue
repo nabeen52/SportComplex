@@ -142,6 +142,8 @@
             </tbody>
           </table>
         </div>
+
+       
         <!-- ================= ส่วนลายเซ็น/ความเห็น ================= -->
         <div class="form-row" style="padding-top: 10px;">
           <table class="approval-table">
@@ -178,12 +180,14 @@
           </table>
         </div>
         </div>
+        
         <!-- ===== แสดงไฟล์แนบ ===== -->
         <!-- ไฟล์แนบ -->
          <div class="form-row-sign" style="padding-top: 30px; display: flex; align-items: center; gap: 10px;">
   <span style="white-space: nowrap;">ลงชื่อ</span>
   <span class="line-field block-text" style="min-width:140px;">{{ booking?.name || "" }}</span>
 </div>
+
 <div v-if="uploadedFiles.length > 0" class="form-row" style="flex-direction: column; align-items: flex-start; padding-top: 20px;">
   <span style="font-weight: bold; margin-bottom: 6px;">ไฟล์แนบ:</span>
   <ul style="list-style-type: disc; padding-left: 20px; margin: 0;">
@@ -250,19 +254,22 @@ function toggleNotifications() {
 }
 
 function exportToPDF() {
+  smartPageBreak(); // <<<< เพิ่มบรรทัดนี้
   const element = document.getElementById('pdf-section');
   // ตั้งค่ารูปแบบไฟล์ PDF
-  const opt = {
-    margin:       0.2,
-    filename:     `booking-form.pdf`,
-    image:        { type: 'jpeg', quality: 0.98 },
-    html2canvas:  { scale: 2, useCORS: true },
-    jsPDF:        { unit: 'in', format: 'a4', orientation: 'portrait' }
-  };
-  html2pdf().from(element).set(opt).save();
+ const opt = {
+  margin: 0.2,
+  filename: 'booking-form.pdf',
+  image: { type: 'jpeg', quality: 0.98 },
+  html2canvas: { scale: 2, useCORS: true },
+  jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' },
+  pagebreak: { mode: ['css', 'legacy'] }
+};
+html2pdf().from(element).set(opt).save();
 }
 // รับ element id, return Blob ของไฟล์ pdf
 function htmlToPdfBlob(elementId) {
+  smartPageBreak();
   return new Promise((resolve, reject) => {
     const element = document.getElementById(elementId)
     const opt = {
@@ -270,7 +277,8 @@ function htmlToPdfBlob(elementId) {
       filename:     `booking-form.pdf`,
       image:        { type: 'jpeg', quality: 0.98 },
       html2canvas:  { scale: 2, useCORS: true },
-      jsPDF:        { unit: 'in', format: 'a4', orientation: 'portrait' }
+      jsPDF:        { unit: 'in', format: 'a4', orientation: 'portrait' },
+       pagebreak: { mode: ['css', 'legacy'] } 
     }
     html2pdf()
       .from(element)
@@ -288,6 +296,28 @@ function blobToBase64(blob) {
     reader.readAsDataURL(blob)
   })
 }
+
+function smartPageBreak() {
+  // ปรับเป็นขนาด px ตาม jsPDF (1 in = 96 px), A4 สูง ~1122 px ที่ scale=1
+  const PAGE_HEIGHT = 1122 * 0.95; // margin เผื่อขอบเล็กน้อย
+  const pdfSection = document.getElementById('pdf-section');
+  const approvalSection = pdfSection.querySelector('.approval-table').closest('.form-row');
+
+  // เอาความสูงจนถึง approval-section
+  const contentHeight = approvalSection.offsetTop;
+
+  // ลบ page-break เดิม (ถ้ามี)
+  const exist = pdfSection.querySelector('.page-break');
+  if (exist) exist.remove();
+
+  // ถ้าเนื้อหายาวเกิน 1 หน้า ให้แทรก div.page-break ก่อน approval-section
+  if (contentHeight > PAGE_HEIGHT) {
+    const pageBreak = document.createElement('div');
+    pageBreak.className = 'page-break';
+    approvalSection.parentNode.insertBefore(pageBreak, approvalSection);
+  }
+}
+
 function closeNotifications() {
   showNotifications.value = false
 }
@@ -657,6 +687,11 @@ async function handleNext() {
   background: #f7f7f7;
   font-weight: bold;
   text-align: center;
+}
+
+.page-break {
+  page-break-before: always;
+  break-before: page;
 }
 /* ===== CSS แจ้งเตือนแบบ history ===== */
 .notification-dropdown {

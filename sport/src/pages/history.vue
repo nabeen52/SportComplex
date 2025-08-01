@@ -318,7 +318,9 @@ export default {
       cameraImage: null,
       returnGroupBookingId: null, // booking_id ของกลุ่มที่จะ return
       filterType: 'all', // 'all', 'field', 'equipment'
-       isSubmittingReturnPhoto: false, // <<== ตัวแปรป้องกันการส่งซ้ำ
+      isSubmittingReturnPhoto: false, // <<== ตัวแปรป้องกันการส่งซ้ำ
+      lastStatusMap: {},
+      autoRefreshTimer: null,
     }
   },
   
@@ -349,12 +351,34 @@ groupedHistories() {
   });
 
   // ถ้า booking_id เดียวกัน มี status 'returned' อย่างน้อย 1 ชิ้น ให้โชว์เฉพาะ 'returned' เท่านั้น
-  Object.values(groupMap).forEach(group => {
+ Object.values(groupMap).forEach(group => {
+  // เฉพาะอุปกรณ์เท่านั้น
+  if (group.type === 'equipment') {
+    const items = group.items;
+    const allReturnPending = items.every(item => (item.status || '').toLowerCase() === 'return-pending');
+    const anyReturnPending = items.some(item => (item.status || '').toLowerCase() === 'return-pending');
+    const allReturned = items.every(item => (item.status || '').toLowerCase() === 'returned');
+    const anyReturned = items.some(item => (item.status || '').toLowerCase() === 'returned');
+    if (allReturnPending) {
+      group.items = items.filter(item => (item.status || '').toLowerCase() === 'return-pending');
+    } else if (allReturned) {
+      group.items = items.filter(item => (item.status || '').toLowerCase() === 'returned');
+    } else if (anyReturnPending) {
+      // ถ้ามี return-pending อยู่ ให้โชว์เฉพาะ return-pending (เช่น กำลังขอคืนแค่บางอัน)
+      group.items = items.filter(item => (item.status || '').toLowerCase() === 'return-pending');
+    } else if (anyReturned) {
+      group.items = items.filter(item => (item.status || '').toLowerCase() === 'returned');
+    }
+    // ถ้าไม่มี return-pending หรือ returned ก็ปล่อยให้โชว์ทุกสถานะเหมือนเดิม
+  } else if (group.type === 'field') {
+    // อันเดิมของ field
     const hasReturned = group.items.some(item => (item.status || '').toLowerCase() === 'returned');
     if (hasReturned) {
       group.items = group.items.filter(item => (item.status || '').toLowerCase() === 'returned');
     }
-  });
+  }
+});
+
 
   
 
@@ -928,6 +952,12 @@ async reloadHistories() {
   }
 
   // โหลดแจ้งเตือนและตะกร้า
+  this.reloadHistories();
+
+    this.autoRefreshTimer = setInterval(() => {
+    this.reloadHistories();
+  }, 5000);
+
   this.fetchNotifications();
   this.polling = setInterval(this.fetchNotifications, 30000);
 
@@ -940,6 +970,7 @@ watch: {
 },
   beforeUnmount() {
     clearInterval(this.polling);
+     clearInterval(this.autoRefreshTimer);
   }
 
 
