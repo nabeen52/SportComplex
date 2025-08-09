@@ -80,53 +80,56 @@
         <div class="form-grid">
           <!-- Name -->
           <div class="form-row">
-            <label>
-              ชื่อ-นามสกุล
-              <span v-if="touched && (showError && !form.name)" style="color:red">*</span>
-            </label>
-            <input
-              type="text"
-              class="custom-input"
-              v-model="form.name"
-              :class="{ 'is-invalid': touched && showError && !form.name }"
-              :readonly="true"
-            />
-
-          </div>
-          <!-- Student ID -->
-          <div class="form-row">
-            <label>
-              รหัสนักศึกษา
-              <span v-if="touched && (showError && !form.user_id)" style="color:red">*</span>
-            </label>
-            <input
-              type="text"
-              class="custom-input"
-              v-model="form.user_id"
-              :class="{ 'is-invalid': touched && showError && !form.user_id }"
-              :readonly="true"
-            />
-
-          </div>
-          <!-- Agency (หน่วยงาน) -->
-          <div class="form-row" style="position:relative;">
           <label>
-            ชื่อหน่วยงาน
-            <span v-if="touched && (showError && !agencyInput)" style="color:red">*</span>
+            ชื่อ-นามสกุล
+            <span v-if="touched && (showError && !username_form)" style="color:red">*</span>
           </label>
           <input
-            class="custom-input"
-            type="text"
-            v-model="agencySearch"
-            @input="filterAgency"
-            @focus="onAgencyFocus"
-            @blur="onAgencyBlur"
-            :readonly="isFormLocked || (isAgencySelected && agencyInput)"
-            placeholder="ค้นหาหรือเลือกหน่วยงาน"
-            autocomplete="off"
-            :class="{ 'is-invalid': touched && showError && !agencyInput }"
-            style="flex:1"
+          type="text"
+          class="custom-input"
+          v-model="form.username_form"
+          :class="{ 'is-invalid': touched && showError && !form.username_form }"
+          :readonly="false"
           />
+        </div>
+          <!-- Student ID -->
+          <div class="form-row">
+  <label>
+    รหัสนักศึกษา/พนักงาน
+    <span v-if="touched && (showError && !id_form)" style="color:red">*</span>
+      </label>
+      <input
+        type="text"
+        class="custom-input"
+        v-model="form.id_form"
+        :class="{ 'is-invalid': touched && showError && !form.id_form }"
+        :readonly="false"
+        inputmode="numeric"
+        pattern="\d*"
+        @input="onIdInput"
+      />
+    </div>
+          <!-- Agency (หน่วยงาน) -->
+          <div class="form-row" style="position:relative;">
+  <label>
+    ชื่อหน่วยงาน
+    <span v-if="touched && (showError && !agencyInput)" style="color:red">*</span>
+  </label>
+  <input
+    ref="agencyInputEl"
+    class="custom-input"
+    type="text"
+    v-model="agencySearch"
+    @click="maybeEnterEdit"
+    @input="filterAgency"
+    @focus="onAgencyFocus"
+    @blur="onAgencyBlur"
+    :readonly="isFormLocked || (isAgencySelected && !!agencyInput && !isAgencyEditing)"
+    placeholder="ค้นหาหรือเลือกหน่วยงาน"
+    autocomplete="off"
+    :class="{ 'is-invalid': touched && showError && !agencyInput }"
+    style="flex:1"
+  />
 
   <ul v-if="agencyDropdownOpen && filteredAgencyOptions.length" class="agency-dropdown">
     <li
@@ -165,8 +168,8 @@
           <!-- Phone number -->
           <div class="form-row">
             <label>
-              เบอร์โทรศัพท์
-              <span v-if="touched && (showError && (!form.number || form.number.length !== 10))" style="color:red">*</span>
+              เบอร์โทรติดต่อ
+              <span v-if="touched && (showError && !form.number)" style="color:red">*</span>
             </label>
             <input
               type="text"
@@ -177,7 +180,7 @@
               pattern="\d*"
               @input="onPhoneInput"
               :readonly="isFormLocked"
-              :class="{ 'is-invalid': touched && (showError && (!form.number || form.number.length !== 10)) }"
+              :class="{ 'is-invalid': touched && (showError && !form.number) }"
             />
           </div>
           <!-- Reason -->
@@ -211,56 +214,61 @@
             ></textarea>
           </div>
 
-          <!-- Date range -->
-          <div class="form-row date-range-row">
+          <!-- ช่วงวันที่ -->
+
+<div class="form-row date-range-row">
   <label>
     ช่วงวันที่
     <span v-if="touched && (showError && (!form.start_date || !form.end_date))" style="color:red">*</span>
   </label>
-  <div class="date-range-group">
-    <input
-      type="date"
-      :min="today"
-      v-model="form.start_date"
-      @change="syncDateRange('start')"
-      class="custom-input"
-      :readonly="isFormLocked"
-      :class="{ 'is-invalid': touched && showError && !form.start_date }"
-      style="width: 48%;"
+  <div class="date-range-group" style="gap:8px; width:100%">
+    <VueDatePicker
+      v-model="dpStart"
+      :format="formatBE"
+      :enable-time-picker="false"
+      :min-date="new Date()"
+      :state="!(touched && showError && !form.start_date)"
+      :disabled="isFormLocked"
+      placeholder="วัน/เดือน/พ.ศ."
+      style="width:48%"
+      locale="th"
+      :hide-input-icon="true"
     />
-    <span style="margin: 0 6px;">-</span>
-    <input
-      type="date"
-      :min="form.start_date || today"
-      v-model="form.end_date"
-      @change="syncDateRange('end')"
-      class="custom-input"
-      :readonly="isFormLocked"
-      :class="{ 'is-invalid': touched && showError && !form.end_date }"
-      style="width: 48%;"
+    <span>-</span>
+    <VueDatePicker
+      v-model="dpEnd"
+      :format="formatBE"
+      :enable-time-picker="false"
+      :min-date="dpStart || new Date()"
+      :state="!(touched && showError && !form.end_date)"
+      :disabled="isFormLocked"
+      placeholder="วัน/เดือน/พ.ศ."
+      style="width:48%"
+      locale="th"
+      :hide-input-icon="true"
     />
   </div>
   <small class="note-text">* กรุณาจองก่อนใช้งานจริง 5 วัน</small>
 </div>
 
-          <!-- รับของวันไหนเวลาไหน: แถวเดียวเหมือนช่วงวันที่ -->
+<!-- วันที่และเวลาที่มารับของ -->
 <div class="form-row date-range-row">
-  <label>
-    วันที่และเวลาที่มารับของ
-  </label>
-  <div class="date-range-group">
-    <input
-      type="date"
-      v-model="form.receive_date"
-      class="custom-input"
-      :class="{ 'is-invalid': touched && showError && !form.receive_date }"
-      :readonly="isFormLocked"
-      :min="form.start_date || today"
-      :max="form.end_date || ''"
+  <label>วันที่และเวลาที่มารับของ</label>
+  <div class="date-range-group" style="gap:8px; width:100%">
+    <VueDatePicker
+      v-model="dpReceive"
+      :format="formatBE"
+      :enable-time-picker="false"
+      :min-date="dpStart || new Date()"
+      :max-date="dpEnd || null"
       :disabled="!form.start_date || !form.end_date || isFormLocked"
-      style="width: 48%;"
+      :state="!(touched && showError && !form.receive_date)"
+      placeholder="วัน/เดือน/พ.ศ."
+      style="width:48%"
+      locale="th"
+      :hide-input-icon="true"
     />
-    <span style="margin: 0 6px;">-</span>
+    <span>-</span>
     <input
       type="time"
       v-model="form.receive_time"
@@ -268,10 +276,13 @@
       :class="{ 'is-invalid': touched && showError && !form.receive_time }"
       :readonly="isFormLocked"
       :disabled="!form.start_date || !form.end_date || isFormLocked"
-      style="width: 48%;"
+      style="width:48%;"
     />
   </div>
 </div>
+
+
+
 
 
          <!-- เฉพาะ block แนบไฟล์ใน template -->
@@ -398,11 +409,16 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, onBeforeUnmount, watch, computed } from 'vue'
+import { ref, reactive, onMounted, onBeforeUnmount, watch, computed, nextTick } from 'vue'
 import axios from 'axios'
 import { useRouter, useRoute, onBeforeRouteLeave } from 'vue-router'
 import Swal from 'sweetalert2'
 
+import VueDatePicker from '@vuepic/vue-datepicker'
+import '@vuepic/vue-datepicker/dist/main.css'
+import dayjs from 'dayjs'
+// ==== เพิ่มตัวแปรชั่วคราวสำหรับไฟล์ (ระดับ window) ====
+if (!window._equipTempFiles) window._equipTempFiles = []  // File[] จริง
 const API_BASE = import.meta.env.VITE_API_BASE
 const products = ref([]) // จำนวนรายการในรถเข็น
 const router = useRouter()
@@ -415,9 +431,46 @@ const LS_FORM_KEY = 'equipmentFormData'
 const isFormLocked = ref(false)
 const selectedFiles = ref([])       // ใช้สำหรับแสดงรายชื่อไฟล์แนบ
 const fileError = ref(false)
-
 const agencySearch = ref('');
 const agencyDropdownOpen = ref(false);
+const agencyInputEl = ref(null)
+const isAgencyEditing = ref(false)
+const fileUploadInput = ref(null)
+const dpStart = ref(null)       // Date | null
+const dpEnd = ref(null)         // Date | null
+const dpReceive = ref(null)
+
+const lastSeenTimestamp = ref(parseInt(localStorage.getItem('lastSeenTimestamp') || '0'))
+
+
+// Date | null
+function fileExt(name='') {
+  return (name.split('.').pop() || '').toLowerCase()
+}
+
+function pruneOldNotifications() {
+  const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000
+  notifications.value = notifications.value.filter(n => (n?.timestamp ?? 0) >= cutoff)
+}
+
+function makePreviewRecord(file) {
+  const url = URL.createObjectURL(file) // blob URL
+  return { name: file.name, size: file.size, type: file.type, url, ext: fileExt(file.name) }
+}
+
+function revokePreview(record) {
+  try { record?.url && URL.revokeObjectURL(record.url) } catch {}
+}
+
+function maybeEnterEdit() {
+  if (isFormLocked.value) return
+  if (isAgencySelected.value && !isAgencyEditing.value) {
+    isAgencyEditing.value = true        // ปลดล็อกให้พิมพ์ได้
+    agencyDropdownOpen.value = true     // เปิด dropdown
+    agencySearch.value = ''             // เคลียร์ข้อความเพื่อพิมพ์หาใหม่
+    nextTick(() => agencyInputEl.value?.focus())
+  }
+}
 
 const filteredAgencyOptions = computed(() => {
   const search = agencySearch.value.trim().toLowerCase();
@@ -429,31 +482,38 @@ const filteredAgencyOptions = computed(() => {
 
 
 function filterAgency() {
-  if (isAgencySelected.value) {
-    agencySearch.value = '';
-  }
-  agencyDropdownOpen.value = true;
+  agencyDropdownOpen.value = true
+  isAgencyEditing.value = true
 }
 
 function onAgencyFocus() {
+  isAgencyEditing.value = true
+  agencyDropdownOpen.value = true
   if (isAgencySelected.value) {
-    agencySearch.value = '';
+    agencySearch.value = ''
   }
-  agencyDropdownOpen.value = true;
 }
 
 function selectAgency(option) {
-  agencyInput.value = option;
-  agencySearch.value = option;
-  agencyDropdownOpen.value = false;
-  handleAgencyChange();
+  agencyInput.value = option
+  agencySearch.value = option
+  agencyDropdownOpen.value = false
+  isAgencyEditing.value = false       // เลือกเสร็จกลับไปล็อก
+  handleAgencyChange()
 }
 
 // ปิด dropdown เมื่อหลุด focus (รอสักนิดป้องกันกดเลือกหาย)
 function onAgencyBlur() {
   setTimeout(() => {
-    agencyDropdownOpen.value = false;
-  }, 180);
+    agencyDropdownOpen.value = false
+    isAgencyEditing.value = false     // กลับไปล็อกหลังจากหลุดโฟกัส
+  }, 180)
+}
+
+function onIdInput(e) {
+  // เอาเฉพาะตัวเลข
+  let digits = e.target.value.replace(/\D/g, '');
+  form.id_form = digits;
 }
 
 
@@ -468,6 +528,8 @@ const form = reactive({
   book_no: '',
   receive_date: '',
   receive_time: '',
+  username_form: '',
+  id_form: '',
 })
 
 const agencyOptions = ref([])
@@ -503,11 +565,36 @@ function clearAgency() {
   otherAgencyDetail.value = ''
 }
 
+function safeDate(str) {
+  if (!str) return null
+  const d = new Date(str)
+  return isNaN(d) ? null : d
+}
+
+// แสดงผลเป็น dd/MM/BBBB (พ.ศ.)
+function formatBE(date) {
+  if (!date) return ''
+  const y = date.getFullYear() + 543
+  const m = String(date.getMonth() + 1).padStart(2,'0')
+  const d = String(date.getDate()).padStart(2,'0')
+  return `${d}/${m}/${y}`
+}
+
+// แปลง Date -> 'YYYY-MM-DD' (ค.ศ.) สำหรับส่งเข้า DB
+function toISO(date) {
+  if (!date || isNaN(date)) return ''
+  return dayjs(date).format('YYYY-MM-DD')
+}
 
 function toggleNotifications() {
   showNotifications.value = !showNotifications.value
-  if (showNotifications.value) unreadCount.value = 0
+  if (showNotifications.value) {
+    lastSeenTimestamp.value = Date.now()
+    localStorage.setItem('lastSeenTimestamp', String(lastSeenTimestamp.value))
+    unreadCount.value = 0
+  }
 }
+
 
 async function loadCart() {
   if (!userId) return
@@ -544,7 +631,7 @@ function validateFields() {
   if (!form.user_id) fields['user_id'] = true
   if (!agencyInput.value || String(agencyInput.value).trim() === "") fields['agency'] = true
   if (agencyInput.value === 'อื่นๆ' && (!customAgency.value || String(customAgency.value).trim() === "")) fields['agencyOther'] = true
-  if (!form.number || form.number.length !== 10) fields['number'] = true
+  if (!form.number) fields['number'] = true
   if (!form.reason) fields['reason'] = true
   if (!form.location) fields['location'] = true
   if (!form.start_date) fields['start_date'] = true
@@ -552,6 +639,9 @@ function validateFields() {
   if (!selectedFiles.value.length) fields['file'] = true
   if (!form.receive_date) fields['receive_date'] = true
   if (!form.receive_time) fields['receive_time'] = true
+
+  if (!form.username_form) fields['username_form'] = true
+  if (!form.id_form) fields['id_form'] = true
 
   let invalidQty = false
   for (const name in cartMap) {
@@ -566,58 +656,20 @@ function validateFields() {
   return Object.keys(fields).length === 0
 }
 
-function hasUploadedFile() {
+function hasUploadedFile() {   // เปลี่ยนความหมายเป็น "มีไฟล์ถูกเลือก"
   return selectedFiles.value.length > 0
 }
 
-function handleFileChange(event) {
-  const allowedExts = [".png", ".jpg", ".jpeg", ".pdf", ".xls", ".xlsx", ".doc", ".docx"]
-  const files = Array.from(event.target.files).filter(file =>
-    allowedExts.some(ext => file.name.toLowerCase().endsWith(ext))
-  )
-  if (files.length !== event.target.files.length) {
-    Swal.fire('รองรับเฉพาะไฟล์ .png, .jpg, .jpeg, .pdf, .xls, .xlsx, .doc, .docx', '', 'warning')
-  }
-  const promises = files.map(file =>
-    new Promise(resolve => {
-      const reader = new FileReader()
-      reader.onload = e => resolve({
-        fileData: e.target.result,
-        fileName: file.name,
-        mimeType: file.type
-      })
-      reader.readAsDataURL(file)
-    })
-  )
-  Promise.all(promises).then(results => {
-    localStorage.setItem('equipment_upload_file', JSON.stringify(results))
-    selectedFiles.value = results.map(f => ({
-      name: f.fileName,
-      type: f.mimeType,
-      size: f.fileData.length,
-      data: f.fileData
-    }))
-  })
-}
+
+
 
 function loadUploadedFiles() {
-  const data = localStorage.getItem('equipment_upload_file')
-  if (data) {
-    try {
-      const arr = JSON.parse(data)
-      selectedFiles.value = arr.map(f => ({
-        name: f.fileName,
-        size: f.fileData.length,
-        type: f.mimeType,
-        data: f.fileData
-      }))
-    } catch (e) {
-      selectedFiles.value = []
-    }
-  } else {
-    selectedFiles.value = []
-  }
+  const files = Array.isArray(window._equipTempFiles) ? window._equipTempFiles : []
+  // เคลียร์ของเก่าก่อน
+  selectedFiles.value.forEach(revokePreview)
+  selectedFiles.value = files.map(makePreviewRecord)
 }
+
 
 function validateBeforeSubmit() {
   if (!hasUploadedFile()) {
@@ -674,37 +726,36 @@ function closeNotifications() {
 }
 
 async function submitBooking() {
-  touched.value = true   // ตั้งค่านี้เพื่อให้แสดงดอกจันและ error
+  touched.value = true
   if (!validateFields() || !validateBeforeSubmit()) {
     Swal.fire('กรุณากรอกข้อมูลให้ครบถ้วน', '', 'warning')
     return
   }
-  let uploadedFiles = []
-  try {
-    uploadedFiles = await uploadSelectedFiles()
-  } catch (err) {
-    Swal.fire('อัปโหลดไฟล์ไม่สำเร็จ', err.message, 'error')
-    return
-  }
+
   const items = Object.entries(selectedQuantities).map(([name, amount]) => ({
     item_name: name,
     amount: amount,
     remark: equipmentRemarks[name] || ""
   }))
+
   const bookingPayload = {
     ...form,
+    username_form: form.username_form,
+    id_form: form.id_form,
     agency: agencyInput.value === 'อื่นๆ' ? customAgency.value : agencyInput.value,
     agency_detail: otherAgencyDetail.value || '',
-    items,
-    attachedFiles: uploadedFiles
+    items
+    // ❌ ไม่ส่งไฟล์ ณ ตอนนี้
   }
+
   try {
     const res = await axios.post(`${API_BASE}/api/booking_equipment`, bookingPayload)
     const booking = res.data?.booking || res.data
     localStorage.setItem('equipmentFormData', JSON.stringify({
-      form: { ...form,
-        agency: agencyInput.value === 'อื่นๆ' ? customAgency.value : agencyInput.value,
-        agency_detail: otherAgencyDetail.value || '',
+      form: { 
+        ...form,
+        agency: bookingPayload.agency,
+        agency_detail: bookingPayload.agency_detail,
         booking_id: booking._id || booking.booking_id
       },
       selectedQuantities: { ...selectedQuantities },
@@ -713,11 +764,14 @@ async function submitBooking() {
       otherAgencyDetail: otherAgencyDetail.value,
       equipmentRemarks: { ...equipmentRemarks }
     }))
+    // ✅ ไปหน้า 3 เพื่ออัปโหลดจริง
     router.push('/form_equipment3')
   } catch (err) {
     Swal.fire('บันทึกข้อมูลไม่สำเร็จ', err?.response?.data?.message || err.message, 'error')
   }
 }
+
+
 
 function handleAgencyChange() {
   if (agencyInput.value !== 'อื่นๆ') {
@@ -738,61 +792,78 @@ function toggleSidebar() {
 async function fetchNotifications() {
   if (!userId) return
   try {
+    // ล้างรายการที่เกิน 7 วันก่อน
+    pruneOldNotifications()
+
     const res = await axios.get(`${API_BASE}/api/history?user_id=${userId}`)
-    const filterStatus = ['approved', 'disapproved', 'cancel', 'canceled', 'returned']
+    const targetStatuses = ['approved', 'disapproved', 'cancel', 'canceled', 'returned']
+
     const newNotis = (res.data || []).filter(item =>
-      filterStatus.includes((item.status || '').toLowerCase())
+      targetStatuses.includes((item.status || '').toLowerCase()) &&
+      !lastCheckedIds.has(item._id)
     )
-    if (newNotis.length > 0) {
-      notifications.value = newNotis
-        .map(item => ({
-          id: item._id,
-          type: (item.status || '').toLowerCase(),
-          timestamp: item.returnedAt
-            ? new Date(item.returnedAt).getTime()
-            : item.updatedAt
-            ? new Date(item.updatedAt).getTime()
-            : item.approvedAt
-            ? new Date(item.approvedAt).getTime()
-            : item.date
-            ? new Date(item.date).getTime()
-            : Date.now(),
-          message: `รายการ '${item.name}' ของคุณ${
-            (item.status || '').toLowerCase() === 'approved'
-              ? ' ได้รับการอนุมัติ'
-              : (item.status || '').toLowerCase() === 'disapproved'
-              ? ' ไม่ได้รับการอนุมัติ'
-              : (item.status || '').toLowerCase() === 'cancel' || (item.status || '').toLowerCase() === 'canceled'
-              ? ' ถูกยกเลิก'
-              : (item.status || '').toLowerCase() === 'returned'
-              ? ' คืนของสำเร็จแล้ว'
-              : ''
-          }`
-        }))
+
+    if (newNotis.length) {
+      const newMessages = newNotis.map(item => ({
+        id: item._id,
+        type: (item.status || '').toLowerCase(),
+        timestamp: item.returnedAt
+          ? new Date(item.returnedAt).getTime()
+          : item.updatedAt
+          ? new Date(item.updatedAt).getTime()
+          : item.approvedAt
+          ? new Date(item.approvedAt).getTime()
+          : item.date
+          ? new Date(item.date).getTime()
+          : Date.now(),
+        message: `รายการ '${item.name}' ของคุณ${
+          (item.status || '').toLowerCase() === 'approved'
+            ? ' ได้รับการอนุมัติ'
+            : (item.status || '').toLowerCase() === 'disapproved'
+            ? ' ไม่ได้รับการอนุมัติ'
+            : (item.status || '').toLowerCase() === 'cancel' || (item.status || '').toLowerCase() === 'canceled'
+            ? ' ถูกยกเลิก'
+            : (item.status || '').toLowerCase() === 'returned'
+            ? ' คืนของสำเร็จแล้ว'
+            : ''
+        }`
+      }))
+
+      // รวม + ตัดซ้ำ + เรียงใหม่สุดบน
+      notifications.value = [...notifications.value, ...newMessages]
+        .filter((v, i, arr) => arr.findIndex(x => x.id === v.id) === i)
         .sort((a, b) => b.timestamp - a.timestamp)
-      unreadCount.value = notifications.value.length
-    } else {
-      notifications.value = []
-      unreadCount.value = 0
+
+      // เพิ่มเข้า set กันซ้ำรอบต่อไป
+      newNotis.forEach(item => lastCheckedIds.add(item._id))
+
+      // ล้างรายการเก่าเกิน 7 วันอีกครั้งหลัง merge
+      pruneOldNotifications()
     }
+
+    // นับเฉพาะที่ timestamp > lastSeenTimestamp
+    unreadCount.value = notifications.value.filter(n => n.timestamp > lastSeenTimestamp.value).length
   } catch (err) {
-    notifications.value = []
-    unreadCount.value = 0
+    // เงียบไว้ ไม่รบกวนผู้ใช้
   }
 }
+
 
 let polling = null
 
 onMounted(async () => {
+    lastSeenTimestamp.value = parseInt(localStorage.getItem('lastSeenTimestamp') || '0')
   const newBookingId = "EQ" + Date.now() + Math.floor(Math.random() * 1000000)
   localStorage.setItem('equipment_booking_id', newBookingId)
   touched.value = false
+
   try {
     const res = await axios.get(`${API_BASE}/api/equipments`)
     equipments.value = res.data.map(e => ({ ...e, amount: e.quantity }))
   } catch {
     equipments.value = []
   }
+
   try {
     const res = await axios.get(`${API_BASE}/api/information?type=equipment`)
     const uniqueUnits = [...new Set(res.data.map(item => item.unit))]
@@ -801,6 +872,7 @@ onMounted(async () => {
   } catch {
     agencyOptions.value = ['อื่นๆ']
   }
+
   if (route.query.items) {
     try {
       const items = JSON.parse(route.query.items)
@@ -835,24 +907,37 @@ onMounted(async () => {
       Object.assign(equipmentRemarks, saved.equipmentRemarks || {})
     }
   }
+
   loadUploadedFiles()
+
+  // โหลด user_id เดิม
   form.user_id = localStorage.getItem('user_id') || ''
   if (form.user_id) {
     try {
       const resUser = await axios.get(`${API_BASE}/api/users/${form.user_id}`)
       form.name = resUser.data.name || ''
+      // เซ็ตค่าลงตัวแปร textbox ใหม่
+      username_form.value = form.name
+      id_form.value = form.user_id
     } catch (err) {
       console.error('โหลดชื่อผู้ใช้ไม่สำเร็จ', err)
     }
   }
+
+  // ✅ เซ็ตค่า Datepicker จากค่าที่มีอยู่ (ISO -> Date object)
+  dpStart.value   = safeDate(form.start_date)
+  dpEnd.value     = safeDate(form.end_date)
+  dpReceive.value = safeDate(form.receive_date)
+
   fetchNotifications()
   polling = setInterval(fetchNotifications, 30000)
   await loadCart()
+})
 
-})
 onBeforeUnmount(() => {
-  clearInterval(polling)
+  if (polling) clearInterval(polling)
 })
+
 
 function resetForm() {
   const name = form.name
@@ -873,45 +958,89 @@ function resetForm() {
   customAgency.value = ''
   otherAgencyDetail.value = ''
   fileError.value = false
+  selectedFiles.value.forEach(revokePreview)
   selectedFiles.value = []
+  window._equipTempFiles = []
   localStorage.removeItem('equipment_upload_file')
+if (fileUploadInput.value) fileUploadInput.value.value = ''
   // Object.keys(selectedQuantities).forEach(key => delete selectedQuantities[key])
   // Object.keys(cartMap).forEach(key => delete cartMap[key])
   // Object.keys(equipmentRemarks).forEach(key => delete equipmentRemarks[key])
   touched.value = false
   showError.value = false
+  dpStart.value = null
+dpEnd.value = null
+dpReceive.value = null
 }
 
 function removeFile(idx) {
+  if (!Array.isArray(window._equipTempFiles)) window._equipTempFiles = []
+  // revoke URL ก่อนลบ
+  revokePreview(selectedFiles.value[idx])
+
+  window._equipTempFiles.splice(idx, 1)
   selectedFiles.value.splice(idx, 1)
-  const arr = JSON.parse(localStorage.getItem('equipment_upload_file') || '[]')
-  arr.splice(idx, 1)
-  if (arr.length === 0) {
-    localStorage.removeItem('equipment_upload_file')
-  } else {
-    localStorage.setItem('equipment_upload_file', JSON.stringify(arr))
-  }
+  fileError.value = selectedFiles.value.length === 0
 }
 
-// ฟังก์ชัน preview
-function previewFile(file) {
-  const ext = file.name.split('.').pop().toLowerCase()
-  if (file.data) {
-    openFilePreview(file.data, ext, file.name)
-  } else {
-    Swal.fire('กรุณาเลือกไฟล์ใหม่อีกครั้งเพื่อดูตัวอย่าง', '', 'info')
-  }
+// ===== helper: อ่านไฟล์เป็น dataURL =====
+function readFileAsDataURL(file) {
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader()
+    fr.onload = () => resolve(fr.result) // dataURL
+    fr.onerror = reject
+    fr.readAsDataURL(file)
+  })
 }
+
+async function handleFileChange(e) {
+  const allowed = [".png",".jpg",".jpeg",".pdf",".xls",".xlsx",".doc",".docx"]
+  const inputFiles = Array.from(e.target.files || [])
+  const valid = inputFiles.filter(f => allowed.some(ext => f.name.toLowerCase().endsWith(ext)))
+
+  if (valid.length !== inputFiles.length) {
+    Swal.fire('รองรับเฉพาะไฟล์ .png, .jpg, .jpeg, .pdf, .xls, .xlsx, .doc, .docx', '', 'warning')
+  }
+
+  // เก็บ File จริงไว้ใช้หน้า 3
+  window._equipTempFiles = valid
+
+  // เคลียร์ของเก่า (revoke URL เดิมก่อน)
+  selectedFiles.value.forEach(revokePreview)
+  selectedFiles.value = valid.map(makePreviewRecord)
+
+  fileError.value = selectedFiles.value.length === 0
+
+  // อนุญาตให้เลือกชื่อเดิมซ้ำ
+  if (fileUploadInput.value) fileUploadInput.value.value = ''
+}
+
+
+// พรีวิวจาก selectedFiles ที่มี dataUrl
+function previewFile(file) {
+  // รูป & PDF เปิดดูในแท็บใหม่ได้เลย
+  if (["png","jpg","jpeg","pdf"].includes(file.ext)) {
+    const w = window.open(file.url, '_blank', 'noopener')
+    return
+  }
+  // ไฟล์ office ดาวน์โหลดแทน
+  const a = document.createElement('a')
+  a.href = file.url
+  a.download = file.name
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+}
+
+
 function openFilePreview(dataUrl, ext, fileName) {
-  if (["png", "jpg", "jpeg", "pdf"].includes(ext)) {
-    const win = window.open()
-    win.document.write(
-      ext === "pdf"
-        ? `<iframe src="${dataUrl}" width="100%" height="100%" style="border:0;min-height:90vh"></iframe>`
-        : `<img src="${dataUrl}" style="max-width:90vw;max-height:90vh;display:block;margin:auto"/>`
-    )
+  if (["png", "jpg", "jpeg"].includes(ext)) {
+    const w = window.open()
+    w.document.write(`<img src="${dataUrl}" style="max-width:95vw;max-height:95vh;display:block;margin:auto"/>`)
+  } else if (ext === "pdf") {
+    const w = window.open()
+    w.document.write(`<iframe src="${dataUrl}" width="100%" height="100%" style="border:0;min-height:95vh"></iframe>`)
   } else {
-    // .doc .xls .xlsx → Download
     const a = document.createElement('a')
     a.href = dataUrl
     a.download = fileName
@@ -926,11 +1055,20 @@ const FORM_ROUTES = [
   '/form_equipment4'
 ]
 onBeforeRouteLeave((to, from, next) => {
-  if (!FORM_ROUTES.includes(to.path)) {
-    localStorage.removeItem('equipment_upload_file')
-    selectedFiles.value = []
+  try {
+    if (!FORM_ROUTES.includes(to.path)) {
+      selectedFiles.value.forEach(revokePreview)
+      selectedFiles.value = []
+      fileError.value = false
+      window._equipTempFiles = []
+      localStorage.removeItem('equipment_upload_file')
+      if (fileUploadInput.value) fileUploadInput.value.value = ''
+    }
+  } catch (e) {
+    console.error('leave guard error:', e)
+  } finally {
+    next()
   }
-  next()
 })
 // =====================================================================================================
 
@@ -963,11 +1101,37 @@ watch(agencySearch, (v) => {
   }
 });
 
+watch(dpStart, (d) => {
+  if (!d || isNaN(d)) {
+    form.start_date = ''
+    return
+  }
+  form.start_date = toISO(d)
+  // ถ้า end < start ให้ดัน end ขึ้นมา
+  if (dpEnd.value && !isNaN(dpEnd.value) && dpEnd.value < d) {
+    dpEnd.value = d
+  }
+})
+
+watch(dpEnd, (d) => {
+  if (!d || isNaN(d)) {
+    form.end_date = ''
+    return
+  }
+  form.end_date = toISO(d)
+  // กันกรณี end < start
+  if (dpStart.value && !isNaN(dpStart.value) && d < dpStart.value) {
+    dpStart.value = d
+  }
+})
+
+watch(dpReceive, (d) => {
+  form.receive_date = (!d || isNaN(d)) ? '' : toISO(d)
+})
+
+
+
 </script>
-
-
-
-
 <style scoped>
 .headStepper {
   background-color: white;
@@ -1419,6 +1583,22 @@ watch(agencySearch, (v) => {
   background: #f4f6fa;
 }
 
+.equipment-table thead th {
+  text-align: center !important;
+  vertical-align: middle;
+}
+
+.equipment-table td:nth-child(2) {
+  text-align: center;
+}
+
+/* จัดกล่องกรอกจำนวนให้มาอยู่กลาง แล้วตัวเลขในกล่องก็อยู่กลาง */
+.equipment-table td:nth-child(2) .equipment-amount-input {
+  display: block;
+  margin: 0 auto;
+  text-align: center;
+}
+
 
 
 
@@ -1458,6 +1638,36 @@ watch(agencySearch, (v) => {
   }
 }
 
+:deep(.dp__input) {
+  border-color: #727272 !important; /* ขอบเทาเหมือนช่องอื่น */
+  box-shadow: none !important;
+
+  border-radius: 8px !important; /* ปรับให้เท่ากับ custom-input */
+  border: 1px solid #ccc;        /* ขอบเทาเหมือนช่องอื่น */
+  height: 40px;                  /* ความสูงเท่ากัน */
+  padding: 10px 14px;
+  box-sizing: border-box;
+}
+:deep(.dp__input_focus) {
+  border-color: #ccc !important; /* ลบสีเขียวตอน focus */
+  box-shadow: none !important;
+}
+
+/* ให้ปฏิทินซ้อนทับ element อื่นได้ */
+:deep(.dp__menu) { z-index: 3000; }
+
+:deep(.dp-like-custom) {
+  padding-left: 40px !important; /* เว้นที่ให้ไอคอน */
+  height: 40px;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1; /* เทาเดียวกับ custom-input */
+  background-color: #f9fafb;
+}
+
+/* จัดตำแหน่งไอคอนให้อยู่ซ้ายพอดี (เผื่อธีมเดิมขยับ) */
+:deep(.dp__input_wrap .dp__icon) {
+  left: 12px;
+}
 
 </style>
 

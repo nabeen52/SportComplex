@@ -27,7 +27,7 @@ const Information = require('./models/information');
 const bcrypt = require('bcrypt');
 const UploadFile = require('./models/upload_file');
 const BookingField = require('./models/booking_field');
-
+const app = express();
 
 const jwt = require('jsonwebtoken');
 const SECRET = process.env.JWT_SECRET || "YOUR_SUPER_SECRET";
@@ -42,6 +42,12 @@ const transporter = nodemailer.createTransport({
     }
 });
 
+
+const uploadDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+}
+app.use('/uploads', express.static(uploadDir));
 // ฟังก์ชันสำหรับส่งอีเมล
 // ฟังก์ชันส่งอีเมล
 async function sendApproveEmail({ to, name, equipment, quantity }) {
@@ -355,7 +361,7 @@ async function saveGoogleProfilePic(picUrl, userId) {
 // });
 
 
-const app = express();
+
 // Connect MongoDB
 
 
@@ -394,8 +400,8 @@ app.use(cors({
     credentials: true
 }));
 
-app.use(express.json({ limit: '20mb' }));
-app.use(express.urlencoded({ limit: '20mb', extended: true }));
+app.use(express.json({ limit: '100mb' }));
+app.use(express.urlencoded({ limit: '100mb', extended: true }));
 
 //login oauth
 
@@ -793,23 +799,22 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 const upload = multer({
     storage: multer.diskStorage({
         destination: function (req, file, cb) {
-            cb(null, './uploads/');
+            cb(null, uploadDir);               // ใช้ absolute path
         },
         filename: function (req, file, cb) {
-            const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-            cb(null, uniqueSuffix + path.extname(file.originalname));
+            const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
+            cb(null, unique + path.extname(file.originalname));
         }
     }),
-    limits: { fileSize: 10 * 1024 * 1024 },
     fileFilter: function (req, file, cb) {
-        const allowedExt = ['.png', '.jpg', '.jpeg', '.pdf'];
-        const ext = path.extname(file.originalname).toLowerCase();
-        if (!allowedExt.includes(ext)) {
-            return cb(new Error('Unsupported file type'), false);
-        }
-        cb(null, true);
+        const allowed = ['.png', '.jpg', '.jpeg', '.pdf', '.xls', '.xlsx', '.doc', '.docx'];
+        return allowed.includes(path.extname(file.originalname).toLowerCase())
+            ? cb(null, true)
+            : cb(new Error('Unsupported file type'), false);
     }
 });
+
+
 
 
 app.post('/api/upload', upload.single('file'), (req, res) => {
@@ -822,6 +827,16 @@ app.post('/api/upload', upload.single('file'), (req, res) => {
         fileUrl: fullUrl
     });
 });
+
+app.post('/api/uploads', upload.array('files', 20), (req, res) => {
+    if (!req.files || req.files.length === 0) {
+        return res.status(400).json({ success: false, message: 'No files uploaded' });
+    }
+    const baseUrl = `${req.protocol}://${req.get('host')}/uploads/`;
+    const fileUrls = req.files.map(f => baseUrl + f.filename);
+    res.json({ success: true, fileUrls });
+});
+
 // ===========================================================================
 
 // ==================== Health Check ====================
@@ -891,7 +906,7 @@ app.post('/api/register', (req, res) => {
 
 //         // บังคับให้ login ได้เฉพาะ email @mfu.ac.th เท่านั้น
 //         if (!(username.endsWith('@lamduan.mfu.ac.th') || username.endsWith('@mfu.ac.th'))) {
- 
+
 //             return res.status(401).json({ success: false, message: 'กรุณาใช้ email ที่ลงท้ายด้วย @mfu.ac.th' });
 //         }
 
@@ -1216,6 +1231,7 @@ app.patch('/api/users/update_id', async (req, res) => {
 });
 
 // ==================== History (Borrow/Return/Approve/Disapprove) ====================
+// ==================== History (Borrow/Return/Approve/Disapprove) ====================
 app.post('/api/history', async (req, res) => {
     try {
         // Default ให้ quantity = 1 สำหรับ type field
@@ -1237,9 +1253,11 @@ app.post('/api/history', async (req, res) => {
             zone: req.body.zone || "",
             startTime: req.body.startTime || req.body.start_time || "",
             endTime: req.body.endTime || req.body.end_time || "",
-            booking_id: req.body.booking_id || ""
+            booking_id: req.body.booking_id || "",
+            // เพิ่ม field ใหม่
+            username_form: req.body.username_form || '',
+            id_form: req.body.id_form || '',
         };
-        // ถ้ามีรายการซ้ำ (pending) อยู่แล้ว ไม่สร้างใหม่
         const exist = await History.findOne(duplicateCond);
         if (exist) {
             return res.status(409).json({ success: false, message: "พบรายการที่ยังไม่อนุมัติอยู่แล้ว", duplicate: exist });
@@ -1247,6 +1265,7 @@ app.post('/api/history', async (req, res) => {
         // ============================================================
 
         let agencyName = (req.body.agency || '').trim();
+
         if (req.body.type === 'field') {
             // ---- สร้าง history สำหรับ field ----
             const newHistory = new History({
@@ -1268,10 +1287,13 @@ app.post('/api/history', async (req, res) => {
                 date: req.body.date || new Date(),
                 proxyStudentName: req.body.proxyStudentName || '',
                 proxyStudentId: req.body.proxyStudentId || '',
-                bookingPdf: req.body.bookingPdf || null,  
+                bookingPdf: req.body.bookingPdf || null,  // <== ใส่ bookingPdf เผื่อมีในอนาคต
+                username_form: req.body.username_form || '',
+                id_form: req.body.id_form || '',
             });
             await newHistory.save();
 
+            // อัปเดต/สร้างข้อมูลใน Information
             if (agencyName !== "") {
                 const existField = await Information.findOne({ unit: agencyName, type: 'field' });
                 if (!existField) {
@@ -1283,7 +1305,7 @@ app.post('/api/history', async (req, res) => {
                 }
             }
 
-            // ======================= แจ้งเตือน admin เมื่อมีการจองสนามใหม่ =======================
+            // ===== แจ้งเตือน admin เมื่อมีการจองสนามใหม่ =====
             try {
                 let user = await User.findOne({ user_id: req.body.user_id });
                 let requester = user?.name || user?.email || req.body.user_id;
@@ -1299,7 +1321,6 @@ app.post('/api/history', async (req, res) => {
             } catch (mailErr) {
                 console.error('[Send field-booking notify mail error]', mailErr.message);
             }
-            // =============================================================================
             return res.send({ success: true, history: newHistory });
 
         } else {
@@ -1318,10 +1339,13 @@ app.post('/api/history', async (req, res) => {
                 fileType: req.body.fileType || null,
                 agency: req.body.agency || '',
                 booking_id: req.body.booking_id || '',
-                bookingPdf: req.body.bookingPdf || null,  
+                bookingPdf: req.body.bookingPdf || null,  // <== สำคัญ!
+                username_form: req.body.username_form || '',
+                id_form: req.body.id_form || '',
             });
             await newHistory.save();
 
+            // อัปเดต/สร้างข้อมูลใน Information
             if (newHistory.agency && newHistory.agency.trim() !== "") {
                 await Information.findOneAndUpdate(
                     { unit: newHistory.agency, type: 'equipment' },
@@ -1330,7 +1354,7 @@ app.post('/api/history', async (req, res) => {
                 );
             }
 
-            // ====== ส่วนนี้คือจุดที่ต้องปรับ (เลือก staff หรือ admin) ======
+            // ===== แจ้งเตือน staff/admin เมื่อมีการขอยืมอุปกรณ์ใหม่ =====
             if (req.body.status === 'pending') {
                 const isOneDay = !req.body.since || !req.body.uptodate || req.body.since === req.body.uptodate;
                 let user = await User.findOne({ user_id: req.body.user_id });
@@ -1348,14 +1372,13 @@ app.post('/api/history', async (req, res) => {
                     await notifyAdminNewBorrow({ requester, items: itemData, booking_id });
                 }
             }
-            // ====== จบส่วนส่งอีเมล ======
-
             return res.send({ success: true, history: newHistory });
         }
     } catch (err) {
         res.status(500).send({ success: false, message: err.message });
     }
 });
+
 
 
 
@@ -2343,6 +2366,9 @@ app.post('/api/booking_field', upload.array('files', 10), async (req, res) => {
             facilityRequest: req.body.facilityRequest,
             proxyStudentName: req.body.proxyStudentName,   // <--- แก้ตรงนี้!
             proxyStudentId: req.body.proxyStudentId,       // <--- แก้ตรงนี้!
+            username_form: req.body.username_form || '',
+            id_form: req.body.id_form || '',
+
         };
 
         // -- debug log ถ้าอยากดู req.body ว่ามีอะไรส่งมา --
@@ -2723,6 +2749,8 @@ app.post('/api/booking_equipment_and_history', async (req, res) => {
             type: 'equipment',
             agency: req.body.agency || '',
             booking_id: booking._id,
+            username_form: req.body.username_form || '',
+            id_form: req.body.id_form || '',
         });
 
         // 3. คัดลอกไฟล์แนบจาก booking.attachedFiles มาใส่ history.attachment

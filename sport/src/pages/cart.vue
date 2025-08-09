@@ -36,10 +36,10 @@
         <div class="topbar-actions">
           <div>
             <div
-    v-if="showNotifications"
-    class="notification-backdrop"
-    @click="closeNotifications"
-  ></div>
+              v-if="showNotifications"
+              class="notification-backdrop"
+              @click="closeNotifications"
+            ></div>
             <button class="notification-btn" @click="toggleNotifications">
               <i class="pi pi-bell"></i>
               <span v-if="unreadCount > 0" class="badge">{{ unreadCount }}</span>
@@ -66,18 +66,9 @@
       </header>
 
       <div style="background-color: #dbe9f4;">
-         <!-- <transition name="slide-down">
-          <div class="announcement-bar" v-if="showAnnouncementBar">
-            <i class="pi pi-megaphone announcement-icon"></i>
-            <div class="announcement-bar-text">{{ announcement }}</div>
-            <button class="close-announcement-btn" @click="showAnnouncementBar = false">
-              <i class="pi pi-times" style="color: red;"></i>
-            </button>
-          </div>
-        </transition> -->
-
         <div class="cartbody">
           <h1 class="cart-title">Cart</h1>
+
           <div class="cart-grid">
             <div class="cart-card" v-for="product in products" :key="product._id">
               <div class="cart-row">
@@ -97,7 +88,15 @@
               </div>
             </div>
           </div>
+
+          <!-- ปุ่มกลับไปเลือกรายการ + Next -->
           <div class="btn-container">
+            <!-- router-link ปุ่มกลับไปเลือกรายการ -->
+            <router-link to="/booking_equipment" id="btnBackToSelect">
+              Back to select items
+            </router-link>
+
+            <!-- ปุ่ม Next เดิม -->
             <button
               id="btnCheckout"
               :disabled="products.length === 0"
@@ -112,6 +111,7 @@
           </div>
         </div>
       </div>
+
       <footer class="foot">
         <div class="footer-left">
           <p>
@@ -126,8 +126,9 @@
   </div>
 </template>
 
+
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 import Swal from 'sweetalert2'
@@ -145,24 +146,39 @@ const notifications = ref([])
 const unreadCount = ref(0)
 const userId = localStorage.getItem('user_id') || ''
 const lastCheckedIds = new Set()
+const lastSeenTimestamp = ref(parseInt(localStorage.getItem('lastSeenTimestamp') || '0'))
+let polling = null
 
 function toggleSidebar() {
   isSidebarClosed.value = !isSidebarClosed.value
 }
 
+function pruneOldNotifications() {
+  const cutoff = Date.now() - (7 * 24 * 60 * 60 * 1000)
+  notifications.value = notifications.value.filter(n => (n?.timestamp ?? 0) >= cutoff)
+}
+
 function toggleNotifications() {
   showNotifications.value = !showNotifications.value
-  if (showNotifications.value) unreadCount.value = 0
+  if (showNotifications.value) {
+    lastSeenTimestamp.value = Date.now()
+    localStorage.setItem('lastSeenTimestamp', String(lastSeenTimestamp.value))
+    unreadCount.value = 0
+  }
 }
 
 async function fetchNotifications() {
   if (!userId) return
   try {
+    // ตัดรายการเกิน 7 วันก่อนเสมอ
+    pruneOldNotifications()
+
     const res = await axios.get(`${API_BASE}/api/history?user_id=${userId}`)
     const newNotis = res.data.filter(item =>
       (['approved', 'disapproved', 'cancel', 'canceled', 'returned'].includes((item.status || '').toLowerCase())) &&
       !lastCheckedIds.has(item._id)
     )
+
     if (newNotis.length) {
       const newMessages = newNotis.map(item => ({
         id: item._id,
@@ -188,17 +204,25 @@ async function fetchNotifications() {
             : ''
         }`
       }))
-      // รวม, กรองซ้ำ, sort ใหม่สุดบน
+
+      // รวม + กันซ้ำ + เรียงใหม่สุดอยู่บน
       notifications.value = [...notifications.value, ...newMessages]
         .filter((v, i, arr) => arr.findIndex(x => x.id === v.id) === i)
         .sort((a, b) => b.timestamp - a.timestamp)
+
+      // ตัดแจ้งเตือนเกิน 7 วันหลังรวม
+      pruneOldNotifications()
+
       newNotis.forEach(item => lastCheckedIds.add(item._id))
-      unreadCount.value = notifications.value.length
     }
+
+    // นับ unread เฉพาะที่ใหม่กว่าครั้งล่าสุดที่เปิดกระดิ่ง
+    unreadCount.value = notifications.value.filter(n => n.timestamp > lastSeenTimestamp.value).length
   } catch (err) {
     // ignore
   }
 }
+
 function closeNotifications() {
   showNotifications.value = false
 }
@@ -235,7 +259,7 @@ async function changeQty(product, delta) {
   if (newQty < 1) return
   const avail = stockMap.value[product.name] || 0
   if (newQty > avail) {
-    Swal.fire('เกินจำนวนสต็อก', `มีสต็อกแค่ ${avail} ชิ้น`, 'warning')
+    Swal.fire('Exceeding stock quantity', `The quantity in stock is ${avail} `, 'warning')
     return
   }
   product.quantity = newQty
@@ -247,24 +271,24 @@ async function changeQty(product, delta) {
     })
   } catch (e) {
     product.quantity -= delta
-    Swal.fire('เกิดข้อผิดพลาด', 'ไม่สามารถอัปเดตจำนวนได้', 'error')
+    Swal.fire('An error occurred', 'Unable to update amount', 'error')
   }
 }
 
 async function removeItem(product) {
   const result = await Swal.fire({
-    title: 'ยืนยันการลบ?',
-    text: 'ต้องการลบอุปกรณ์นี้ออกจากตะกร้าหรือไม่',
+    title: 'Confirm deletion?',
+    text: 'Do you want to remove this equipment from your cart?',
     showCancelButton: true,
-    confirmButtonText: 'ลบ',
-    cancelButtonText: 'ยกเลิก'
+    confirmButtonText: 'Delete',
+    cancelButtonText: 'Cancel'
   })
   if (!result.isConfirmed) return
   try {
     await axios.delete(`${API_BASE}/api/cart/delete`, { data: { user_id: userId, name: product.name } })
     products.value = products.value.filter(p => p._id !== product._id)
   } catch {
-    Swal.fire('เกิดข้อผิดพลาด', 'ไม่สามารถลบได้', 'error')
+    Swal.fire('An error occurred', 'Unable to deleted', 'error')
   }
 }
 
@@ -288,21 +312,21 @@ async function handleCheckout() {
   });
 
   const { value: borrowType } = await Swal.fire({
-    title: 'ต้องการยืมวันเดียวหรือหลายวัน?',
+    title: 'Do you want to borrow for one day or several days?',
     icon: 'question',
     input: 'radio',
     inputOptions: {
-      oneDay: 'ยืมวันเดียว',
-      multiDay: 'ยืมหลายวัน',
+      oneDay: 'One day',
+      multiDay: 'Several days',
     },
     inputValidator: (value) => {
       if (!value) {
-        return 'กรุณาเลือกอย่างใดอย่างหนึ่ง'
+        return 'Please select one'
       }
     },
-    confirmButtonText: 'ตกลง',
+    confirmButtonText: 'OK',
     showCancelButton: true,
-    cancelButtonText: 'ยกเลิก'
+    cancelButtonText: 'Cancel'
   })
 
   if (!borrowType) return;
@@ -319,7 +343,7 @@ async function handleCheckout() {
     try {
       const userId = localStorage.getItem('user_id') || ''
       if (!userId) {
-        Swal.fire('กรุณาเข้าสู่ระบบก่อนใช้งาน', '', 'warning')
+        Swal.fire('Please log in before using', '', 'warning')
         return
       }
 
@@ -334,11 +358,11 @@ async function handleCheckout() {
       }
 
       await axios.delete(`${API_BASE}/api/cart?user_id=${userId}`)
-      Swal.fire('ส่งคำขอสำเร็จ!', '', 'success')
+      Swal.fire('Sent request successfully !', '', 'success')
       products.value = []
       router.push('/history')
     } catch (err) {
-      Swal.fire('เกิดข้อผิดพลาด', err.message || 'ไม่สามารถส่งคำขอได้', 'error')
+      Swal.fire('An error occurred', err.message || 'Unable to send request', 'error')
     }
   }
 }
@@ -351,7 +375,7 @@ onMounted(async () => {
   if (!userId) {
     await Swal.fire({
       icon: 'warning',
-      title: 'คุณยังไม่ได้เข้าสู่ระบบ',
+      title: 'You are not logged in',
       confirmButtonText: 'OK'
     });
     router.replace('/login');
@@ -365,8 +389,12 @@ onMounted(async () => {
   } catch {
     announcement.value = ""
   }
-  fetchNotifications()
-  setInterval(fetchNotifications, 30000)
+  await fetchNotifications()
+  polling = setInterval(fetchNotifications, 30000)
+})
+
+onBeforeUnmount(() => {
+  if (polling) clearInterval(polling)
 })
 
 </script>
@@ -582,6 +610,25 @@ onMounted(async () => {
 .notification-item {
   transition: background 0.3s, border-color 0.3s, color 0.3s;
 }
+
+#btnBackToSelect {
+  display: inline-block;
+  text-align: center;
+  color: white;
+  background-color: #6c757d;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  border-radius: 20px;
+  padding: 10px 20px;
+  cursor: pointer;
+  font-size: 1.1rem;
+  text-decoration: none; /* เอาเส้นใต้ลิงก์ออก */
+  margin-right: 10px;
+}
+
+#btnBackToSelect:hover {
+  background-color: #5a6268;
+}
+
 
 </style>
 <style>

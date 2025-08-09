@@ -91,12 +91,12 @@
                 :class="{ 'btn-disabled': hasUnreturnedEquipment || equipment.visible === false }"
                 :disabled="hasUnreturnedEquipment || equipment.visible === false"
                 @click="goToBorrow(equipment)"
-                :title="hasUnreturnedEquipment ? 'คุณยังมีอุปกรณ์ที่ยังไม่ได้คืน กรุณาคืนอุปกรณ์ก่อนจองใหม่' : ''"
+                :title="hasUnreturnedEquipment ? 'Please return the equipment before re-booking' : ''"
               >
-                ยืมอุปกรณ์
+                Borrow
               </button>
               <div v-if="hasUnreturnedEquipment" style="color:red;font-size:0.9em;">
-                คุณยังมีอุปกรณ์ที่ยังไม่ได้คืน กรุณาคืนอุปกรณ์ก่อนจองใหม่
+                Please return the equipment before re-booking
               </div>
             </div>
           </div>
@@ -128,9 +128,13 @@ const userEquipHistory = ref([])
 const isSidebarClosed = ref(false)
 const announcement = ref("")
 const showAnnouncementBar = ref(false)
+
 const showNotifications = ref(false)
 const notifications = ref([])
 const unreadCount = ref(0)
+const lastSeenTimestamp = ref(parseInt(localStorage.getItem('lastSeenTimestamp') || '0'))
+
+
 const userId = localStorage.getItem('user_id') || ''
 let polling = null
 const router = useRouter()
@@ -139,13 +143,23 @@ const products = ref([]) // สินค้าในรถเข็น
 // แจ้งเตือน: ใช้ lastCheckedIds เพื่อกันซ้ำ
 const lastCheckedIds = new Set()
 
+function pruneOldNotifications() {
+  const cutoff = Date.now() - (7 * 24 * 60 * 60 * 1000)
+  notifications.value = notifications.value.filter(n => (n?.timestamp ?? 0) >= cutoff)
+}
+
 function toggleSidebar() {
   isSidebarClosed.value = !isSidebarClosed.value
 }
 
 function toggleNotifications() {
   showNotifications.value = !showNotifications.value
-  if (showNotifications.value) unreadCount.value = 0
+  if (showNotifications.value) {
+    // บันทึกว่าอ่านแล้ว ณ ตอนนี้
+    lastSeenTimestamp.value = Date.now()
+    localStorage.setItem('lastSeenTimestamp', String(lastSeenTimestamp.value))
+    unreadCount.value = 0
+  }
 }
 function closeNotifications() {
   showNotifications.value = false
@@ -155,11 +169,16 @@ function closeNotifications() {
 async function fetchNotifications() {
   if (!userId) return
   try {
+    // ตัดของเก่าออกก่อน
+    pruneOldNotifications()
+
     const res = await axios.get(`${API_BASE}/api/history?user_id=${userId}`)
     const newNotis = res.data.filter(item =>
-      (['approved', 'disapproved', 'cancel', 'canceled', 'returned'].includes((item.status || '').toLowerCase())) &&
+      (['approved', 'disapproved', 'cancel', 'canceled', 'returned']
+        .includes((item.status || '').toLowerCase())) &&
       !lastCheckedIds.has(item._id)
     )
+
     if (newNotis.length) {
       const newMessages = newNotis.map(item => ({
         id: item._id,
@@ -185,17 +204,25 @@ async function fetchNotifications() {
             : ''
         }`
       }))
-      // รวม, กรองซ้ำ, sort ใหม่สุดบน
+
+      // รวม + กันซ้ำ + เรียงใหม่สุดบน
       notifications.value = [...notifications.value, ...newMessages]
         .filter((v, i, arr) => arr.findIndex(x => x.id === v.id) === i)
         .sort((a, b) => b.timestamp - a.timestamp)
+
+      // ตัดแจ้งเตือนที่เกิน 7 วันอีกรอบหลังรวม
+      pruneOldNotifications()
+
       newNotis.forEach(item => lastCheckedIds.add(item._id))
-      unreadCount.value = notifications.value.length
     }
+
+    // นับ unread เฉพาะที่ timestamp > lastSeenTimestamp
+    unreadCount.value = notifications.value.filter(n => n.timestamp > lastSeenTimestamp.value).length
   } catch (err) {
-    // ignore
+    // เงียบไว้เหมือนเดิม
   }
 }
+
 
 async function loadEquipments() {
   try {
@@ -267,12 +294,10 @@ function goToBorrow(equipment) {
 onMounted(async () => {
   await loadEquipments()
   await loadUserEquipHistory()
-  await fetchNotifications()
   await loadCart()
-  polling = setInterval(fetchNotifications, 30000)
 
+  // โหลดประกาศ
   try {
-    // โหลดประกาศ
     const annRes = await axios.get(`${API_BASE}/api/announcement`)
     const ann = annRes.data?.announce || ''
     announcement.value = ann
@@ -282,15 +307,15 @@ onMounted(async () => {
     showAnnouncementBar.value = false
   }
 
-  // โหลดแจ้งเตือนครั้งแรกและตั้ง poll ทุก 30 วินาที
-  fetchNotifications()
-  setInterval(fetchNotifications, 30000)
-
+  // แจ้งเตือน: โหลดครั้งแรก + ตั้ง poll ทุก 30 วิ
+  await fetchNotifications()
+  polling = setInterval(fetchNotifications, 30000)
 })
 
 onBeforeUnmount(() => {
   if (polling) clearInterval(polling)
 })
+
 </script>
 
 <style scoped>

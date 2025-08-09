@@ -35,7 +35,8 @@ const historySchema = new mongoose.Schema({
     notified: { type: Boolean, default: false },
     proxyStudentName: { type: String, default: '' },
     proxyStudentId: { type: String, default: '' },
-
+    username_form: { type: String, default: '' },
+    id_form: { type: String, default: '' },
     // --- เพิ่ม field นี้สำหรับเก็บ PDF โดยเฉพาะ ---
     bookingPdf: { type: String, default: null }, // <<-- เพิ่มตรงนี้
 

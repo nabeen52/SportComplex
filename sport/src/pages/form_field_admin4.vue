@@ -30,31 +30,31 @@
       <header class="topbar">
         <button class="menu-toggle" @click="toggleSidebar">☰</button>
         <div class="topbar-actions">
-          <div style="position: relative; display: inline-block;">
-            <!-- BACKDROP สำหรับปิดแจ้งเตือนเมื่อกดข้างนอก -->
-            <div
-              v-if="showNotifications"
-              class="notification-backdrop"
-              @click="closeNotifications"
-              style="position: fixed; inset: 0; z-index: 10;"
-            ></div>
-            <button class="notification-btn" @click="toggleNotifications" style="z-index: 20; position: relative;">
-              <i class="pi pi-bell"></i>
-              <span v-if="unreadCount > 0" class="badge">{{ unreadCount }}</span>
-            </button>
-            <div
-              v-if="showNotifications"
-              class="notification-dropdown"
-              style="z-index: 20; position: absolute; right: 0; top: 42px;"
-            >
-              <ul>
-                <li v-for="(noti, idx) in notifications" :key="noti.id || idx">
-                  {{ noti.message }}
-                </li>
-                <li v-if="notifications.length === 0" class="no-noti">ไม่มีแจ้งเตือน</li>
-              </ul>
-            </div>
-          </div>
+           <div style="position: relative; display: inline-block;">
+      <div
+        v-if="showNotifications"
+        class="notification-backdrop"
+        @click="closeNotifications"
+      ></div>
+
+      <button class="notification-btn" @click="toggleNotifications">
+        <i class="pi pi-bell"></i>
+        <span v-if="unreadCount > 0" class="badge">{{ unreadCount }}</span>
+      </button>
+
+      <div v-if="showNotifications" class="notification-dropdown">
+        <ul>
+          <li
+            v-for="(noti, idx) in notifications.slice(0, 10)"
+            :key="noti.id || idx"
+            :class="['notification-item', noti.type || '', { unread: noti.timestamp > lastSeenTimestamp }]"
+          >
+            {{ noti.message }}
+          </li>
+          <li v-if="notifications.length === 0" class="no-noti">ไม่มีแจ้งเตือน</li>
+        </ul>
+      </div>
+    </div>
           <router-link to="/profile_admin"><i class="pi pi-user"></i></router-link>
         </div>
       </header>
@@ -96,7 +96,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, watch, onBeforeUnmount } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import Swal from 'sweetalert2'
 import axios from 'axios'
@@ -108,11 +108,15 @@ import '@/assets/fonts/Sarabun-Regular-normal.js'
 import '@/assets/fonts/Sarabun-Bold-normal.js'
 
 const API_BASE = import.meta.env.VITE_API_BASE
+const ADMIN_FORM_LAST_SEEN_KEY = 'form_field_admin_lastSeen'
 const showNotifications = ref(false)
 const notifications = ref([])
 const unreadCount = ref(0)
 const userId = localStorage.getItem('user_id') || ''
 const lastCheckedIds = new Set()
+const lastSeenTimestamp = ref(0)
+let notiPolling = null
+
 const route = useRoute()
 watch(() => route.fullPath, () => {
   if (isMobile.value) isSidebarClosed.value = true
@@ -121,60 +125,84 @@ const isMobile = ref(window.innerWidth <= 600)
 window.addEventListener('resize', () => {
   isMobile.value = window.innerWidth <= 600
 })
+
+function pruneOldNotifications() {
+  const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000
+  notifications.value = notifications.value.filter(n => (n?.timestamp ?? 0) >= cutoff)
+}
+
 function toggleNotifications() {
   showNotifications.value = !showNotifications.value
-  if (showNotifications.value) unreadCount.value = 0
-}
-function closeNotifications() {
-  showNotifications.value = false
-}
-async function fetchNotifications() {
-  if (!userId) return
-  try {
-    const res = await axios.get(`${API_BASE}/api/history?user_id=${userId}`)
-    const newNotis = res.data.filter(item =>
-      (['approved', 'disapproved', 'cancel', 'canceled', 'returned'].includes((item.status || '').toLowerCase())) &&
-      !lastCheckedIds.has(item._id)
-    )
-    if (newNotis.length) {
-      const newMessages = newNotis.map(item => ({
-        id: item._id,
-        type: (item.status || '').toLowerCase(),
-        timestamp: item.returnedAt
-          ? new Date(item.returnedAt).getTime()
-          : item.updatedAt
-          ? new Date(item.updatedAt).getTime()
-          : item.approvedAt
-          ? new Date(item.approvedAt).getTime()
-          : item.date
-          ? new Date(item.date).getTime()
-          : Date.now(),
-        message: `รายการ '${item.name}' ของคุณ${
-          (item.status || '').toLowerCase() === 'approved'
-            ? ' ได้รับการอนุมัติ'
-            : (item.status || '').toLowerCase() === 'disapproved'
-            ? ' ไม่ได้รับการอนุมัติ'
-            : (item.status || '').toLowerCase() === 'cancel' || (item.status || '').toLowerCase() === 'canceled'
-            ? ' ถูกยกเลิก'
-            : (item.status || '').toLowerCase() === 'returned'
-            ? ' คืนของสำเร็จแล้ว'
-            : ''
-        }`
-      }))
-      notifications.value = [...notifications.value, ...newMessages]
-        .filter((v, i, arr) => arr.findIndex(x => x.id === v.id) === i)
-        .sort((a, b) => b.timestamp - a.timestamp)
-      newNotis.forEach(item => lastCheckedIds.add(item._id))
-      unreadCount.value = notifications.value.length
-    }
-  } catch (err) {
-    // ไม่ต้อง alert
+  if (showNotifications.value) {
+    lastSeenTimestamp.value = Date.now()
+    localStorage.setItem(ADMIN_FORM_LAST_SEEN_KEY, String(lastSeenTimestamp.value))
+    unreadCount.value = 0
   }
 }
-onMounted(() => {
-  fetchNotifications()
-  setInterval(fetchNotifications, 30000)
+
+function closeNotifications() { showNotifications.value = false }
+
+function handleClickOutside(e) {
+  const dd = document.querySelector('.notification-dropdown')
+  const btn = document.querySelector('.notification-btn')
+  if (dd && !dd.contains(e.target) && btn && !btn.contains(e.target)) closeNotifications()
+}
+
+async function fetchNotifications() {
+  const uid = localStorage.getItem('user_id') || ''
+  if (!uid) return
+  try {
+    pruneOldNotifications()
+
+    const res = await axios.get(`${API_BASE}/api/history?user_id=${uid}`)
+    const data = Array.isArray(res.data) ? res.data : []
+
+    const list = data
+      .filter(it => ['approved','disapproved','cancel','canceled','returned'].includes((it.status||'').toLowerCase()))
+      .map(it => {
+        const ts =
+          (it.returnedAt && new Date(it.returnedAt).getTime()) ??
+          (it.updatedAt && new Date(it.updatedAt).getTime()) ??
+          (it.approvedAt && new Date(it.approvedAt).getTime()) ??
+          (it.date && new Date(it.date).getTime()) ??
+          Date.now()
+        return {
+          id: it._id,
+          type: (it.status||'').toLowerCase(),
+          timestamp: ts,
+          message:
+            `รายการ '${it.name}' ของคุณ${
+              (it.status||'').toLowerCase()==='approved' ? ' ได้รับการอนุมัติ' :
+              (it.status||'').toLowerCase()==='disapproved' ? ' ไม่ได้รับการอนุมัติ' :
+              (it.status||'').toLowerCase()==='canceled' || (it.status||'').toLowerCase()==='cancel' ? ' ถูกยกเลิก' :
+              (it.status||'').toLowerCase()==='returned' ? ' คืนของสำเร็จแล้ว' : ''
+            }`
+        }
+      })
+
+    notifications.value = [...list, ...notifications.value]
+      .filter((v, i, arr) => arr.findIndex(x => (x.id||i) === (v.id||i)) === i)
+      .sort((a,b) => b.timestamp - a.timestamp)
+
+    pruneOldNotifications()
+    unreadCount.value = notifications.value.filter(n => n.timestamp > lastSeenTimestamp.value).length
+  } catch {}
+}
+
+onMounted(async () => {
+  // ...ของเดิมคุณ (เช่น loadBookingInfo)
+  lastSeenTimestamp.value = parseInt(localStorage.getItem(ADMIN_FORM_LAST_SEEN_KEY) || '0')
+
+  document.addEventListener('mousedown', handleClickOutside)
+  await fetchNotifications()
+  notiPolling = setInterval(fetchNotifications, 30000)
 })
+
+onBeforeUnmount(() => {
+  if (notiPolling) clearInterval(notiPolling)
+  document.removeEventListener('mousedown', handleClickOutside)
+})
+
 
 const router = useRouter()
 const info = ref({})
@@ -205,9 +233,10 @@ function formatDateOnly(dateTime) {
   if (isNaN(dateObj)) return '-'
   const day = String(dateObj.getDate()).padStart(2, '0')
   const month = String(dateObj.getMonth() + 1).padStart(2, '0')
-  const year = dateObj.getFullYear()
+  const year = dateObj.getFullYear() + 543 // ✅ แปลงเป็น พ.ศ.
   return `${day}/${month}/${year}`
 }
+
 
 async function loadBookingInfo() {
   const bookingId = localStorage.getItem('bookingId')
@@ -463,6 +492,13 @@ async function exportPdf(item) {
     padding-right: 12px;
     overflow-x: auto;
   }
+}
+
+.notification-backdrop{
+  position: fixed;
+  inset: 0;
+  background: transparent;
+  z-index: 1001;
 }
 
 </style>

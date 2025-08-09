@@ -47,10 +47,14 @@
       </button>
       <div v-if="showNotifications" class="notification-dropdown">
         <ul>
-          <li v-for="(noti, idx) in notifications" :key="idx">
+          <li
+            v-for="(noti, idx) in notifications.slice(0, 10)"
+            :key="noti.id || idx"
+            :class="['notification-item', noti.type || '', { unread: noti.timestamp > lastSeenTimestamp }]"
+          >
             {{ noti.message }}
           </li>
-          <li v-if="notifications.length === 0">ไม่มีแจ้งเตือน</li>
+          <li v-if="notifications.length === 0" class="no-noti">ไม่มีแจ้งเตือน</li>
         </ul>
       </div>
     </div>
@@ -113,6 +117,7 @@ const unreadCount = ref(0)
 const lastCheckedIds = ref(new Set())
 let polling = null
 const isMobile = ref(window.innerWidth <= 600)
+const lastSeenTimestamp = ref(0)
 
 function checkMobile() {
   isMobile.value = window.innerWidth <= 600
@@ -121,6 +126,7 @@ function checkMobile() {
 
 onMounted(async () => {
   await fetchEquipments()
+   lastSeenTimestamp.value = parseInt(localStorage.getItem('staff_lastSeenTimestamp') || '0')
   try {
     const annRes = await axios.get(`${API_BASE}/api/announcement`)
     announcement.value = annRes.data?.announce || ""
@@ -151,7 +157,16 @@ async function fetchEquipments() {
 
 function toggleNotifications() {
   showNotifications.value = !showNotifications.value
-  if (showNotifications.value) unreadCount.value = 0
+  if (showNotifications.value) {
+    lastSeenTimestamp.value = Date.now()
+    localStorage.setItem('staff_lastSeenTimestamp', String(lastSeenTimestamp.value))
+    unreadCount.value = 0
+  }
+}
+
+function pruneOldNotifications() {
+  const cutoff = Date.now() - (7 * 24 * 60 * 60 * 1000) // 7 วัน
+  notifications.value = notifications.value.filter(n => (n?.timestamp ?? 0) >= cutoff)
 }
 
 function closeNotifications() {
@@ -161,22 +176,52 @@ function closeNotifications() {
 
 async function fetchNotifications() {
   try {
-    // ดึง pending อุปกรณ์ที่ต้องอนุมัติ
+    const cutoff = Date.now() - (7 * 24 * 60 * 60 * 1000)
+
+    // ตัดทิ้งที่เก่ากว่า 7 วัน
+    pruneOldNotifications()
+
+    // ดึง pending สำหรับ staff
     const res = await axios.get(`${API_BASE}/api/equipments/pending`)
     const data = Array.isArray(res.data) ? res.data : []
-    // กรองเฉพาะ id ใหม่ ๆ ที่ยังไม่เคยแจ้ง
-    const pendings = data.filter(item => !lastCheckedIds.value.has(item._id?.$oid || item._id))
-    if (pendings.length) {
-      const newMessages = pendings.map(item => ({
-        id: item._id?.$oid || item._id,
-        message: `มีอุปกรณ์ '${item.name}' ที่รออนุมัติ`
-      }))
+
+    // เอาเฉพาะ id ใหม่ที่ยังไม่เคยขึ้นแจ้ง
+    const fresh = data.filter(item => !lastCheckedIds.value.has(item._id?.$oid || item._id))
+
+    if (fresh.length) {
+      const newMessages = fresh.map(item => {
+        const ts =
+          item.updatedAt ? new Date(item.updatedAt).getTime() :
+          item.createdAt ? new Date(item.createdAt).getTime() :
+          item.date      ? new Date(item.date).getTime()      :
+          Date.now()
+        return {
+          id: item._id?.$oid || item._id,
+          type: 'pending',
+          timestamp: ts,
+          message: `มีอุปกรณ์ '${item.name}' ที่รออนุมัติ`
+        }
+      })
+
+      // รวม + กันซ้ำ + เรียงล่าสุดก่อน
       notifications.value = [...notifications.value, ...newMessages]
-      pendings.forEach(item => lastCheckedIds.value.add(item._id?.$oid || item._id))
-      unreadCount.value = notifications.value.length
+        .filter((v, i, arr) => arr.findIndex(x => x.id === v.id) === i)
+        .sort((a, b) => b.timestamp - a.timestamp)
+
+      // ตัดที่เก่ากว่า 7 วันอีกรอบ เผื่อ backend ส่งรายการเก่ามา
+      pruneOldNotifications()
+
+      // มาร์คว่าเคยเห็น id เหล่านี้แล้ว กันเด้งซ้ำ
+      fresh.forEach(item => lastCheckedIds.value.add(item._id?.$oid || item._id))
     }
-  } catch (err) { /* ไม่ต้องแจ้งเตือน error */ }
+
+    // นับ unread เฉพาะที่ timestamp > lastSeenTimestamp
+    unreadCount.value = notifications.value.filter(n => n.timestamp > lastSeenTimestamp.value).length
+  } catch (err) {
+    // เงียบไว้ตามเดิม
+  }
 }
+
 
 // ฟังก์ชันเปิด/ปิดสถานะ พร้อม SweetAlert2
 async function confirmToggle(item) {

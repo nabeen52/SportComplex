@@ -68,7 +68,7 @@
 
     <div class="profile-details" v-if="info">
       <p>Username : {{ info.name }}</p>
-      <div class="editable-row">
+      <!-- <div class="editable-row">
       <span>ID :</span>
       <template v-if="!editId">
         <span>{{ info.id }}</span>
@@ -83,7 +83,7 @@
         <button class="save-btn" @click="saveUserId">บันทึก</button>
         <button class="cancel-btn" @click="cancelEdit">ยกเลิก</button>
       </template>
-    </div>
+    </div> -->
 
       <p>Email : {{ info.email }}</p>
     </div>
@@ -136,7 +136,7 @@ const showNotifications = ref(false)
 const notifications = ref([])
 const unreadCount = ref(0)
 const lastCheckedIds = new Set()
-
+const lastSeenTimestamp = ref(parseInt(localStorage.getItem('lastSeenTimestamp') || '0'))
 let polling = null
 
 // Render รูป profile ถูกต้อง
@@ -149,14 +149,9 @@ function imgError(event) {
   event.target.src = '/img/user.png'
 }
 
-
-function startEdit() {
-  editUserId.value = info.value.id
-  editId.value = true
-}
-
-function cancelEdit() {
-  editId.value = false
+function pruneOldNotifications() {
+  const cutoff = Date.now() - (7 * 24 * 60 * 60 * 1000)
+  notifications.value = notifications.value.filter(n => (n?.timestamp ?? 0) >= cutoff)
 }
 
 async function saveUserId() {
@@ -200,14 +195,14 @@ async function loadCart() {
 // LOGOUT
 async function logout() {
   const result = await Swal.fire({
-    title: 'ต้องการออกจากระบบ-?',
-    text: "คุณต้องการออกจากระบบใช่หรือไม่",
+    title: 'Log out?',
+    text: "Do you want to log out?",
     icon: 'warning',
     showCancelButton: true,
     confirmButtonColor: '#3085d6',
     cancelButtonColor: '#d33',
-    confirmButtonText: 'ใช่, ออกจากระบบ',
-    cancelButtonText: 'ยกเลิก'
+    confirmButtonText: 'Yes',
+    cancelButtonText: 'No'
   });
 
   if (result.isConfirmed) {
@@ -232,19 +227,29 @@ async function logout() {
 // Notification
 function toggleNotifications() {
   showNotifications.value = !showNotifications.value
-  if (showNotifications.value) unreadCount.value = 0
+  if (showNotifications.value) {
+    lastSeenTimestamp.value = Date.now()
+    localStorage.setItem('lastSeenTimestamp', String(lastSeenTimestamp.value))
+    unreadCount.value = 0
+  }
 }
 function closeNotifications() {
   showNotifications.value = false
 }
+
 async function fetchNotifications() {
   if (!userId) return
   try {
+    // ตัดรายการเกิน 7 วันก่อนเสมอ
+    pruneOldNotifications()
+
     const res = await axios.get(`${API_BASE}/api/history?user_id=${userId}`)
     const newNotis = res.data.filter(item =>
-      (['approved', 'disapproved', 'cancel', 'canceled', 'returned'].includes((item.status || '').toLowerCase())) &&
+      (['approved', 'disapproved', 'cancel', 'canceled', 'returned']
+        .includes((item.status || '').toLowerCase())) &&
       !lastCheckedIds.has(item._id)
     )
+
     if (newNotis.length) {
       const newMessages = newNotis.map(item => ({
         id: item._id,
@@ -270,17 +275,25 @@ async function fetchNotifications() {
             : ''
         }`
       }))
-      // รวม, กรองซ้ำ, sort ใหม่สุดบน
+
+      // รวม + กันซ้ำ + เรียงใหม่สุดอยู่บน
       notifications.value = [...notifications.value, ...newMessages]
         .filter((v, i, arr) => arr.findIndex(x => x.id === v.id) === i)
         .sort((a, b) => b.timestamp - a.timestamp)
+
+      // ตัดแจ้งเตือนเกิน 7 วันหลังรวม
+      pruneOldNotifications()
+
       newNotis.forEach(item => lastCheckedIds.add(item._id))
-      unreadCount.value = notifications.value.length
     }
+
+    // นับ unread เฉพาะที่ใหม่กว่าครั้งล่าสุดที่เปิดกระดิ่ง
+    unreadCount.value = notifications.value.filter(n => n.timestamp > lastSeenTimestamp.value).length
   } catch (err) {
-    // ignore
+    // เงียบไว้เหมือนเดิม
   }
 }
+
 
 onMounted(async () => {
   // ดึง user profile สดใหม่เสมอ
@@ -302,17 +315,15 @@ onMounted(async () => {
     return
   }
 
-  await fetchNotifications()
+   await fetchNotifications()
   polling = setInterval(fetchNotifications, 30000)
   fetchNotifications()
   setInterval(fetchNotifications, 30000)
    loadCart()
 })
+
 onUnmounted(() => clearInterval(polling))
 </script>
-
-
-
 <style scoped>
 .probody {
   background-color: #dbe9f4;

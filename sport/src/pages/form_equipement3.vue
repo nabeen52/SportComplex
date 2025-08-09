@@ -67,33 +67,44 @@
         <div id="pdf-section"> 
         <div class="form-header">
           <h3>แบบฟอร์มการยืมอุปกรณ์/วัสดุ/ครุภัณฑ์ ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง</h3>
-          <p>โทร 053-917-8201 E-mail Sport-complex@mfu.ac.th</p>
+          <p><b>โทร: 053-917-8201 | E-mail: sport-complex@mfu.ac.th</b></p>
         </div>
 
-      <!-- กลุ่มขวา: วันที่มารับของ ชิดขวา, เวลาที่มารับของอยู่บรรทัดล่าง -->
-<div class="form-header-section">
-  <div class="right-form" style="align-items: flex-end; text-align: right;">
-    <div class="form-row-title" style="font-size: 18px; font-weight: bold;">
-      ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง
-    </div>
-    <div>
-      
-      <div style="display: flex; justify-content: flex-end; align-items: center; gap: 2px;">
-        <span>วันที่มารับของ</span>
-        <span>{{ booking?.receive_date ? new Date(booking.receive_date).toLocaleDateString('th-TH') : "" }}</span>
-      </div>
-      <div style="display: flex; justify-content: flex-end; align-items: center; gap: 2px; margin-top:2px;">
-        <span>เวลาที่มารับของ</span>
-        <span>{{ booking?.receive_time || "" }}</span>
-      </div>
-    </div>
-  </div>
+        <!-- กลุ่มขวา: วันที่มารับของและเวลามารับของ -->
+        <div class="form-header-section">
+          <div class="right-form" style="align-items: flex-end; text-align: right;">
+            <div class="form-row-title" style="font-size: 18px; font-weight: bold;">
+              ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง
+            </div>
+            <div>
+    <!-- วันที่และเวลา -->
+<div style="display: flex; flex-direction: column; align-items: flex-start;">
+  <span style="display: flex; gap: 19px;"> <!-- gap = ระยะห่างระหว่างคำกับเลข -->
+    <span><b>วันที่มารับของ</b></span>
+    <span>
+      {{ booking && booking.receive_date
+        ? new Date(booking.receive_date).toLocaleDateString('th-TH')
+        : "" }}
+    </span>
+  </span>
+  <span style="display: flex; gap: 6px;">
+    <span><b>เวลาที่มารับของ</b></span>
+    <span>
+      {{ booking && booking.receive_time ? booking.receive_time : "" }} น.
+    </span>
+  </span>
 </div>
+
+
+
+            </div>
+          </div>
+        </div>
 
         <!-- =================== ข้อมูลผู้ขอ/รายละเอียด =================== -->
         <div class="form-row" style="padding-top: 30px; flex-direction: column; align-items: flex-start;">
           <span style="margin-bottom: 0;">
-            วันที่ {{ booking?.start_date ? (new Date(booking.start_date)).toLocaleDateString('th-TH') : (new Date()).toLocaleDateString('th-TH') }}
+           <b>วันที่ </b> {{ booking && booking.start_date ? (new Date(booking.start_date)).toLocaleDateString('th-TH') : (new Date()).toLocaleDateString('th-TH') }}
           </span>
           <span style="font-weight: bold; margin-top: 8px;">
             ส่วนที่1 สำหรับผู้ใช้
@@ -101,28 +112,24 @@
         </div>
 
         <!-- ========== ข้าพเจ้า ... รหัสนักศึกษา ... หน่วยงาน ========== -->
-      <!-- จุดนี้คือส่วนที่ต้องการจัดให้อยู่ "แนวเดียวกับคำว่าสำหรับผู้ใช้" -->
-<!-- อยู่ใน <div class="form-container"> ... -->
+        <div class="form-row mt-30"
+          style="text-indent: 80px; text-align: left; line-height: 2.0;">
+          ข้าพเจ้า {{ booking && booking.username_form || "-" }}
+          รหัสนักศึกษา {{ booking && booking.id_form || "-" }}
+           {{ booking && booking.agency || "-" }}
+          โทร {{ booking && booking.number || "-" }}
+          มีความประสงค์ขอยืมอุปกรณ์/วัสดุ/ครุภัณฑ์ ของศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวงเพื่อใช้ในงาน {{ booking && booking.reason || "-" }}
+          สถานที่ใช้งาน {{ booking && booking.location || "-" }}
+          ในระหว่างวันที่ {{ booking && booking.start_date ? (new Date(booking.start_date)).toLocaleDateString('th-TH') : "-" }}
+          ถึงวันที่ {{ booking && booking.end_date ? (new Date(booking.end_date)).toLocaleDateString('th-TH') : "-" }}
+        </div>
 
-<!-- ย่อหน้าเดียวกันทั้งหมด -->
-<div class="form-row mt-30"
-     style="text-indent: 80px; text-align: left; line-height: 2.0;">
-  ข้าพเจ้า {{ booking?.name || "-" }}
-  รหัสนักศึกษา {{ booking?.user_id || "-" }}
-  หน่วยงาน {{ booking?.agency || "-" }}
-  เหตุผลในการขอใช้เพื่อ {{ booking?.reason || "-" }}
-  สถานที่ใช้งาน {{ booking?.location || "-" }}
-  ในวันที่ {{ booking?.start_date ? (new Date(booking.start_date)).toLocaleDateString('th-TH') : "-" }}
-  ถึงวันที่ {{ booking?.end_date ? (new Date(booking.end_date)).toLocaleDateString('th-TH') : "-" }}
-</div>
-
-<div class="form-row" style="padding-top: 5px; justify-content: flex-start !important;">
-  <span>โดยมีรายการดังต่อไปนี้</span>
-</div>
-
+        <div class="form-row" style="padding-top: 10px; justify-content: flex-start !important;">
+          <span>โดยมีรายการดังต่อไปนี้</span>
+        </div>
 
         <!-- ================= ตารางรายการอุปกรณ์ ================= -->
-        <div class="form-row" style="padding-top: 10px;">
+        <div class="form-row" style="padding-top: 0px;">
           <table class="equipment-table">
             <thead>
               <tr>
@@ -143,7 +150,6 @@
           </table>
         </div>
 
-       
         <!-- ================= ส่วนลายเซ็น/ความเห็น ================= -->
         <div class="form-row" style="padding-top: 10px;">
           <table class="approval-table">
@@ -179,54 +185,62 @@
             </tbody>
           </table>
         </div>
-        </div>
-        
-        <!-- ===== แสดงไฟล์แนบ ===== -->
-        <!-- ไฟล์แนบ -->
-         <div class="form-row-sign" style="padding-top: 30px; display: flex; align-items: center; gap: 10px;">
-  <span style="white-space: nowrap;">ลงชื่อ</span>
-  <span class="line-field block-text" style="min-width:140px;">{{ booking?.name || "" }}</span>
+        <div style="margin-top: 15px;"></div>
+<p class="note-block"> <b> *หมายเหตุ หากอุปกรณ์/วัสดุ/ครุภัณฑ์ เกิดการชำรุดเสียหายในระหว่างที่ผู้ยืมเป็นผู้รับผิดชอบ ผู้ยืมจะต้องชดใช้ค่าเสียหายที่เกิดขึ้นทั้งหมด</b>
+ 
+</p>
+        <!-- หมายเหตุ -->
+        <!-- ลายเซ็น: ชิดขวา และชื่อจะอยู่ใต้เส้นพอดีแบบ responsive -->
+<div class="signature">
+  <div class="sig-row">
+    <span>ลงชื่อ</span>
+    <span class="sig-dots" aria-hidden="true"></span>  <!-- เปลี่ยนจาก sig-line เป็น sig-dots -->
+    <span>ผู้ยืม</span>
+  </div>
+  <div class="sig-name">
+    ( {{ booking && booking.username_form || "-" }} )
+  </div>
 </div>
 
-<div v-if="uploadedFiles.length > 0" class="form-row" style="flex-direction: column; align-items: flex-start; padding-top: 20px;">
+
+      </div>
+
+      <!-- ไฟล์แนบ (ยังไม่อัปโหลด) -->
+<div v-if="tempFiles.length > 0" class="form-row" style="flex-direction: column; align-items: flex-start; padding-top: 20px;">
   <span style="font-weight: bold; margin-bottom: 6px;">ไฟล์แนบ:</span>
   <ul style="list-style-type: disc; padding-left: 20px; margin: 0;">
-    <li v-for="(file, idx) in uploadedFiles" :key="file.fileName || idx" style="margin-bottom: 4px;">
-      <span style="font-weight: 500;">{{ file.fileName }}</span>
+    <li v-for="(f, idx) in tempFiles" :key="idx" style="margin-bottom: 4px;">
+      <span style="font-weight: 500;">{{ f.name }}</span>
       <span style="font-size: 12px; color: #888; margin-left: 10px;">
-        ({{ file.mimeType }})
-      </span>
-      <span v-if="file.fileData" style="margin-left:10px;">
-        <a :href="file.fileData" :download="file.fileName" target="_blank">ดูไฟล์</a>
+        ({{ f.type || 'unknown' }}, {{ Math.ceil((f.size||0)/1024) }} KB)
       </span>
     </li>
   </ul>
 </div>
 
-
-
-        <div class="button-wrapper">
-          <button id="btnBack" @click="handleBack">Back</button>
-          <button id="btnNext" @click="handleNext" :disabled="isLoading">Next</button>
-        </div>
+      <div class="button-wrapper">
+        <button id="btnBack" @click="handleBack">Back</button>
+        <button id="btnNext" @click="handleNext" :disabled="isLoading">Next</button>
       </div>
-      </div>
-      <footer class="foot">
-        <div class="footer-left">
-          <p>
-            Sport Complex – Mae Fah Luang University |
-            Tel. 0-5391-7821 | Facebook:
-            <a href="https://www.facebook.com/mfusportcomplex" target="_blank">MFU Sports Complex Center</a> |
-            Email: <a href="mailto:sport-complex@mfu.ac.th">sport-complex@mfu.ac.th</a>
-          </p>
-        </div>
-      </footer>
     </div>
+    </div>
+    <footer class="foot">
+      <div class="footer-left">
+        <p>
+          Sport Complex – Mae Fah Luang University |
+          Tel. 0-5391-7821 | Facebook:
+          <a href="https://www.facebook.com/mfusportcomplex" target="_blank">MFU Sports Complex Center</a> |
+          Email: <a href="mailto:sport-complex@mfu.ac.th">sport-complex@mfu.ac.th</a>
+        </p>
+      </div>
+    </footer>
   </div>
+</div>
 </template>
 
+
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 import html2pdf from 'html2pdf.js'
@@ -247,46 +261,110 @@ const showNotifications = ref(false)
 const notifications = ref([])
 const unreadCount = ref(0)
 const userId = localStorage.getItem('user_id') || ''
+const tempFiles = ref([])
 
-function toggleNotifications() {
-  showNotifications.value = !showNotifications.value
-  if (showNotifications.value) unreadCount.value = 0
+const lastSeenTimestamp = ref(parseInt(localStorage.getItem('lastSeenTimestamp') || '0'))
+let polling = null
+
+function pruneOldNotifications() {
+  const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000
+  notifications.value = notifications.value.filter(n => (n?.timestamp ?? 0) >= cutoff)
 }
 
+function loadTempFilesFromPage1() {
+  tempFiles.value = Array.isArray(window._equipTempFiles) ? window._equipTempFiles : []
+}
+function toggleNotifications() {
+  showNotifications.value = !showNotifications.value
+  if (showNotifications.value) {
+    lastSeenTimestamp.value = Date.now()
+    localStorage.setItem('lastSeenTimestamp', String(lastSeenTimestamp.value))
+    unreadCount.value = 0
+  }
+}
+
+const PDF_FILENAME = 'แบบฟอร์มการยืมอุปกรณ์-วัสดุ-ครุภัณฑ์.pdf'
+
 function exportToPDF() {
-  smartPageBreak(); // <<<< เพิ่มบรรทัดนี้
+  smartPageBreak();
   const element = document.getElementById('pdf-section');
-  // ตั้งค่ารูปแบบไฟล์ PDF
+  element.classList.add('pdf-export-font-size'); // <<< เพิ่มคลาสลดฟอนต์
+  // option ตามด้านบน
  const opt = {
-  margin: 0.2,
-  filename: 'booking-form.pdf',
+  margin: [0.5, 0.5, 0.5, 0.5],
+  filename: PDF_FILENAME,
   image: { type: 'jpeg', quality: 0.98 },
   html2canvas: { scale: 2, useCORS: true },
   jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' },
   pagebreak: { mode: ['css', 'legacy'] }
 };
-html2pdf().from(element).set(opt).save();
+  html2pdf()
+    .from(element)
+    .set(opt)
+    .save()
+    .then(() => {
+      element.classList.remove('pdf-export-font-size'); // <<< ถอดคลาส
+    })
+    .catch(() => {
+      element.classList.remove('pdf-export-font-size');
+    });
 }
+async function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = e => resolve(e.target.result.split(',')[1]) // base64 (ตัด header)
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
+}
+
+async function uploadTempFiles() {
+  const results = []
+  for (const f of (tempFiles.value || [])) {
+    const fd = new FormData()
+    fd.append('file', f, f.name)
+    const res = await axios.post(`${API_BASE}/api/upload`, fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      maxBodyLength: Infinity,
+      maxContentLength: Infinity,
+    })
+    results.push({
+      fileId: null,
+      fileName: f.name,
+      mimeType: f.type || '',
+      fileUrl: res.data.fileUrl
+    })
+  }
+  return results
+}
+
 // รับ element id, return Blob ของไฟล์ pdf
 function htmlToPdfBlob(elementId) {
   smartPageBreak();
   return new Promise((resolve, reject) => {
     const element = document.getElementById(elementId)
     const opt = {
-      margin:       0.2,
-      filename:     `booking-form.pdf`,
-      image:        { type: 'jpeg', quality: 0.98 },
-      html2canvas:  { scale: 2, useCORS: true },
-      jsPDF:        { unit: 'in', format: 'a4', orientation: 'portrait' },
-       pagebreak: { mode: ['css', 'legacy'] } 
-    }
-    html2pdf()
+  margin: [0.5, 0.5, 0.5, 0.5],
+  filename: PDF_FILENAME,
+  image: { type: 'jpeg', quality: 0.98 },
+  html2canvas: { scale: 2, useCORS: true },
+  jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' },
+  pagebreak: { mode: ['css', 'legacy'] }
+}
+
+   html2pdf()
       .from(element)
       .set(opt)
       .outputPdf('blob')
-      .then(resolve)
-      .catch(reject)
-  })
+      .then(blob => {
+        element.classList.remove('pdf-export-font-size');
+        resolve(blob);
+      })
+      .catch(err => {
+        element.classList.remove('pdf-export-font-size');
+        reject(err);
+      });
+  });
 }
 function blobToBase64(blob) {
   return new Promise((resolve, reject) => {
@@ -324,55 +402,70 @@ function closeNotifications() {
 async function fetchNotifications() {
   if (!userId) return
   try {
+    pruneOldNotifications()
+
     const res = await axios.get(`${API_BASE}/api/history?user_id=${userId}`)
-    const filterStatus = ['approved', 'disapproved', 'cancel', 'canceled', 'returned']
+    const targetStatuses = ['approved', 'disapproved', 'cancel', 'canceled', 'returned']
+
     const newNotis = (res.data || []).filter(item =>
-      filterStatus.includes((item.status || '').toLowerCase())
+      targetStatuses.includes((item.status || '').toLowerCase())
     )
-    if (newNotis.length > 0) {
-      notifications.value = newNotis
-        .map(item => ({
-          id: item._id,
-          type: (item.status || '').toLowerCase(),
-          timestamp: item.returnedAt
-            ? new Date(item.returnedAt).getTime()
-            : item.updatedAt
-            ? new Date(item.updatedAt).getTime()
-            : item.approvedAt
-            ? new Date(item.approvedAt).getTime()
-            : item.date
-            ? new Date(item.date).getTime()
-            : Date.now(),
-          message: `รายการ '${item.name}' ของคุณ${
-            (item.status || '').toLowerCase() === 'approved'
-              ? ' ได้รับการอนุมัติ'
-              : (item.status || '').toLowerCase() === 'disapproved'
-              ? ' ไม่ได้รับการอนุมัติ'
-              : (item.status || '').toLowerCase() === 'cancel' || (item.status || '').toLowerCase() === 'canceled'
-              ? ' ถูกยกเลิก'
-              : (item.status || '').toLowerCase() === 'returned'
-              ? ' คืนของสำเร็จแล้ว'
-              : ''
-          }`
-        }))
+
+    if (newNotis.length) {
+      const mapped = newNotis.map(item => ({
+        id: item._id,
+        type: (item.status || '').toLowerCase(),
+        timestamp: item.returnedAt
+          ? new Date(item.returnedAt).getTime()
+          : item.updatedAt
+          ? new Date(item.updatedAt).getTime()
+          : item.approvedAt
+          ? new Date(item.approvedAt).getTime()
+          : item.date
+          ? new Date(item.date).getTime()
+          : Date.now(),
+        message: `รายการ '${item.name}' ของคุณ${
+          (item.status || '').toLowerCase() === 'approved'
+            ? ' ได้รับการอนุมัติ'
+            : (item.status || '').toLowerCase() === 'disapproved'
+            ? ' ไม่ได้รับการอนุมัติ'
+            : (item.status || '').toLowerCase() === 'cancel' || (item.status || '').toLowerCase() === 'canceled'
+            ? ' ถูกยกเลิก'
+            : (item.status || '').toLowerCase() === 'returned'
+            ? ' คืนของสำเร็จแล้ว'
+            : ''
+        }`
+      }))
+
+      // รวม + ตัดซ้ำตาม id + เรียงเวลาใหม่สุดบน
+      notifications.value = [...notifications.value, ...mapped]
+        .filter((v, i, arr) => arr.findIndex(x => x.id === v.id) === i)
         .sort((a, b) => b.timestamp - a.timestamp)
-      unreadCount.value = notifications.value.length
-    } else {
-      notifications.value = []
-      unreadCount.value = 0
+
+      pruneOldNotifications()
     }
-  } catch (err) {
-    notifications.value = []
-    unreadCount.value = 0
+
+    // นับเฉพาะที่ยังไม่ได้อ่าน (timestamp > lastSeenTimestamp)
+    unreadCount.value = notifications.value.filter(n => n.timestamp > lastSeenTimestamp.value).length
+  } catch {
+    // เงียบไว้ ไม่ต้องรบกวนผู้ใช้
   }
 }
 
+
 onMounted(async () => {
+
+  lastSeenTimestamp.value = parseInt(localStorage.getItem('lastSeenTimestamp') || '0')
   const formDataRaw = localStorage.getItem('equipmentFormData')
   let bookingId = null
   if (formDataRaw) {
     const parsed = JSON.parse(formDataRaw)
     booking.value = parsed.form
+
+    // ✅ ดึงค่าที่ส่งมาจากหน้าแรก
+    booking.value.username_form = parsed.form.username_form || ""
+    booking.value.id_form = parsed.form.id_form || ""
+
     bookingId = booking.value.booking_id || booking.value._id || booking.value.id
     if (!booking.value.booking_id && (booking.value._id || booking.value.id)) {
       booking.value.booking_id = booking.value._id || booking.value.id
@@ -385,12 +478,16 @@ onMounted(async () => {
       }))
     }
   }
+loadTempFilesFromPage1()
   const fileData = localStorage.getItem('equipment_upload_file')
   if (fileData) {
     try {
       uploadedFiles.value = JSON.parse(fileData)
-    } catch { uploadedFiles.value = [] }
+    } catch { 
+      uploadedFiles.value = [] 
+    }
   }
+
   if (bookingId) {
     try {
       const res = await axios.get(`${API_BASE}/api/booking_equipment/${bookingId}`)
@@ -406,11 +503,15 @@ onMounted(async () => {
       attachedFiles.value = []
     }
     fetchNotifications()
-    setInterval(fetchNotifications, 30000)
+  polling = setInterval(fetchNotifications, 30000)
     await loadCart()
-
   }
 })
+
+onBeforeUnmount(() => {
+  if (polling) clearInterval(polling)
+})
+
 
 function toggleSidebar() {
   isSidebarClosed.value = !isSidebarClosed.value
@@ -453,47 +554,50 @@ async function handleNext() {
   }
   isLoading.value = true
   try {
-     // สร้าง PDF Blob จาก html
+    // 1) สร้าง PDF สำหรับแนบ (เหมือนเดิม)
     const pdfBlob = await htmlToPdfBlob('pdf-section')
-    // แปลง Blob เป็น base64 string
     const pdfBase64 = await blobToBase64(pdfBlob)
-    
-    // บันทึกข้อมูล history พร้อม PDF ลง DB
-    // สมมติว่า API /api/history รองรับ field bookingPdf (base64)
-    // และบันทึกข้อมูลแยกเป็น 1 record ต่อ 1 รายการ item
+
+    // 2) อัปโหลดไฟล์ “จริง” ที่เลือกมาจากหน้าแรก
+    const uploaded = await uploadTempFiles()  // [{fileId,fileName,mimeType,fileUrl}]
+
+    // 3) บันทึก history (แนบเป็น URL/Id ของไฟล์ที่อัปโหลดแล้ว ไม่ใช่ base64)
     for (const item of equipmentList.value) {
       await axios.post(`${API_BASE}/api/history`, {
         booking_id: bookingIdFromServer,
         user_id: booking.value.user_id,
+        username_form: booking.value.username_form || '',
+        id_form: booking.value.id_form || '',
         name: item.name,
         quantity: item.quantity,
         status: 'pending',
         agency: booking.value.agency || booking.value.school_of || '',
-        attachment: uploadedFiles.value.map(f => f.fileData),
-        fileName: uploadedFiles.value.map(f => f.fileName),
-        fileType: uploadedFiles.value.map(f => f.mimeType),
+        attachment: uploaded.map(u => u.fileUrl || u.fileId).filter(Boolean), // เก็บ url หรือ id
+        fileName: uploaded.map(u => u.fileName),
+        fileType: uploaded.map(u => u.mimeType),
         reason: booking.value.reason || '',
         since: booking.value.start_date || '',
         uptodate: booking.value.end_date || '',
         receive_date: booking.value.receive_date || '',
         receive_time: booking.value.receive_time || '',
-        bookingPdf: pdfBase64 
+        bookingPdf: pdfBase64
       })
     }
-     // ดาวน์โหลด PDF ให้ผู้ใช้ด้วย
+
+    // 4) โหลดไฟล์ PDF ให้ผู้ใช้ (เหมือนเดิม)
     const link = document.createElement('a')
     link.href = URL.createObjectURL(pdfBlob)
-    link.download = 'booking-form.pdf'
+    link.download = PDF_FILENAME
     document.body.appendChild(link)
     link.click()
     link.remove()
 
-    await axios.delete(`${API_BASE}/api/cart`, {
-      data: { user_id: booking.value.user_id }
-    })
-    localStorage.removeItem('equipment_upload_file')
-    localStorage.removeItem('equipmentFormData')
+    // 5) เคลียร์รถเข็น + temp files + localStorage
+    await axios.delete(`${API_BASE}/api/cart`, { data: { user_id: booking.value.user_id } })
+    window._equipTempFiles = []                    // <<<< เคลียร์ temp files
+    localStorage.removeItem('equipmentFormData')   // เก็บไว้แค่ booking id
     localStorage.setItem('equipment_booking_id', bookingIdFromServer)
+
     router.push('/form_equipment4')
   } catch (err) {
     alert('เกิดข้อผิดพลาด: ' + (err.response?.data?.message || err.message))
@@ -501,6 +605,7 @@ async function handleNext() {
     isLoading.value = false
   }
 }
+
 </script>
 
 <style scoped>
@@ -669,19 +774,23 @@ async function handleNext() {
 }
 .equipment-table th {
   background-color: #f0f0f0;
+  text-align: center; /* จัดหัวข้อกลาง */
 }
 .approval-table {
   width: 100%;
   border-collapse: collapse;
+  table-layout: fixed;
   margin-top: 24px;
 }
 .approval-table th,
 .approval-table td {
   border: 1px solid #000;
-  padding: 10px 12px;
-  font-size: 15px;
+  padding: 6px 6px;
+  font-size: 14px;
   text-align: left;
   vertical-align: top;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 .approval-table th {
   background: #f7f7f7;
@@ -841,7 +950,7 @@ async function handleNext() {
   }
   .equipment-table,
   .approval-table {
-    min-width: 700px;
+    min-width: 600px;
   }
 }
 /* ลบเส้นใต้เฉพาะในโซนฟอร์ม */
@@ -935,6 +1044,72 @@ async function handleNext() {
 .form-row-sign .label {
   white-space: nowrap; /* ป้องกันคำว่า "ลงชื่อ" หักบรรทัด */
 }
+/* PDF ONLY */
+.pdf-export-font-size {
+  font-size: 14px !important;
+}
+.pdf-export-header {
+  font-size: 24px !important;
+  font-weight: bold;
+}
+
+.equipment-table td:nth-child(1),
+.equipment-table td:nth-child(3) {
+  text-align: center; /* จัดข้อความกลาง */
+}
+
+/* ลายเซ็น – ไม่ใช้ margin fix พิกเซล */
+.signature{
+  margin-top: 30px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+.sig-row{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  justify-content: flex-end;
+}
+
+/* เส้นจุดเล็ก คงที่ */
+.sig-dots{
+  display: inline-block;
+  width: 25ch;           /* ความยาวเส้น ปรับได้ */
+  height: 0;             /* ไม่กินความสูงบรรทัด */
+  border-bottom: 1px dotted #000;  /* เม็ดจุดเล็ก */
+  transform: translateY(8px);     /* ยกเส้นขึ้นให้ระดับเดียวกับข้อความ "ลงชื่อ / ผู้ยืม" */
+}
+
+/* ชื่อใต้เส้น */
+/* ชื่อใต้เส้น */
+/* ชื่อใต้เส้น */
+.sig-name{
+  margin-top: 6px;
+  width: 25ch;           
+  text-align: center;    
+  position: relative;    /* ใช้ relative เพื่อให้เลื่อนด้วย left ได้ */
+  left: -25px;           /* ค่านี้ปรับได้ตามต้องการเพื่อเลื่อนซ้าย */
+}
+/* หมายเหตุ: ให้เป็นบล็อกธรรมดา ชิดซ้ายเต็มความกว้าง */
+.note-block{
+  display: block;
+  margin: 6px 0 0 0;
+  font-size: 12.5px;
+  font-style: italic;
+  text-align: left;
+  width: 100%;
+  color: #000;
+}
+
+
+/* หน้าจอเล็ก ลดความยาวเส้นลง */
+@media (max-width: 540px){
+  .sig-dots, .sig-name{ width: 20ch; }
+}
+
+
 
 
 

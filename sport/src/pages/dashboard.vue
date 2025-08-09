@@ -50,18 +50,32 @@
 
     <!-- กระดิ่งแจ้งเตือน (ซ้าย) -->
     <div style="position: relative; display: inline-block;">
-      <button class="notification-btn" @click="toggleNotifications">
-        <i class="pi pi-bell"></i>
-        <span v-if="unreadCount > 0" class="badge">{{ unreadCount }}</span>
-      </button>
-      <div v-if="showNotifications" class="notification-dropdown">
-  
-  <ul>
-    <li v-for="(noti, idx) in notifications" :key="idx">{{ noti.message }}</li>
-    <li v-if="notifications.length === 0">ไม่มีแจ้งเตือน</li>
-  </ul>
+  <!-- backdrop ปิด dropdown เมื่อคลิกนอกกรอบ -->
+  <div
+    v-if="showNotifications"
+    class="notification-backdrop"
+    @click="closeNotifications"
+  ></div>
+
+  <button class="notification-btn" @click="toggleNotifications">
+    <i class="pi pi-bell"></i>
+    <span v-if="unreadCount > 0" class="badge">{{ unreadCount }}</span>
+  </button>
+
+  <div v-if="showNotifications" class="notification-dropdown">
+    <ul>
+      <li
+        v-for="(noti, idx) in notifications.slice(0, 10)"
+        :key="noti.id || idx"
+        :class="['notification-item', noti.type || '', { unread: noti.timestamp > lastSeenTimestamp }]"
+      >
+        {{ noti.message }}
+      </li>
+      <li v-if="notifications.length === 0" class="no-noti">ไม่มีแจ้งเตือน</li>
+    </ul>
+  </div>
 </div>
-    </div>
+
     <!-- ปุ่มโปรไฟล์ (ขวา) -->
     <router-link to="/profile_admin" class="profile-link">
       <i class="pi pi-user"></i>
@@ -278,6 +292,7 @@ import '@/assets/fonts/Sarabun-Thin-normal.js'
 import '@/assets/fonts/Sarabun-ThinItalic-normal.js'
 
 const API_BASE = import.meta.env.VITE_API_BASE
+const ADMIN_LAST_SEEN_KEY = 'admin_lastSeenTimestamp'
 const currentYear = new Date().getFullYear()
 const fieldStartMonth = ref(1)
 const fieldStartYear = ref(currentYear)
@@ -442,44 +457,81 @@ const notifications = ref([])
 const unreadCount = ref(0)
 const lastCheckedIds = ref(new Set())
 let polling = null
+const lastSeenTimestamp = ref(parseInt(localStorage.getItem(ADMIN_LAST_SEEN_KEY) || '0'))
+
 
 function toggleSidebar() {
   isSidebarClosed.value = !isSidebarClosed.value
 }
 function toggleNotifications() {
   showNotifications.value = !showNotifications.value
-  if (showNotifications.value) unreadCount.value = 0
+  if (showNotifications.value) {
+    lastSeenTimestamp.value = Date.now()
+    localStorage.setItem(ADMIN_LAST_SEEN_KEY, String(lastSeenTimestamp.value)) // ✅
+    unreadCount.value = 0
+  }
 }
+
 async function fetchNotifications() {
   try {
+    // ตัดรายการเก่าเกิน 7 วันทิ้งก่อน
+    const cutoff = Date.now() - (7 * 24 * 60 * 60 * 1000)
+    notifications.value = notifications.value.filter(n => (n?.timestamp ?? 0) >= cutoff)
+
+    // โหลดสถานะรออนุมัติ (pending) ของ field/equipment
     const res = await axios.get(`${API_BASE}/api/history/approve_field`)
     const data = Array.isArray(res.data) ? res.data : []
+
+    // เอาเฉพาะ pending ของ field/equipment ที่ยังไม่เคยใส่
     const pendings = data.filter(item =>
       item.status === 'pending' &&
-      (item.type === 'field' || item.type === 'equipment') &&
-      !lastCheckedIds.value.has(item._id?.$oid || item._id)
+      (item.type === 'field' || item.type === 'equipment')
     )
+
     if (pendings.length) {
       const newMessages = pendings.map(item => {
-        if (item.type === 'field') {
-          return {
-            id: item._id?.$oid || item._id,
-            message: `สนาม '${item.name}' กำลังรอการอนุมัติ`
-          }
-        } else if (item.type === 'equipment') {
-          return {
-            id: item._id?.$oid || item._id,
-            message: `อุปกรณ์ '${item.name}' กำลังรอการอนุมัติ`
-          }
+        const id = item._id?.$oid || item._id
+        // หา timestamp ที่เหมาะสม
+        const ts =
+          (item.updatedAt && new Date(item.updatedAt).getTime()) ??
+          (item.createdAt && new Date(item.createdAt).getTime()) ??
+          (item.date && new Date(item.date).getTime()) ??
+          Date.now()
+
+        return {
+          id,
+          type: 'pending',
+          timestamp: ts,
+          message:
+            item.type === 'field'
+              ? `สนาม '${item.name}' กำลังรอการอนุมัติ`
+              : `อุปกรณ์ '${item.name}' กำลังรอการอนุมัติ`
         }
       })
+
+      // รวม + unique ตาม id + sort ตามเวลาล่าสุด
       notifications.value = [...notifications.value, ...newMessages]
-      pendings.forEach(item => lastCheckedIds.value.add(item._id?.$oid || item._id))
-      unreadCount.value = notifications.value.length
+        .filter((v, i, arr) => arr.findIndex(x => (x.id || i) === (v.id || i)) === i)
+        .sort((a, b) => b.timestamp - a.timestamp)
+
+      // ตัดของเก่าเกิน 7 วันอีกรอบ (กันเผื่อ)
+      pruneOldNotifications()
     }
-  } catch {}
+
+    // คำนวณ unread ตาม timestamp > lastSeenTimestamp (คงสภาพไม่ว่าไปหน้าไหน)
+    unreadCount.value = notifications.value.filter(n => n.timestamp > lastSeenTimestamp.value).length
+  } catch (e) {
+    // เงียบไว้ตามเดิม
+  }
 }
+
 function closeNotifications() { showNotifications.value = false }
+
+function pruneOldNotifications() {
+  const cutoff = Date.now() - (7 * 24 * 60 * 60 * 1000) // 7 วันย้อนหลัง
+  notifications.value = notifications.value.filter(n => (n?.timestamp ?? 0) >= cutoff)
+}
+
 function handleClickOutside(event) {
   const notifDropdown = document.querySelector('.notification-dropdown')
   const notifBtn = document.querySelector('.notification-btn')
@@ -516,10 +568,12 @@ try {
     // log ข้อมูลอุปกรณ์
     console.log('equipUnits', JSON.stringify(equipUnits.value, null, 2))
   } catch { equipUnits.value = [] }
+
+  
 })
 onUnmounted(() => {
   document.removeEventListener('mousedown', handleClickOutside)
-  clearInterval(polling)
+  if (polling) clearInterval(polling)
 })
 
 // ======= สนามกีฬา =======
@@ -758,12 +812,19 @@ function exportPDF(data, header, filename, filterSummary, type = 'field') {
   min-height: unset !important;
   padding-bottom: 1.5rem !important;
 }
+/* ปล่อยสูง auto, กันล้นแนวนอน และคงพื้นที่แคนวาสกราฟไว้ด้วย canvas height */
 .chart-container.overall {
-  height: 320px;
-  min-height: 0;
-  max-height: 350px;
-  overflow: visible !important;
+  height: auto !important;       /* ให้สูงอัตโนมัติ */
+  min-height: 320px;             /* ฐานขั้นต่ำ */
+  max-height: none !important;   /* ไม่จำกัดความสูง */
+  overflow: visible !important;  /* ให้ tooltip โผล่ได้ */
 }
+/* ล็อกความสูงตัวกราฟ (canvas) แทน เพื่อไม่ให้ยืดตาม legend */
+.chart-container.overall canvas {
+  height: 260px !important;  /* ปรับได้ตามชอบ */
+  width: 100% !important;
+}
+
 
 .filter-options {
   display: flex;
@@ -908,6 +969,12 @@ background: #39b844;
   padding: 10px 0;
   font-size: 1rem;
 }
+.notification-backdrop{
+  position: fixed;
+  top:0; left:0; right:0; bottom:0;
+  background: transparent;
+  z-index: 1001; /* ต้องต่ำกว่า .notification-dropdown */
+}
 .notification-dropdown ul {
   padding: 0 18px;
   margin: 0;
@@ -1022,6 +1089,15 @@ background: #39b844;
     box-sizing: border-box;
     overflow-x: auto;
   }
+  .chart-container.overall {
+    height: auto !important;
+    min-height: 0;
+    max-height: none !important;
+  }
+  .chart-container.overall canvas {
+    height: 160px !important;   /* ให้กราฟเตี้ยลงบนจอเล็ก */
+  }
+  
 }
 
 

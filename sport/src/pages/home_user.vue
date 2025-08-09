@@ -74,15 +74,20 @@
       <!-- ปรับ layout ใน template -->
 <transition name="slide-down">
   <div class="announcement-bar" v-if="showAnnouncementBar">
-    <i class="pi pi-megaphone" style="color: red; font-size: 1.5rem;"></i>
+    <span class="announcement-icon">
+      <i class="pi pi-megaphone"></i>
+    </span>
     <span class="announcement-bar-text">
       {{ announcement }}
     </span>
-    <button class="close-announcement-btn" @click="showAnnouncementBar = false">
-      <i class="pi pi-times" style="color: red;"></i>
+    <button class="close-announcement-btn" @click="showAnnouncementBar = false" aria-label="ปิดประกาศ">
+      <span class="close-icon">
+        <i class="pi pi-times"></i>
+      </span>
     </button>
   </div>
 </transition>
+
 
       <section class="hero">
         <div class="carousel-container" v-if="images.length > 0">
@@ -157,7 +162,8 @@ export default {
       polling: null,
       products: [],
       isLightboxOpen: false,
-    lightboxImage: null
+      lightboxImage: null,
+      lastSeenTimestamp: 0
     }
   },
   computed: {
@@ -175,6 +181,15 @@ export default {
   async mounted() {
     // ------- บรรทัดสำคัญ (ต้องมี) ---------
     axios.defaults.withCredentials = true
+
+  this.lastSeenTimestamp = parseInt(localStorage.getItem('lastSeenTimestamp') || '0');
+
+  this.setUserIdFromLocalStorage();
+  if (!this.userId) {
+    this.$router.push('/login');
+    return;
+  }
+  this.startAutoPlay();
 
     this.setUserIdFromLocalStorage()
     if (!this.userId) {
@@ -240,55 +255,74 @@ export default {
     this.lightboxImage = null
   },
     toggleNotifications() {
-      this.showNotifications = !this.showNotifications
-      if (this.showNotifications) {
-        this.unreadCount = 0
-      }
-    },
+  this.showNotifications = !this.showNotifications;
+  if (this.showNotifications) {
+    // บันทึกเวลาที่อ่านล่าสุด
+    this.lastSeenTimestamp = Date.now();
+    localStorage.setItem('lastSeenTimestamp', this.lastSeenTimestamp);
+    this.unreadCount = 0;
+  }
+},
+
+    pruneOldNotifications() {
+    const cutoff = Date.now() - (7 * 24 * 60 * 60 * 1000); // 7 วันย้อนหลังจากปัจจุบัน
+    this.notifications = this.notifications.filter(n => (n?.timestamp ?? 0) >= cutoff);
+  },
     async fetchNotifications() {
-      if (!this.userId) return;
-      try {
-        const res = await axios.get(`${API_BASE}/api/history?user_id=${this.userId}`);
-        const newNotis = res.data.filter(item =>
-          (['approved', 'disapproved', 'cancel', 'canceled', 'returned'].includes((item.status || '').toLowerCase())) &&
-          !this.lastCheckedIds.has(item._id)
-        );
-        if (newNotis.length) {
-          const newMessages = newNotis.map(item => ({
-            id: item._id,
-            type: (item.status || '').toLowerCase(),
-            timestamp: item.returnedAt
-              ? new Date(item.returnedAt).getTime()
-              : item.updatedAt
-              ? new Date(item.updatedAt).getTime()
-              : item.approvedAt
-              ? new Date(item.approvedAt).getTime()
-              : item.date
-              ? new Date(item.date).getTime()
-              : Date.now(),
-            message: `รายการ '${item.name}' ของคุณ${
-              (item.status || '').toLowerCase() === 'approved'
-                ? ' ได้รับการอนุมัติ'
-                : (item.status || '').toLowerCase() === 'disapproved'
-                ? ' ไม่ได้รับการอนุมัติ'
-                : (item.status || '').toLowerCase() === 'cancel' || (item.status || '').toLowerCase() === 'canceled'
-                ? ' ถูกยกเลิก'
-                : (item.status || '').toLowerCase() === 'returned'
-                ? ' คืนของสำเร็จแล้ว'
-                : ''
-            }`
-          }));
+  if (!this.userId) return;
+  try {
+    const cutoff = Date.now() - (7 * 24 * 60 * 60 * 1000);
+    this.notifications = this.notifications.filter(n => (n?.timestamp ?? 0) >= cutoff);
 
-          // Merge, filter duplicates, sort ใหม่สุดอยู่บน
-          this.notifications = [...this.notifications, ...newMessages]
-            .filter((v, i, arr) => arr.findIndex(x => x.id === v.id) === i)
-            .sort((a, b) => b.timestamp - a.timestamp);
+    const res = await axios.get(`${API_BASE}/api/history?user_id=${this.userId}`);
+    const newNotis = res.data.filter(item =>
+      (['approved', 'disapproved', 'cancel', 'canceled', 'returned']
+        .includes((item.status || '').toLowerCase())) &&
+      !this.lastCheckedIds.has(item._id)
+    );
 
-          newNotis.forEach(item => this.lastCheckedIds.add(item._id));
-          this.unreadCount = this.notifications.length;
-        }
-      } catch (err) {}
-    },
+    if (newNotis.length) {
+      const newMessages = newNotis.map(item => ({
+        id: item._id,
+        type: (item.status || '').toLowerCase(),
+        timestamp: item.returnedAt
+          ? new Date(item.returnedAt).getTime()
+          : item.updatedAt
+          ? new Date(item.updatedAt).getTime()
+          : item.approvedAt
+          ? new Date(item.approvedAt).getTime()
+          : item.date
+          ? new Date(item.date).getTime()
+          : Date.now(),
+        message: `รายการ '${item.name}' ของคุณ${
+          (item.status || '').toLowerCase() === 'approved'
+            ? ' ได้รับการอนุมัติ'
+            : (item.status || '').toLowerCase() === 'disapproved'
+            ? ' ไม่ได้รับการอนุมัติ'
+            : (item.status || '').toLowerCase() === 'cancel' || 
+              (item.status || '').toLowerCase() === 'canceled'
+            ? ' ถูกยกเลิก'
+            : (item.status || '').toLowerCase() === 'returned'
+            ? ' คืนของสำเร็จแล้ว'
+            : ''
+        }`
+      }));
+
+      this.notifications = [...this.notifications, ...newMessages]
+        .filter((v, i, arr) => arr.findIndex(x => x.id === v.id) === i)
+        .sort((a, b) => b.timestamp - a.timestamp);
+
+      this.notifications = this.notifications.filter(n => (n?.timestamp ?? 0) >= cutoff);
+
+      newNotis.forEach(item => this.lastCheckedIds.add(item._id));
+
+      // นับ unread เฉพาะที่ timestamp > lastSeenTimestamp
+      this.unreadCount = this.notifications.filter(n => n.timestamp > this.lastSeenTimestamp).length;
+    }
+  } catch (err) {}
+},
+
+
     closeNotifications() {
       this.showNotifications = false
     },
@@ -493,53 +527,89 @@ export default {
 
 /* ตัวแถบประกาศ */
 .announcement-bar {
-  position: fixed;
-  left: 0;
-  top: 0;
-  z-index: 3000;
-  width: px;
-  max-width: var(--announcement-width);
-  margin-left: auto;
-  margin-right: auto;
-  left: 0;
-  right: 0;
-  background: rgba(255, 216, 216, 0.911);
-  color: #ff0000;
-  padding: 1rem 2rem;
-  font-size: 1.15rem;
-  font-weight: bold;
   display: flex;
-  align-items: flex-start;
+  align-items: center;  
   gap: 1.2rem;
-  box-shadow: 0 4px 18px rgba(255, 80, 80, 0.13);
+  width: 100%;
+  max-width: 900px; 
+  margin: 12px auto;
+  background: #ffeaeac8; /* ชมพูอ่อนแบบ danger alert */
+  color: #e53e3e;      /* ฟอนต์แดง */
+  font-size: 1.15rem;
+  font-weight: 500;
   border-radius: 12px;
+  padding: 1rem 2rem;
+   box-shadow: 0 4px 18px rgba(255, 80, 80, 0.13);
+  border: 1.5px solid #fdb6b6;
+  position: sticky;
+  top: 60px;                  /* ระยะห่างจากขอบบน ปรับให้เท่ากับความสูง navbar */
+  z-index: 900;               /* ให้อยู่เหนือเนื้อหา แต่ต่ำกว่า navbar */
 }
+.announcement-icon {
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  min-height: 34px;
+  background: #ff5a5f;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  margin-right: 7px;
+  box-shadow: 0 1px 5px #ffbfc1a0;
+  flex-shrink: 0;
+}
+.announcement-icon i {
+  color: #fff !important;
+  font-size: 1.3rem !important;
+  margin-top: 1px;
+}
+
 
 .announcement-bar-text {
   flex: 1;
   display: flex;
   align-items: center;
-  gap: 0.8rem;
-  white-space: pre-wrap;
-    /* แปลง \n เป็น break line ตามที่พิมพ์ไว้ */
-    word-break: break-word;
+  word-break: break-word;
+   gap: 0.8rem;
+  white-space: pre-wrap;   /* อันนี้สำคัญ */
   overflow-wrap: anywhere;
+  font-size: 1.07rem;
+  font-weight: 500;
+  color: #e53e3e; /* ฟอนต์แดง */
 }
-
 .close-announcement-btn {
-  background: none;
+  margin-left: 12px;
+  background: transparent;
   border: none;
-  color: #bf0c0c;
-  font-size: 1.5rem;
+  outline: none;
   cursor: pointer;
-  margin-left: 0.5rem;
-  transition: color 0.15s;
+  padding: 0;
+  transition: background 0.2s;
+  display: flex;
+  align-items: center;
+}
+.close-icon {
+  width: 32px;
+  height: 32px;
+  background: #ffe0e3; /* วงกลมจางๆ */
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+  box-shadow: 0 1px 6px #f6b4b833;
 }
 
-.close-announcement-btn:hover {
-  color: #222;
+.close-icon i {
+  color: #e53e3e !important;
+  font-size: 1.28rem !important;
 }
 
+.close-announcement-btn:hover .close-icon {
+  background: #ffd1d7;
+  /* สามารถปรับเฉดเมื่อ hover */
+}
 
 /* ===== ปุ่มรูป ===== */
 .carousel-indicator {

@@ -85,7 +85,14 @@
       </div>
 
       <footer class="foot">
-        Sport Complex – Mae Fah Luang University | Tel. 0-5391-7821 | Email: sport-complex@mfu.ac.th © 2025
+        <div class="footer-left">
+          <p>
+            Sport Complex – Mae Fah Luang University |
+            Tel. 0-5391-7821 | Facebook:
+            <a href="https://www.facebook.com/mfusportcomplex" target="_blank">MFU Sports Complex Center</a> |
+            Email: <a href="mailto:sport-complex@mfu.ac.th">sport-complex@mfu.ac.th</a>
+          </p>
+        </div>
       </footer>
     </div>
   </div>
@@ -111,7 +118,9 @@ export default {
       unreadCount: 0,
       userId: localStorage.getItem('user_id') || '',
       lastCheckedIds: new Set(),
-       products: [],
+      products: [],
+      lastSeenTimestamp: 0,
+      polling: null,
     };
   },
   computed: {
@@ -125,6 +134,12 @@ export default {
     }
   },
   methods: {
+
+     pruneOldNotifications() {
+    const cutoff = Date.now() - (7 * 24 * 60 * 60 * 1000); // 7 วันย้อนหลัง
+    this.notifications = this.notifications.filter(n => (n?.timestamp ?? 0) >= cutoff);
+  },
+
     toggleSidebar() {
       this.isSidebarClosed = !this.isSidebarClosed;
     },
@@ -191,74 +206,91 @@ export default {
       }
     },
     toggleNotifications() {
-    this.showNotifications = !this.showNotifications;
-    if (this.showNotifications) this.unreadCount = 0;
-  },
+  this.showNotifications = !this.showNotifications;
+  if (this.showNotifications) {
+    this.lastSeenTimestamp = Date.now();
+    localStorage.setItem('lastSeenTimestamp', String(this.lastSeenTimestamp));
+    this.unreadCount = 0;
+  }
+},
 
   async fetchNotifications() {
   if (!this.userId) return;
   try {
+    // ตัดเกิน 7 วันก่อนทุกครั้ง
+    this.pruneOldNotifications();
+
     const res = await axios.get(`${API_BASE}/api/history?user_id=${this.userId}`);
     const newNotis = res.data.filter(item =>
-      (['approved', 'disapproved', 'cancel', 'canceled', 'returned'].includes((item.status || '').toLowerCase())) &&
+      (['approved', 'disapproved', 'cancel', 'canceled', 'returned']
+        .includes((item.status || '').toLowerCase())) &&
       !this.lastCheckedIds.has(item._id)
     );
+
     if (newNotis.length) {
       const newMessages = newNotis.map(item => ({
-  id: item._id,
-  type: (item.status || '').toLowerCase(),
-  // ลองเอา updatedAt, returnedAt, approvedAt หรือ date ที่ใหม่สุดมาใช้ (ต้องมีฟิลด์ใน DB)
-  timestamp: item.returnedAt
-    ? new Date(item.returnedAt).getTime()
-    : item.updatedAt
-    ? new Date(item.updatedAt).getTime()
-    : item.approvedAt
-    ? new Date(item.approvedAt).getTime()
-    : item.date
-    ? new Date(item.date).getTime()
-    : Date.now(),
-  message: `รายการ '${item.name}' ของคุณ${
-    (item.status || '').toLowerCase() === 'approved'
-      ? ' ได้รับการอนุมัติ'
-      : (item.status || '').toLowerCase() === 'disapproved'
-      ? ' ไม่ได้รับการอนุมัติ'
-      : (item.status || '').toLowerCase() === 'cancel' || (item.status || '').toLowerCase() === 'canceled'
-      ? ' ถูกยกเลิก'
-      : (item.status || '').toLowerCase() === 'returned'
-      ? ' คืนของสำเร็จแล้ว'
-      : ''
-  }`
-}));
+        id: item._id,
+        type: (item.status || '').toLowerCase(),
+        timestamp: item.returnedAt
+          ? new Date(item.returnedAt).getTime()
+          : item.updatedAt
+          ? new Date(item.updatedAt).getTime()
+          : item.approvedAt
+          ? new Date(item.approvedAt).getTime()
+          : item.date
+          ? new Date(item.date).getTime()
+          : Date.now(),
+        message: `รายการ '${item.name}' ของคุณ${
+          (item.status || '').toLowerCase() === 'approved'
+            ? ' ได้รับการอนุมัติ'
+            : (item.status || '').toLowerCase() === 'disapproved'
+            ? ' ไม่ได้รับการอนุมัติ'
+            : (item.status || '').toLowerCase() === 'cancel' || (item.status || '').toLowerCase() === 'canceled'
+            ? ' ถูกยกเลิก'
+            : (item.status || '').toLowerCase() === 'returned'
+            ? ' คืนของสำเร็จแล้ว'
+            : ''
+        }`
+      }));
 
-
-      // Merge, filter duplicates, sort ใหม่สุดอยู่บน
+      // รวม + กันซ้ำ + เรียงใหม่สุดบน
       this.notifications = [...this.notifications, ...newMessages]
         .filter((v, i, arr) => arr.findIndex(x => x.id === v.id) === i)
         .sort((a, b) => b.timestamp - a.timestamp);
 
+      // ตัดเกิน 7 วันอีกรอบหลังรวม
+      this.pruneOldNotifications();
+
       newNotis.forEach(item => this.lastCheckedIds.add(item._id));
-      this.unreadCount = this.notifications.length;
     }
-  } catch (err) {}
-}
 
-
-,
-    
+    // นับเฉพาะที่มาใหม่กว่าครั้งล่าสุดที่เปิดกระดิ่ง
+    this.unreadCount = this.notifications.filter(n => n.timestamp > this.lastSeenTimestamp).length;
+  } catch (err) {
+    // ignore
+  }
+},  
   },
   async mounted() {
-  console.log('user_id from localStorage:', localStorage.getItem('user_id'))
-  // ดึง query params จาก route (ชื่อ/รูป)
-  this.equipmentName = this.$route.query.name || 'Basketball'
-  this.equipmentImage = this.$route.query.image || this.defaultImage
-  this.fetchNotifications();
-  this.polling = setInterval(this.fetchNotifications, 30000);
-  // โหลดจำนวนที่เหลือจริงจากฐานข้อมูล
+  // เซ็ตเวลาอ่านล่าสุดจาก localStorage (ถ้าไม่เคยมีจะเป็น 0)
+  this.lastSeenTimestamp = parseInt(localStorage.getItem('lastSeenTimestamp') || '0');
+
+  // รับค่าจาก route เดิม
+  this.equipmentName = this.$route.query.name || 'Basketball';
+  this.equipmentImage = this.$route.query.image || this.defaultImage;
+
+  // โหลดข้อมูล
   await this.fetchRemaining();
   await this.loadCart();
-}
-,
 
+  // โหลดแจ้งเตือนครั้งแรก + ตั้ง polling เดียว
+  await this.fetchNotifications();
+  this.polling = setInterval(this.fetchNotifications, 30000);
+},
+
+beforeUnmount() {
+  if (this.polling) clearInterval(this.polling);
+},
   watch: {
     equipmentName() {
       this.fetchRemaining();

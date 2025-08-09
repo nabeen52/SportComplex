@@ -53,7 +53,7 @@
             <div v-if="showNotifications" class="notification-dropdown">
   <ul>
     <li
-      v-for="(noti, idx) in notifications"
+      v-for="(noti, idx) in notifications.slice(0, 10)"  
       :key="noti.id || idx"
       :class="['notification-item', noti.type || '', { unread: idx === 0 }]"
     >
@@ -97,7 +97,7 @@
   </div>
   <button class="book-btn" :class="{ disabled: !field.visible }" :disabled="!field.visible"
     @click="goToBooking(field)">
-    จอง
+    Book
   </button>
 </div>
 
@@ -120,7 +120,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 const API_BASE = import.meta.env.VITE_API_BASE
@@ -138,6 +138,8 @@ const products = ref([]) // เพิ่มบรรทัดนี้
 const showNotifications = ref(false)
 const notifications = ref([])
 const unreadCount = ref(0)
+const lastSeenTimestamp = ref(parseInt(localStorage.getItem('lastSeenTimestamp') || '0'))
+const polling = ref(null)
 const userId = localStorage.getItem('user_id') || ''
 const lastCheckedIds = new Set()
 
@@ -152,9 +154,18 @@ function toggleSidebar() {
 function toggleNotifications() {
   showNotifications.value = !showNotifications.value
   if (showNotifications.value) {
+    lastSeenTimestamp.value = Date.now()
+    localStorage.setItem('lastSeenTimestamp', String(lastSeenTimestamp.value))
     unreadCount.value = 0
   }
 }
+
+function pruneOldNotifications() {
+  const cutoff = Date.now() - (7 * 24 * 60 * 60 * 1000)
+  notifications.value = notifications.value.filter(n => (n?.timestamp ?? 0) >= cutoff)
+}
+
+
 
 async function loadCart() {
   if (!userId) return
@@ -171,11 +182,16 @@ async function loadCart() {
 async function fetchNotifications() {
   if (!userId) return
   try {
+    // ตัดของเก่าออกก่อนเสมอ
+    pruneOldNotifications()
+
     const res = await axios.get(`${API_BASE}/api/history?user_id=${userId}`)
     const newNotis = res.data.filter(item =>
-      (['approved', 'disapproved', 'cancel', 'canceled', 'returned'].includes((item.status || '').toLowerCase())) &&
+      (['approved', 'disapproved', 'cancel', 'canceled', 'returned']
+        .includes((item.status || '').toLowerCase())) &&
       !lastCheckedIds.has(item._id)
     )
+
     if (newNotis.length) {
       const newMessages = newNotis.map(item => ({
         id: item._id,
@@ -201,15 +217,22 @@ async function fetchNotifications() {
             : ''
         }`
       }))
-      // รวม, กรองซ้ำ, sort ใหม่สุดบน
+
+      // รวม + ตัดซ้ำ + เรียงใหม่สุดอยู่บน
       notifications.value = [...notifications.value, ...newMessages]
         .filter((v, i, arr) => arr.findIndex(x => x.id === v.id) === i)
         .sort((a, b) => b.timestamp - a.timestamp)
+
+      // ตัดแจ้งเตือนเกิน 7 วันอีกรอบหลังรวม
+      pruneOldNotifications()
+
       newNotis.forEach(item => lastCheckedIds.add(item._id))
-      unreadCount.value = notifications.value.length
     }
+
+    // นับ unread เฉพาะรายการที่ timestamp > lastSeenTimestamp
+    unreadCount.value = notifications.value.filter(n => n.timestamp > lastSeenTimestamp.value).length
   } catch (err) {
-    // ignore
+    // เงียบเหมือนเดิม
   }
 }
 
@@ -250,10 +273,14 @@ onMounted(async () => {
   }
 
   // โหลดแจ้งเตือนครั้งแรกและตั้ง poll ทุก 30 วินาที
-  fetchNotifications()
+  await fetchNotifications()
+  polling.value = setInterval(fetchNotifications, 30000)
   setInterval(fetchNotifications, 30000)
-
   await loadCart()
+})
+
+onUnmounted(() => {
+  if (polling.value) clearInterval(polling.value)
 })
 
 // ไปหน้าจองสนาม พร้อมส่ง query
@@ -533,13 +560,45 @@ function goToBooking(field) {
 .notification-item {
   transition: background 0.3s, border-color 0.3s, color 0.3s;
 }
+@media (max-width: 540px) {
+  .notification-dropdown {
+    min-width: 220px;
+    max-width: 99vw;
+  }
+  .notification-dropdown li {
+    font-size: 0.99rem;
+    padding: 0.7em 0.7em;
+  }
+}
 .notification-backdrop {
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
   background: transparent;
   z-index: 1001; /* ต้องน้อยกว่า .notification-dropdown (1002) */
 }
-
+@media (max-width: 900px) {
+  .sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 80vw;
+    max-width: 320px;
+    height: 100vh;
+    z-index: 3000;
+    transform: translateX(-100%);
+    transition: transform 0.3s;
+    box-shadow: 2px 0 12px rgba(0,0,0,0.11);
+  }
+  .sidebar.open {
+    transform: translateX(0);
+  }
+  .main {
+    margin-left: 0 !important;
+    max-width: 100vw;
+    min-width: 0;
+    padding: 8px;
+  }
+}
 .sidebar-mask {
   position: fixed;
   left: 0; right: 0; top: 0; bottom: 0;

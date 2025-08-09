@@ -42,13 +42,17 @@
               <span v-if="unreadCount > 0" class="badge">{{ unreadCount }}</span>
             </button>
             <div v-if="showNotifications" class="notification-dropdown">
-              <ul>
-                <li v-for="(noti, idx) in notifications" :key="idx">
-                  {{ noti.message }}
-                </li>
-                <li v-if="notifications.length === 0">ไม่มีแจ้งเตือน</li>
-              </ul>
-            </div>
+            <ul>
+              <li
+                v-for="(noti, idx) in notifications.slice(0, 10)"
+                :key="noti.id || idx"
+                :class="['notification-item', noti.type || '', { unread: noti.timestamp > lastSeenTimestamp }]"
+              >
+                {{ noti.message }}
+              </li>
+              <li v-if="notifications.length === 0" class="no-noti">ไม่มีแจ้งเตือน</li>
+            </ul>
+          </div>
           </div>
           <router-link to="/profile_staff"><i class="pi pi-user"></i></router-link>
         </div>
@@ -175,6 +179,7 @@ export default {
       polling: null,
       filterStatus: '',
       isMobile: window.innerWidth <= 600, // ★
+      lastSeenTimestamp: 0,
     }
   },
   computed: {
@@ -225,9 +230,19 @@ export default {
       this.isSidebarClosed = !this.isSidebarClosed
     },
     toggleNotifications() {
-      this.showNotifications = !this.showNotifications
-      if (this.showNotifications) this.unreadCount = 0
-    },
+  this.showNotifications = !this.showNotifications;
+  if (this.showNotifications) {
+    this.lastSeenTimestamp = Date.now();
+    localStorage.setItem('staff_lastSeenTimestamp', String(this.lastSeenTimestamp));
+    this.unreadCount = 0;
+  }
+},
+
+pruneOldNotifications() {
+  const cutoff = Date.now() - (7 * 24 * 60 * 60 * 1000);
+  this.notifications = this.notifications.filter(n => (n?.timestamp ?? 0) >= cutoff);
+},
+
     toggleFilter(status) {
     this.filterStatus = this.filterStatus === status ? '' : status
   },
@@ -249,21 +264,51 @@ export default {
       return d.toLocaleDateString('th-TH', { year: 'numeric', month: '2-digit', day: '2-digit' })
     },
     async fetchNotifications() {
-      try {
-        const res = await axios.get(`${API_BASE}/api/equipments/pending`)
-        const data = Array.isArray(res.data) ? res.data : []
-        const pendings = data.filter(item => !this.lastCheckedIds.has(item._id?.$oid || item._id))
-        if (pendings.length) {
-          const newMessages = pendings.map(item => ({
-            id: item._id?.$oid || item._id,
-            message: `มีรายการ '${item.name}' ที่รออนุมัติ`
-          }))
-          this.notifications = [...this.notifications, ...newMessages]
-          pendings.forEach(item => this.lastCheckedIds.add(item._id?.$oid || item._id))
-          this.unreadCount = this.notifications.length
-        }
-      } catch (err) {}
-    },
+  try {
+    const cutoff = Date.now() - (7 * 24 * 60 * 60 * 1000);
+
+    // ตัดของเก่าทิ้งก่อน
+    this.pruneOldNotifications();
+
+    // ดึง pending สำหรับ staff
+    const res = await axios.get(`${API_BASE}/api/equipments/pending`);
+    const data = Array.isArray(res.data) ? res.data : [];
+
+    // เอาเฉพาะ id ใหม่ที่ยังไม่เคยแจ้ง
+    const fresh = data.filter(item => !this.lastCheckedIds.has(item._id?.$oid || item._id));
+
+    if (fresh.length) {
+      const newMessages = fresh.map(item => {
+        const ts =
+          item.updatedAt ? new Date(item.updatedAt).getTime() :
+          item.createdAt ? new Date(item.createdAt).getTime() :
+          item.date      ? new Date(item.date).getTime()      :
+          Date.now();
+        return {
+          id: item._id?.$oid || item._id,
+          type: 'pending',
+          timestamp: ts,
+          message: `มีรายการ '${item.name}' ที่รออนุมัติ`,
+        };
+      });
+
+      // รวม + กันซ้ำ + เรียงล่าสุด
+      this.notifications = [...this.notifications, ...newMessages]
+        .filter((v, i, arr) => arr.findIndex(x => x.id === v.id) === i)
+        .sort((a, b) => b.timestamp - a.timestamp);
+
+      // ตัดทิ้งอีกครั้งหลังรวม
+      this.pruneOldNotifications();
+
+      // มาร์คว่าเคยเห็น id เหล่านี้แล้ว
+      fresh.forEach(item => this.lastCheckedIds.add(item._id?.$oid || item._id));
+    }
+
+    // นับ unread เฉพาะที่ timestamp > lastSeenTimestamp
+    this.unreadCount = this.notifications.filter(n => n.timestamp > this.lastSeenTimestamp).length;
+  } catch (err) {}
+},
+
     detailGroup(group) {
       let html = '<div style="text-align:left;">'
       group.forEach((item, i) => {
@@ -289,6 +334,7 @@ export default {
     }
   },
   async mounted() {
+    
     try {
       const staffId = localStorage.getItem('user_id')
       const res = await axios.get(`${API_BASE}/api/history`)
@@ -333,6 +379,7 @@ export default {
       this.announcement = ""
       this.showAnnouncementBar = false
     }
+    this.lastSeenTimestamp = parseInt(localStorage.getItem('staff_lastSeenTimestamp') || '0');
 
     await this.fetchNotifications()
     this.polling = setInterval(this.fetchNotifications, 30000)

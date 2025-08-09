@@ -21,14 +21,22 @@
         <button class="menu-toggle" @click="toggleSidebar">☰</button>
         <div class="topbar-actions">
           <div>
-            <div v-if="showNotifications" class="notification-backdrop" @click="closeNotifications"></div>
+            <div
+              v-if="showNotifications"
+              class="notification-backdrop"
+              @click="closeNotifications"
+            ></div>
             <button class="notification-btn" @click="toggleNotifications">
               <i class="pi pi-bell"></i>
               <span v-if="unreadCount > 0" class="badge">{{ unreadCount }}</span>
             </button>
             <div v-if="showNotifications" class="notification-dropdown">
               <ul>
-                <li v-for="(noti, idx) in notifications" :key="noti.id || idx" :class="['notification-item', noti.type || '', { unread: idx === 0 }]">
+                <li
+                  v-for="(noti, idx) in notifications.slice(0, 10)"
+                  :key="noti.id || idx"
+                  :class="['notification-item', noti.type || '', { unread: idx === 0 }]"
+                >
                   {{ noti.message }}
                 </li>
                 <li v-if="notifications.length === 0" class="no-noti">ไม่มีแจ้งเตือน</li>
@@ -76,7 +84,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import Swal from 'sweetalert2'
 import axios from 'axios'
@@ -94,22 +102,39 @@ const products = ref([])
 const unreadCount = ref(0)
 const userId = localStorage.getItem('user_id') || ''
 const lastCheckedIds = new Set()
+const lastSeenTimestamp = ref(parseInt(localStorage.getItem('lastSeenTimestamp') || '0'))
+let polling = null
+
+function pruneOldNotifications() {
+  const cutoff = Date.now() - (7 * 24 * 60 * 60 * 1000) // 7 วัน
+  notifications.value = notifications.value.filter(n => (n?.timestamp ?? 0) >= cutoff)
+}
 
 function toggleNotifications() {
   showNotifications.value = !showNotifications.value
-  if (showNotifications.value) unreadCount.value = 0
+  if (showNotifications.value) {
+    lastSeenTimestamp.value = Date.now()
+    localStorage.setItem('lastSeenTimestamp', String(lastSeenTimestamp.value))
+    unreadCount.value = 0
+  }
 }
+
 function closeNotifications() {
   showNotifications.value = false
 }
+
 async function fetchNotifications() {
   if (!userId) return
   try {
+    // ตัดทิ้งแจ้งเตือนเก่าเกิน 7 วันก่อน
+    pruneOldNotifications()
+
     const res = await axios.get(`${API_BASE}/api/history?user_id=${userId}`)
     const newNotis = res.data.filter(item =>
       (['approved', 'disapproved', 'cancel', 'canceled', 'returned'].includes((item.status || '').toLowerCase())) &&
       !lastCheckedIds.has(item._id)
     )
+
     if (newNotis.length) {
       const newMessages = newNotis.map(item => ({
         id: item._id,
@@ -135,14 +160,22 @@ async function fetchNotifications() {
             : ''
         }`
       }))
+
+      // รวม + กันซ้ำ + เรียงใหม่สุดบน
       notifications.value = [...notifications.value, ...newMessages]
         .filter((v, i, arr) => arr.findIndex(x => x.id === v.id) === i)
         .sort((a, b) => b.timestamp - a.timestamp)
+
+      // ตัดทิ้งรายการเกิน 7 วันอีกครั้งหลังรวม
+      pruneOldNotifications()
+
       newNotis.forEach(item => lastCheckedIds.add(item._id))
-      unreadCount.value = notifications.value.length
     }
+
+    // นับเฉพาะแจ้งเตือนที่ใหม่กว่าเวลาที่ผู้ใช้เปิดกระดิ่งครั้งล่าสุด
+    unreadCount.value = notifications.value.filter(n => n.timestamp > lastSeenTimestamp.value).length
   } catch (err) {
-    // ไม่ต้อง alert
+    // ignore
   }
 }
 
@@ -158,9 +191,19 @@ async function loadCart() {
 }
 
 onMounted(() => {
+  // อ่าน timestamp ที่เคยเปิดกระดิ่งครั้งล่าสุด
+  lastSeenTimestamp.value = parseInt(localStorage.getItem('lastSeenTimestamp') || '0')
+
+  // โหลดแจ้งเตือนครั้งแรก + เริ่ม polling
   fetchNotifications()
-  setInterval(fetchNotifications, 30000)
+  polling = setInterval(fetchNotifications, 30000)
+
+  // โหลดรถเข็นเหมือนเดิม
   loadCart()
+})
+
+onBeforeUnmount(() => {
+  if (polling) clearInterval(polling)
 })
 
 const router = useRouter()
@@ -190,11 +233,15 @@ function formatDateOnly(dateTime) {
     dateObj = new Date(dateTime)
   }
   if (isNaN(dateObj)) return '-'
+
   const day = String(dateObj.getDate()).padStart(2, '0')
   const month = String(dateObj.getMonth() + 1).padStart(2, '0')
-  const year = dateObj.getFullYear()
+  // แปลงเป็น พ.ศ.
+  const year = dateObj.getFullYear() + 543
+
   return `${day}/${month}/${year}`
 }
+
 
 async function loadBookingInfo() {
   const bookingId = localStorage.getItem('bookingId')

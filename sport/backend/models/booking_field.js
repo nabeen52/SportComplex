@@ -47,6 +47,9 @@ const bookingFieldSchema = new mongoose.Schema({
     proxyStudentName: { type: String, default: '' },
     proxyStudentId: { type: String, default: '' },
 
+    username_form: String,
+    id_form: String,
+
 });
 
 module.exports = mongoose.model('BookingField', bookingFieldSchema, 'booking_field');

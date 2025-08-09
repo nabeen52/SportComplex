@@ -25,9 +25,11 @@ const bookingEquipmentSchema = new mongoose.Schema({
             fileId: String,
             fileName: String,
             mimeType: String,
-            
+
         }
-    ]
+    ],
+    username_form: String,
+    id_form: String,
 });
 
 module.exports = mongoose.model('BookingEquipment', bookingEquipmentSchema, 'booking_equipment');

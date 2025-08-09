@@ -49,16 +49,27 @@
   <div class="topbar-actions">
     <!-- กระดิ่งแจ้งเตือน -->
     <div style="position: relative; display: inline-block;">
+      <div
+        v-if="showNotifications"
+        class="notification-backdrop"
+        @click="closeNotifications"
+      ></div>
+
       <button class="notification-btn" @click="toggleNotifications">
         <i class="pi pi-bell"></i>
         <span v-if="unreadCount > 0" class="badge">{{ unreadCount }}</span>
       </button>
+
       <div v-if="showNotifications" class="notification-dropdown">
         <ul>
-          <li v-for="(noti, idx) in notifications" :key="idx">
+          <li
+            v-for="(noti, idx) in notifications.slice(0, 10)"
+            :key="noti.id || idx"
+            :class="['notification-item', noti.type || '', { unread: noti.timestamp > lastSeenTimestamp }]"
+          >
             {{ noti.message }}
           </li>
-          <li v-if="notifications.length === 0">ไม่มีแจ้งเตือน</li>
+          <li v-if="notifications.length === 0" class="no-noti">ไม่มีแจ้งเตือน</li>
         </ul>
       </div>
     </div>
@@ -397,6 +408,7 @@ import Swal from 'sweetalert2'
 import html2pdf from 'html2pdf.js'
 
 const API_BASE = import.meta.env.VITE_API_BASE
+const ADMIN_FORM_LAST_SEEN_KEY = 'form_field_admin_lastSeen'
 const isMobile = ref(false)
 
 // --------------- แจ้งเตือน -----------------
@@ -405,14 +417,32 @@ const notifications = ref([])
 const unreadCount = ref(0)
 const userId = localStorage.getItem('user_id') || ''
 const lastCheckedIds = new Set()
+const lastSeenTimestamp = ref(0)
+let notiPolling = null
+
+function pruneOldNotifications() {
+  const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000
+  notifications.value = notifications.value.filter(n => (n?.timestamp ?? 0) >= cutoff)
+}
 
 function toggleNotifications() {
   showNotifications.value = !showNotifications.value
-  if (showNotifications.value) unreadCount.value = 0
+  if (showNotifications.value) {
+    lastSeenTimestamp.value = Date.now()
+    localStorage.setItem(ADMIN_FORM_LAST_SEEN_KEY, String(lastSeenTimestamp.value))
+    unreadCount.value = 0
+  }
 }
 function closeNotifications() {
   showNotifications.value = false
 }
+
+function handleClickOutside(e) {
+  const dd = document.querySelector('.notification-dropdown')
+  const btn = document.querySelector('.notification-btn')
+  if (dd && !dd.contains(e.target) && btn && !btn.contains(e.target)) closeNotifications()
+}
+
 function checkMobile() {
   isMobile.value = window.innerWidth <= 600
 }
@@ -459,47 +489,45 @@ function blobToBase64(blob) {
 }
 
 async function fetchNotifications() {
-  if (!userId) return
+  const uid = localStorage.getItem('user_id') || ''
+  if (!uid) return
   try {
-    const res = await axios.get(`${API_BASE}/api/history?user_id=${userId}`)
-    const newNotis = res.data.filter(item =>
-      (['approved', 'disapproved', 'cancel', 'canceled', 'returned'].includes((item.status || '').toLowerCase())) &&
-      !lastCheckedIds.has(item._id)
-    )
-    if (newNotis.length) {
-      const newMessages = newNotis.map(item => ({
-        id: item._id,
-        type: (item.status || '').toLowerCase(),
-        timestamp: item.returnedAt
-          ? new Date(item.returnedAt).getTime()
-          : item.updatedAt
-          ? new Date(item.updatedAt).getTime()
-          : item.approvedAt
-          ? new Date(item.approvedAt).getTime()
-          : item.date
-          ? new Date(item.date).getTime()
-          : Date.now(),
-        message: `รายการ '${item.name}' ของคุณ${
-          (item.status || '').toLowerCase() === 'approved'
-            ? ' ได้รับการอนุมัติ'
-            : (item.status || '').toLowerCase() === 'disapproved'
-            ? ' ไม่ได้รับการอนุมัติ'
-            : (item.status || '').toLowerCase() === 'cancel' || (item.status || '').toLowerCase() === 'canceled'
-            ? ' ถูกยกเลิก'
-            : (item.status || '').toLowerCase() === 'returned'
-            ? ' คืนของสำเร็จแล้ว'
-            : ''
-        }`
-      }))
-      notifications.value = [...notifications.value, ...newMessages]
-        .filter((v, i, arr) => arr.findIndex(x => x.id === v.id) === i)
-        .sort((a, b) => b.timestamp - a.timestamp)
-      newNotis.forEach(item => lastCheckedIds.add(item._id))
-      unreadCount.value = notifications.value.length
-    }
-  } catch (err) {
-    // ignore
-  }
+    pruneOldNotifications()
+
+    const res = await axios.get(`${API_BASE}/api/history?user_id=${uid}`)
+    const data = Array.isArray(res.data) ? res.data : []
+
+    const list = data
+      .filter(it => ['approved','disapproved','cancel','canceled','returned']
+        .includes((it.status||'').toLowerCase()))
+      .map(it => {
+        const ts =
+          (it.returnedAt && new Date(it.returnedAt).getTime()) ??
+          (it.updatedAt && new Date(it.updatedAt).getTime()) ??
+          (it.approvedAt && new Date(it.approvedAt).getTime()) ??
+          (it.date && new Date(it.date).getTime()) ??
+          Date.now()
+        return {
+          id: it._id,
+          type: (it.status||'').toLowerCase(),
+          timestamp: ts,
+          message:
+            `รายการ '${it.name}' ของคุณ${
+              (it.status||'').toLowerCase()==='approved' ? ' ได้รับการอนุมัติ' :
+              (it.status||'').toLowerCase()==='disapproved' ? ' ไม่ได้รับการอนุมัติ' :
+              (it.status||'').toLowerCase()==='canceled' || (it.status||'').toLowerCase()==='cancel' ? ' ถูกยกเลิก' :
+              (it.status||'').toLowerCase()==='returned' ? ' คืนของสำเร็จแล้ว' : ''
+            }`
+        }
+      })
+
+    notifications.value = [...list, ...notifications.value]
+      .filter((v, i, arr) => arr.findIndex(x => (x.id||i) === (v.id||i)) === i)
+      .sort((a,b) => b.timestamp - a.timestamp)
+
+    pruneOldNotifications()
+    unreadCount.value = notifications.value.filter(n => n.timestamp > lastSeenTimestamp.value).length
+  } catch {}
 }
 
 // -------------- Form Confirm + ดึงไฟล์แนบ ----------------
@@ -556,8 +584,10 @@ function isFacilityNo(val) {
 
 // -------------- Load ข้อมูล Booking + Attachments ----------------
 onMounted(async () => {
-  fetchNotifications()
-  setInterval(fetchNotifications, 30000)
+  lastSeenTimestamp.value = parseInt(localStorage.getItem(ADMIN_FORM_LAST_SEEN_KEY) || '0')
+  document.addEventListener('mousedown', handleClickOutside)
+  await fetchNotifications()
+  notiPolling = setInterval(fetchNotifications, 30000)
   checkMobile()
   window.addEventListener('resize', checkMobile)
 
@@ -627,8 +657,11 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
-  window.removeEventListener('resize', checkMobile)
+  // ... (ของเดิมคุณที่ลบ resize listener)
+  if (notiPolling) clearInterval(notiPolling)
+  document.removeEventListener('mousedown', handleClickOutside)
 })
+
 
 async function handleNext() {
   try {
@@ -1133,6 +1166,13 @@ async function handleNext() {
   font-size: 1.4rem;
   position: relative;
   margin-right: 8px;
+}
+
+.notification-backdrop{
+  position: fixed;
+  inset: 0;
+  background: transparent;
+  z-index: 1001;
 }
 .badge {
   position: absolute;

@@ -13,6 +13,15 @@
         <router-link to="/history" active-class="active"><i class="pi pi-history"></i> History</router-link>
       </nav>
     </aside>
+
+     <div
+      v-if="!isSidebarClosed"
+      class="sidebar-overlay"
+      @click="toggleSidebar"
+    ></div>
+
+
+
     <div class="main">
       <header class="topbar">
         <button class="menu-toggle" @click="toggleSidebar">☰</button>
@@ -31,7 +40,7 @@
             <div v-if="showNotifications" class="notification-dropdown">
               <ul>
                 <li
-                  v-for="(noti, idx) in notifications"
+                  v-for="(noti, idx) in notifications.slice(0, 10)"
                   :key="noti.id || idx"
                   :class="['notification-item', noti.type || '', { unread: idx === 0 }]"
                 >
@@ -58,7 +67,7 @@
   </div>
   <div class="calendar-wrapper">
     <iframe
-      src="https://calendar.google.com/calendar/embed?src=gpt.lumduanfriend%40gmail.com&ctz=Asia%2FBangkok"
+      src="https://calendar.google.com/calendar/embed?src=test.cits%40mfu.ac.th&ctz=Asia%2FBangkok"
       style="border: 0"
       width="100%"
       height="600"
@@ -131,7 +140,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
 const API_BASE = import.meta.env.VITE_API_BASE
@@ -149,9 +158,16 @@ const notifications = ref([])
 const unreadCount = ref(0)
 const userId = localStorage.getItem('user_id') || ''
 const lastCheckedIds = new Set()
+let polling = null
+const lastSeenTimestamp = ref(parseInt(localStorage.getItem('lastSeenTimestamp') || '0'))
 
 // รับชื่อสนามจาก query param
 const fieldName = ref(route.query.fieldName || '')
+
+function pruneOldNotifications() {
+  const cutoff = Date.now() - (7 * 24 * 60 * 60 * 1000) // 7 วันย้อนหลัง
+  notifications.value = notifications.value.filter(n => (n?.timestamp ?? 0) >= cutoff)
+}
 
 // แปลง path รูป
 function resolveImagePath(img) {
@@ -194,6 +210,8 @@ function toggleSidebar() {
 function toggleNotifications() {
   showNotifications.value = !showNotifications.value
   if (showNotifications.value) {
+    lastSeenTimestamp.value = Date.now()
+    localStorage.setItem('lastSeenTimestamp', String(lastSeenTimestamp.value))
     unreadCount.value = 0
   }
 }
@@ -206,6 +224,7 @@ async function loadCart() {
     products.value = []
   }
 }
+
 function closeNotifications() {
   showNotifications.value = false
 }
@@ -213,11 +232,16 @@ function closeNotifications() {
 async function fetchNotifications() {
   if (!userId) return
   try {
+    // ตัดแจ้งเตือนเกิน 7 วันก่อนเสมอ
+    pruneOldNotifications()
+
     const res = await axios.get(`${API_BASE}/api/history?user_id=${userId}`)
     const newNotis = res.data.filter(item =>
-      (['approved', 'disapproved', 'cancel', 'canceled', 'returned'].includes((item.status || '').toLowerCase())) &&
+      (['approved', 'disapproved', 'cancel', 'canceled', 'returned']
+        .includes((item.status || '').toLowerCase())) &&
       !lastCheckedIds.has(item._id)
     )
+
     if (newNotis.length) {
       const newMessages = newNotis.map(item => ({
         id: item._id,
@@ -243,16 +267,25 @@ async function fetchNotifications() {
             : ''
         }`
       }))
+
+      // รวม + กันซ้ำ + เรียงใหม่สุดบน
       notifications.value = [...notifications.value, ...newMessages]
         .filter((v, i, arr) => arr.findIndex(x => x.id === v.id) === i)
         .sort((a, b) => b.timestamp - a.timestamp)
+
+      // ตัด >7 วันอีกรอบหลังรวม
+      pruneOldNotifications()
+
       newNotis.forEach(item => lastCheckedIds.add(item._id))
-      unreadCount.value = notifications.value.length
     }
+
+    // นับ unread เฉพาะที่ใหม่กว่าครั้งล่าสุดที่เปิดกระดิ่ง
+    unreadCount.value = notifications.value.filter(n => n.timestamp > lastSeenTimestamp.value).length
   } catch (err) {
     // ignore
   }
 }
+
 
 function clearZone() {
   if (selectedZoneName.value) {
@@ -300,11 +333,16 @@ onMounted(async () => {
     console.error('โหลดข้อมูลสนามไม่สำเร็จ', err)
   }
   await fetchNotifications()
-  setInterval(fetchNotifications, 30000)
+  polling = setInterval(fetchNotifications, 30000)
   
   await loadCart()
 
 })
+
+onBeforeUnmount(() => {
+  if (polling) clearInterval(polling)
+})
+
 </script>
 
 <style scoped>
@@ -532,7 +570,7 @@ onMounted(async () => {
   position: absolute;
   top: 32px;
   left: 32px;
-  background: rgba(0, 123, 255, 0.658);
+  background: rgba(0, 123, 255, 0.86);
   color: #fff;
   padding: 10px 22px;
   font-size: 1.25rem;

@@ -34,7 +34,7 @@
         <button class="menu-toggle" @click="toggleSidebar">☰</button>
         <div class="topbar-actions">
           <!-- 🔔 START กระดิ่งแจ้งเตือน -->
-          <div>
+           <div>
             <div v-if="showNotifications" class="notification-backdrop" @click="closeNotifications"></div>
             <button class="notification-btn" @click="toggleNotifications">
               <i class="pi pi-bell"></i>
@@ -105,7 +105,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
 import Swal from 'sweetalert2'
 import axios from 'axios'
 import { useRouter } from 'vue-router'
@@ -117,6 +117,8 @@ import '@/assets/fonts/Sarabun-Regular-normal.js'
 import '@/assets/fonts/Sarabun-Bold-normal.js'
 
 const API_BASE = import.meta.env.VITE_API_BASE
+const lastSeenTimestamp = ref(parseInt(localStorage.getItem('lastSeenTimestamp') || '0'))
+
 const products = ref([])
 const router = useRouter()
 const equipmentList = ref([])
@@ -130,63 +132,69 @@ const showNotifications = ref(false)
 const notifications = ref([])
 const unreadCount = ref(0)
 const userId = localStorage.getItem('user_id') || ''
+let polling = null
+
+function pruneOldNotifications() {
+  const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000
+  notifications.value = notifications.value.filter(n => (n?.timestamp ?? 0) >= cutoff)
+}
 
 function toggleNotifications() {
   showNotifications.value = !showNotifications.value
-  if (showNotifications.value) unreadCount.value = 0
-}
-function closeNotifications() {
-  showNotifications.value = false
-}
-async function fetchNotifications() {
-  if (!userId) return
-  try {
-    const res = await axios.get(`${API_BASE}/api/history?user_id=${userId}`)
-    const filterStatus = ['approved', 'disapproved', 'cancel', 'canceled', 'returned']
-    const newNotis = (res.data || []).filter(item =>
-      filterStatus.includes((item.status || '').toLowerCase())
-    )
-    if (newNotis.length > 0) {
-      notifications.value = newNotis
-        .map(item => ({
-          id: item._id,
-          type: (item.status || '').toLowerCase(),
-          timestamp: item.returnedAt
-            ? new Date(item.returnedAt).getTime()
-            : item.updatedAt
-            ? new Date(item.updatedAt).getTime()
-            : item.approvedAt
-            ? new Date(item.approvedAt).getTime()
-            : item.date
-            ? new Date(item.date).getTime()
-            : Date.now(),
-          message: `รายการ '${item.name}' ของคุณ${
-            (item.status || '').toLowerCase() === 'approved'
-              ? ' ได้รับการอนุมัติ'
-              : (item.status || '').toLowerCase() === 'disapproved'
-              ? ' ไม่ได้รับการอนุมัติ'
-              : (item.status || '').toLowerCase() === 'cancel' || (item.status || '').toLowerCase() === 'canceled'
-              ? ' ถูกยกเลิก'
-              : (item.status || '').toLowerCase() === 'returned'
-              ? ' คืนของสำเร็จแล้ว'
-              : ''
-          }`
-        }))
-        .sort((a, b) => b.timestamp - a.timestamp)
-      unreadCount.value = notifications.value.length
-    } else {
-      notifications.value = []
-      unreadCount.value = 0
-    }
-  } catch (err) {
-    notifications.value = []
+  if (showNotifications.value) {
+    lastSeenTimestamp.value = Date.now()
+    localStorage.setItem('lastSeenTimestamp', String(lastSeenTimestamp.value))
     unreadCount.value = 0
   }
 }
 
-function toggleSidebar() {
-  isSidebarClosed.value = !isSidebarClosed.value
+function closeNotifications() { showNotifications.value = false }
+
+async function fetchNotifications() {
+  if (!userId) return
+  try {
+    pruneOldNotifications()
+
+    const res = await axios.get(`${API_BASE}/api/history?user_id=${userId}`)
+    const target = ['approved', 'disapproved', 'cancel', 'canceled', 'returned']
+    const list = (res.data || []).filter(it => target.includes((it.status || '').toLowerCase()))
+    if (list.length) {
+      const mapped = list.map(item => ({
+        id: item._id,
+        type: (item.status || '').toLowerCase(),
+        timestamp: item.returnedAt
+          ? new Date(item.returnedAt).getTime()
+          : item.updatedAt
+          ? new Date(item.updatedAt).getTime()
+          : item.approvedAt
+          ? new Date(item.approvedAt).getTime()
+          : item.date
+          ? new Date(item.date).getTime()
+          : Date.now(),
+        message: `รายการ '${item.name}' ของคุณ${
+          (item.status || '').toLowerCase() === 'approved'
+            ? ' ได้รับการอนุมัติ'
+            : (item.status || '').toLowerCase() === 'disapproved'
+            ? ' ไม่ได้รับการอนุมัติ'
+            : (item.status || '').toLowerCase() === 'cancel' || (item.status || '').toLowerCase() === 'canceled'
+            ? ' ถูกยกเลิก'
+            : (item.status || '').toLowerCase() === 'returned'
+            ? ' คืนของสำเร็จแล้ว'
+            : ''
+        }`
+      }))
+      notifications.value = [...notifications.value, ...mapped]
+        .filter((v, i, arr) => arr.findIndex(x => x.id === v.id) === i)
+        .sort((a, b) => b.timestamp - a.timestamp)
+      pruneOldNotifications()
+    }
+    unreadCount.value = notifications.value.filter(n => n.timestamp > lastSeenTimestamp.value).length
+  } catch {
+    // เงียบไว้
+  }
 }
+
+function toggleSidebar() { isSidebarClosed.value = !isSidebarClosed.value }
 
 async function loadCart() {
   if (!userId) return
@@ -249,8 +257,12 @@ async function loadBookingInfo() {
 onMounted(() => {
   loadBookingInfo()
   fetchNotifications()
-  setInterval(fetchNotifications, 30000)
+  polling = setInterval(fetchNotifications, 30000)
   loadCart()
+})
+
+onBeforeUnmount(() => {
+  if (polling) clearInterval(polling)
 })
 
 function handleNext() {

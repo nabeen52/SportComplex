@@ -48,24 +48,26 @@
         <button class="menu-toggle" @click="toggleSidebar">☰</button>
         <div class="topbar-actions">
           <div>
-            <div v-if="showNotifications" class="notification-backdrop" @click="closeNotifications"></div>
-            <button class="notification-btn" @click="toggleNotifications">
-              <i class="pi pi-bell"></i>
-              <span v-if="unreadCount > 0" class="badge">{{ unreadCount }}</span>
-            </button>
-            <div v-if="showNotifications" class="notification-dropdown">
-              <ul>
-                <li
-                  v-for="(noti, idx) in notifications"
-                  :key="noti.id || idx"
-                  :class="['notification-item', noti.type || '', { unread: idx === 0 }]"
-                >
-                  {{ noti.message }}
-                </li>
-                <li v-if="notifications.length === 0" class="no-noti">ไม่มีแจ้งเตือน</li>
-              </ul>
-            </div>
+          <div v-if="showNotifications" class="notification-backdrop" @click="closeNotifications"></div>
+
+          <button class="notification-btn" @click="toggleNotifications">
+            <i class="pi pi-bell"></i>
+            <span v-if="unreadCount > 0" class="badge">{{ unreadCount }}</span>
+          </button>
+
+          <div v-if="showNotifications" class="notification-dropdown">
+            <ul>
+              <li
+                v-for="(noti, idx) in notifications.slice(0, 10)"
+                :key="noti.id || idx"
+                :class="['notification-item', noti.type || '', { unread: noti.timestamp > lastSeenTimestamp }]"
+              >
+                {{ noti.message }}
+              </li>
+              <li v-if="notifications.length === 0" class="no-noti">ไม่มีแจ้งเตือน</li>
+            </ul>
           </div>
+        </div>
           <router-link to="/profile_admin"><i class="pi pi-user"></i></router-link>
         </div>
       </header>
@@ -73,15 +75,20 @@
       <!-- แถบประกาศ -->
       <transition name="slide-down">
   <div class="announcement-bar" v-if="showAnnouncementBar">
-    <i class="pi pi-megaphone" style="color: red; font-size: 1.5rem;"></i>
+    <span class="announcement-icon">
+      <i class="pi pi-megaphone"></i>
+    </span>
     <span class="announcement-bar-text">
       {{ announcement }}
     </span>
-    <button class="close-announcement-btn" @click="showAnnouncementBar = false">
-      <i class="pi pi-times" style="color: red;"></i>
+    <button class="close-announcement-btn" @click="showAnnouncementBar = false" aria-label="ปิดประกาศ">
+      <span class="close-icon">
+        <i class="pi pi-times"></i>
+      </span>
     </button>
   </div>
 </transition>
+
 
       <section class="content">
         <p style="padding-top: 5px;"></p>
@@ -126,7 +133,9 @@ import { useRouter } from 'vue-router'
 import axios from 'axios'
 
 const API_BASE = import.meta.env.VITE_API_BASE
+const ADMIN_LAST_SEEN_KEY = 'admin_lastSeenTimestamp';
 
+const lastSeenTimestamp = ref(0); 
 const fields = ref([])
 const isSidebarClosed = ref(false)
 const announcement = ref("")
@@ -153,61 +162,82 @@ function toggleSidebar() {
   isSidebarClosed.value = !isSidebarClosed.value
 }
 
-function toggleNotifications() {
-  showNotifications.value = !showNotifications.value
-  if (showNotifications.value) unreadCount.value = 0
+
+function pruneOldNotifications() {
+  const cutoff = Date.now() - (7 * 24 * 60 * 60 * 1000); // เก็บ 7 วัน
+  notifications.value = notifications.value.filter(n => (n?.timestamp ?? 0) >= cutoff);
 }
+
+function toggleNotifications() {
+  showNotifications.value = !showNotifications.value;
+  if (showNotifications.value) {
+    lastSeenTimestamp.value = Date.now();
+    localStorage.setItem(ADMIN_LAST_SEEN_KEY, String(lastSeenTimestamp.value));
+    unreadCount.value = 0; // เคลียร์ badge เมื่อเปิดดู
+  }
+}
+
 function closeNotifications() {
-  showNotifications.value = false
+  showNotifications.value = false;
 }
 
 // ปิดแจ้งเตือนเมื่อคลิกข้างนอก dropdown
 function handleClickOutside(event) {
-  const notifDropdown = document.querySelector('.notification-dropdown')
-  const notifBtn = document.querySelector('.notification-btn')
+  const notifDropdown = document.querySelector('.notification-dropdown');
+  const notifBtn = document.querySelector('.notification-btn');
   if (
     notifDropdown &&
     !notifDropdown.contains(event.target) &&
     notifBtn &&
     !notifBtn.contains(event.target)
   ) {
-    closeNotifications()
+    closeNotifications();
   }
 }
 
 // แจ้งเตือน admin เฉพาะ pending ทั้ง field/equipment
 async function fetchNotifications() {
   try {
-    const res = await axios.get(`${API_BASE}/api/history/approve_field`)
-    const data = Array.isArray(res.data) ? res.data : []
+    pruneOldNotifications();
+
+    const res = await axios.get(`${API_BASE}/api/history/approve_field`);
+    const data = Array.isArray(res.data) ? res.data : [];
+
     const pendings = data.filter(item =>
       item.status === 'pending' &&
-      (item.type === 'field' || item.type === 'equipment') &&
-      !lastCheckedIds.value.has(item._id?.$oid || item._id)
-    )
+      (item.type === 'field' || item.type === 'equipment')
+    );
+
     if (pendings.length) {
       const newMessages = pendings.map(item => {
-        if (item.type === 'field') {
-          return {
-            id: item._id?.$oid || item._id,
-            type: 'pending',
-            message: `สนาม '${item.name}' กำลังรอการอนุมัติ`
-          }
-        } else if (item.type === 'equipment') {
-          return {
-            id: item._id?.$oid || item._id,
-            type: 'pending',
-            message: `อุปกรณ์ '${item.name}' กำลังรอการอนุมัติ`
-          }
-        }
-      })
+        const id = item._id?.$oid || item._id;
+        const ts =
+          (item.updatedAt && new Date(item.updatedAt).getTime()) ??
+          (item.createdAt && new Date(item.createdAt).getTime()) ??
+          (item.date && new Date(item.date).getTime()) ??
+          Date.now();
+
+        return {
+          id,
+          type: 'pending',
+          timestamp: ts,
+          message: item.type === 'field'
+            ? `สนาม '${item.name}' กำลังรอการอนุมัติ`
+            : `อุปกรณ์ '${item.name}' กำลังรอการอนุมัติ`
+        };
+      });
+
+      // รวม-ลบซ้ำตาม id แล้วเรียงใหม่ล่าสุดก่อน
       notifications.value = [...notifications.value, ...newMessages]
-      pendings.forEach(item => lastCheckedIds.value.add(item._id?.$oid || item._id))
-      unreadCount.value = notifications.value.length
+        .filter((v, i, arr) => arr.findIndex(x => (x.id || i) === (v.id || i)) === i)
+        .sort((a, b) => b.timestamp - a.timestamp);
+
+      pruneOldNotifications();
     }
-  } catch (err) {
-    // ไม่แจ้ง error
-  }
+
+    // badge = จำนวน noti ที่ timestamp > lastSeenTimestamp
+    unreadCount.value = notifications.value.filter(n => n.timestamp > lastSeenTimestamp.value).length;
+  } catch {}
 }
 
 // ไปหน้าจอง (ใช้ /booking_admin) พร้อมส่ง query
@@ -244,6 +274,8 @@ onMounted(async () => {
     announcement.value = ""
     showAnnouncementBar.value = false
   }
+
+  lastSeenTimestamp.value = parseInt(localStorage.getItem(ADMIN_LAST_SEEN_KEY) || '0');
 
   await fetchNotifications()
   polling = setInterval(fetchNotifications, 30000)
@@ -374,52 +406,90 @@ window.removeEventListener('resize', checkMobile)
 /* แถบประกาศ */
 /* ตัวแถบประกาศ */
 .announcement-bar {
-  position: fixed;
-  left: 0;
-  top: 0;
-  z-index: 3000;
-  width: px;
-  max-width: var(--announcement-width);
-  margin-left: auto;
-  margin-right: auto;
-  left: 0;
-  right: 0;
-  background: rgba(255, 216, 216, 0.911);
-  color: #ff0000;
-  padding: 1rem 2rem;
-  font-size: 1.15rem;
-  font-weight: bold;
   display: flex;
-  align-items: flex-start;
+  align-items: center;  
   gap: 1.2rem;
-  box-shadow: 0 4px 18px rgba(255, 80, 80, 0.13);
+  width: 100%;
+  max-width: 900px; 
+  margin: 12px auto;
+  background: #ffeaeac8; /* ชมพูอ่อนแบบ danger alert */
+  color: #e53e3e;      /* ฟอนต์แดง */
+  font-size: 1.15rem;
+  font-weight: 500;
   border-radius: 12px;
+  padding: 1rem 2rem;
+   box-shadow: 0 4px 18px rgba(255, 80, 80, 0.13);
+  border: 1.5px solid #fdb6b6;
+  position: sticky;
+  top: 60px;                  /* ระยะห่างจากขอบบน ปรับให้เท่ากับความสูง navbar */
+  z-index: 900;               /* ให้อยู่เหนือเนื้อหา แต่ต่ำกว่า navbar */
 }
+.announcement-icon {
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  min-height: 34px;
+  background: #ff5a5f;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  margin-right: 7px;
+  box-shadow: 0 1px 5px #ffbfc1a0;
+  flex-shrink: 0;
+}
+.announcement-icon i {
+  color: #fff !important;
+  font-size: 1.3rem !important;
+  margin-top: 1px;
+}
+
 
 .announcement-bar-text {
   flex: 1;
   display: flex;
   align-items: center;
-  gap: 0.8rem;
-  white-space: pre-wrap;
-    /* แปลง \n เป็น break line ตามที่พิมพ์ไว้ */
-    word-break: break-word;
+  word-break: break-word;
+   gap: 0.8rem;
+  white-space: pre-wrap;   /* อันนี้สำคัญ */
   overflow-wrap: anywhere;
+  font-size: 1.07rem;
+  font-weight: 500;
+  color: #e53e3e; /* ฟอนต์แดง */
 }
-
 .close-announcement-btn {
-  background: none;
+  margin-left: 12px;
+  background: transparent;
   border: none;
-  color: #bf0c0c;
-  font-size: 1.5rem;
+  outline: none;
   cursor: pointer;
-  margin-left: 0.5rem;
-  transition: color 0.15s;
+  padding: 0;
+  transition: background 0.2s;
+  display: flex;
+  align-items: center;
+}
+.close-icon {
+  width: 32px;
+  height: 32px;
+  background: #ffe0e3; /* วงกลมจางๆ */
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+  box-shadow: 0 1px 6px #f6b4b833;
 }
 
-.close-announcement-btn:hover {
-  color: #222;
+.close-icon i {
+  color: #e53e3e !important;
+  font-size: 1.28rem !important;
 }
+
+.close-announcement-btn:hover .close-icon {
+  background: #ffd1d7;
+  /* สามารถปรับเฉดเมื่อ hover */
+}
+
 
 /* ===== CSS แจ้งเตือนแบบ history ===== */
 .notification-dropdown {
@@ -444,78 +514,7 @@ window.removeEventListener('resize', checkMobile)
   0% { opacity: 0; transform: translateY(-24px);}
   100% { opacity: 1; transform: translateY(0);}
 }
-.notification-dropdown ul {
-  padding: 0;
-  margin: 0;
-  list-style: none;
-}
-.notification-dropdown li {
-  background: linear-gradient(90deg, #f6fafd 88%, #e2e7f3 100%);
-  margin: 0.2em 0.8em;
-  padding: 0.85em 1.1em;
-  border-radius: 12px;
-  border: none;
-  font-size: 1.07rem;
-  font-weight: 500;
-  color: #1e2c48;
-  box-shadow: 0 2px 8px 0 rgba(85, 131, 255, 0.06);
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  position: relative;
-  cursor: default;
-  transition: background 0.2s;
-}
-.notification-dropdown li:not(:last-child) {
-  margin-bottom: 0.15em;
-}
-.notification-dropdown li::before {
-  content: "🔔";
-  font-size: 1.2em;
-  margin-right: 7px;
-  color: #1976d2;
-  opacity: 0.80;
-}
-.notification-dropdown li.no-noti {
-  background: #f2f3f6;
-  color: #a7aab7;
-  justify-content: center;
-  font-style: italic;
-}
-.notification-dropdown::-webkit-scrollbar {
-  width: 7px;
-}
-.notification-dropdown::-webkit-scrollbar-thumb {
-  background: #e1e7f5;
-  border-radius: 10px;
-}
-.notification-dropdown::-webkit-scrollbar-track {
-  background: transparent;
-}
-.notification-item.approved {
-  background: linear-gradient(90deg, #e9fbe7 85%, #cbffdb 100%);
-  border-left: 4px solid #38b000;
-  color: #228c22;
-}
-.notification-item.disapproved {
-  background: linear-gradient(90deg, #ffeaea 85%, #ffd6d6 100%);
-  border-left: 4px solid #ff6060;
-  color: #b91423;
-}
-.notification-item.canceled,
-.notification-item.cancel {
-  background: linear-gradient(90deg, #f9d7d7 80%, #e26a6a 100%);
-  border-left: 4px solid #bb2124;
-  color: #91061a;
-}
-.notification-item.returned {
-  background: linear-gradient(90deg, #e0f0ff 85%, #b6e0ff 100%);
-  border-left: 4px solid #1976d2;
-  color: #1976d2;
-}
-.notification-item {
-  transition: background 0.3s, border-color 0.3s, color 0.3s;
-}
+
 .sidebar-overlay {
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
@@ -524,6 +523,12 @@ window.removeEventListener('resize', checkMobile)
 }
 .sidebar {
   z-index: 2000;
+}
+.notification-backdrop{
+  position: fixed;
+  top:0; left:0; right:0; bottom:0;
+  background: transparent;
+  z-index: 1001;
 }
 
 @media (max-width: 600px) {

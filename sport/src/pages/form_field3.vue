@@ -22,7 +22,7 @@
       </nav>
     </aside>
 
-     <div v-if="!isSidebarClosed" class="sidebar-overlay" @click="toggleSidebar"></div>
+    <div v-if="!isSidebarClosed" class="sidebar-overlay" @click="toggleSidebar"></div>
 
     <!-- Main Content -->
     <div class="main">
@@ -32,29 +32,28 @@
         <div class="topbar-actions">
           <div>
             <div
-      v-if="showNotifications"
-      class="notification-backdrop"
-      @click="closeNotifications"
-    ></div>
+              v-if="showNotifications"
+              class="notification-backdrop"
+              @click="closeNotifications"
+            ></div>
             <button class="notification-btn" @click="toggleNotifications">
               <i class="pi pi-bell"></i>
               <span v-if="unreadCount > 0" class="badge">{{ unreadCount }}</span>
             </button>
             <div v-if="showNotifications" class="notification-dropdown">
-  <ul>
-    <li
-      v-for="(noti, idx) in notifications"
-      :key="noti.id || idx"
-      :class="['notification-item', noti.type || '', { unread: idx === 0 }]"
-    >
-      {{ noti.message }}
-    </li>
-    <li v-if="notifications.length === 0" class="no-noti">ไม่มีแจ้งเตือน</li>
-  </ul>
-</div>
-
+              <ul>
+                <li
+                  v-for="(noti, idx) in notifications.slice(0, 10)"
+                  :key="noti.id || idx"
+                  :class="['notification-item', noti.type || '', { unread: idx === 0 }]"
+                >
+                  {{ noti.message }}
+                </li>
+                <li v-if="notifications.length === 0" class="no-noti">ไม่มีแจ้งเตือน</li>
+              </ul>
+            </div>
           </div>
-         <router-link to="/cart" class="cart-link">
+          <router-link to="/cart" class="cart-link">
             <i class="pi pi-shopping-cart"></i>
             <span v-if="products.length > 0" class="badge">{{ products.length }}</span>
           </router-link>
@@ -85,65 +84,66 @@
           </div>
         </div>
       </div>
-    
 
       <div class="scroll-x-container">
-      <!-- Confirm Form -->
-      <div class="form-container">
-        <h1 class="title">ยืนยันข้อมูล</h1>
-        <div id="pdf-section"> 
-        <div class="form-header">
-          <h3>แบบฟอร์มขออนุมัติใช้สถานที่ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง</h3>
-          <p>โทร 053-917-8201 | E-mail: sport-complex@mfu.ac.th</p>
-        </div>
+        <!-- Confirm Form -->
+        <div class="form-container">
+          <h1 class="title">ยืนยันข้อมูล</h1>
+          <div id="pdf-section"> 
+            <div class="form-header">
+              <h3>แบบฟอร์มขออนุมัติใช้สถานที่ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง</h3>
+              <p><b>โทร 053-917-8201 | E-mail: sport-complex@mfu.ac.th</b></p>
+            </div>
 
-        <!-- Header Info -->
-        <div class="info-left " >
-          <span>ที่ อว.</span>
-          <span class="line-field single-line">{{ info.aw }}</span>
-          <span style="margin-left: 50px;">วันที่</span>
-          <span class="line-field single-line">{{ formatDateOnly(info.date) }}</span>
-          <span style="margin-left: 50px;">โทร</span>
-          <span class="line-field single-line">{{ info.tel }}</span>
-        </div>
+            <!-- Header Info -->
+            <div class="info-left " >
+              <span class="bold">ที่ อว.</span>
+              <span class="line-field single-line">{{ info.aw }}</span>
+              <span class="bold" style="margin-left: 50px;">วันที่</span>
+              <span class="line-field single-line">{{ formatDateOnly(info.date) }}</span>
+              <span class="bold" style="margin-left: 50px;">โทร</span>
+              <span class="line-field single-line">{{ info.tel }}</span>
+            </div>
 
-        <!-- Detail Content -->
-     <!-- "เรื่อง..." ชิดซ้าย (ตรงกับ "ที่ อว.") -->
-<div class="form-row mt-30" style="margin-left: 0;">
-  <span>เรื่อง ขออนุมัติใช้สถานที่</span>
+            <!-- Detail Content -->
+            <!-- "เรื่อง..." ชิดซ้าย (ตรงกับ "ที่ อว.") -->
+            <div class="form-row mt-15" style="margin-left: 0;">
+  <span class="bold">เรื่อง ขออนุมัติใช้สถานที่</span>
 </div>
-        
-      <div class="form-row mt-30" style="margin-left: 0px;">
-  <span>เรียน อธิการบดี</span>
-</div>
-
-        
-
-<!-- ย่อหน้าเดียว -->
-<div class="form-row mt-30" style="text-indent: 80px; text-align: left; line-height: 2.0;">
-  ด้วย {{ info.agency }}
-  จะดำเนินกิจกรรม/โครงการ {{ info.name_activity }}
-  เหตุผลในการขอใช้เพื่อ {{ info.reasons }}
-  ในช่วงวันที่ {{ formatDateOnly(info.since) }} ถึงวันที่ {{ formatDateOnly(info.uptodate) }}
-  ช่วงเวลา {{ info.since_time || '-' }} ถึงเวลา {{ info.until_thetime || '-' }}
-  จำนวนผู้เข้าร่วม {{ info.participants }} คน
-  และ เพื่อให้การดำเนินงานเป็นไปด้วยความเรียบร้อย จึงเรียนมาเพื่อขออนุมัติ ดังนี้
+<div class="form-row mt-15" style="margin-left: 0px;">
+  <span class="bold">เรียน อธิการบดี</span>
 </div>
 
-<!-- ข้อ 1 -->
-<div class="form-row mt-30 bold" style="margin-left: 0; margin-bottom: 6px;">
+
+            <!-- ย่อหน้าเดียว -->
+            <div class="form-row mt-15" style="text-indent: 80px; text-align: left; line-height: 2.0;">
+              ด้วย {{ info.agency }}
+              จะดำเนินกิจกรรม/โครงการ {{ info.name_activity }}
+              เหตุผลในการขอใช้เพื่อ {{ info.reasons }}
+              ในช่วงวันที่ {{ formatDateOnly(info.since) }} ถึงวันที่ {{ formatDateOnly(info.uptodate) }}
+              ช่วงเวลา {{ formatTimeTH(info.since_time) }} ถึงเวลา {{ formatTimeTH(info.until_thetime) }}
+              จำนวนผู้เข้าร่วม {{ info.participants }} คน
+              และเพื่อให้การดำเนินงานเป็นไปด้วยความเรียบร้อย จึงเรียนมาเพื่อขออนุมัติ ดังนี้
+            </div>
+
+            <!-- ข้อ 1 -->
+          <div class="form-row mt-30 bold" style="margin-left: 0; margin-bottom: 6px;">
   <span>1. ขออนุมัติใช้สถานที่</span>
 </div>
-<div class="form-row block-row" style="margin-left: 80px; margin-bottom: 22px;">
+<div class="form-row block-row" style="margin-left: 80px; margin-bottom: 0px;">
   <span>อาคาร</span>
   <span class="line-field block-text">{{ info.building }}</span>
-  <span>ระบุตำแหน่งพื้นที่/ห้องที่ต้องการใช้</span>
+</div>
+<div class="form-row block-row" style="margin-left: 80px; margin-bottom: 22px;">
+  <span>ตำแหน่งพื้นที่/ห้องที่ต้องการใช้</span>
   <span class="line-field block-text">
     {{ info.zone && info.zone.trim() !== '' ? info.zone : '-' }}
   </span>
 </div>
 
-<!-- ข้อ 2 -->
+
+            <!-- ข้อ 2 -->
+          <!-- ...ข้อ 2. ... -->
 <div class="form-row mt-30 bold" style="margin-left: 0; margin-bottom: 8px;">
   <span>2. ขออนุมัติใช้ระบบสาธารณูปโภค</span>
   <input type="radio" value="yes" :checked="isUtilityYes(info.utilityRequest)" disabled/>
@@ -151,221 +151,233 @@
   <input type="radio" value="no" :checked="isUtilityNo(info.utilityRequest)" disabled/>
   <label>ไม่เลือก</label>
 </div>
-<div class="form-row block-row" style="margin-left: 80px; margin-bottom: 5px;">
-  <span>เปิดเครื่องปรับอากาศตั้งแต่</span>
-  <span class="line-field single-line">{{ info.turnon_air || '-' }}</span>
-  <span>ถึง</span>
-  <span class="line-field single-line">{{ info.turnoff_air || '-' }}</span>
-</div>
-<div class="form-row block-row" style="margin-left: 80px; margin-bottom: 5px;">
-  <span>ไฟฟ้าส่องสว่างตั้งแต่</span>
-  <span class="line-field single-line">{{ info.turnon_lights || '-' }}</span>
-  <span>ถึง</span>
-  <span class="line-field single-line">{{ info.turnoff_lights || '-' }}</span>
-</div>
-<div class="form-row block-row" style="margin-left: 80px; margin-bottom: 22px;">
-  <span>อื่นๆ</span>
-  <span class="line-field block-text">{{ info.other }}</span>
-</div>
-
-<!-- ข้อ 3 -->
-<div class="form-row mt-30 bold" style="margin-left: 0; margin-bottom: 8px;">
-  <span>3. ขออนุมัติรายการประกอบอาคาร</span>
-  <input type="radio" value="yes" :checked="isFacilityYes(info.facilityRequest)" disabled/>
-  <label style="margin-right: 18px;">เลือก</label>
-  <input type="radio" value="no" :checked="isFacilityNo(info.facilityRequest)" disabled/>
-  <label>ไม่เลือก</label>
-</div>
-<div class="form-row block-row" style="margin-left: 80px; margin-bottom: 5px;">
-  <span style="white-space: nowrap;">ดึงอัฒจันทร์ภายในอาคารเฉลิมพระเกียรติฯ</span>
-  <span class="line-field block-text force-inline">{{ info.amphitheater }}</span>
-</div>
-<div class="form-row block-row" style="margin-left: 80px; margin-bottom: 22px;">
-  <span style="white-space: nowrap;">อุปกรณ์กีฬา (โปรดระบุรายการและจำนวน)</span>
-  <span class="line-field block-text force-inline">{{ info.need_equipment }}</span>
-</div>
-
-
-        <!-- ตารางเซ็นชื่อ 3 ช่อง (ด้านบน) -->
-
-  <table class="sign-header-table">
-  <tbody>
-    <tr>
-      <td>
-        ลงชื่อ............................................<br><br>
-        <span style=" white-space: nowrap;">
-          ( {{ info.requester }} )
-        </span><br><br>
-        นักศึกษา/ผู้รับผิดชอบ<br><br>
-        วันที่............/............/............
-      </td>
-      <td>
-        ลงชื่อ............................................<br><br>
-        (.................................................)<br><br>
-        อาจารย์/ที่ปรึกษาโครงการ<br><br>
-        วันที่............/............/............
-      </td>
-      <td>
-        ลงชื่อ............................................<br><br>
-        (.................................................)<br><br>
-        คณบดี/หัวหน้าหน่วยงาน<br><br>
-        วันที่............/............/............
-      </td>
-    </tr>
-  </tbody>
+<div v-if="isUtilityYes(info.utilityRequest)" style="margin-left:80px;">
+<table style="border-collapse: collapse;">
+  <tr style="height: 26px;"> <!-- ปรับตรงนี้ -->
+    <td style="white-space:nowrap; min-width: 150px; padding:0;">
+      2.1 เปิดเครื่องปรับอากาศตั้งแต่ :
+    </td>
+    <td style="min-width:65px; text-align:center; padding:0 4px;">
+      {{ formatTimeTH(info.turnon_air) }}
+    </td>
+    <td style="padding:0 4px;">ถึง</td>
+    <td style="min-width:65px; text-align:center; padding:0 4px;">
+      {{ formatTimeTH(info.turnoff_air) }}
+    </td>
+  </tr>
+  <tr style="height: 26px;"> <!-- ปรับตรงนี้ -->
+    <td style="white-space:nowrap; min-width: 150px; padding:0;">
+      2.2 ไฟฟ้าส่องสว่างตั้งแต่ :
+    </td>
+    <td style="min-width:65px; text-align:center; padding:0 4px;">
+      {{ formatTimeTH(info.turnon_lights) }}
+    </td>
+    <td style="padding:0 4px;">ถึง</td>
+    <td style="min-width:65px; text-align:center; padding:0 4px;">
+      {{ formatTimeTH(info.turnoff_lights) }}
+    </td>
+  </tr>
+  <tr style="height: 26px;"> <!-- ปรับตรงนี้ -->
+    <td style="white-space:nowrap; min-width: 150px; padding:0;">
+      2.3 อื่นๆ :
+    </td>
+    <td style="min-width:65px; text-align:center; padding:0 4px;">
+      {{ info.other && info.other.trim() !== '' ? info.other : '-' }}
+    </td>
+    <td style="padding:0 4px;"></td>
+    <td style="min-width:65px; text-align:center; padding:0 4px;"></td>
+  </tr>
 </table>
+
+<div style="margin-left:0px; margin-top: 10px;">
+  <span style="font-weight: bold; font-size: 13.5px;">
+    *ต้องได้รับการอนุมัติจากรองอธิการบดีผู้กำกับดูแล และสำเนาเอกสารถึงฝ่ายอนุรักษ์พลังงาน
+  </span>
+</div>
+
+</div>
+
+            <div class="form-row mt-30 bold" style="margin-left: 0; margin-bottom: 8px;">
+              <span>3. ขออนุมัติรายการประกอบอาคาร</span>
+              <input type="radio" value="yes" :checked="isFacilityYes(info.facilityRequest)" disabled/>
+              <label style="margin-right: 18px;">เลือก</label>
+              <input type="radio" value="no" :checked="isFacilityNo(info.facilityRequest)" disabled/>
+              <label>ไม่เลือก</label>
+            </div>
+
+            <!-- ต้องเอา 2 บรรทัดนี้ไปอยู่ใน v-if -->
+            <div v-if="isFacilityYes(info.facilityRequest)">
+              <div class="form-row block-row" style="margin-left: 80px; margin-bottom: 5px;">
+                <span style="white-space: nowrap;"><b>3.1</b> ดึงอัฒจันทร์ภายในอาคารเฉลิมพระเกียรติฯ :</span>
+                <span class="line-field block-text force-inline">{{ info.amphitheater && info.amphitheater.trim() !== '' ? info.amphitheater : '-' }}</span>
+              </div>
+              <div class="form-row block-row" style="margin-left: 80px; margin-bottom: 22px;">
+                <span style="white-space: nowrap;"><b>3.2</b> อุปกรณ์กีฬา (โปรดระบุรายการและจำนวน) :</span>
+                <span class="line-field block-text force-inline">{{ info.need_equipment && info.need_equipment.trim() !== '' ? info.need_equipment : '-' }}</span>
+              </div>
+            </div>
+
+            <!-- ตารางเซ็นชื่อ 3 ช่อง (ด้านบน) -->
+            <table class="sign-header-table">
+              <tbody>
+                <tr>
+                  <td>
+                    ลงชื่อ...........................................<br><br>
+                    <span style=" white-space: nowrap;">
+                    ( {{ info.username_form || '-' }} )
+                  </span>
+                  <br><br>
+                    นักศึกษา/ผู้รับผิดชอบ<br><br>
+                    วันที่............/............/............
+                  </td>
+                  <td>
+                    ลงชื่อ...........................................<br><br>
+                    (.................................................)<br><br>
+                    อาจารย์/ที่ปรึกษาโครงการ<br><br>
+                    วันที่............/............/............
+                  </td>
+                  <td>
+                    ลงชื่อ...........................................<br><br>
+                    (.................................................)<br><br>
+                    คณบดี/หัวหน้าหน่วยงาน<br><br>
+                    วันที่............/............/............
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <!-- ตารางเซ็นชื่อ 3 ช่อง (ด้านล่าง) -->
 <div class="avoid-break">
   <div class="form-row" style="padding-top: 10px;">
     <table class="approval-sign-table avoid-break">
-  <thead>
-    <tr>
-      <th>1. เลขานุการศูนย์กีฬาฯ</th>
-      <th>2. หัวหน้าศูนย์กีฬาฯ</th>
-      <th>3. อธิการบดี</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <!-- ช่อง 1 -->
-      <td>
-        <div class="td-inner">
-           <div class="checkbox-line">
-     <input type="checkbox" id="chk1-1" disabled><label for="chk1-1">เรียน หัวหน้าศูนย์กีฬาฯ</label>
-   </div>
-   <div class="checkbox-line">
-     <input type="checkbox" id="chk1-2" disabled><label for="chk1-2">เพื่อโปรดพิจารณา</label>
-   </div>
-   <div class="checkbox-line">
-     <input type="checkbox" id="chk1-3" disabled><label for="chk1-3">อื่นๆ</label><span class="dot-line mid"></span>
-   </div>
-          <div class="dot-line"></div>
-          <div style="margin:12px 0 6px;">
-            (<span class="dot-line short"></span>)
-          </div>
-          <div style="margin-bottom: 6px;">
-            วันที่ <span class="dot-line date"></span>
-          </div>
-        </div>
-      </td>
-      <!-- ช่อง 2 -->
-      <td>
-        <div class="td-inner">
-          <div class="checkbox-line">
-            <input type="checkbox" id="chk2-1"disabled><label for="chk2-1">เรียนท่านรองอธิการบดี</label>
-          </div>
-          <div class="checkbox-line">
-            <input type="checkbox" id="chk2-2"disabled><label for="chk2-2">เพื่อโปรดพิจารณา</label>
-          </div>
-          <div class="checkbox-line">
-            <input type="checkbox" id="chk2-3"disabled><label for="chk2-3">อื่นๆ</label><span class="dot-line mid"></span>
-          </div>
-          <div class="dot-line"></div>
-          <div style="margin:12px 0 6px;">
-            (<span class="dot-line short"></span>)
-          </div>
-          <div style="margin-bottom: 6px;">
-            วันที่ <span class="dot-line date"></span>
-          </div>
-        </div>
-      </td>
-      
-      
+      <thead>
+        <tr>
+          <th>1. เลขานุการศูนย์กีฬาฯ</th>
+          <th>2. หัวหน้าศูนย์กีฬาฯ</th>
+          <th>3. อธิการบดี</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <!-- ช่อง 1 -->
+          <td>
+            <div class="td-inner">
+              <div class="checkbox-line">
+                <input type="checkbox" id="chk1-1" disabled>
+                <label for="chk1-1">เรียน หัวหน้าศูนย์กีฬาฯ</label>
+              </div>
+              <div class="checkbox-line">
+                <input type="checkbox" id="chk1-2" disabled>
+                <label for="chk1-2">เพื่อโปรดพิจารณา</label>
+              </div>
+              <div class="checkbox-line">
+                <input type="checkbox" id="chk1-3" disabled>
+                <label for="chk1-3">อื่นๆ</label>
+                <span class="dot-line dot-line-custom"></span>
+              </div>
+              <div class="dot-line"></div>
+              <div style="margin:12px 0 6px;">
+                (<span class="dot-line short"></span>)
+              </div>
+              <div style="margin-bottom: 6px;">
+                วันที่ <span class="dot-line date"></span>
+              </div>
+            </div>
+          </td>
+          <!-- ช่อง 2 -->
+          <td>
+            <div class="td-inner">
+              <div class="checkbox-line">
+                <input type="checkbox" id="chk2-1" disabled>
+                <label for="chk2-1">เรียนรองอธิการบดี</label>
+              </div>
+              <div class="checkbox-line">
+                <input type="checkbox" id="chk2-2" disabled>
+                <label for="chk2-2">เพื่อโปรดพิจารณา</label>
+              </div>
+              <div class="checkbox-line">
+                <input type="checkbox" id="chk2-3" disabled>
+                <label for="chk2-3">อื่นๆ</label>
+                <span class="dot-line dot-line-custom"></span>
+              </div>
+              <div class="dot-line"></div>
+              <div style="margin:12px 0 6px;">
+                (<span class="dot-line short"></span>)
+              </div>
+              <div style="margin-bottom: 6px;">
+                วันที่ <span class="dot-line date"></span>
+              </div>
+            </div>
+          </td>
+        <!-- ช่อง 3 -->
 <!-- ช่อง 3 -->
 <td>
   <div class="td-inner">
     <div class="checkbox-line">
-      <input type="checkbox" id="chk3-1"disabled>
+      <input type="checkbox" id="chk3-1" disabled>
       <label for="chk3-1">อนุมัติข้อ</label>
     </div>
     <div class="checkbox-line">
-      <input type="checkbox" id="chk3-2"disabled>
+      <input type="checkbox" id="chk3-2" disabled>
       <label for="chk3-2">อื่นๆ</label>
-      <span class="dot-line mid"></span>
+      <span class="dot-line dot-line-custom"></span>
     </div>
-    <!-- เพิ่มบรรทัดเปล่าไว้ตรงนี้ (จำนวน 1 บรรทัด) -->
-    <div style="height:9.5px"></div> <!-- ปรับขนาดได้ตามต้องการ -->
+    <!-- เส้นจุดบรรทัดที่ 2 แบบเว้นบรรทัด -->
+    <div style="margin-bottom: 3px;"></div> <!-- เพิ่มระยะห่าง -->
     <div class="dot-line"></div>
+     <div style="margin-bottom: 7px;"></div> 
     <div class="dot-line"></div>
-    
     <div style="margin:12px 0 6px;">
       (<span class="dot-line short"></span>)
     </div>
     <div style="margin-bottom: 6px;">
       วันที่ <span class="dot-line date"></span>
     </div>
-    
   </div>
-  
 </td>
 
 
-
-
-
-
-    </tr>
-  </tbody>
-</table>
- </div>
-</div>
- </div>
-
-<!-- โชว์ไฟล์แนบ -->
-<!-- ...ไฟล์แนบปกติ-->
-<div v-if="fileAttachments && fileAttachments.length > 0" class="form-row mt-30">
-  <span>ไฟล์แนบ</span>
-  <div class="attached-files-list">
-    <div 
-      v-for="(file, idx) in fileAttachments" 
-      :key="idx"
-      class="attached-file-item"
-    >
-      <a 
-        :href="file.url"
-        target="_blank"
-        :download="file.fileName"
-      >
-        {{ file.fileName || 'ไฟล์แนบ' }}
-      </a>
-      <span v-if="file.size" style="color: #888; font-size:12px; margin-left:8px;">
-        ({{ file.size }} KB)
-      </span>
-    </div>
-  </div>
+        </tr>
+      </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+<div style="margin-top:12px;">
+  <span style="font-weight:bold; font-size: 15px;">
+    หมายเหตุ: ให้นักศึกษา/ผู้รับผิดชอบแนบเอกสารโครงการหรือกำหนดการเพื่อประกอบการพิจารณา
+  </span>
 </div>
 
-<!-- ...ไฟล์แนบจาก uploadFiles (base64)-->
-<!-- <div v-if="fileAttachments && fileAttachments.length > 0" class="form-row mt-30">
-  <span>ไฟล์แนบ (UploadFile)</span>
-  <div class="attached-files-list">
-    <div 
-      v-for="(file, idx) in fileAttachments" 
-      :key="'upl-'+idx"
-      class="attached-file-item"
-    >
-      <a 
-        :href="file.url"
-        target="_blank"
-        :download="file.fileName"
-      >
-        {{ file.fileName || 'ไฟล์แนบ' }}
-      </a>
-      <span v-if="file.size" style="color: #888; font-size:12px; margin-left:8px;">
-        ({{ file.size }} KB)
-      </span>
-    </div>
-  </div>
-</div> -->
+          <!-- โชว์ไฟล์แนบ -->
+          <div v-if="fileAttachments && fileAttachments.length > 0" class="form-row mt-30">
+            <span>ไฟล์แนบ</span>
+            <div class="attached-files-list">
+              <div 
+                v-for="(file, idx) in fileAttachments" 
+                :key="idx"
+                class="attached-file-item"
+              >
+                <a 
+                  :href="file.url"
+                  target="_blank"
+                  :download="file.fileName"
+                >
+                  {{ file.fileName || 'ไฟล์แนบ' }}
+                </a>
+                <span v-if="file.size" style="color: #888; font-size:12px; margin-left:8px;">
+                  ({{ file.size }} KB)
+                </span>
+              </div>
+            </div>
+          </div>
 
-
-        <div class="button-wrapper mt-30">
-          <button id="btnBack" @click="goBack">Back</button>
-          <button id="btnNext" @click="handleNext">Next</button>
+          <div class="button-wrapper mt-30">
+            <button id="btnBack" @click="goBack">Back</button>
+            <button id="btnNext" @click="handleNext">Next</button>
+          </div>
         </div>
-        
       </div>
     </div>
-</div>
     <!-- Footer -->
     <footer class="foot">
       <div class="footer-left">
@@ -383,11 +395,10 @@
       </div>
     </footer>
   </div>
-  
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 import Swal from 'sweetalert2'
@@ -402,36 +413,51 @@ const products = ref([])
 const unreadCount = ref(0)
 const userId = localStorage.getItem('user_id') || ''
 const lastCheckedIds = new Set()
+const lastSeenTimestamp = ref(parseInt(localStorage.getItem('lastSeenTimestamp') || '0'))
+let polling = null
+
+function pruneOldNotifications() {
+  const cutoff = Date.now() - (7 * 24 * 60 * 60 * 1000) // 7 วัน
+  notifications.value = notifications.value.filter(n => (n?.timestamp ?? 0) >= cutoff)
+}
 
 function toggleNotifications() {
   showNotifications.value = !showNotifications.value
-  if (showNotifications.value) unreadCount.value = 0
+  if (showNotifications.value) {
+    lastSeenTimestamp.value = Date.now()
+    localStorage.setItem('lastSeenTimestamp', String(lastSeenTimestamp.value))
+    unreadCount.value = 0
+  }
 }
+
 function closeNotifications() {
   showNotifications.value = false
 }
+
+
+const pdfFilename = 'แบบฟอร์มขออนุมัติใช้สถานที่ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง.pdf'
+
 function exportToPDF() {
-  const element = document.getElementById('pdf-section');
-  // ตั้งค่ารูปแบบไฟล์ PDF
+  const element = document.getElementById('pdf-section')
   const opt = {
-    margin:       0.2,
-    filename:     `booking-form.pdf`,
-    image:        { type: 'jpeg', quality: 0.98 },
-    html2canvas:  { scale: 2, useCORS: true },
-    jsPDF:        { unit: 'in', format: 'a4', orientation: 'portrait' }
-  };
-  html2pdf().from(element).set(opt).save();
+    margin: [0.5, 0.5, 0.5, 0.5],
+    filename: pdfFilename,
+    image: { type: 'jpeg', quality: 0.98 },
+    html2canvas: { scale: 2, useCORS: true },
+    jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
+  }
+  html2pdf().from(element).set(opt).save()
 }
 // รับ element id, return Blob ของไฟล์ pdf
 function htmlToPdfBlob(elementId) {
   return new Promise((resolve, reject) => {
     const element = document.getElementById(elementId)
     const opt = {
-      margin:       0.2,
-      filename:     `booking-form.pdf`,
-      image:        { type: 'jpeg', quality: 0.98 },
-      html2canvas:  { scale: 2, useCORS: true },
-      jsPDF:        { unit: 'in', format: 'a4', orientation: 'portrait' }
+      margin: [0.5, 0.5, 0.5, 0.5],
+      filename: pdfFilename,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true },
+      jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
     }
     html2pdf()
       .from(element)
@@ -445,11 +471,15 @@ function htmlToPdfBlob(elementId) {
 async function fetchNotifications() {
   if (!userId) return
   try {
+    // ตัดทิ้งแจ้งเตือนเก่าเกิน 7 วันก่อน
+    pruneOldNotifications()
+
     const res = await axios.get(`${API_BASE}/api/history?user_id=${userId}`)
     const newNotis = res.data.filter(item =>
       (['approved', 'disapproved', 'cancel', 'canceled', 'returned'].includes((item.status || '').toLowerCase())) &&
       !lastCheckedIds.has(item._id)
     )
+
     if (newNotis.length) {
       const newMessages = newNotis.map(item => ({
         id: item._id,
@@ -475,16 +505,25 @@ async function fetchNotifications() {
             : ''
         }`
       }))
+
+      // รวม + กันซ้ำ + เรียงใหม่สุดบน
       notifications.value = [...notifications.value, ...newMessages]
         .filter((v, i, arr) => arr.findIndex(x => x.id === v.id) === i)
         .sort((a, b) => b.timestamp - a.timestamp)
+
+      // ตัดทิ้งรายการเกิน 7 วันอีกครั้งหลังรวม
+      pruneOldNotifications()
+
       newNotis.forEach(item => lastCheckedIds.add(item._id))
-      unreadCount.value = notifications.value.length
     }
+
+    // นับเฉพาะแจ้งเตือนที่ใหม่กว่าเวลาที่ผู้ใช้เปิดกระดิ่งครั้งล่าสุด
+    unreadCount.value = notifications.value.filter(n => n.timestamp > lastSeenTimestamp.value).length
   } catch (err) {
     // ignore
   }
 }
+
 
 async function loadCart() {
   const userId = localStorage.getItem('user_id') || ''
@@ -497,9 +536,19 @@ async function loadCart() {
   }
 }
 onMounted(() => {
+  // อ่าน timestamp ที่เคยเปิดกระดิ่งครั้งล่าสุด
+  lastSeenTimestamp.value = parseInt(localStorage.getItem('lastSeenTimestamp') || '0')
+
+  // โหลดแจ้งเตือนครั้งแรก + เริ่ม polling
   fetchNotifications()
-  setInterval(fetchNotifications, 30000)
+  polling = setInterval(fetchNotifications, 30000)
+
+  // โหลดรถเข็นเหมือนเดิม
   loadCart()
+})
+
+onBeforeUnmount(() => {
+  if (polling) clearInterval(polling)
 })
 
 // -------------- Form Confirm + ดึงไฟล์แนบ ----------------
@@ -536,10 +585,16 @@ function formatDateOnly(dateTime) {
     dateStr = dateTime.split('T')[0]
   }
   if (dateStr.includes('/')) return dateStr // ถ้าเป็น dd/mm/yyyy อยู่แล้ว
+
   const [y, m, d] = dateStr.split('-')
   if (!y || !m || !d) return dateStr
-  return `${d.padStart(2, '0')}/${m.padStart(2, '0')}/${y}`
+
+  // แปลงเป็น พ.ศ.
+  const buddhistYear = (parseInt(y) + 543).toString()
+
+  return `${d.padStart(2, '0')}/${m.padStart(2, '0')}/${buddhistYear}`
 }
+
 
 
 function isUtilityYes(val) {
@@ -564,8 +619,21 @@ function blobToBase64(blob) {
 }
 
 
+
+
+
 // -------------- Load ข้อมูล Booking + Attachments ----------------
 onMounted(async () => {
+
+  // แสดงชื่อไฟล์ที่เลือกจากหน้าแรก (โดยยังไม่อัปโหลด) เพื่อให้ผู้ใช้เห็นว่าจะส่งอะไร
+const tempFiles = Array.isArray(window._tempSelectedFiles) ? window._tempSelectedFiles : []
+for (const f of tempFiles) {
+  fileAttachments.value.push({
+    fileName: f.name || 'ไฟล์แนบ',
+    url: '#', // ยังไม่อัปโหลดจริง เลยยังไม่มีลิงก์
+    size: f.size ? Math.round(f.size / 1024) : null,
+  })
+}
   const bookingId = localStorage.getItem('bookingId')
   if (!bookingId) {
     Swal.fire('ไม่พบ bookingId')
@@ -593,7 +661,7 @@ onMounted(async () => {
     }
 
     // ----- โหลดไฟล์แนบ -----
-    fileAttachments.value = []
+    // fileAttachments.value = []
 
     // 4.1 ดึงไฟล์แนบที่อัปโหลดผ่าน Multer (info.value.files)
     if (info.value.files && info.value.files.length > 0) {
@@ -607,35 +675,54 @@ onMounted(async () => {
     }
 
     // 4.2 ดึงไฟล์แนบจาก uploadFiles (base64) เพิ่มต่อท้าย
-    if (info.value.uploadFiles && info.value.uploadFiles.length > 0) {
-      let fileListRes
-      try {
-        fileListRes = await axios.get(`${API_BASE}/api/upload_file`)
-      } catch (e) {
-        fileListRes = { data: [] }
-      }
-      for (const fid of info.value.uploadFiles) {
-        const found = Array.isArray(fileListRes.data) ? fileListRes.data.find(f => f._id === fid) : null
-        if (found) {
-          fileAttachments.value.push({
-            fileName: found.fileName,
-            url: `${API_BASE}/api/uploadfile/${found._id}`,
-            size: found.fileData ? Math.round((found.fileData.length * 3 / 4) / 1024) : null
-          })
-        }
-      }
-    }
+    // if (info.value.uploadFiles && info.value.uploadFiles.length > 0) {
+    //   let fileListRes
+    //   try {
+    //     fileListRes = await axios.get(`${API_BASE}/api/upload_file`)
+    //   } catch (e) {
+    //     fileListRes = { data: [] }
+    //   }
+    //   for (const fid of info.value.uploadFiles) {
+    //     const found = Array.isArray(fileListRes.data) ? fileListRes.data.find(f => f._id === fid) : null
+    //     if (found) {
+    //       fileAttachments.value.push({
+    //         fileName: found.fileName,
+    //         url: `${API_BASE}/api/uploadfile/${found._id}`,
+    //         size: found.fileData ? Math.round((found.fileData.length * 3 / 4) / 1024) : null
+    //       })
+    //     }
+    //   }
+    // }
   } catch (err) {
     Swal.fire('ดึงข้อมูลไม่สำเร็จ')
     console.error(err)
   }
-  fetchNotifications()
-  setInterval(fetchNotifications, 30000)
+  // fetchNotifications()
+  // setInterval(fetchNotifications, 30000)
 })
+async function uploadTempFilesAndGetUrls() {
+  const filesToUpload = Array.isArray(window._tempSelectedFiles) ? window._tempSelectedFiles : []
+  const uploaded = [] // { url, fileName, fileType, size }
+
+  for (const f of filesToUpload) {
+    const fd = new FormData()
+    fd.append('file', f)
+    const up = await axios.post(`${API_BASE}/api/upload`, fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    if (up.data?.fileUrl) {
+      uploaded.push({
+        url: up.data.fileUrl,
+        fileName: f.name || up.data.fileName || 'attachment',
+        fileType: f.type || up.data.mimetype || '',
+        size: f.size || null,
+      })
+    }
+  }
+  return uploaded
+}
 
 async function handleNext() {
-  
-
   try {
     const bookingId = localStorage.getItem('bookingId')
     if (!bookingId) {
@@ -650,7 +737,7 @@ async function handleNext() {
     const url = window.URL.createObjectURL(pdfBlob)
     const link = document.createElement('a')
     link.href = url
-    link.download = 'booking-form.pdf'
+    link.download = 'แบบฟอร์มขออนุมัติใช้สถานที่ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง.pdf'
     document.body.appendChild(link)
     link.click()
     setTimeout(() => {
@@ -662,47 +749,54 @@ async function handleNext() {
     const pdfBase64 = await blobToBase64(pdfBlob) // เพิ่มฟังก์ชันนี้ด้านล่าง
 
     const bookingData = { ...info.value }
-    const attachments = (bookingData.files || []).map(f => f.fileUrl || f.url || null)
-    const fileNames   = (bookingData.files || []).map(f => f.originalName || f.fileName || null)
-    const fileTypes   = (bookingData.files || []).map(f => f.mimetype || null)
-    const uploadFiles = Array.isArray(bookingData.uploadFiles) ? bookingData.uploadFiles : []
 
-    const allFileNames = [
-      ...fileNames,
-      ...fileAttachments.value.map(f => f.fileName),
+// 1) อัปโหลดไฟล์ชั่วคราว (ที่เลือกจากหน้าแรก) ตอนนี้
+const uploadedNow = await uploadTempFilesAndGetUrls() // [{url, fileName, fileType, size}]
 
-    ]
-     const allAttachments = [
-      ...attachments,
-      ...fileAttachments.value.map(f => f.url),
-    ]
-    const allFileTypes = [
-      ...fileTypes,
-      ...fileAttachments.value.map(f => f.fileType || 'application/pdf'), // กรณีมีไฟล์อื่น
-    ]
+// 2) เก็บไฟล์ที่ “เคยอัปโหลดด้วย Multer” ติดมากับ booking (ถ้ามี)
+const multerFiles = Array.isArray(bookingData.files) ? bookingData.files : []
 
-    const payload = {
-      user_id: bookingData.user_id,
-      name: bookingData.building,
-      name_active: bookingData.name_activity,
-      zone: bookingData.zone,
-      since: bookingData.since,
-      uptodate: bookingData.uptodate,
-      startTime: bookingData.since_time,
-      endTime: bookingData.until_thetime,
-      status: 'pending',
-      type: 'field',
-      agency: bookingData.agency,
-      booking_id: bookingId,
-      attachment: allAttachments,
-      fileName: allFileNames,
-      fileType: fileTypes,
-      uploadFiles: uploadFiles,
-      date: new Date(),
-      proxyStudentName: bookingData.proxyStudentName || '',   // <--- เพิ่ม
-      proxyStudentId: bookingData.proxyStudentId || '', 
-      bookingPdf: pdfBase64,       // <--- เพิ่ม
-    }
+// 3) รวมรายการไฟล์ให้เป็น list เดียว (URL อย่างเดียวพอ)
+const allAttachments = [
+  // จาก muler (รายการเดิม)
+  ...multerFiles.map(f => f.fileUrl || f.url).filter(Boolean),
+  // จากไฟล์ชั่วคราวที่เพิ่งอัปโหลด
+  ...uploadedNow.map(f => f.url),
+]
+
+// 4) รวมชื่อไฟล์ (เพื่อโชว์/ดาวน์โหลดในภายหลัง)
+const allFileNames = [
+  ...multerFiles.map(f => f.originalName || f.fileName || 'ไฟล์แนบ'),
+  ...uploadedNow.map(f => f.fileName || 'ไฟล์แนบ'),
+]
+
+// ไม่ต้องใช้แล้ว (เราไม่ดึงจาก upload_file base64 อีก)
+const uploadFiles = [] 
+
+
+   const payload = {
+  user_id: bookingData.user_id,
+  name: bookingData.building,
+  name_active: bookingData.name_activity,
+  zone: bookingData.zone,
+  since: bookingData.since,
+  uptodate: bookingData.uptodate,
+  startTime: bookingData.since_time,
+  endTime: bookingData.until_thetime,
+  status: 'pending',
+  type: 'field',
+  agency: bookingData.agency,
+  booking_id: bookingId,
+  // ใช้ URL + ชื่อไฟล์ที่รวมมาใหม่
+  attachment: allAttachments, 
+  fileName: allFileNames,
+  date: new Date(),
+  proxyStudentName: bookingData.proxyStudentName || '',
+  proxyStudentId: bookingData.proxyStudentId || '',
+  bookingPdf: pdfBase64, // ถ้ายังอยากเก็บ PDF ลง DB ต่อ (ไม่บังคับ)
+}
+
+
 
     console.log('PAYLOAD ส่งเข้า /api/history', payload)
 
@@ -711,6 +805,9 @@ async function handleNext() {
     // ---- สำคัญ! ----
     sessionStorage.removeItem('form_field_save')
     window._tempSelectedFiles = []
+
+    localStorage.removeItem('username_form')
+    localStorage.removeItem('id_form')
 
     router.push('/form_field4')
   } catch (err) {
@@ -726,6 +823,13 @@ async function handleNext() {
     }
     console.error(err)
   }
+}
+function formatTimeTH(timeStr) {
+  if (!timeStr || typeof timeStr !== 'string') return '-'
+  // เอาเฉพาะ HH:mm (ถ้ามีวินาที เช่น 09:10:00 → 09:10)
+  let t = timeStr.trim().slice(0, 5)
+  if (!/^\d{2}:\d{2}$/.test(t)) return timeStr + ' น.'
+  return t + ' น.'
 }
 
 </script>
@@ -802,12 +906,13 @@ async function handleNext() {
 }
 .form-header { text-align: center; margin-bottom: 20px; }
 .info-left {
-  display: flex; align-items: center; gap: 12px;
- margin-top: 60px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 0px;   /* หรือ 8px */
   flex-wrap: wrap;
- 
-
 }
+
 .form-row {
   display: flex;
   align-items: center;
@@ -1246,6 +1351,66 @@ async function handleNext() {
   vertical-align: middle;
 }
 
+.utility-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: 80px;
+  margin-bottom: 5px;
+  min-height: 28px;
+  white-space: nowrap;
+}
+.utility-label {
+  display: inline-block;
+  font-size: 15px;
+  min-width: 170px;
+  text-align: right;
+  margin-right: 8px;
+  font-weight: normal;
+}
+.utility-time {
+  display: inline-block;
+  min-width: 54px;
+  text-align: center;
+  background: none;
+  border-bottom: none !important;
+  margin: 0 3px;
+  font-size: 15px;
+  font-family: inherit;
+  /* เพิ่มได้เลยถ้าจะขยับขีดออกจาก label */
+  /* margin-left: 4px; */
+}
+
+.utility-between {
+  margin: 0 3px;
+  font-size: 15px;
+}
+.utility-other-center {
+  font-size: 15px;
+  text-align: center;
+}
+/* เส้นจุดหลัง "อื่นๆ" ให้เต็มบรรทัดแบบช่อง 2, 3 */
+.dot-line-custom {
+  flex: 1 1 0;
+  border-bottom: 1.5px dotted #222;
+  min-width: 80px;
+  margin-left: 8px;
+  margin-right: 6px;
+  height: 16px;
+  display: inline-block;
+}
+
+.pdf-export {
+  padding: 18px !important;
+}
+.pdf-export * {
+  font-size: 16px !important;
+}
+.pdf-export h1,
+.pdf-export h2,
+.pdf-export h3 {
+  font-size: 20px !important;
+}
 
 </style>
 

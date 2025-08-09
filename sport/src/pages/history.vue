@@ -79,17 +79,17 @@
             <button
               :class="['filter-btn', { active: filterType === 'all' }]"
               @click="filterType = 'all'"
-            >ทั้งหมด</button>
+            >All</button>
             <button
               :class="['filter-btn', { active: filterType === 'field' }]"
               style="margin-left:8px"
               @click="filterType = 'field'"
-            >สนาม</button>
+            >Field</button>
             <button
               :class="['filter-btn', { active: filterType === 'equipment' }]"
               style="margin-left:8px"
               @click="filterType = 'equipment'"
-            >อุปกรณ์</button>
+            >Equipment</button>
           </div>
 
 
@@ -98,14 +98,14 @@
          <table class="history-table" style="width: 90%; margin: 0 auto; border-collapse: collapse;">
   <thead>
     <tr>
-      <th style="border-bottom: 2px solid #ccc; padding: 8px;">วันที่</th>
-      <th style="border-bottom: 2px solid #ccc; padding: 8px;">ประเภท</th>
-      <th style="border-bottom: 2px solid #ccc; padding: 8px;">ชื่อ</th>
+      <th style="border-bottom: 2px solid #ccc; padding: 8px;">Date</th>
+      <th style="border-bottom: 2px solid #ccc; padding: 8px;">Type</th>
+      <th style="border-bottom: 2px solid #ccc; padding: 8px;">Name</th>
       
       <!-- <th style="border-bottom: 2px solid #ccc; padding: 8px;">จำนวน</th> -->
-      <th style="border-bottom: 2px solid #ccc; padding: 8px;">เวลา/จำนวน</th>
-      <th style="border-bottom: 2px solid #ccc; padding: 8px;">สถานะ</th>
-      <th style="border-bottom: 2px solid #ccc; padding: 8px;">การกระทำ</th>
+      <th style="border-bottom: 2px solid #ccc; padding: 8px;">Time/Amount</th>
+      <th style="border-bottom: 2px solid #ccc; padding: 8px;">Status</th>
+      <th style="border-bottom: 2px solid #ccc; padding: 8px;">Action</th>
     </tr>
   </thead>
   <tbody>
@@ -118,9 +118,14 @@
         {{ formatDateOnly(group.items[0].date) }}
       </td>
 
+      <!-- ประเภท -->
       <td style="padding: 8px; text-align: center; text-transform: capitalize;">
         {{ group.type }}
       </td>
+      <!-- <td style="padding: 8px; text-align: center;">
+        {{ typeLabel(group.type) }}
+      </td> -->
+
 
       <td class="col-center" style="padding: 8px; max-width: 300px;">
   <template v-if="group.type === 'field'">
@@ -134,9 +139,10 @@
   </template>
 </td>
 
+    <!-- เวลา -->
       <td style="padding: 8px; text-align: center;">
   <template v-if="group.type === 'field'">
-    เวลา: {{ formatTimeRange(group.items[0].startTime, group.items[0].endTime) }}
+     {{ formatTimeRange(group.items[0].startTime, group.items[0].endTime) }}
   </template>
   <template v-else-if="group.type === 'equipment'">
     <span>
@@ -201,9 +207,9 @@
 
 
           <div class="pagination-control" style="margin-top: 16px;">
-            <button @click="prevPage" :disabled="currentPage === 1">ย้อนกลับ</button>
-            <span>หน้า {{ currentPage }} / {{ totalPages }}</span>
-            <button @click="nextPage" :disabled="currentPage === totalPages">ถัดไป</button>
+            <button @click="prevPage" :disabled="currentPage === 1">Back</button>
+            <span>Pages {{ currentPage }} / {{ totalPages }}</span>
+            <button @click="nextPage" :disabled="currentPage === totalPages">Next</button>
           </div>
         </div>
       </div>
@@ -308,6 +314,7 @@ export default {
       showAnnouncementBar: false,
       showNotifications: false,
       notifications: [],
+      lastSeenTimestamp: 0,
       unreadCount: 0,
       userId: localStorage.getItem('user_id') || '',
       lastCheckedIds: new Set(),
@@ -318,9 +325,7 @@ export default {
       cameraImage: null,
       returnGroupBookingId: null, // booking_id ของกลุ่มที่จะ return
       filterType: 'all', // 'all', 'field', 'equipment'
-      isSubmittingReturnPhoto: false, // <<== ตัวแปรป้องกันการส่งซ้ำ
-      lastStatusMap: {},
-      autoRefreshTimer: null,
+       isSubmittingReturnPhoto: false, // <<== ตัวแปรป้องกันการส่งซ้ำ
     }
   },
   
@@ -351,34 +356,12 @@ groupedHistories() {
   });
 
   // ถ้า booking_id เดียวกัน มี status 'returned' อย่างน้อย 1 ชิ้น ให้โชว์เฉพาะ 'returned' เท่านั้น
- Object.values(groupMap).forEach(group => {
-  // เฉพาะอุปกรณ์เท่านั้น
-  if (group.type === 'equipment') {
-    const items = group.items;
-    const allReturnPending = items.every(item => (item.status || '').toLowerCase() === 'return-pending');
-    const anyReturnPending = items.some(item => (item.status || '').toLowerCase() === 'return-pending');
-    const allReturned = items.every(item => (item.status || '').toLowerCase() === 'returned');
-    const anyReturned = items.some(item => (item.status || '').toLowerCase() === 'returned');
-    if (allReturnPending) {
-      group.items = items.filter(item => (item.status || '').toLowerCase() === 'return-pending');
-    } else if (allReturned) {
-      group.items = items.filter(item => (item.status || '').toLowerCase() === 'returned');
-    } else if (anyReturnPending) {
-      // ถ้ามี return-pending อยู่ ให้โชว์เฉพาะ return-pending (เช่น กำลังขอคืนแค่บางอัน)
-      group.items = items.filter(item => (item.status || '').toLowerCase() === 'return-pending');
-    } else if (anyReturned) {
-      group.items = items.filter(item => (item.status || '').toLowerCase() === 'returned');
-    }
-    // ถ้าไม่มี return-pending หรือ returned ก็ปล่อยให้โชว์ทุกสถานะเหมือนเดิม
-  } else if (group.type === 'field') {
-    // อันเดิมของ field
+  Object.values(groupMap).forEach(group => {
     const hasReturned = group.items.some(item => (item.status || '').toLowerCase() === 'returned');
     if (hasReturned) {
       group.items = group.items.filter(item => (item.status || '').toLowerCase() === 'returned');
     }
-  }
-});
-
+  });
 
   
 
@@ -439,6 +422,10 @@ paginatedHistory() {
 
 
   methods: {
+     pruneOldNotifications() {
+    const cutoff = Date.now() - (7 * 24 * 60 * 60 * 1000); // 7 วันย้อนหลัง
+    this.notifications = this.notifications.filter(n => (n?.timestamp ?? 0) >= cutoff);
+  },
     showFieldDate(history) {
       if (history.type === 'field') {
         if (history.since && history.uptodate) {
@@ -452,6 +439,14 @@ paginatedHistory() {
       }
       return '-';
     },
+
+    typeLabel(t) {
+    const s = (t || '').toLowerCase();
+    if (s === 'equipment') return 'อุปกรณ์';
+    if (s === 'field') return 'สนาม';
+    return t || '-';
+  },
+
     async downloadBookingPdf(bookingId) {
     if (!bookingId) {
       Swal.fire('ผิดพลาด', 'ไม่พบ booking_id สำหรับดาวน์โหลด PDF', 'error');
@@ -515,7 +510,16 @@ paginatedHistory() {
     nextPage() { if (this.currentPage < this.totalPages) this.currentPage++; },
     prevPage() { if (this.currentPage > 1) this.currentPage--; },
     toggleSidebar() { this.isSidebarClosed = !this.isSidebarClosed },
-    toggleNotifications() { this.showNotifications = !this.showNotifications; if (this.showNotifications) this.unreadCount = 0 },
+    toggleNotifications() {
+    this.showNotifications = !this.showNotifications;
+    if (this.showNotifications) {
+      this.lastSeenTimestamp = Date.now();
+      localStorage.setItem('lastSeenTimestamp', String(this.lastSeenTimestamp));
+      this.unreadCount = 0;
+    }
+  },
+   closeNotifications() { this.showNotifications = false },
+
     async loadCart() {
       if (!this.userId) return;
       try { const res = await axios.get(`${API_BASE}/api/cart?user_id=${this.userId}`); this.products = res.data } catch { this.products = [] }
@@ -580,14 +584,14 @@ async reloadHistories() {
 },
     async cancelGroup(group) {
   const confirmed = await Swal.fire({
-    title: 'ยืนยันการยกเลิกทั้งหมด?',
-    text: 'คุณแน่ใจหรือไม่ว่าต้องการยกเลิกการจองอุปกรณ์นี้ทั้งหมด?',
+    title: 'Confirm cancellations?',
+    text: 'Are you sure you want to cancel all reservations for this list?',
     icon: 'warning',
     showCancelButton: true,
     confirmButtonColor: '#d33',
     cancelButtonColor: '#9e9e9e',
-    confirmButtonText: 'ใช่, ยกเลิก!',
-    cancelButtonText: 'ไม่'
+    confirmButtonText: 'Yes',
+    cancelButtonText: 'No'
   });
   if (confirmed.isConfirmed) {
     try {
@@ -595,31 +599,31 @@ async reloadHistories() {
         axios.delete(`${API_BASE}/api/history/${item.id}`)
       ));
       await this.reloadHistories(); // <<--- เพิ่มบรรทัดนี้
-      Swal.fire('ยกเลิกแล้ว!', 'รายการของคุณถูกยกเลิกเรียบร้อยแล้ว', 'success');
+      Swal.fire('Cancelled!', '', 'success');
     } catch (err) {
-      Swal.fire('ผิดพลาด', 'ลบข้อมูลไม่สำเร็จ', 'error');
+      Swal.fire('Error', 'deletion failed', 'error');
     }
   }
 },
 
     async cancelItem(itemId) {
   const confirmed = await Swal.fire({
-    title: 'ยืนยันการยกเลิกการจอง?',
-    text: 'คุณแน่ใจหรือไม่ว่าต้องการยกเลิกการจองสนาม?',
+    title: 'Confirm cancellation?',
+    text: 'Are you sure you want to cancel your booking?',
     icon: 'warning',
     showCancelButton: true,
     confirmButtonColor: '#d33',
     cancelButtonColor: '#3085d6',
-    confirmButtonText: 'ใช่, ยกเลิก!',
-    cancelButtonText: 'ไม่'
+    confirmButtonText: 'Yes',
+    cancelButtonText: 'No'
   });
   if (confirmed.isConfirmed) {
     try {
       await axios.delete(`${API_BASE}/api/history/${itemId}`);
       await this.reloadHistories(); // <<--- เพิ่มบรรทัดนี้
-      Swal.fire('ยกเลิกแล้ว!', 'รายการของคุณถูกยกเลิกเรียบร้อยแล้ว', 'success');
+      Swal.fire('Cancelled!', '', 'success');
     } catch (err) {
-      Swal.fire('ผิดพลาด', 'ลบข้อมูลไม่สำเร็จ', 'error');
+      Swal.fire('Error', 'deletion failed', 'error');
     }
   }
 },
@@ -658,15 +662,15 @@ async reloadHistories() {
 
     html = `
       <div style="text-align:left;">
-        <b>ชื่อสนาม:</b> ${item.name || '-'}<br>
-        <b>ชื่อผู้ขอใช้:</b> ${item.requester || '-'}<br>
-        <b>จองให้ผู้ใช้:</b> ${item.proxyStudentName || '-'}<br>
-        <b>วันที่:</b> ${item.date ? new Date(item.date).toLocaleDateString() : '-'}<br>
-        <b>เวลา:</b> ${timeRange}<br>
-        <b>สถานะ:</b> ${item.status || '-'}
+        <b>Field Name:</b> ${item.name || '-'}<br>
+        <b>Name:</b> ${item.requester || '-'}<br>
+        <b>Book for:</b> ${item.proxyStudentName || '-'}<br>
+        <b>Date:</b> ${item.date ? new Date(item.date).toLocaleDateString() : '-'}<br>
+        <b>เTime:</b> ${timeRange}<br>
+        <b>Status:</b> ${item.status || '-'}
         ${item.status === 'Canceled' ? ' 🚫' : ''}
         <br>
-        <button id="pdf-btn" class="pdfmake-btn" style="margin-top:10px;">ดาวน์โหลด PDF ฟอร์ม</button>
+        <button id="pdf-btn" class="pdfmake-btn" style="margin-top:10px;">Dowmload PDF form</button>
       </div>
     `;
   } else if (group.type === 'equipment') {
@@ -704,18 +708,18 @@ async reloadHistories() {
       shownItems.forEach((item, i) => {
         html += `
           <div style="margin-bottom:8px;padding-bottom:8px;border-bottom:1px dashed #bbb;">
-            <b>อุปกรณ์ที่ ${i + 1}:</b> ${item.name || '-'}<br>
-            <b>จำนวน:</b> ${item.quantity || '-'}<br>
-            <b>ชื่อผู้ขอใช้:</b> ${item.requester || '-'}<br>
-            <b>วันที่ขอยืม:</b> ${item.date ? new Date(item.date).toLocaleDateString() : '-'}<br>
-            <b>สถานะ:</b> ${item.status || '-'}<br>
-            <b>วันที่คืน:</b> ${item.returnedAt ? this.formatDateOnly(item.returnedAt) : '-'}<br>
+            <b>Equipment ${i + 1}:</b> ${item.name || '-'}<br>
+            <b>Amount:</b> ${item.quantity || '-'}<br>
+            <b>Name:</b> ${item.requester || '-'}<br>
+            <b>Date:</b> ${item.date ? new Date(item.date).toLocaleDateString() : '-'}<br>
+            <b>Status:</b> ${item.status || '-'}<br>
+            <b>Return date:</b> ${item.returnedAt ? this.formatDateOnly(item.returnedAt) : '-'}<br>
             ${
               (item.status === "Returned" || item.status === "Return-pending") && item.attachment
                 ? `<div style="margin-top:6px;">
                     <img src="${item.attachment}" style="max-width:180px;max-height:120px;object-fit:contain;border-radius:10px;border:1.5px solid #bbb;cursor:pointer" 
                       onclick="window.__showFullReturnPhoto && window.__showFullReturnPhoto('${item.attachment}')">
-                    <div style="font-size:0.9em;color:#888;margin-top:0.3em;">(คลิกที่รูปเพื่อดูแบบเต็มจอ)</div>
+                    <div style="font-size:0.9em;color:#888;margin-top:0.3em;">(Click on the image to view it in full screen.)</div>
                   </div>`
                 : ''
             }
@@ -724,15 +728,15 @@ async reloadHistories() {
       });
     }
     if (showPdfButton) {
-      html += `<button id="pdf-btn" class="pdfmake-btn" style="margin-top:10px;">ดาวน์โหลด PDF ฟอร์ม</button>`;
+      html += `<button id="pdf-btn" class="pdfmake-btn" style="margin-top:10px;">Download PDF form</button>`;
     }
     html += '</div>';
   }
 
   Swal.fire({
-    title: 'รายละเอียดรายการ',
+    title: 'Detail list',
     html,
-    confirmButtonText: 'ปิด',
+    confirmButtonText: 'Close',
     confirmButtonColor: '#3085d6',
     didOpen: () => {
       // BIND CLICK ให้ปุ่ม PDF เฉพาะกรณีที่ปุ่มมีอยู่จริง
@@ -851,49 +855,61 @@ async reloadHistories() {
     async fetchNotifications() {
   if (!this.userId) return;
   try {
+    // ตัดของเก่าออกก่อนเสมอ
+    this.pruneOldNotifications();
+
     const res = await axios.get(`${API_BASE}/api/history?user_id=${this.userId}`);
     const newNotis = res.data.filter(item =>
-      (['approved', 'disapproved', 'cancel', 'canceled', 'returned'].includes((item.status || '').toLowerCase())) &&
+      (['approved', 'disapproved', 'cancel', 'canceled', 'returned']
+        .includes((item.status || '').toLowerCase())) &&
       !this.lastCheckedIds.has(item._id)
     );
+
     if (newNotis.length) {
       const newMessages = newNotis.map(item => ({
-  id: item._id,
-  type: (item.status || '').toLowerCase(),
-  // ลองเอา updatedAt, returnedAt, approvedAt หรือ date ที่ใหม่สุดมาใช้ (ต้องมีฟิลด์ใน DB)
-  timestamp: item.returnedAt
-    ? new Date(item.returnedAt).getTime()
-    : item.updatedAt
-    ? new Date(item.updatedAt).getTime()
-    : item.approvedAt
-    ? new Date(item.approvedAt).getTime()
-    : item.date
-    ? new Date(item.date).getTime()
-    : Date.now(),
-  message: `รายการ '${item.name}' ของคุณ${
-    (item.status || '').toLowerCase() === 'approved'
-      ? ' ได้รับการอนุมัติ'
-      : (item.status || '').toLowerCase() === 'disapproved'
-      ? ' ไม่ได้รับการอนุมัติ'
-      : (item.status || '').toLowerCase() === 'cancel' || (item.status || '').toLowerCase() === 'canceled'
-      ? ' ถูกยกเลิก'
-      : (item.status || '').toLowerCase() === 'returned'
-      ? ' คืนของสำเร็จแล้ว'
-      : ''
-  }`
-}));
+        id: item._id,
+        type: (item.status || '').toLowerCase(),
+        timestamp: item.returnedAt
+          ? new Date(item.returnedAt).getTime()
+          : item.updatedAt
+          ? new Date(item.updatedAt).getTime()
+          : item.approvedAt
+          ? new Date(item.approvedAt).getTime()
+          : item.date
+          ? new Date(item.date).getTime()
+          : Date.now(),
+        message: `รายการ '${item.name}' ของคุณ${
+          (item.status || '').toLowerCase() === 'approved'
+            ? ' ได้รับการอนุมัติ'
+            : (item.status || '').toLowerCase() === 'disapproved'
+            ? ' ไม่ได้รับการอนุมัติ'
+            : (item.status || '').toLowerCase() === 'cancel' || (item.status || '').toLowerCase() === 'canceled'
+            ? ' ถูกยกเลิก'
+            : (item.status || '').toLowerCase() === 'returned'
+            ? ' คืนของสำเร็จแล้ว'
+            : ''
+        }`
+      }));
 
-
-      // Merge, filter duplicates, sort ใหม่สุดอยู่บน
+      // รวม + กันซ้ำ + เรียงใหม่สุดบน
       this.notifications = [...this.notifications, ...newMessages]
         .filter((v, i, arr) => arr.findIndex(x => x.id === v.id) === i)
         .sort((a, b) => b.timestamp - a.timestamp);
 
+      // ตัดรายการที่เกิน 7 วันอีกรอบหลังรวม
+      this.pruneOldNotifications();
+
       newNotis.forEach(item => this.lastCheckedIds.add(item._id));
-      this.unreadCount = this.notifications.length;
     }
-  } catch (err) {}
-},  closeNotifications() {
+
+    // นับ unread เฉพาะที่ใหม่กว่าครั้งล่าสุดที่กดเปิดกระดิ่ง
+    this.unreadCount = this.notifications.filter(n => n.timestamp > this.lastSeenTimestamp).length;
+  } catch (err) {
+    // เงียบไว้เหมือนเดิม
+  }
+},
+  
+closeNotifications() {
     this.showNotifications = false
   },
 
@@ -935,6 +951,7 @@ async reloadHistories() {
     const userId = localStorage.getItem('user_id');
     const res = await axios.get(`${API_BASE}/api/history?user_id=${userId}`);
     // ใช้ฟังก์ชันแยกเพื่อความเรียบร้อย
+     this.lastSeenTimestamp = parseInt(localStorage.getItem('lastSeenTimestamp') || '0');
     this.histories = this.addSortDateToHistories(res.data);
     this.currentPage = 1;
   } catch (err) {
@@ -952,15 +969,8 @@ async reloadHistories() {
   }
 
   // โหลดแจ้งเตือนและตะกร้า
-  this.reloadHistories();
-
-    this.autoRefreshTimer = setInterval(() => {
-    this.reloadHistories();
-  }, 5000);
-
-  this.fetchNotifications();
+  await this.fetchNotifications();
   this.polling = setInterval(this.fetchNotifications, 30000);
-
   await this.loadCart();
 },
 watch: {
@@ -970,7 +980,6 @@ watch: {
 },
   beforeUnmount() {
     clearInterval(this.polling);
-     clearInterval(this.autoRefreshTimer);
   }
 
 

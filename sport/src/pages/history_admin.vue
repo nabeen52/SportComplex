@@ -27,19 +27,31 @@
         <button class="menu-toggle" @click="toggleSidebar">☰</button>
         <div class="topbar-actions">
           <div style="position: relative; display: inline-block;">
-            <button class="notification-btn" @click="toggleNotifications">
-              <i class="pi pi-bell"></i>
-              <span v-if="unreadCount > 0" class="badge">{{ unreadCount }}</span>
-            </button>
-            <div v-if="showNotifications" class="notification-dropdown">
-              <ul>
-                <li v-for="(noti, idx) in notifications" :key="idx">
-                  {{ noti.message }}
-                </li>
-                <li v-if="notifications.length === 0">ไม่มีแจ้งเตือน</li>
-              </ul>
-            </div>
-          </div>
+  <div
+    v-if="showNotifications"
+    class="notification-backdrop"
+    @click="closeNotifications"
+  ></div>
+
+  <button class="notification-btn" @click="toggleNotifications">
+    <i class="pi pi-bell"></i>
+    <span v-if="unreadCount > 0" class="badge">{{ unreadCount }}</span>
+  </button>
+
+  <div v-if="showNotifications" class="notification-dropdown">
+    <ul>
+      <li
+        v-for="(noti, idx) in notifications.slice(0, 10)"
+        :key="noti.id || idx"
+        :class="['notification-item', noti.type || '', { unread: noti.timestamp > lastSeenTimestamp }]"
+      >
+        {{ noti.message }}
+      </li>
+      <li v-if="notifications.length === 0" class="no-noti">ไม่มีแจ้งเตือน</li>
+    </ul>
+  </div>
+</div>
+
           <router-link to="/profile_admin"><i class="pi pi-user"></i></router-link>
         </div>
       </header>
@@ -292,6 +304,7 @@ import '@/assets/fonts/Sarabun-Bold-normal.js'
 // ... import font ตัวอื่นๆ ถ้ามี
 
 const API_BASE = import.meta.env.VITE_API_BASE
+const ADMIN_LAST_SEEN_KEY = 'admin_lastSeenTimestamp';
 
 
 
@@ -349,10 +362,11 @@ export default {
       isMobile: window.innerWidth <= 600,
       API_BASE: API_BASE,
       dateFilterStart: '',
-dateFilterEnd: '',
-dateFilterApplied: false,
-dateFilterStart: '',
-    dateFilterEnd: '',
+      dateFilterEnd: '',
+      dateFilterApplied: false,
+      dateFilterStart: '',
+      dateFilterEnd: '',
+      lastSeenTimestamp: 0,
 
     }
   },
@@ -1011,65 +1025,78 @@ doc.text(`โทร ${data.tel || '-'}`, 430, 100);
   }
 },
 
-
-
-
-
-
-
-
-
-
-
     // ==== Notification functions ====
+    pruneOldNotifications() {
+      const cutoff = Date.now() - (7 * 24 * 60 * 60 * 1000); // 7 วัน
+      this.notifications = this.notifications.filter(n => (n?.timestamp ?? 0) >= cutoff);
+    },
+
     toggleNotifications() {
-      this.showNotifications = !this.showNotifications
-      if (this.showNotifications) this.unreadCount = 0
-    },
+  this.showNotifications = !this.showNotifications;
+  if (this.showNotifications) {
+    this.lastSeenTimestamp = Date.now();
+    localStorage.setItem(ADMIN_LAST_SEEN_KEY, String(this.lastSeenTimestamp));
+    this.unreadCount = 0; // เคลียร์ badge ทันทีเมื่อเปิด
+  }
+},
     closeNotifications() {
-      this.showNotifications = false
-    },
+  this.showNotifications = false;
+},
     handleClickOutside(event) {
-      const notifDropdown = document.querySelector('.notification-dropdown')
-      const notifBtn = document.querySelector('.notification-btn')
-      if (
-        notifDropdown &&
-        !notifDropdown.contains(event.target) &&
-        notifBtn &&
-        !notifBtn.contains(event.target)
-      ) {
-        this.closeNotifications()
-      }
-    },
+  const notifDropdown = document.querySelector('.notification-dropdown');
+  const notifBtn = document.querySelector('.notification-btn');
+  if (
+    notifDropdown &&
+    !notifDropdown.contains(event.target) &&
+    notifBtn &&
+    !notifBtn.contains(event.target)
+  ) {
+    this.closeNotifications();
+  }
+},
     async fetchNotifications() {
-      try {
-        const res = await axios.get(`${API_BASE}/api/history/approve_field`)
-        const data = Array.isArray(res.data) ? res.data : []
-        const pendings = data.filter(item =>
-          item.status === 'pending' &&
-          (item.type === 'field' || item.type === 'equipment') &&
-          !this.lastCheckedIds.has(item._id?.$oid || item._id)
-        )
-        if (pendings.length) {
-          const newMessages = pendings.map(item => {
-            if (item.type === 'field') {
-              return {
-                id: item._id?.$oid || item._id,
-                message: `สนาม '${item.name}' กำลังรอการอนุมัติ`
-              }
-            } else if (item.type === 'equipment') {
-              return {
-                id: item._id?.$oid || item._id,
-                message: `อุปกรณ์ '${item.name}' กำลังรอการอนุมัติ`
-              }
-            }
-          })
-          this.notifications = [...this.notifications, ...newMessages]
-          pendings.forEach(item => this.lastCheckedIds.add(item._id?.$oid || item._id))
-          this.unreadCount = this.notifications.length
-        }
-      } catch (err) { }
-    },
+  try {
+    this.pruneOldNotifications();
+
+    const res = await axios.get(`${API_BASE}/api/history/approve_field`);
+    const data = Array.isArray(res.data) ? res.data : [];
+
+    const pendings = data.filter(item =>
+      item.status === 'pending' &&
+      (item.type === 'field' || item.type === 'equipment')
+    );
+
+    if (pendings.length) {
+      const newMessages = pendings.map(item => {
+        const id = item._id?.$oid || item._id;
+        const ts =
+          (item.updatedAt && new Date(item.updatedAt).getTime()) ??
+          (item.createdAt && new Date(item.createdAt).getTime()) ??
+          (item.date && new Date(item.date).getTime()) ??
+          Date.now();
+
+        return {
+          id,
+          type: 'pending',
+          timestamp: ts,
+          message: item.type === 'field'
+            ? `สนาม '${item.name}' กำลังรอการอนุมัติ`
+            : `อุปกรณ์ '${item.name}' กำลังรอการอนุมัติ`
+        };
+      });
+
+      // รวม + unique ตาม id และเรียงล่าสุดก่อน
+      this.notifications = [...this.notifications, ...newMessages]
+        .filter((v, i, arr) => arr.findIndex(x => (x.id || i) === (v.id || i)) === i)
+        .sort((a, b) => b.timestamp - a.timestamp);
+
+      this.pruneOldNotifications();
+    }
+
+    // นับ unread จาก timestamp > lastSeenTimestamp (เหมือน Members)
+    this.unreadCount = this.notifications.filter(n => n.timestamp > this.lastSeenTimestamp).length;
+  } catch {}
+},
     async cancelFieldBooking(item) {
       const result = await Swal.fire({
         title: "ยืนยันยกเลิกการจองสนาม?",
@@ -1150,8 +1177,10 @@ doc.text(`โทร ${data.tel || '-'}`, 430, 100);
   async mounted() {
 
     window.addEventListener('resize', this.handleResize);
-  this.handleResize();
+    this.handleResize();
     document.addEventListener('mousedown', this.handleClickOutside)
+    this.lastSeenTimestamp = parseInt(localStorage.getItem(ADMIN_LAST_SEEN_KEY) || '0');
+
     try {
       const usersRes = await axios.get(`${API_BASE}/api/users`)
       const allUsers = Array.isArray(usersRes.data) ? usersRes.data : []
@@ -1606,6 +1635,13 @@ doc.text(`โทร ${data.tel || '-'}`, 430, 100);
     min-width: 700px;
     width: max-content;
   }
+}
+
+.notification-backdrop{
+  position: fixed;
+  top:0; left:0; right:0; bottom:0;
+  background: transparent;
+  z-index: 1001;
 }
 
 

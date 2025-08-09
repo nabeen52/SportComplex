@@ -74,7 +74,7 @@
    <img :src="profileImageUrl" alt="profile" class="profile-img" @error="imgError" />
     <div class="profile-details" v-if="info">
       <p>Username : {{ info.name }}</p>
-      <div class="editable-row">
+      <!-- <div class="editable-row">
         <span>ID :</span>
         <template v-if="!editId">
           <span>{{ info.id }}</span>
@@ -89,7 +89,7 @@
           <button class="save-btn" @click="saveUserId">บันทึก</button>
           <button class="cancel-btn" @click="cancelEdit">ยกเลิก</button>
         </template>
-      </div>
+      </div> -->
       <p>Email : {{ info.email }}</p>
     </div>
     <div v-else>

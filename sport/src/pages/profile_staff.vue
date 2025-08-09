@@ -43,13 +43,18 @@
               <span v-if="unreadCount > 0" class="badge">{{ unreadCount }}</span>
             </button>
             <div v-if="showNotifications" class="notification-dropdown">
-              <ul>
-                <li v-for="(noti, idx) in notifications" :key="idx">
-                  {{ noti.message }}
-                </li>
-                <li v-if="notifications.length === 0">ไม่มีแจ้งเตือน</li>
-              </ul>
-            </div>
+            <ul>
+              <li
+                v-for="(noti, idx) in notifications.slice(0, 10)"
+                :key="noti.id || idx"
+                :class="['notification-item', noti.type || '', { unread: noti.timestamp > lastSeenTimestamp }]"
+              >
+                {{ noti.message }}
+              </li>
+              <li v-if="notifications.length === 0" class="no-noti">ไม่มีแจ้งเตือน</li>
+            </ul>
+          </div>
+
           </div>
           <router-link to="/profile_staff"><i class="pi pi-user"></i></router-link>
         </div>
@@ -71,7 +76,7 @@
                     <span class="label">Username :</span>
                     <span class="value">{{ info.name }}</span>
                   </p>
-                  <div class="editable-row">
+                  <!-- <div class="editable-row">
   <span>ID :</span>
   <template v-if="!editId">
     <span>{{ info.id }}</span>
@@ -86,7 +91,7 @@
     <button class="save-btn" @click="saveUserId">บันทึก</button>
     <button class="cancel-btn" @click="cancelEdit">ยกเลิก</button>
   </template>
-</div>
+</div> -->
 
                   <p class="info-line">
                     <span class="label">Email :</span>
@@ -125,10 +130,13 @@ import { useRouter } from 'vue-router'
 import Swal from 'sweetalert2'
 import axios from 'axios'
 
+axios.defaults.withCredentials = true
+
 const API_BASE = import.meta.env.VITE_API_BASE // ให้ตรงกับ backend
 const isMobile = ref(window.innerWidth <= 600)
 const isSidebarClosed = ref(false)
 const router = useRouter()
+
 
 // ดึงข้อมูล user จาก API (ไม่ใช้ userStore.user แล้ว)
 const info = ref({ id: "-", name: "-", email: "-", picture: null })
@@ -138,6 +146,7 @@ const notifications = ref([])
 const unreadCount = ref(0)
 const lastCheckedIds = ref(new Set())
 let polling = null
+const lastSeenTimestamp = ref(0)
 
 // Render รูป profile ถูกต้อง
 const profileImageUrl = computed(() => {
@@ -196,23 +205,62 @@ async function logout() {
 function closeNotifications() { showNotifications.value = false }
 function toggleNotifications() {
   showNotifications.value = !showNotifications.value
-  if (showNotifications.value) unreadCount.value = 0
+  if (showNotifications.value) {
+    lastSeenTimestamp.value = Date.now()
+    localStorage.setItem('staff_lastSeenTimestamp', String(lastSeenTimestamp.value))
+    unreadCount.value = 0
+  }
 }
+
+function pruneOldNotifications() {
+  const cutoff = Date.now() - (7 * 24 * 60 * 60 * 1000) // 7 วัน
+  notifications.value = notifications.value.filter(n => (n?.timestamp ?? 0) >= cutoff)
+}
+
 async function fetchNotifications() {
   try {
+    const cutoff = Date.now() - (7 * 24 * 60 * 60 * 1000)
+
+    // ล้างของเก่ากว่า 7 วันทุกครั้งก่อน
+    pruneOldNotifications()
+
+    // ดึง pending สำหรับ staff
     const res = await axios.get(`${API_BASE}/api/equipments/pending`)
     const data = Array.isArray(res.data) ? res.data : []
-    const pendings = data.filter(item => !lastCheckedIds.value.has(item._id?.$oid || item._id))
-    if (pendings.length) {
-      const newMessages = pendings.map(item => ({
-        id: item._id?.$oid || item._id,
-        message: `มีรายการ '${item.name}' ที่รออนุมัติ`
-      }))
+
+    // เอาเฉพาะ id ใหม่ที่ยังไม่เคยแจ้ง
+    const fresh = data.filter(item => !lastCheckedIds.value.has(item._id?.$oid || item._id))
+
+    if (fresh.length) {
+      const newMessages = fresh.map(item => {
+        const ts =
+          item.updatedAt ? new Date(item.updatedAt).getTime() :
+          item.createdAt ? new Date(item.createdAt).getTime() :
+          item.date      ? new Date(item.date).getTime()      :
+          Date.now()
+        return {
+          id: item._id?.$oid || item._id,
+          type: 'pending',
+          timestamp: ts,
+          message: `มีรายการ '${item.name}' ที่รออนุมัติ`
+        }
+      })
+
+      // รวม + กันซ้ำ + เรียงล่าสุดก่อน
       notifications.value = [...notifications.value, ...newMessages]
-      pendings.forEach(item => lastCheckedIds.value.add(item._id?.$oid || item._id))
-      unreadCount.value = notifications.value.length
+        .filter((v, i, arr) => arr.findIndex(x => x.id === v.id) === i)
+        .sort((a, b) => b.timestamp - a.timestamp)
+
+      // ตัดที่เก่ากว่า 7 วันอีกรอบ
+      pruneOldNotifications()
+
+      // มาร์คว่าเคยเห็น id แล้วกันเด้งซ้ำ
+      fresh.forEach(item => lastCheckedIds.value.add(item._id?.$oid || item._id))
     }
-  } catch (err) {}
+
+    // นับ unread เฉพาะที่ timestamp > lastSeenTimestamp
+    unreadCount.value = notifications.value.filter(n => n.timestamp > lastSeenTimestamp.value).length
+  } catch (err) { /* เงียบตามเดิม */ }
 }
 
 // ---------- ส่วนของ "แก้ไข user_id" ----------
@@ -278,6 +326,7 @@ onMounted(async () => {
     return
   }
 
+  lastSeenTimestamp.value = parseInt(localStorage.getItem('staff_lastSeenTimestamp') || '0')
   await fetchNotifications()
   polling = setInterval(fetchNotifications, 30000)
   window.addEventListener('resize', checkMobile)

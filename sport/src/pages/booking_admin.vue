@@ -30,25 +30,31 @@
       <header class="topbar">
         <button class="menu-toggle" @click="toggleSidebar">☰</button>
         <div class="topbar-actions">
-          <div>
-            <div v-if="showNotifications" class="notification-backdrop" @click="closeNotifications"></div>
-            <button class="notification-btn" @click="toggleNotifications">
-              <i class="pi pi-bell"></i>
-              <span v-if="unreadCount > 0" class="badge">{{ unreadCount }}</span>
-            </button>
-            <div v-if="showNotifications" class="notification-dropdown">
-              <ul>
-                <li
-                  v-for="(noti, idx) in notifications"
-                  :key="noti.id || idx"
-                  :class="['notification-item', noti.type || '', { unread: idx === 0 }]"
-                >
-                  {{ noti.message }}
-                </li>
-                <li v-if="notifications.length === 0" class="no-noti">ไม่มีแจ้งเตือน</li>
-              </ul>
-            </div>
-          </div>
+          <div style="position: relative; display: inline-block;">
+  <div
+    v-if="showNotifications"
+    class="notification-backdrop"
+    @click="closeNotifications"
+  ></div>
+
+  <button class="notification-btn" @click="toggleNotifications">
+    <i class="pi pi-bell"></i>
+    <span v-if="unreadCount > 0" class="badge">{{ unreadCount }}</span>
+  </button>
+
+  <div v-if="showNotifications" class="notification-dropdown">
+    <ul>
+      <li
+        v-for="(noti, idx) in notifications.slice(0, 10)"
+        :key="noti.id || idx"
+        :class="['notification-item', noti.type || '', { unread: noti.timestamp > lastSeenTimestamp }]"
+      >
+        {{ noti.message }}
+      </li>
+      <li v-if="notifications.length === 0" class="no-noti">ไม่มีแจ้งเตือน</li>
+    </ul>
+  </div>
+</div>
           <router-link to="/profile_admin"><i class="pi pi-user"></i></router-link>
         </div>
       </header>
@@ -142,6 +148,7 @@ import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
 const API_BASE = import.meta.env.VITE_API_BASE
+const ADMIN_LAST_SEEN_KEY = 'admin_lastSeenTimestamp'
 
 const route = useRoute()
 const router = useRouter()
@@ -157,64 +164,80 @@ const notifications = ref([])
 const unreadCount = ref(0)
 const lastCheckedIds = ref(new Set())
 let polling = null
+const lastSeenTimestamp = ref(0)
 
 function checkMobile() {
   isMobile.value = window.innerWidth <= 600
 }
+
+function pruneOldNotifications() {
+  const cutoff = Date.now() - (7 * 24 * 60 * 60 * 1000) // เก็บ 7 วัน
+  notifications.value = notifications.value.filter(n => (n?.timestamp ?? 0) >= cutoff)
+}
+
 function toggleNotifications() {
   showNotifications.value = !showNotifications.value
-  if (showNotifications.value) unreadCount.value = 0
+  if (showNotifications.value) {
+    lastSeenTimestamp.value = Date.now()
+    localStorage.setItem(ADMIN_LAST_SEEN_KEY, String(lastSeenTimestamp.value))
+    unreadCount.value = 0
+  }
 }
-function closeNotifications() {
-  showNotifications.value = false
-}
+
+function closeNotifications() { showNotifications.value = false }
+
 function handleClickOutside(event) {
   const notifDropdown = document.querySelector('.notification-dropdown')
   const notifBtn = document.querySelector('.notification-btn')
   if (
-    notifDropdown &&
-    !notifDropdown.contains(event.target) &&
-    notifBtn &&
-    !notifBtn.contains(event.target)
+    notifDropdown && !notifDropdown.contains(event.target) &&
+    notifBtn && !notifBtn.contains(event.target)
   ) {
     closeNotifications()
   }
 }
 
-// แจ้งเตือน admin เฉพาะ pending ทั้ง field/equipment
 async function fetchNotifications() {
   try {
-    const res = await axios.get(`${API_BASE}/api/history/approve_field`)
+    pruneOldNotifications()
 
+    const res = await axios.get(`${API_BASE}/api/history/approve_field`)
     const data = Array.isArray(res.data) ? res.data : []
+
     const pendings = data.filter(item =>
       item.status === 'pending' &&
-      (item.type === 'field' || item.type === 'equipment') &&
-      !lastCheckedIds.value.has(item._id?.$oid || item._id)
+      (item.type === 'field' || item.type === 'equipment')
     )
+
     if (pendings.length) {
       const newMessages = pendings.map(item => {
-        if (item.type === 'field') {
-          return {
-            id: item._id?.$oid || item._id,
-            type: 'pending',
-            message: `สนาม '${item.name}' กำลังรอการอนุมัติ`
-          }
-        } else if (item.type === 'equipment') {
-          return {
-            id: item._id?.$oid || item._id,
-            type: 'pending',
-            message: `อุปกรณ์ '${item.name}' กำลังรอการอนุมัติ`
-          }
+        const id = item._id?.$oid || item._id
+        const ts =
+          (item.updatedAt && new Date(item.updatedAt).getTime()) ??
+          (item.createdAt && new Date(item.createdAt).getTime()) ??
+          (item.date && new Date(item.date).getTime()) ??
+          Date.now()
+        return {
+          id,
+          type: 'pending',
+          timestamp: ts,
+          message: item.type === 'field'
+            ? `สนาม '${item.name}' กำลังรอการอนุมัติ`
+            : `อุปกรณ์ '${item.name}' กำลังรอการอนุมัติ`
         }
       })
+
+      // รวม + unique ตาม id + sort ล่าสุดมาก่อน
       notifications.value = [...notifications.value, ...newMessages]
-      pendings.forEach(item => lastCheckedIds.value.add(item._id?.$oid || item._id))
-      unreadCount.value = notifications.value.length
+        .filter((v, i, arr) => arr.findIndex(x => (x.id || i) === (v.id || i)) === i)
+        .sort((a, b) => b.timestamp - a.timestamp)
+
+      pruneOldNotifications()
     }
-  } catch (err) {
-    // ไม่แจ้ง error
-  }
+
+    // badge = จำนวนที่ timestamp > lastSeenTimestamp
+    unreadCount.value = notifications.value.filter(n => n.timestamp > lastSeenTimestamp.value).length
+  } catch {}
 }
 // ====== /กระดิ่งแจ้งเตือน ======
 
@@ -273,9 +296,9 @@ function bookZone() {
 
 onMounted(async () => {
   document.addEventListener('mousedown', handleClickOutside)
-
   checkMobile()
   window.addEventListener('resize', checkMobile)
+  lastSeenTimestamp.value = parseInt(localStorage.getItem(ADMIN_LAST_SEEN_KEY) || '0')
   // โหลด field สำหรับ booking admin
   if (!fieldName.value) return
   try {

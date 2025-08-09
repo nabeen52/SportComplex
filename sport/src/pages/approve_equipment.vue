@@ -38,10 +38,17 @@
             </button>
             <div v-if="showNotifications" class="notification-dropdown">
               <ul>
-                <li v-for="(noti, idx) in notifications" :key="idx">{{ noti.message }}</li>
-                <li v-if="notifications.length === 0">ไม่มีแจ้งเตือน</li>
+                <li
+                  v-for="(noti, idx) in notifications.slice(0, 10)"
+                  :key="noti.id || idx"
+                  :class="['notification-item', noti.type || '', { unread: noti.timestamp > lastSeenTimestamp }]"
+                >
+                  {{ noti.message }}
+                </li>
+                <li v-if="notifications.length === 0" class="no-noti">ไม่มีแจ้งเตือน</li>
               </ul>
             </div>
+
           </div>
           <router-link to="/profile_staff"><i class="pi pi-user"></i></router-link>
         </div>
@@ -50,15 +57,20 @@
       <!-- แถบประกาศ -->
       <transition name="slide-down">
   <div class="announcement-bar" v-if="showAnnouncementBar">
-    <i class="pi pi-megaphone" style="color: red; font-size: 1.5rem;"></i>
+    <span class="announcement-icon">
+      <i class="pi pi-megaphone"></i>
+    </span>
     <span class="announcement-bar-text">
       {{ announcement }}
     </span>
-    <button class="close-announcement-btn" @click="showAnnouncementBar = false">
-      <i class="pi pi-times" style="color: red;"></i>
+    <button class="close-announcement-btn" @click="showAnnouncementBar = false" aria-label="ปิดประกาศ">
+      <span class="close-icon">
+        <i class="pi pi-times"></i>
+      </span>
     </button>
   </div>
 </transition>
+
       
 
       <div class="histbody">
@@ -165,7 +177,8 @@ export default {
       usersMap: {},
       equipmentGroups: [],
       polling: null,
-      pollingNotif: null
+      pollingNotif: null,
+      lastSeenTimestamp: 0,
     }
   },
  computed: {
@@ -239,10 +252,20 @@ export default {
 
 
     toggleNotifications() {
-      this.showNotifications = !this.showNotifications;
-      if (this.showNotifications) this.unreadCount = 0;
-    },
-      
+    this.showNotifications = !this.showNotifications;
+    if (this.showNotifications) {
+      // ✅ บันทึกเวลาอ่านล่าสุดแบบถาวร (ใช้ key แยกของ staff)
+      this.lastSeenTimestamp = Date.now();
+      localStorage.setItem('staff_lastSeenTimestamp', this.lastSeenTimestamp);
+      this.unreadCount = 0;
+    }
+  },
+
+  pruneOldNotifications() {
+  const cutoff = Date.now() - (7 * 24 * 60 * 60 * 1000); // ✅ 7 วันย้อนหลัง
+  this.notifications = this.notifications.filter(n => (n?.timestamp ?? 0) >= cutoff);
+},
+
     closeNotifications() {
       this.showNotifications = false
     },
@@ -583,31 +606,61 @@ export default {
     console.error('โหลดข้อมูล booking ไม่สำเร็จ:', err);
   }
 },
-
-
-
-
-
     async fetchNotifications() {
-      try {
-        const res = await axios.get(`${API_BASE}/api/equipments/pending`);
-        const data = Array.isArray(res.data) ? res.data : [];
-        const pendings = data.filter(item => !this.lastCheckedIds.has(item._id?.$oid || item._id));
-        if (pendings.length) {
-          const newMessages = pendings.map(item => ({
-            id: item._id?.$oid || item._id,
-            message: `มีรายการ '${item.name}' ที่รออนุมัติ`
-          }));
-          this.notifications = [...this.notifications, ...newMessages];
-          pendings.forEach(item => this.lastCheckedIds.add(item._id?.$oid || item._id));
-          this.unreadCount = this.notifications.length;
-        }
-      } catch (err) { }
-    },
+  try {
+    const cutoff = Date.now() - (7 * 24 * 60 * 60 * 1000); // ✅ เก็บแค่ 7 วันล่าสุด
+
+    // ล้างของเก่ากว่า 7 วัน ก่อน
+    this.pruneOldNotifications();
+
+    // ดึงงานที่ "รออนุมัติ" (สำหรับ staff)
+    const res = await axios.get(`${API_BASE}/api/equipments/pending`);
+    const data = Array.isArray(res.data) ? res.data : [];
+
+    // คัดเฉพาะที่ยังไม่เคยแจ้ง (กันซ้ำด้วย lastCheckedIds)
+    const fresh = data.filter(item => !this.lastCheckedIds.has(item._id?.$oid || item._id));
+
+    if (fresh.length) {
+      const newMessages = fresh.map(item => {
+        const ts =
+          item.updatedAt ? new Date(item.updatedAt).getTime() :
+          item.createdAt ? new Date(item.createdAt).getTime() :
+          item.date      ? new Date(item.date).getTime()      :
+          Date.now();
+
+        return {
+          id: item._id?.$oid || item._id,
+          type: 'pending',                       // สำหรับจัดสีสไตล์ ถ้าต้องการ
+          timestamp: ts,
+          message: `มีรายการ '${item.name}' ที่รออนุมัติ`,
+        };
+      });
+
+      // รวม + กันซ้ำด้วย id + เรียงล่าสุดก่อน
+      this.notifications = [...this.notifications, ...newMessages]
+        .filter((v, i, arr) => arr.findIndex(x => x.id === v.id) === i)
+        .sort((a, b) => b.timestamp - a.timestamp);
+
+      // ตัดแจ้งเตือนที่เก่ากว่า 7 วันอีกรอบ (ป้องกันกรณี timestamp จาก backend เก่ามาก)
+      this.pruneOldNotifications();
+
+      // มาร์คว่าเคยเห็น item เหล่านี้แล้ว (กันเด้งซ้ำ)
+      fresh.forEach(item => this.lastCheckedIds.add(item._id?.$oid || item._id));
+    }
+
+    // ✅ นับ unread เฉพาะที่ timestamp > lastSeenTimestamp (ข้ามหน้าเลขจะไม่กลับมา)
+    this.unreadCount = this.notifications.filter(n => n.timestamp > this.lastSeenTimestamp).length;
+  } catch (err) {
+    // เงียบไว้เหมือนเดิม
+  }
+},
+
   },
   async mounted() {
   await this.fetchUsers();
   this.fetchAllEquipments();  // โหลดรอบแรกทันที
+  this.lastSeenTimestamp = parseInt(localStorage.getItem('staff_lastSeenTimestamp') || '0');
+
 
   // ✅ โหลดข้อมูลใหม่ทุก 5 วินาที
   this.polling = setInterval(this.fetchAllEquipments, 5000);
@@ -744,52 +797,90 @@ export default {
 
 /* ตัวแถบประกาศ */
 .announcement-bar {
-  position: fixed;
-  left: 0;
-  top: 0;
-  z-index: 3000;
-  width: px;
-  max-width: var(--announcement-width);
-  margin-left: auto;
-  margin-right: auto;
-  left: 0;
-  right: 0;
-  background: rgba(255, 216, 216, 0.911);
-  color: #ff0000;
-  padding: 1rem 2rem;
-  font-size: 1.15rem;
-  font-weight: bold;
   display: flex;
-  align-items: flex-start;
+  align-items: center;  
   gap: 1.2rem;
-  box-shadow: 0 4px 18px rgba(255, 80, 80, 0.13);
+  width: 100%;
+  max-width: 900px; 
+  margin: 12px auto;
+  background: #ffeaeac8; /* ชมพูอ่อนแบบ danger alert */
+  color: #e53e3e;      /* ฟอนต์แดง */
+  font-size: 1.15rem;
+  font-weight: 500;
   border-radius: 12px;
+  padding: 1rem 2rem;
+   box-shadow: 0 4px 18px rgba(255, 80, 80, 0.13);
+  border: 1.5px solid #fdb6b6;
+  position: sticky;
+  top: 60px;                  /* ระยะห่างจากขอบบน ปรับให้เท่ากับความสูง navbar */
+  z-index: 900;               /* ให้อยู่เหนือเนื้อหา แต่ต่ำกว่า navbar */
 }
+.announcement-icon {
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  min-height: 34px;
+  background: #ff5a5f;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  margin-right: 7px;
+  box-shadow: 0 1px 5px #ffbfc1a0;
+  flex-shrink: 0;
+}
+.announcement-icon i {
+  color: #fff !important;
+  font-size: 1.3rem !important;
+  margin-top: 1px;
+}
+
 
 .announcement-bar-text {
   flex: 1;
   display: flex;
   align-items: center;
-  gap: 0.8rem;
-  white-space: pre-wrap;
-    /* แปลง \n เป็น break line ตามที่พิมพ์ไว้ */
-    word-break: break-word;
+  word-break: break-word;
+   gap: 0.8rem;
+  white-space: pre-wrap;   /* อันนี้สำคัญ */
   overflow-wrap: anywhere;
+  font-size: 1.07rem;
+  font-weight: 500;
+  color: #e53e3e; /* ฟอนต์แดง */
 }
-
 .close-announcement-btn {
-  background: none;
+  margin-left: 12px;
+  background: transparent;
   border: none;
-  color: #bf0c0c;
-  font-size: 1.5rem;
+  outline: none;
   cursor: pointer;
-  margin-left: 0.5rem;
-  transition: color 0.15s;
+  padding: 0;
+  transition: background 0.2s;
+  display: flex;
+  align-items: center;
+}
+.close-icon {
+  width: 32px;
+  height: 32px;
+  background: #ffe0e3; /* วงกลมจางๆ */
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+  box-shadow: 0 1px 6px #f6b4b833;
 }
 
-.close-announcement-btn:hover {
-  color: #222;
+.close-icon i {
+  color: #e53e3e !important;
+  font-size: 1.28rem !important;
 }
+
+.close-announcement-btn:hover .close-icon {
+  background: #ffd1d7;
+  /* สามารถปรับเฉดเมื่อ hover */
+}
+
 
 .notification-dropdown {
   position: absolute;
