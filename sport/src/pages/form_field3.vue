@@ -89,14 +89,14 @@
         <!-- Confirm Form -->
         <div class="form-container">
           <h1 class="title">ยืนยันข้อมูล</h1>
-          <div id="pdf-section"> 
+          <div id="pdf-section">
             <div class="form-header">
               <h3>แบบฟอร์มขออนุมัติใช้สถานที่ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง</h3>
-              <p><b>โทร 053-917-8201 | E-mail: sport-complex@mfu.ac.th</b></p>
+              <p><b>โทร: 0-5391-7820 และ 0-5391-7821 | E-mail: sport-complex@mfu.ac.th</b></p>
             </div>
 
             <!-- Header Info -->
-            <div class="info-left " >
+            <div class="info-left">
               <span class="bold">ที่ อว.</span>
               <span class="line-field single-line">{{ info.aw }}</span>
               <span class="bold" style="margin-left: 50px;">วันที่</span>
@@ -106,96 +106,82 @@
             </div>
 
             <!-- Detail Content -->
-            <!-- "เรื่อง..." ชิดซ้าย (ตรงกับ "ที่ อว.") -->
             <div class="form-row mt-15" style="margin-left: 0;">
-  <span class="bold">เรื่อง ขออนุมัติใช้สถานที่</span>
-</div>
-<div class="form-row mt-15" style="margin-left: 0px;">
-  <span class="bold">เรียน อธิการบดี</span>
-</div>
+              <span class="bold">เรื่อง</span><span>เรื่อง ขออนุมัติใช้สถานที่</span>
+            </div>
+            <div class="form-row mt-15" style="margin-left: 0px;">
+              <span class="bold">เรียน</span><span>อธิการบดี</span>
+            </div>
 
-
-            <!-- ย่อหน้าเดียว -->
             <div class="form-row mt-15" style="text-indent: 80px; text-align: left; line-height: 2.0;">
               ด้วย {{ info.agency }}
               จะดำเนินกิจกรรม/โครงการ {{ info.name_activity }}
               เหตุผลในการขอใช้เพื่อ {{ info.reasons }}
-              ในช่วงวันที่ {{ formatDateOnly(info.since) }} ถึงวันที่ {{ formatDateOnly(info.uptodate) }}
+              ในวันที่ {{ formatDateOnly(info.since) }} ถึงวันที่ {{ formatDateOnly(info.uptodate) }}
               ช่วงเวลา {{ formatTimeTH(info.since_time) }} ถึงเวลา {{ formatTimeTH(info.until_thetime) }}
               จำนวนผู้เข้าร่วม {{ info.participants }} คน
               และเพื่อให้การดำเนินงานเป็นไปด้วยความเรียบร้อย จึงเรียนมาเพื่อขออนุมัติ ดังนี้
             </div>
 
             <!-- ข้อ 1 -->
-          <div class="form-row mt-30 bold" style="margin-left: 0; margin-bottom: 6px;">
-  <span>1. ขออนุมัติใช้สถานที่</span>
-</div>
-<div class="form-row block-row" style="margin-left: 80px; margin-bottom: 0px;">
-  <span>อาคาร</span>
-  <span class="line-field block-text">{{ info.building }}</span>
-</div>
-<div class="form-row block-row" style="margin-left: 80px; margin-bottom: 22px;">
-  <span>ตำแหน่งพื้นที่/ห้องที่ต้องการใช้</span>
-  <span class="line-field block-text">
-    {{ info.zone && info.zone.trim() !== '' ? info.zone : '-' }}
-  </span>
-</div>
-
+            <div class="form-row mt-30 bold" style="margin-left: 0; margin-bottom: 6px;">
+              <span>1. ขออนุมัติใช้สถานที่</span>
+            </div>
+            <div class="form-row block-row" style="margin-left: 80px; margin-bottom: 0px;">
+              <span>อาคาร :</span>
+              <span class="line-field block-text">{{ info.building }}</span>
+            </div>
+            <div class="form-row block-row" style="margin-left: 80px; margin-bottom: 22px;">
+              <span>ตำแหน่งพื้นที่/ห้องที่ต้องการใช้ :</span>
+              <span class="line-field block-text">
+                {{ info.zone && info.zone.trim() !== '' ? info.zone : '-' }}
+              </span>
+            </div>
 
             <!-- ข้อ 2 -->
-          <!-- ...ข้อ 2. ... -->
-<div class="form-row mt-30 bold" style="margin-left: 0; margin-bottom: 8px;">
-  <span>2. ขออนุมัติใช้ระบบสาธารณูปโภค</span>
-  <input type="radio" value="yes" :checked="isUtilityYes(info.utilityRequest)" disabled/>
-  <label style="margin-right: 18px;">เลือก</label>
-  <input type="radio" value="no" :checked="isUtilityNo(info.utilityRequest)" disabled/>
-  <label>ไม่เลือก</label>
-</div>
-<div v-if="isUtilityYes(info.utilityRequest)" style="margin-left:80px;">
-<table style="border-collapse: collapse;">
-  <tr style="height: 26px;"> <!-- ปรับตรงนี้ -->
-    <td style="white-space:nowrap; min-width: 150px; padding:0;">
-      2.1 เปิดเครื่องปรับอากาศตั้งแต่ :
-    </td>
-    <td style="min-width:65px; text-align:center; padding:0 4px;">
-      {{ formatTimeTH(info.turnon_air) }}
-    </td>
-    <td style="padding:0 4px;">ถึง</td>
-    <td style="min-width:65px; text-align:center; padding:0 4px;">
-      {{ formatTimeTH(info.turnoff_air) }}
-    </td>
-  </tr>
-  <tr style="height: 26px;"> <!-- ปรับตรงนี้ -->
-    <td style="white-space:nowrap; min-width: 150px; padding:0;">
-      2.2 ไฟฟ้าส่องสว่างตั้งแต่ :
-    </td>
-    <td style="min-width:65px; text-align:center; padding:0 4px;">
-      {{ formatTimeTH(info.turnon_lights) }}
-    </td>
-    <td style="padding:0 4px;">ถึง</td>
-    <td style="min-width:65px; text-align:center; padding:0 4px;">
-      {{ formatTimeTH(info.turnoff_lights) }}
-    </td>
-  </tr>
-  <tr style="height: 26px;"> <!-- ปรับตรงนี้ -->
-    <td style="white-space:nowrap; min-width: 150px; padding:0;">
-      2.3 อื่นๆ :
-    </td>
-    <td style="min-width:65px; text-align:center; padding:0 4px;">
-      {{ info.other && info.other.trim() !== '' ? info.other : '-' }}
-    </td>
-    <td style="padding:0 4px;"></td>
-    <td style="min-width:65px; text-align:center; padding:0 4px;"></td>
-  </tr>
-</table>
+            <div class="form-row mt-30 bold" style="margin-left: 0; margin-bottom: 8px;">
+              <span>2. ขออนุมัติใช้ระบบสาธารณูปโภค</span>
+              <input type="radio" value="yes" :checked="isUtilityYes(info.utilityRequest)" disabled/>
+              <label style="margin-right: 18px;">เลือก</label>
+              <input type="radio" value="no" :checked="isUtilityNo(info.utilityRequest)" disabled/>
+              <label>ไม่เลือก</label>
+            </div>
 
-<div style="margin-left:0px; margin-top: 10px;">
-  <span style="font-weight: bold; font-size: 13.5px;">
-    *ต้องได้รับการอนุมัติจากรองอธิการบดีผู้กำกับดูแล และสำเนาเอกสารถึงฝ่ายอนุรักษ์พลังงาน
-  </span>
-</div>
+            <!-- ตารางสาธารณูปโภค: ปรับระยะให้ชิด + คุมความกว้างคอลัมน์ด้วย colgroup -->
+            <div v-if="isUtilityYes(info.utilityRequest)" style="margin-left:80px;">
+              <table class="util-table">
+                <colgroup>
+                  <col class="c-label" />
+                  <col class="c-time" />
+                  <col class="c-sep" />
+                  <col class="c-time" />
+                </colgroup>
+                <tr>
+                  <td class="util-label">2.1 เปิดเครื่องปรับอากาศตั้งแต่ :</td>
+                  <td class="time">{{ formatTimeTH(info.turnon_air) }}</td>
+                  <td class="sep">ถึง</td>
+                  <td class="time">{{ formatTimeTH(info.turnoff_air) }}</td>
+                </tr>
+                <tr>
+                  <td class="util-label">2.2 ไฟฟ้าส่องสว่างตั้งแต่ :</td>
+                  <td class="time">{{ formatTimeTH(info.turnon_lights) }}</td>
+                  <td class="sep">ถึง</td>
+                  <td class="time">{{ formatTimeTH(info.turnoff_lights) }}</td>
+                </tr>
+                <tr>
+                  <td class="util-label">2.3 อื่นๆ :</td>
+                  <td class="other-value" colspan="3">
+                    {{ info.other && info.other.trim() !== '' ? info.other : '-' }}
+                  </td>
+                </tr>
+              </table>
 
-</div>
+              <div style="margin-left:0px; margin-top: 10px;">
+                <span style="font-weight: bold; font-size: 13.5px;">
+                  *ต้องได้รับการอนุมัติจากรองอธิการบดีผู้กำกับดูแล และสำเนาเอกสารถึงฝ่ายอนุรักษ์พลังงาน
+                </span>
+              </div>
+            </div>
 
             <div class="form-row mt-30 bold" style="margin-left: 0; margin-bottom: 8px;">
               <span>3. ขออนุมัติรายการประกอบอาคาร</span>
@@ -205,16 +191,26 @@
               <label>ไม่เลือก</label>
             </div>
 
-            <!-- ต้องเอา 2 บรรทัดนี้ไปอยู่ใน v-if -->
             <div v-if="isFacilityYes(info.facilityRequest)">
               <div class="form-row block-row" style="margin-left: 80px; margin-bottom: 5px;">
-                <span style="white-space: nowrap;"><b>3.1</b> ดึงอัฒจันทร์ภายในอาคารเฉลิมพระเกียรติฯ :</span>
+                <span style="white-space: nowrap;">3.1 ดึงอัฒจันทร์ภายในอาคารเฉลิมพระเกียรติฯ :</span>
                 <span class="line-field block-text force-inline">{{ info.amphitheater && info.amphitheater.trim() !== '' ? info.amphitheater : '-' }}</span>
               </div>
               <div class="form-row block-row" style="margin-left: 80px; margin-bottom: 22px;">
-                <span style="white-space: nowrap;"><b>3.2</b> อุปกรณ์กีฬา (โปรดระบุรายการและจำนวน) :</span>
+                <span style="white-space: nowrap;">3.2 อุปกรณ์กีฬา (โปรดระบุรายการและจำนวน) :</span>
                 <span class="line-field block-text force-inline">{{ info.need_equipment && info.need_equipment.trim() !== '' ? info.need_equipment : '-' }}</span>
               </div>
+            </div>
+
+            <div style="margin-top:5px;">
+              <span style="font-weight:bold; font-size: 15px;">
+                ทั้งนี้ต้องแนบเอกสารโครงการหรือกิจกรรมที่ได้รับการอนุมัติแล้วพร้อมกำหนดการจัดกิจกรรม
+              </span>
+            </div>
+            <div style="margin-top:0px;">
+              <span style="font-weight:bold; font-size: 15px;">
+                หากเป็นการเรียนกรสอน ต้องแนบตารางการเรียนการสอน (Class schedule) พร้อมทั้งรายชื่อนักศึกษา
+              </span>
             </div>
 
             <!-- ตารางเซ็นชื่อ 3 ช่อง (ด้านบน) -->
@@ -224,9 +220,9 @@
                   <td>
                     ลงชื่อ...........................................<br><br>
                     <span style=" white-space: nowrap;">
-                    ( {{ info.username_form || '-' }} )
-                  </span>
-                  <br><br>
+                      ( {{ info.username_form || '-' }} )
+                    </span>
+                    <br><br>
                     นักศึกษา/ผู้รับผิดชอบ<br><br>
                     วันที่............/............/............
                   </td>
@@ -245,157 +241,155 @@
                 </tr>
               </tbody>
             </table>
+
             <!-- ตารางเซ็นชื่อ 3 ช่อง (ด้านล่าง) -->
-<div class="avoid-break">
-  <div class="form-row" style="padding-top: 10px;">
-    <table class="approval-sign-table avoid-break">
-      <thead>
-        <tr>
-          <th>1. เลขานุการศูนย์กีฬาฯ</th>
-          <th>2. หัวหน้าศูนย์กีฬาฯ</th>
-          <th>3. อธิการบดี</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <!-- ช่อง 1 -->
-          <td>
-            <div class="td-inner">
-              <div class="checkbox-line">
-                <input type="checkbox" id="chk1-1" disabled>
-                <label for="chk1-1">เรียน หัวหน้าศูนย์กีฬาฯ</label>
-              </div>
-              <div class="checkbox-line">
-                <input type="checkbox" id="chk1-2" disabled>
-                <label for="chk1-2">เพื่อโปรดพิจารณา</label>
-              </div>
-              <div class="checkbox-line">
-                <input type="checkbox" id="chk1-3" disabled>
-                <label for="chk1-3">อื่นๆ</label>
-                <span class="dot-line dot-line-custom"></span>
-              </div>
-              <div class="dot-line"></div>
-              <div style="margin:12px 0 6px;">
-                (<span class="dot-line short"></span>)
-              </div>
-              <div style="margin-bottom: 6px;">
-                วันที่ <span class="dot-line date"></span>
-              </div>
-            </div>
-          </td>
-          <!-- ช่อง 2 -->
-          <td>
-            <div class="td-inner">
-              <div class="checkbox-line">
-                <input type="checkbox" id="chk2-1" disabled>
-                <label for="chk2-1">เรียนรองอธิการบดี</label>
-              </div>
-              <div class="checkbox-line">
-                <input type="checkbox" id="chk2-2" disabled>
-                <label for="chk2-2">เพื่อโปรดพิจารณา</label>
-              </div>
-              <div class="checkbox-line">
-                <input type="checkbox" id="chk2-3" disabled>
-                <label for="chk2-3">อื่นๆ</label>
-                <span class="dot-line dot-line-custom"></span>
-              </div>
-              <div class="dot-line"></div>
-              <div style="margin:12px 0 6px;">
-                (<span class="dot-line short"></span>)
-              </div>
-              <div style="margin-bottom: 6px;">
-                วันที่ <span class="dot-line date"></span>
-              </div>
-            </div>
-          </td>
-        <!-- ช่อง 3 -->
-<!-- ช่อง 3 -->
-<td>
-  <div class="td-inner">
-    <div class="checkbox-line">
-      <input type="checkbox" id="chk3-1" disabled>
-      <label for="chk3-1">อนุมัติข้อ</label>
-    </div>
-    <div class="checkbox-line">
-      <input type="checkbox" id="chk3-2" disabled>
-      <label for="chk3-2">อื่นๆ</label>
-      <span class="dot-line dot-line-custom"></span>
-    </div>
-    <!-- เส้นจุดบรรทัดที่ 2 แบบเว้นบรรทัด -->
-    <div style="margin-bottom: 3px;"></div> <!-- เพิ่มระยะห่าง -->
-    <div class="dot-line"></div>
-     <div style="margin-bottom: 7px;"></div> 
-    <div class="dot-line"></div>
-    <div style="margin:12px 0 6px;">
-      (<span class="dot-line short"></span>)
-    </div>
-    <div style="margin-bottom: 6px;">
-      วันที่ <span class="dot-line date"></span>
-    </div>
-  </div>
-</td>
-
-
-        </tr>
-      </tbody>
+            <div class="avoid-break">
+              <div class="form-row" style="padding-top: 10px;">
+                <table class="approval-sign-table avoid-break">
+                  <thead>
+                    <tr>
+                      <th>1. เลขานุการศูนย์กีฬาฯ</th>
+                      <th>2. หัวหน้าศูนย์กีฬาฯ</th>
+                      <th>3. อธิการบดี</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <!-- ช่อง 1 -->
+                      <td>
+                        <div class="td-inner">
+                          <div class="checkbox-line">
+                            <input type="checkbox" id="chk1-1" disabled>
+                            <label for="chk1-1">เรียน หัวหน้าศูนย์กีฬาฯ</label>
+                          </div>
+                          <div class="checkbox-line">
+                            <input type="checkbox" id="chk1-2" disabled>
+                            <label for="chk1-2">เพื่อโปรดพิจารณา</label>
+                          </div>
+                          <div class="checkbox-line">
+                            <input type="checkbox" id="chk1-3" disabled>
+                            <label for="chk1-3">อื่นๆ</label>
+                            <span class="dot-line dot-line-custom"></span>
+                          </div>
+                          <div class="dot-line"></div>
+                          <div style="margin:12px 0 6px;">
+                            (<span class="dot-line short"></span>)
+                          </div>
+                          <div style="margin-bottom: 6px;">
+                            วันที่ <span class="dot-line date"></span>
+                          </div>
+                        </div>
+                      </td>
+                      <!-- ช่อง 2 -->
+                      <td>
+                        <div class="td-inner">
+                          <div class="checkbox-line">
+                            <input type="checkbox" id="chk2-1" disabled>
+                            <label for="chk2-1">เรียนรองอธิการบดี</label>
+                          </div>
+                          <div class="checkbox-line">
+                            <input type="checkbox" id="chk2-2" disabled>
+                            <label for="chk2-2">เพื่อโปรดพิจารณา</label>
+                          </div>
+                          <div class="checkbox-line">
+                            <input type="checkbox" id="chk2-3" disabled>
+                            <label for="chk2-3">อื่นๆ</label>
+                            <span class="dot-line dot-line-custom"></span>
+                          </div>
+                          <div class="dot-line"></div>
+                          <div style="margin:12px 0 6px;">
+                            (<span class="dot-line short"></span>)
+                          </div>
+                          <div style="margin-bottom: 6px;">
+                            วันที่ <span class="dot-line date"></span>
+                          </div>
+                        </div>
+                      </td>
+                      <!-- ช่อง 3 -->
+                      <td>
+                        <div class="td-inner">
+                          <div class="checkbox-line">
+                            <input type="checkbox" id="chk3-1" disabled>
+                            <label for="chk3-1">อนุมัติข้อ</label>
+                          </div>
+                          <div class="checkbox-line">
+                            <input type="checkbox" id="chk3-2" disabled>
+                            <label for="chk3-2">อื่นๆ</label>
+                            <span class="dot-line dot-line-custom"></span>
+                          </div>
+                          <!-- เส้นจุดบรรทัดที่ 2 แบบเว้นบรรทัด -->
+                          <div style="margin-bottom: 3px;"></div>
+                          <div class="dot-line"></div>
+                          <div style="margin-bottom: 7px;"></div>
+                          <div class="dot-line"></div>
+                          <div style="margin:12px 0 6px;">
+                            (<span class="dot-line short"></span>)
+                          </div>
+                          <div style="margin-bottom: 6px;">
+                            วันที่ <span class="dot-line date"></span>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  </tbody>
                 </table>
               </div>
             </div>
-          </div>
-<div style="margin-top:12px;">
-  <span style="font-weight:bold; font-size: 15px;">
-    หมายเหตุ: ให้นักศึกษา/ผู้รับผิดชอบแนบเอกสารโครงการหรือกำหนดการเพื่อประกอบการพิจารณา
-  </span>
-</div>
 
-          <!-- โชว์ไฟล์แนบ -->
-          <div v-if="fileAttachments && fileAttachments.length > 0" class="form-row mt-30">
-            <span>ไฟล์แนบ</span>
-            <div class="attached-files-list">
-              <div 
-                v-for="(file, idx) in fileAttachments" 
-                :key="idx"
-                class="attached-file-item"
-              >
-                <a 
-                  :href="file.url"
-                  target="_blank"
-                  :download="file.fileName"
+            <div style="margin-top:12px;">
+              <span style="font-weight:bold; font-size: 15px;">
+                หมายเหตุ: ให้นักศึกษา/ผู้รับผิดชอบแนบเอกสารโครงการหรือกำหนดการเพื่อประกอบการพิจารณา
+              </span>
+            </div>
+
+            <!-- โชว์ไฟล์แนบ -->
+            <div v-if="fileAttachments && fileAttachments.length > 0" class="form-row mt-30">
+              <span>ไฟล์แนบ</span>
+              <div class="attached-files-list">
+                <div
+                  v-for="(file, idx) in fileAttachments"
+                  :key="idx"
+                  class="attached-file-item"
                 >
-                  {{ file.fileName || 'ไฟล์แนบ' }}
-                </a>
-                <span v-if="file.size" style="color: #888; font-size:12px; margin-left:8px;">
-                  ({{ file.size }} KB)
-                </span>
+                  <a
+                    :href="file.url"
+                    target="_blank"
+                    :download="file.fileName"
+                  >
+                    {{ file.fileName || 'ไฟล์แนบ' }}
+                  </a>
+                  <span v-if="file.size" style="color: #888; font-size:12px; margin-left:8px;">
+                    ({{ file.size }} KB)
+                  </span>
+                </div>
               </div>
             </div>
-          </div>
 
-          <div class="button-wrapper mt-30">
-            <button id="btnBack" @click="goBack">Back</button>
-            <button id="btnNext" @click="handleNext">Next</button>
+            <div class="button-wrapper mt-30">
+              <button id="btnBack" @click="goBack">Back</button>
+              <button id="btnNext" @click="handleNext">Next</button>
+            </div>
           </div>
         </div>
       </div>
+
+      <!-- Footer (moved inside .main) -->
+      <footer class="foot">
+        <div class="footer-left">
+          <p>
+            Sport Complex – Mae Fah Luang University |
+            Tel: 0-5391-7820 and 0-5391-7821 | Facebook:
+            <a href="https://www.facebook.com/mfusportcomplex" target="_blank">MFU Sports Complex Center</a>
+            |
+            Email:
+            <a href="mailto:sport-complex@mfu.ac.th">sport-complex@mfu.ac.th</a>
+          </p>
+        </div>
+      </footer>
     </div>
-    <!-- Footer -->
-    <footer class="foot">
-      <div class="footer-left">
-        <p>
-          Sport Complex – Mae Fah Luang University | Tel. 053-917-821 |
-          Facebook: 
-          <a href="https://www.facebook.com/mfusportcomplex" target="_blank">
-            MFU Sports Complex Center
-          </a> | 
-          Email: 
-          <a href="mailto:sport-complex@mfu.ac.th">
-            sport-complex@mfu.ac.th
-          </a>
-        </p>
-      </div>
-    </footer>
   </div>
 </template>
+
 
 <script setup>
 import { ref, onMounted, onBeforeUnmount } from 'vue'
@@ -434,7 +428,6 @@ function closeNotifications() {
   showNotifications.value = false
 }
 
-
 const pdfFilename = 'แบบฟอร์มขออนุมัติใช้สถานที่ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง.pdf'
 
 function exportToPDF() {
@@ -448,7 +441,6 @@ function exportToPDF() {
   }
   html2pdf().from(element).set(opt).save()
 }
-// รับ element id, return Blob ของไฟล์ pdf
 function htmlToPdfBlob(elementId) {
   return new Promise((resolve, reject) => {
     const element = document.getElementById(elementId)
@@ -471,7 +463,6 @@ function htmlToPdfBlob(elementId) {
 async function fetchNotifications() {
   if (!userId) return
   try {
-    // ตัดทิ้งแจ้งเตือนเก่าเกิน 7 วันก่อน
     pruneOldNotifications()
 
     const res = await axios.get(`${API_BASE}/api/history?user_id=${userId}`)
@@ -506,24 +497,19 @@ async function fetchNotifications() {
         }`
       }))
 
-      // รวม + กันซ้ำ + เรียงใหม่สุดบน
       notifications.value = [...notifications.value, ...newMessages]
         .filter((v, i, arr) => arr.findIndex(x => x.id === v.id) === i)
         .sort((a, b) => b.timestamp - a.timestamp)
 
-      // ตัดทิ้งรายการเกิน 7 วันอีกครั้งหลังรวม
       pruneOldNotifications()
-
       newNotis.forEach(item => lastCheckedIds.add(item._id))
     }
 
-    // นับเฉพาะแจ้งเตือนที่ใหม่กว่าเวลาที่ผู้ใช้เปิดกระดิ่งครั้งล่าสุด
     unreadCount.value = notifications.value.filter(n => n.timestamp > lastSeenTimestamp.value).length
   } catch (err) {
     // ignore
   }
 }
-
 
 async function loadCart() {
   const userId = localStorage.getItem('user_id') || ''
@@ -536,14 +522,9 @@ async function loadCart() {
   }
 }
 onMounted(() => {
-  // อ่าน timestamp ที่เคยเปิดกระดิ่งครั้งล่าสุด
   lastSeenTimestamp.value = parseInt(localStorage.getItem('lastSeenTimestamp') || '0')
-
-  // โหลดแจ้งเตือนครั้งแรก + เริ่ม polling
   fetchNotifications()
   polling = setInterval(fetchNotifications, 30000)
-
-  // โหลดรถเข็นเหมือนเดิม
   loadCart()
 })
 
@@ -584,73 +565,50 @@ function formatDateOnly(dateTime) {
   if (typeof dateTime === 'string' && dateTime.includes('T')) {
     dateStr = dateTime.split('T')[0]
   }
-  if (dateStr.includes('/')) return dateStr // ถ้าเป็น dd/mm/yyyy อยู่แล้ว
-
+  if (dateStr.includes('/')) return dateStr
   const [y, m, d] = dateStr.split('-')
   if (!y || !m || !d) return dateStr
-
-  // แปลงเป็น พ.ศ.
   const buddhistYear = (parseInt(y) + 543).toString()
-
   return `${d.padStart(2, '0')}/${m.padStart(2, '0')}/${buddhistYear}`
 }
 
+function isUtilityYes(val) { return val === 'yes' }
+function isUtilityNo(val) { return val === 'no' }
+function isFacilityYes(val) { return val === 'yes' }
+function isFacilityNo(val) { return val === 'no' }
 
-
-function isUtilityYes(val) {
-  return val === 'yes'
-}
-function isUtilityNo(val) {
-  return val === 'no'
-}
-function isFacilityYes(val) {
-  return val === 'yes'
-}
-function isFacilityNo(val) {
-  return val === 'no'
-}
 function blobToBase64(blob) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
-    reader.onloadend = () => resolve(reader.result.split(',')[1]) // เอาเฉพาะ base64
+    reader.onloadend = () => resolve(reader.result.split(',')[1])
     reader.onerror = reject
     reader.readAsDataURL(blob)
   })
 }
 
-
-
-
-
-// -------------- Load ข้อมูล Booking + Attachments ----------------
 onMounted(async () => {
-
-  // แสดงชื่อไฟล์ที่เลือกจากหน้าแรก (โดยยังไม่อัปโหลด) เพื่อให้ผู้ใช้เห็นว่าจะส่งอะไร
-const tempFiles = Array.isArray(window._tempSelectedFiles) ? window._tempSelectedFiles : []
-for (const f of tempFiles) {
-  fileAttachments.value.push({
-    fileName: f.name || 'ไฟล์แนบ',
-    url: '#', // ยังไม่อัปโหลดจริง เลยยังไม่มีลิงก์
-    size: f.size ? Math.round(f.size / 1024) : null,
-  })
-}
+  const tempFiles = Array.isArray(window._tempSelectedFiles) ? window._tempSelectedFiles : []
+  for (const f of tempFiles) {
+    fileAttachments.value.push({
+      fileName: f.name || 'ไฟล์แนบ',
+      url: '#',
+      size: f.size ? Math.round(f.size / 1024) : null,
+    })
+  }
   const bookingId = localStorage.getItem('bookingId')
   if (!bookingId) {
     Swal.fire('ไม่พบ bookingId')
     return
   }
   try {
-    // 1. โหลดข้อมูล booking_field
     const res = await axios.get(`${API_BASE}/api/booking_field/${bookingId}`)
     info.value = res.data
 
-    // Normalize ค่า yes/no กรณีเจอ "เลือก"/"ไม่เลือก"
     if (info.value.utilityRequest === 'เลือก') info.value.utilityRequest = 'yes'
     if (info.value.utilityRequest === 'ไม่เลือก') info.value.utilityRequest = 'no'
     if (info.value.facilityRequest === 'เลือก') info.value.facilityRequest = 'yes'
     if (info.value.facilityRequest === 'ไม่เลือก') info.value.facilityRequest = 'no'
 
-    // โหลดชื่อผู้ขอใช้ (requester)
     if (info.value.user_id) {
       try {
         const userRes = await axios.get(`${API_BASE}/api/user/${info.value.user_id}`)
@@ -660,10 +618,6 @@ for (const f of tempFiles) {
       }
     }
 
-    // ----- โหลดไฟล์แนบ -----
-    // fileAttachments.value = []
-
-    // 4.1 ดึงไฟล์แนบที่อัปโหลดผ่าน Multer (info.value.files)
     if (info.value.files && info.value.files.length > 0) {
       for (const file of info.value.files) {
         fileAttachments.value.push({
@@ -673,37 +627,15 @@ for (const f of tempFiles) {
         })
       }
     }
-
-    // 4.2 ดึงไฟล์แนบจาก uploadFiles (base64) เพิ่มต่อท้าย
-    // if (info.value.uploadFiles && info.value.uploadFiles.length > 0) {
-    //   let fileListRes
-    //   try {
-    //     fileListRes = await axios.get(`${API_BASE}/api/upload_file`)
-    //   } catch (e) {
-    //     fileListRes = { data: [] }
-    //   }
-    //   for (const fid of info.value.uploadFiles) {
-    //     const found = Array.isArray(fileListRes.data) ? fileListRes.data.find(f => f._id === fid) : null
-    //     if (found) {
-    //       fileAttachments.value.push({
-    //         fileName: found.fileName,
-    //         url: `${API_BASE}/api/uploadfile/${found._id}`,
-    //         size: found.fileData ? Math.round((found.fileData.length * 3 / 4) / 1024) : null
-    //       })
-    //     }
-    //   }
-    // }
   } catch (err) {
     Swal.fire('ดึงข้อมูลไม่สำเร็จ')
     console.error(err)
   }
-  // fetchNotifications()
-  // setInterval(fetchNotifications, 30000)
 })
+
 async function uploadTempFilesAndGetUrls() {
   const filesToUpload = Array.isArray(window._tempSelectedFiles) ? window._tempSelectedFiles : []
-  const uploaded = [] // { url, fileName, fileType, size }
-
+  const uploaded = []
   for (const f of filesToUpload) {
     const fd = new FormData()
     fd.append('file', f)
@@ -729,11 +661,8 @@ async function handleNext() {
       Swal.fire('ไม่พบ bookingId')
       return
     }
-    // 1. สร้าง PDF
     const pdfBlob = await htmlToPdfBlob('pdf-section')
 
-    // 2. ดาวน์โหลด PDF ให้ user
-    // -- download แบบ JS:
     const url = window.URL.createObjectURL(pdfBlob)
     const link = document.createElement('a')
     link.href = url
@@ -745,64 +674,44 @@ async function handleNext() {
       link.remove()
     }, 100)
 
-    // 3. แปลงเป็น base64 เพื่อเก็บลง db
-    const pdfBase64 = await blobToBase64(pdfBlob) // เพิ่มฟังก์ชันนี้ด้านล่าง
+    const pdfBase64 = await blobToBase64(pdfBlob)
 
     const bookingData = { ...info.value }
+    const uploadedNow = await uploadTempFilesAndGetUrls()
+    const multerFiles = Array.isArray(bookingData.files) ? bookingData.files : []
+    const allAttachments = [
+      ...multerFiles.map(f => f.fileUrl || f.url).filter(Boolean),
+      ...uploadedNow.map(f => f.url),
+    ]
+    const allFileNames = [
+      ...multerFiles.map(f => f.originalName || f.fileName || 'ไฟล์แนบ'),
+      ...uploadedNow.map(f => f.fileName || 'ไฟล์แนบ'),
+    ]
+    const uploadFiles = []
 
-// 1) อัปโหลดไฟล์ชั่วคราว (ที่เลือกจากหน้าแรก) ตอนนี้
-const uploadedNow = await uploadTempFilesAndGetUrls() // [{url, fileName, fileType, size}]
-
-// 2) เก็บไฟล์ที่ “เคยอัปโหลดด้วย Multer” ติดมากับ booking (ถ้ามี)
-const multerFiles = Array.isArray(bookingData.files) ? bookingData.files : []
-
-// 3) รวมรายการไฟล์ให้เป็น list เดียว (URL อย่างเดียวพอ)
-const allAttachments = [
-  // จาก muler (รายการเดิม)
-  ...multerFiles.map(f => f.fileUrl || f.url).filter(Boolean),
-  // จากไฟล์ชั่วคราวที่เพิ่งอัปโหลด
-  ...uploadedNow.map(f => f.url),
-]
-
-// 4) รวมชื่อไฟล์ (เพื่อโชว์/ดาวน์โหลดในภายหลัง)
-const allFileNames = [
-  ...multerFiles.map(f => f.originalName || f.fileName || 'ไฟล์แนบ'),
-  ...uploadedNow.map(f => f.fileName || 'ไฟล์แนบ'),
-]
-
-// ไม่ต้องใช้แล้ว (เราไม่ดึงจาก upload_file base64 อีก)
-const uploadFiles = [] 
-
-
-   const payload = {
-  user_id: bookingData.user_id,
-  name: bookingData.building,
-  name_active: bookingData.name_activity,
-  zone: bookingData.zone,
-  since: bookingData.since,
-  uptodate: bookingData.uptodate,
-  startTime: bookingData.since_time,
-  endTime: bookingData.until_thetime,
-  status: 'pending',
-  type: 'field',
-  agency: bookingData.agency,
-  booking_id: bookingId,
-  // ใช้ URL + ชื่อไฟล์ที่รวมมาใหม่
-  attachment: allAttachments, 
-  fileName: allFileNames,
-  date: new Date(),
-  proxyStudentName: bookingData.proxyStudentName || '',
-  proxyStudentId: bookingData.proxyStudentId || '',
-  bookingPdf: pdfBase64, // ถ้ายังอยากเก็บ PDF ลง DB ต่อ (ไม่บังคับ)
-}
-
-
-
-    console.log('PAYLOAD ส่งเข้า /api/history', payload)
+    const payload = {
+      user_id: bookingData.user_id,
+      name: bookingData.building,
+      name_active: bookingData.name_activity,
+      zone: bookingData.zone,
+      since: bookingData.since,
+      uptodate: bookingData.uptodate,
+      startTime: bookingData.since_time,
+      endTime: bookingData.until_thetime,
+      status: 'pending',
+      type: 'field',
+      agency: bookingData.agency,
+      booking_id: bookingId,
+      attachment: allAttachments,
+      fileName: allFileNames,
+      date: new Date(),
+      proxyStudentName: bookingData.proxyStudentName || '',
+      proxyStudentId: bookingData.proxyStudentId || '',
+      bookingPdf: pdfBase64,
+    }
 
     await axios.post(`${API_BASE}/api/history`, payload)
 
-    // ---- สำคัญ! ----
     sessionStorage.removeItem('form_field_save')
     window._tempSelectedFiles = []
 
@@ -811,7 +720,6 @@ const uploadFiles = []
 
     router.push('/form_field4')
   } catch (err) {
-    // เช็คว่า error มาจาก duplicate หรือไม่
     if (err?.response?.status === 409) {
       Swal.fire({
         title: 'คำขอซ้ำ',
@@ -824,19 +732,14 @@ const uploadFiles = []
     console.error(err)
   }
 }
+
 function formatTimeTH(timeStr) {
   if (!timeStr || typeof timeStr !== 'string') return '-'
-  // เอาเฉพาะ HH:mm (ถ้ามีวินาที เช่น 09:10:00 → 09:10)
   let t = timeStr.trim().slice(0, 5)
   if (!/^\d{2}:\d{2}$/.test(t)) return timeStr + ' น.'
   return t + ' น.'
 }
-
 </script>
-
-
-
-
 
 <style scoped>
 /* Stepper */
@@ -858,16 +761,13 @@ function formatTimeTH(timeStr) {
   align-items: center;
   position: relative;
 }
-/* เพิ่ม style นี้ใน <style scoped> หรือ style global ก็ได้ */
 .avoid-break, .approval-sign-table, .sign-header-table {
   page-break-inside: avoid;
   break-inside: avoid;
-  /* สำหรับความเข้ากันได้สูงสุด */
   -webkit-column-break-inside: avoid;
   -webkit-break-inside: avoid;
   -moz-break-inside: avoid;
 }
-
 .circle {
   width: 30px; height: 30px;
   border-radius: 50%;
@@ -909,25 +809,19 @@ function formatTimeTH(timeStr) {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-top: 0px;   /* หรือ 8px */
+  margin-top: 0px;
   flex-wrap: wrap;
 }
-
 .form-row {
   display: flex;
   align-items: center;
   gap: 10px;
 }
-
-.form-row-title {
-  font-weight: bold;
-  margin-bottom: 10px;
-}
+.form-row-title { font-weight: bold; margin-bottom: 10px; }
 .mt-30 { margin-top: 30px; }
 .mt-15 { margin-top: 15px; }
 .bold { font-weight: bold; }
 .line-field {
- 
   padding: 0 6px;
   min-width: 50px;
   height: auto;
@@ -939,6 +833,43 @@ function formatTimeTH(timeStr) {
   display: block;
   line-height: 1.5em;
 }
+
+/* ===== แนวตารางของหัวข้อ 2 (Utility) ===== */
+/* ===== แนวตารางของหัวข้อ 2 (Utility) ===== */
+.util-table {
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+.util-table td {
+  padding: 0 4px;
+  height: 26px;
+  vertical-align: middle;
+  font-size: 15px;
+}
+.util-table .util-label { white-space: nowrap; }
+
+/* เปลี่ยนจาก center -> left เพื่อให้ "10:30 น." เริ่มตำแหน่งเดียวกับแถว "อื่นๆ" */
+.util-table .time {
+  white-space: nowrap;
+  text-align: left;      /* <-- แก้จุดนี้ */
+  padding-left: 0;       /* ให้เริ่มติดขอบเหมือนแถว "อื่นๆ" */
+}
+
+.util-table .sep { text-align: center; }
+
+/* ให้ค่าในแถว "อื่นๆ" เริ่มตรงจุดเดียวกับตัวเลขเวลา */
+.util-table .other-value {
+  text-align: left;
+  white-space: pre-wrap;
+  word-break: break-word;
+  padding-left: 0;       /* สำคัญ: ให้เริ่มตำแหน่งเดียวกับ .time */
+}
+
+/* คุมความกว้างคอลัมน์คงเดิม */
+.util-table col.c-label { width: 240px; }
+.util-table col.c-time  { width: 76px; }
+.util-table col.c-sep   { width: 34px; }
+
 .attached-files-list {
   margin-top: 8px;
   max-height: 140px;
@@ -956,462 +887,93 @@ function formatTimeTH(timeStr) {
   white-space: normal;
   word-break: break-all;
 }
-.attached-file-item:last-child {
-  border-bottom: none;
-}
-.attached-file-item a {
-  color: #048ace;
-  text-decoration: underline;
-  word-break: break-all;
-}
-/* --- Signature Section --- */
-.signatures-row {
-  display: flex;
-  justify-content: space-between;
-  gap: 20px;
-  margin: 38px 0 12px 0;
-}
+.attached-file-item:last-child { border-bottom: none; }
+.attached-file-item a { color: #048ace; text-decoration: underline; word-break: break-all; }
 
-.signature-box {
-  flex: 1 1 0;
-  padding: 0px;
-  margin: 0 2px;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  background: none;
-  box-shadow: none;
-}
-.sign-label {
-  font-size: 14px;
-  margin-bottom: 1px;
-  margin-top: 0;
-}
-.sign-role {
-  font-size: 13px;
-  margin-bottom: 2px;
-  margin-top: 2px;
-}
-.sign-date {
-  font-size: 13px;
-  margin-bottom: 4px;
-  margin-top: 0;
-}
-.sign-inner-box {
-  width: 100%;
-  border: 1px solid #222;
-  margin-top: 7px;
-  padding: 8px 9px 7px 9px;
-  font-size: 14px;
-  background: none;
-  box-shadow: none;
-}
-.sign-inner-title {
-  font-weight: bold;
-  margin-bottom: 4px;
-}
-.sign-inner-item {
-  display: flex;
-  align-items: center;
-  font-size: 14px;
-  gap: 7px;
-  margin-bottom: 1px;
-}
-.sign-inner-item input[type="checkbox"] {
-  accent-color: #222;
-  margin-right: 5px;
-}
-.sign-dotline {
-  display: inline-block;
-  min-width: 80px;
-  font-size: 14px;
-  border-bottom: none;
-  letter-spacing: 2px;
-  vertical-align: bottom;
-}
-.sign-inner-blank {
-  margin: 7px 0 3px 0;
-}
+/* --- Signature Section & Tables (unchanged) --- */
+.signatures-row { display: flex; justify-content: space-between; gap: 20px; margin: 38px 0 12px 0; }
+.signature-box { flex: 1 1 0; padding: 0px; margin: 0 2px; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; background: none; box-shadow: none; }
+.sign-label { font-size: 14px; margin-bottom: 1px; margin-top: 0; }
+.sign-role { font-size: 13px; margin-bottom: 2px; margin-top: 2px; }
+.sign-date { font-size: 13px; margin-bottom: 4px; margin-top: 0; }
+.sign-inner-box { width: 100%; border: 1px solid #222; margin-top: 7px; padding: 8px 9px 7px 9px; font-size: 14px; background: none; box-shadow: none; }
+.sign-inner-title { font-weight: bold; margin-bottom: 4px; }
+.sign-inner-item { display: flex; align-items: center; font-size: 14px; gap: 7px; margin-bottom: 1px; }
+.sign-inner-item input[type="checkbox"] { accent-color: #222; margin-right: 5px; }
+.sign-dotline { display: inline-block; min-width: 80px; font-size: 14px; border-bottom: none; letter-spacing: 2px; vertical-align: bottom; }
+.sign-inner-blank { margin: 7px 0 3px 0; }
+.sign-inner-title { font-weight: bold; margin-bottom: 4px; position: relative; padding-bottom: 0; }
+.sign-underline { border-bottom: 1px solid #222; width: 500px ; margin-left: 0px; margin-right: 0px; margin-top: 2px; }
 
-.sign-inner-title {
-  font-weight: bold;
-  margin-bottom: 4px;
-  position: relative;
-  padding-bottom: 0;
-}
-.sign-underline {
-  border-bottom: 1px solid #222;
-  width: 500px ;
-  margin-left: 0px;
-  margin-right: 0px;
-  margin-top: 2px;
-}
-.approval-table {
-  width: 100%;
-  table-layout: fixed;
-  border-collapse: collapse;
-  margin-top: 24px;
-}
-.approval-table th,
-.approval-table td {
-  border: 1px solid #000;
-  padding: 10px 8px;
-  font-size: 15px;
-  text-align: left;
-  vertical-align: top;
-  word-break: break-word;
-  overflow-wrap: break-word;
-}
-.approval-table th {
-  background: #f7f7f7;
-  font-weight: bold;
-  text-align: center;
-}
+.approval-table { width: 100%; table-layout: fixed; border-collapse: collapse; margin-top: 24px; }
+.approval-table th, .approval-table td { border: 1px solid #000; padding: 10px 8px; font-size: 15px; text-align: left; vertical-align: top; word-break: break-word; overflow-wrap: break-word; }
+.approval-table th { background: #f7f7f7; font-weight: bold; text-align: center; }
 
-/* ===================== */
-/* ตารางเซ็น 3 ช่องหลัก  */
-/* ===================== */
-.approval-sign-table {
-  width: 100%;
-  border-collapse: collapse;
-  table-layout: fixed;
-  background: #fff;
-  margin-bottom: 16px;
-}
-.approval-sign-table th,
-.approval-sign-table td {
-  border: 1px solid #222;
-  font-size: 16px;
-  vertical-align: top;
-  padding: 0;
-  text-align: left;
-}
-.approval-sign-table th {
-  text-align: center;
-  background: #f8f9fa;
-  font-weight: bold;
-  font-size: 16.5px;
-  padding: 10px 0;
-}
-.approval-sign-table td {
-  height: 230px; /* ความสูงแต่ละช่อง */
-}
+.approval-sign-table { width: 100%; border-collapse: collapse; table-layout: fixed; background: #fff; margin-bottom: 16px; }
+.approval-sign-table th, .approval-sign-table td { border: 1px solid #222; font-size: 16px; vertical-align: top; padding: 0; text-align: left; }
+.approval-sign-table th { text-align: center; background: #f8f9fa; font-weight: bold; font-size: 16.5px; padding: 10px 0; }
+.approval-sign-table td { height: 230px; }
 
-.td-inner {
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-start;
-  height: 100%;
-  padding: 12px 12px 10px 12px;
-  box-sizing: border-box;
-}
+.td-inner { display: flex; flex-direction: column; justify-content: flex-start; height: 100%; padding: 12px 12px 10px 12px; box-sizing: border-box; }
 
-.checkbox-line {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 8px;
-  min-height: 26px;
-}
-.checkbox-line input[type="checkbox"] {
-  width: 17px;
-  height: 17px;
-  accent-color: #444;
-  margin: 0 4px 0 0;
-}
-.checkbox-line label {
-  font-size: 15px;
-  user-select: none;
-}
+.checkbox-line { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; min-height: 26px; }
+.checkbox-line input[type="checkbox"] { width: 17px; height: 17px; accent-color: #444; margin: 0 4px 0 0; }
+.checkbox-line label { font-size: 15px; user-select: none; }
 
-.dot-line {
-  display: inline-block;
-  width: 98%;
-  border-bottom: 1px dotted #222;
-  height: 15px;
-  margin: 9px 0 0 0;
-  min-width: 60px;
-  vertical-align: middle;
-}
+.dot-line { display: inline-block; width: 98%; border-bottom: 1px dotted #222; height: 15px; margin: 9px 0 0 0; min-width: 60px; vertical-align: middle; }
 .dot-line.short { width: 90%; min-width: 70px; }
 .dot-line.mid { width: 65px; }
-.dot-line.date { 
-  width: 170px;  /* จากเดิม 98px */
-  min-width: 100px; 
-  border-bottom: 1px dotted #222;
-}
+.dot-line.date { width: 170px; min-width: 100px; border-bottom: 1px dotted #222; }
 
+.sign-space { margin: 16px 0 0 0; font-size: 15px; min-height: 22px; display: flex; align-items: center; gap: 7px; }
 
-.sign-space {
-  margin: 16px 0 0 0;
-  font-size: 15px;
-  min-height: 22px;
-  display: flex;
-  align-items: center;
-  gap: 7px;
-}
+/* ตารางเซ็นชื่อบน */
+.sign-header-table { width: 100%; border-collapse: collapse; margin-top: 16px; table-layout: fixed; }
+.sign-header-table td { padding: 14px 10px 12px 10px; font-size: 16px; text-align: center; vertical-align: top; word-break: break-word; width: 33.33%; }
 
-
-/* ========================= */
-.sign-header-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-top: 16px;
-  table-layout: fixed;
-}
-.sign-header-table td {
-  padding: 14px 10px 12px 10px;
-  font-size: 16px;
-  text-align: center;
-  vertical-align: top;
-  word-break: break-word;
-  width: 33.33%;
-}
-
-/* ======= ปุ่ม Back & Next ======= */
-.button-wrapper {
-  display: flex;
-  justify-content: flex-end;
-  gap: 16px;
-  margin-top: 30px;
-}
-
-#btnBack, #btnNext {
-  font-size: 1rem;
-  font-weight: 500;
-  padding: .55rem 1.5rem;
-  border: none;
-  border-radius: 8px;
-  outline: none;
-  cursor: pointer;
-  transition: background 0.22s, color 0.22s, box-shadow 0.22s;
-  box-shadow: 0 1px 6px 0 rgba(0,0,0,0.07);
-}
-.button-wrapper {
-  display: flex;
-  justify-content: space-between; /* แยก Back ไปซ้าย, Next ไปขวา */
-  gap: 16px;
-  margin-top: 30px;
-}
-
-#btnBack {
-  padding: 0.5rem 1rem;
-  background-color: #6c757d;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  text-decoration: none;
-  display: inline-block;
-}
-
-#btnNext {
-  background: #007bff;
-  color: #fff;
-}
-
-#btnBack:hover {
-  background: #c9bfbf;
-  color: #111;
-}
-
-
-#btnBack:hover {
-  background-color: #5a6268;
-}
-
-
+/* ปุ่ม Back & Next */
+.button-wrapper { display: flex; justify-content: space-between; gap: 16px; margin-top: 30px; }
+#btnBack, #btnNext { font-size: 1rem; font-weight: 500; padding: .55rem 1.5rem; border: none; border-radius: 8px; outline: none; cursor: pointer; transition: background 0.22s, color 0.22s, box-shadow 0.22s; box-shadow: 0 1px 6px 0 rgba(0,0,0,0.07); }
+#btnBack { padding: 0.5rem 1rem; background-color: #6c757d; color: white; border: none; border-radius: 6px; cursor: pointer; text-decoration: none; display: inline-block; }
+#btnNext { background: #007bff; color: #fff; }
+#btnBack:hover { background-color: #5a6268; }
 
 /* ===== CSS แจ้งเตือนแบบ history ===== */
-.notification-dropdown {
-  position: absolute;
-  right: 0;
-  top: 38px;
-  background: #fff;
-  border-radius: 18px 0 18px 18px;
-  box-shadow:
-    0 8px 24px 0 rgba(27, 50, 98, 0.14),
-    0 2px 4px 0 rgba(33, 125, 215, 0.06);
-  min-width: 330px;
-  max-width: 370px;
-  max-height: 420px;
-  overflow-y: auto;
-  z-index: 1002;
-  padding: 0;
-  border: none;
-  animation: fadeDown 0.22s;
-}
-@keyframes fadeDown {
-  0% { opacity: 0; transform: translateY(-24px);}
-  100% { opacity: 1; transform: translateY(0);}
-}
-.notification-dropdown ul {
-  padding: 0;
-  margin: 0;
-  list-style: none;
-}
-.notification-dropdown li {
-  background: linear-gradient(90deg, #f6fafd 88%, #e2e7f3 100%);
-  margin: 0.2em 0.8em;
-  padding: 0.85em 1.1em;
-  border-radius: 12px;
-  border: none;
-  font-size: 1.07rem;
-  font-weight: 500;
-  color: #1e2c48;
-  box-shadow: 0 2px 8px 0 rgba(85, 131, 255, 0.06);
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  position: relative;
-  cursor: default;
-  transition: background 0.2s;
-}
-.notification-dropdown li:not(:last-child) {
-  margin-bottom: 0.15em;
-}
-.notification-dropdown li::before {
-  content: "🔔";
-  font-size: 1.2em;
-  margin-right: 7px;
-  color: #1976d2;
-  opacity: 0.80;
-}
-.notification-dropdown li.no-noti {
-  background: #f2f3f6;
-  color: #a7aab7;
-  justify-content: center;
-  font-style: italic;
-}
-.notification-dropdown::-webkit-scrollbar {
-  width: 7px;
-}
-.notification-dropdown::-webkit-scrollbar-thumb {
-  background: #e1e7f5;
-  border-radius: 10px;
-}
-.notification-dropdown::-webkit-scrollbar-track {
-  background: transparent;
-}
-.notification-item.approved {
-  background: linear-gradient(90deg, #e9fbe7 85%, #cbffdb 100%);
-  border-left: 4px solid #38b000;
-  color: #228c22;
-}
-.notification-item.disapproved {
-  background: linear-gradient(90deg, #ffeaea 85%, #ffd6d6 100%);
-  border-left: 4px solid #ff6060;
-  color: #b91423;
-}
-.notification-item.canceled,
-.notification-item.cancel {
-  background: linear-gradient(90deg, #f9d7d7 80%, #e26a6a 100%);
-  border-left: 4px solid #bb2124;
-  color: #91061a;
-}
-.notification-item.returned {
-  background: linear-gradient(90deg, #e0f0ff 85%, #b6e0ff 100%);
-  border-left: 4px solid #1976d2;
-  color: #1976d2;
-}
-.notification-item {
-  transition: background 0.3s, border-color 0.3s, color 0.3s;
-}
+.notification-dropdown { position: absolute; right: 0; top: 38px; background: #fff; border-radius: 18px 0 18px 18px; box-shadow: 0 8px 24px 0 rgba(27, 50, 98, 0.14), 0 2px 4px 0 rgba(33, 125, 215, 0.06); min-width: 330px; max-width: 370px; max-height: 420px; overflow-y: auto; z-index: 1002; padding: 0; border: none; animation: fadeDown 0.22s; }
+@keyframes fadeDown { 0% { opacity: 0; transform: translateY(-24px);} 100% { opacity: 1; transform: translateY(0);} }
+.notification-dropdown ul { padding: 0; margin: 0; list-style: none; }
+.notification-dropdown li { background: linear-gradient(90deg, #f6fafd 88%, #e2e7f3 100%); margin: 0.2em 0.8em; padding: 0.85em 1.1em; border-radius: 12px; border: none; font-size: 1.07rem; font-weight: 500; color: #1e2c48; box-shadow: 0 2px 8px 0 rgba(85, 131, 255, 0.06); display: flex; align-items: flex-start; gap: 10px; position: relative; cursor: default; transition: background 0.2s; }
+.notification-dropdown li:not(:last-child) { margin-bottom: 0.15em; }
+.notification-dropdown li::before { content: "🔔"; font-size: 1.2em; margin-right: 7px; color: #1976d2; opacity: 0.80; }
+.notification-dropdown li.no-noti { background: #f2f3f6; color: #a7aab7; justify-content: center; font-style: italic; }
+.notification-dropdown::-webkit-scrollbar { width: 7px; }
+.notification-dropdown::-webkit-scrollbar-thumb { background: #e1e7f5; border-radius: 10px; }
+.notification-dropdown::-webkit-scrollbar-track { background: transparent; }
+.notification-item.approved { background: linear-gradient(90deg, #e9fbe7 85%, #cbffdb 100%); border-left: 4px solid #38b000; color: #228c22; }
+.notification-item.disapproved { background: linear-gradient(90deg, #ffeaea 85%, #ffd6d6 100%); border-left: 4px solid #ff6060; color: #b91423; }
+.notification-item.canceled, .notification-item.cancel { background: linear-gradient(90deg, #f9d7d7 80%, #e26a6a 100%); border-left: 4px solid #bb2124; color: #91061a; }
+.notification-item.returned { background: linear-gradient(90deg, #e0f0ff 85%, #b6e0ff 100%); border-left: 4px solid #1976d2; color: #1976d2; }
+.notification-item { transition: background 0.3s, border-color 0.3s, color 0.3s; }
 
-.notification-backdrop {
-  position: fixed;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: transparent;
-  z-index: 1001; /* ต้องน้อยกว่า .notification-dropdown (1002) */
-}
+.notification-backdrop { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: transparent; z-index: 1001; }
 
 @media (max-width: 540px) {
-  .scroll-x-container {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    width: 100vw;
-    padding: 0;
-  }
-  .form-container {
-    min-width: 900px;   /* หรือเท่ากับ desktop */
-    width: 900px;
-    max-width: 900px;
-    padding: 16px 24px !important;
-    border-radius: 10px !important;
-    box-sizing: border-box;
-  }
-}
-.force-inline {
-  display: inline-block !important;
-  min-width: unset !important;
-  max-width: unset !important;
-  width: auto !important;
-  white-space: nowrap !important;
-  vertical-align: middle;
+  .scroll-x-container { overflow-x: auto; -webkit-overflow-scrolling: touch; width: 100vw; padding: 0; }
+  .form-container { min-width: 900px; width: 900px; max-width: 900px; padding: 16px 24px !important; border-radius: 10px !important; box-sizing: border-box; }
 }
 
-.utility-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-left: 80px;
-  margin-bottom: 5px;
-  min-height: 28px;
-  white-space: nowrap;
-}
-.utility-label {
-  display: inline-block;
-  font-size: 15px;
-  min-width: 170px;
-  text-align: right;
-  margin-right: 8px;
-  font-weight: normal;
-}
-.utility-time {
-  display: inline-block;
-  min-width: 54px;
-  text-align: center;
-  background: none;
-  border-bottom: none !important;
-  margin: 0 3px;
-  font-size: 15px;
-  font-family: inherit;
-  /* เพิ่มได้เลยถ้าจะขยับขีดออกจาก label */
-  /* margin-left: 4px; */
-}
+.force-inline { display: inline-block !important; min-width: unset !important; max-width: unset !important; width: auto !important; white-space: nowrap !important; vertical-align: middle; }
 
-.utility-between {
-  margin: 0 3px;
-  font-size: 15px;
-}
-.utility-other-center {
-  font-size: 15px;
-  text-align: center;
-}
-/* เส้นจุดหลัง "อื่นๆ" ให้เต็มบรรทัดแบบช่อง 2, 3 */
-.dot-line-custom {
-  flex: 1 1 0;
-  border-bottom: 1.5px dotted #222;
-  min-width: 80px;
-  margin-left: 8px;
-  margin-right: 6px;
-  height: 16px;
-  display: inline-block;
-}
+.utility-row { display: flex; align-items: center; gap: 12px; margin-left: 80px; margin-bottom: 5px; min-height: 28px; white-space: nowrap; }
+.utility-label { display: inline-block; font-size: 15px; min-width: 170px; text-align: right; margin-right: 8px; font-weight: normal; }
+.utility-time { display: inline-block; min-width: 54px; text-align: center; background: none; border-bottom: none !important; margin: 0 3px; font-size: 15px; font-family: inherit; }
+.utility-between { margin: 0 3px; font-size: 15px; }
+.utility-other-center { font-size: 15px; text-align: center; }
+.dot-line-custom { flex: 1 1 0; border-bottom: 1.5px dotted #222; min-width: 80px; margin-left: 8px; margin-right: 6px; height: 16px; display: inline-block; }
 
-.pdf-export {
-  padding: 18px !important;
-}
-.pdf-export * {
-  font-size: 16px !important;
-}
-.pdf-export h1,
-.pdf-export h2,
-.pdf-export h3 {
-  font-size: 20px !important;
-}
-
+.pdf-export { padding: 18px !important; }
+.pdf-export * { font-size: 16px !important; }
+.pdf-export h1, .pdf-export h2, .pdf-export h3 { font-size: 20px !important; }
 </style>
 
 <style>

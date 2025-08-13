@@ -6,51 +6,57 @@
         <p class="sidebar-title">ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง</p>
       </div>
       <nav class="nav-links">
-        <router-link to="/dashboard" exact-active-class="active"><i class="pi pi-chart-pie"></i> Dashboard</router-link>
-        <router-link to="/home_admin" exact-active-class="active"><i class="pi pi-megaphone"></i> Edit News</router-link>
-        <router-link to="/edit_field" active-class="active"><i class="pi pi-map-marker"></i> Edit Field</router-link>
-        <router-link to="/edit_equipment" active-class="active"><i class="pi pi-clipboard"></i> Edit Equipment</router-link>
-        <router-link to="/booking_field_admin" active-class="active"><i class="pi pi-map-marker"></i> Book Field</router-link>
-        <router-link to="/approve_field" active-class="active"><i class="pi pi-verified"></i> Approve</router-link>
-        <router-link to="/return_admin" active-class="active"><i class="pi pi-box"></i> Return</router-link>
-        <router-link to="/members" active-class="active"><i class="pi pi-user-edit"></i> Member</router-link>
-        <router-link to="/history_admin" active-class="active"><i class="pi pi-history"></i> History System</router-link>
+        <router-link to="/dashboard" exact-active-class="active"><i class="pi pi-chart-pie"></i> แดชบอร์ด</router-link>
+        <router-link to="/home_admin" exact-active-class="active"><i class="pi pi-megaphone"></i> แก้ไขข่าว</router-link>
+        <router-link to="/edit_field" active-class="active"><i class="pi pi-map-marker"></i> แก้ไขสนาม</router-link>
+        <router-link to="/edit_equipment" active-class="active"><i class="pi pi-clipboard"></i> แก้ไขอุปกรณ์ </router-link>
+        <router-link to="/booking_field_admin" active-class="active"><i class="pi pi-map-marker"></i> จองสนาม</router-link>
+        <router-link to="/approve_field" active-class="active"><i class="pi pi-verified"></i> อนุมัติ</router-link>
+        <router-link to="/return_admin" active-class="active"><i class="pi pi-box"></i> รับคืนอุปกรณ์ </router-link>
+        <router-link to="/members" active-class="active"><i class="pi pi-user-edit"></i> พนักงาน/ผู้ดูแล </router-link>
+        <router-link to="/history_admin" active-class="active"><i class="pi pi-history"></i> ระบบประวัติการทำรายการ</router-link>
       </nav>
     </aside>
-<div
-  v-if="isMobile && !isSidebarClosed"
-  class="sidebar-overlay"
-  @click="toggleSidebar"
-></div>
+
+    <div
+      v-if="isMobile && !isSidebarClosed"
+      class="sidebar-overlay"
+      @click="toggleSidebar"
+    ></div>
+
     <div class="main" :class="{ 'sidebar-closed': isSidebarClosed }">
       <header class="topbar">
         <button class="menu-toggle" @click="toggleSidebar">☰</button>
         <div class="topbar-actions">
           <div style="position: relative; display: inline-block;">
-  <div
-    v-if="showNotifications"
-    class="notification-backdrop"
-    @click="closeNotifications"
-  ></div>
+            <div
+              v-if="showNotifications"
+              class="notification-backdrop"
+              @click="closeNotifications"
+            ></div>
 
-  <button class="notification-btn" @click="toggleNotifications">
-    <i class="pi pi-bell"></i>
-    <span v-if="unreadCount > 0" class="badge">{{ unreadCount }}</span>
-  </button>
+            <button class="notification-btn" @click="toggleNotifications">
+              <i class="pi pi-bell"></i>
+              <span v-if="unreadCount > 0" class="badge">{{ unreadCount }}</span>
+            </button>
 
-  <div v-if="showNotifications" class="notification-dropdown">
-    <ul>
-      <li
-        v-for="(noti, idx) in notifications.slice(0, 10)"
-        :key="noti.id || idx"
-        :class="['notification-item', noti.type || '', { unread: noti.timestamp > lastSeenTimestamp }]"
-      >
-        {{ noti.message }}
-      </li>
-      <li v-if="notifications.length === 0" class="no-noti">ไม่มีแจ้งเตือน</li>
-    </ul>
-  </div>
-</div>
+            <div v-if="showNotifications" class="notification-dropdown">
+              <ul>
+                <li
+                  v-for="(noti, idx) in notifications.slice(0, 10)"
+                  :key="noti.id || idx"
+                  :class="[
+                    'notification-item',
+                    noti.type || '',
+                    { unread: noti.timestamp > lastSeenTimestamp }
+                  ]"
+                >
+                  {{ noti.message }}
+                </li>
+                <li v-if="notifications.length === 0" class="no-noti">ไม่มีแจ้งเตือน</li>
+              </ul>
+            </div>
+          </div>
 
           <router-link to="/profile_admin"><i class="pi pi-user"></i></router-link>
         </div>
@@ -58,214 +64,217 @@
 
       <div style="background-color: #dbe9f4;">
         <div class="histbody">
-<!-- ตรง h1 -->
-<h1 style="display: flex; justify-content: center;">System history</h1>
+          <!-- Title -->
+          <h1 style="display: flex; justify-content: center;">System history</h1>
 
+          <!-- Type filter -->
           <div class="history-filter">
             <button :class="{ active: historyFilter === 'all' }" @click="setHistoryFilter('all')">ทั้งหมด</button>
             <button :class="{ active: historyFilter === 'field' }" @click="setHistoryFilter('field')">สถานที่</button>
             <button :class="{ active: historyFilter === 'equipment' }" @click="setHistoryFilter('equipment')">อุปกรณ์กีฬา</button>
           </div>
-<div class="date-filter-row">
-  <label>ตั้งแต่</label>
-  <input
-    type="date"
-    v-model="dateFilterStart"
-    @change="onDateFilterChange"
-    :max="dateFilterEnd"
-  >
-  <label>ถึง</label>
-  <input
-    type="date"
-    v-model="dateFilterEnd"
-    @change="onDateFilterChange"
-    :min="dateFilterStart"
-  >
-</div>
+
+          <!-- Date filter -->
+          <div class="date-filter-row">
+            <label>ตั้งแต่</label>
+            <input
+              type="date"
+              v-model="dateFilterStart"
+              @change="onDateFilterChange"
+              :max="dateFilterEnd"
+            >
+            <label>ถึง</label>
+            <input
+              type="date"
+              v-model="dateFilterEnd"
+              @change="onDateFilterChange"
+              :min="dateFilterStart"
+            >
+          </div>
+
+          <!-- History list (TABLE VERSION) -->
+          <div class="table-x-scroll">
+            <table class="history-table" style="width: 92%; margin: 0 auto; border-collapse: collapse;">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Type</th>
+                  <th>Name</th>
+                  <th>Time / Amount</th>
+                  <th>Status</th>
+                  <th>Files/PDF</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                <template
+                  v-for="(group, gIdx) in paginatedGroups"
+                  :key="group.type + '_' + (group.items[0].booking_id || group.items[0].id || gIdx)"
+                >
+                  <!-- แถวหลักของกลุ่ม -->
+                  <tr>
+                    <!-- วันที่ -->
+                    <td style="text-align:center; white-space:nowrap;">
+                      <template v-if="group.type === 'field'">
+                        {{ formatDate(group.items[0].approvedAt || group.items[0].date) }}
+                      </template>
+                      <template v-else>
+                        {{ formatDate(group.items[0].returnedAt || group.items[0].approvedAt || group.items[0].date) }}
+                      </template>
+                    </td>
+
+                    <!-- ประเภท -->
+                    <td style="text-align:center; text-transform: capitalize;">
+                      {{ group.type }}
+                    </td>
+
+                    <!-- ชื่อรายการ -->
+                    <td class="col-center" style="max-width: 360px;">
+                    <template v-if="group.type === 'field'">
+                      <div style="text-align:center; width:100%;">{{ group.items[0].name || '-' }}</div>
+                    </template>
+
+                    <!-- equipment: แสดงชื่อแบบไม่ซ้ำภายในกลุ่ม (booking_id เดียวกัน) -->
+                    <template v-else>
+                      <div style="text-align:center;">
+                        {{ uniqueListByName(group.items).join(', ') || '-' }}
+                      </div>
+                    </template>
+                  </td>
 
 
-          <div class="hist-grid" :class="{ 'sidebar-closed': isSidebarClosed }">
-            <template v-for="group in paginatedGroups" :key="group.type + '_' + (group.items[0].booking_id || group.items[0].id)">
-              
-              <!-- Field card -->
-              <div v-if="group.type === 'field'">
-                <div class="hist-date-outside">
-                  {{ formatDate(group.items[0].approvedAt || group.items[0].date) }}
-                </div>
-                <div class="hist-card">
-                  <div class="hist-row table-row-align" style="font-weight:600; border-bottom:1px solid #eee; background-color: #a1bdff">
-                    <span class="hist-user">ผู้ใช้</span>
-                    <span class="hist-name">ชื่อสนาม</span>
-                    <span class="hist-detail">เวลา</span>
-                    <span class="hist-status">สถานะ</span>
-                    <span class="hist-file">ดูไฟล์แนบ</span>
-                    <span class="hist-action">รายละเอียด</span>
-                  </div>
-                  <div class="hist-row table-row-align">
-                    <span class="hist-user">{{ group.items[0].userName }}</span>
-                    <span class="hist-name">{{ group.items[0].name }}</span>
-                    <span class="hist-detail">{{ group.items[0].time }}</span>
-                    <span class="hist-status">
+                    <!-- เวลา/จำนวน -->
+                    <td style="text-align:center;">
+                      <template v-if="group.type === 'field'">
+                        {{ group.items[0].time || '-' }}
+                      </template>
+                      <template v-else>
+                        {{ quantitiesForGroup(group) }}
+                      </template>
+
+                    </td>
+
+                    <!-- สถานะ -->
+                    <td style="text-align:center;">
                       <span v-if="group.items[0].status && group.items[0].status.toLowerCase() === 'returned'">👍 Returned</span>
                       <span v-else-if="group.items[0].status && group.items[0].status.toLowerCase() === 'approved'">✅ Approved</span>
                       <span v-else-if="group.items[0].status && group.items[0].status.toLowerCase() === 'disapproved'">❌ Disapproved</span>
-                      <span v-else-if="group.items[0].status && group.items[0].status.toLowerCase() === 'cancel'" class="cancel-status">🚫 Cancel</span>
+                      <span v-else-if="group.items[0].status && group.items[0].status.toLowerCase() === 'pending'">⌛ Pending</span>
+                      <span v-else-if="group.items[0].status && group.items[0].status.toLowerCase() === 'return-pending'">⏪ Return-pending</span>
+                      <span v-else-if="group.items[0].status && group.items[0].status.toLowerCase() === 'cancel'">🚫 Cancel</span>
                       <span v-else>-</span>
-                    </span>
-                    <span class="hist-file">
-  <button class="toggle-btn" @click="toggleExpand(group.items[0].id)">
-    <i class="pi pi-paperclip"></i>
-  </button>
-  <button class="pdfmake-btn small-btn" @click="downloadBookingPdf(group.items[0])" style="margin-left:8px;" title="ดาวน์โหลด PDF">
-  <i class="pi pi-file-pdf"></i>
-</button>
+                    </td>
 
-</span>
+                    <!-- ไฟล์แนบ / PDF -->
+                    <td style="text-align:center;">
+                      <button class="toggle-btn" @click="toggleExpand(group.items[0].id)">
+                        <i class="pi pi-paperclip"></i>
+                      </button>
+                      <button
+                        class="pdfmake-btn small-btn"
+                        @click="downloadBookingPdf(group.items[0])"
+                        style="margin-left:8px;"
+                        title="ดาวน์โหลด PDF"
+                      >
+                        <i class="pi pi-file-pdf"></i>
+                      </button>
+                    </td>
 
-                    <span class="hist-action">
+                    <!-- การกระทำ -->
+                    <td style="text-align:center;">
                       <button class="remark-btn" @click="showDetailGroup(group)">Detail</button>
-                      <button v-if="group.items[0].status && group.items[0].status.toLowerCase() === 'approved'"
+                      <button
+                        v-if="group.type === 'field' && group.items[0].status && group.items[0].status.toLowerCase() === 'approved'"
                         class="cancel-btn"
                         @click="cancelFieldBooking(group.items[0])"
-                        style="margin-left: 10px"
-                      >Cancel</button>
-                    </span>
-                  </div>
-                  <transition name="slide">
-                    <div class="hist-file-detail-box" v-show="expandedRows.includes(group.items[0].id)">
-                      <div class="hist-file-header">
-                        <b>ไฟล์แนบ</b>
-                      </div>
-                      <div v-if="Array.isArray(group.items[0].fileName) && group.items[0].fileName.length">
-                        <table class="attached-files-table">
-                          <thead>
-                            <tr>
-                              <th>#</th>
-                              <th>ชื่อไฟล์</th>
-                              <th>ดาวน์โหลด</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            <tr v-for="(fname, idx) in group.items[0].fileName" :key="idx">
-                              <td>{{ idx + 1 }}</td>
-                              <td>{{ fname }}</td>
-                              <td>
-                                <a
-  :href="`${API_BASE}/api/history/file/${group.items[0].id}?fileIdx=${idx}`"
-  target="_blank"
-  class="download-link"
-  download
->
-  ดาวน์โหลด
-</a>
-                              </td>
-                            </tr>
-                          </tbody>
-                        </table>
-                      </div>
-                      <div v-else class="no-attachment">
-                        - ไม่มีไฟล์แนบ -
-                      </div>
-                    </div>
-                  </transition>
-                </div>
-              </div>
-              
-              <!-- Equipment card -->
-              <div v-else-if="group.type === 'equipment'">
-                <div class="hist-date-outside">
-                  {{ formatDate(group.items[0].returnedAt || group.items[0].date) }}
-                </div>
-                <div class="hist-card">
-                  <div class="hist-row table-row-align" style="font-weight:600; border-bottom:1px solid #eee; background-color: #a1bdff">
-                    <span class="hist-user">รายการอุปกรณ์</span>
-                    <span class="hist-name">วันที่ทำรายการ</span>
-                    <span class="hist-detail hist-qty">จำนวน</span>
-                    <span class="hist-status hist-equip-status">สถานะ</span>
-                    <span class="hist-file">ดูไฟล์แนบ</span>
-                    <span class="hist-action">
-                      <button class="remark-btn" @click="showDetailGroup(group)">Detail</button>
-                    </span>
-                  </div>
-                  <div
-                    class="hist-row table-row-align"
-                    v-for="item in group.items"
-                    :key="item.id"
-                    style="border-bottom:1px dashed #ccc;"
-                  >
-                    <span class="hist-user">{{ item.name }}</span>
-                    <span class="hist-name">
-                      <template v-if="item.since && item.uptodate">
-                        {{ formatDate(item.since) }} - {{ formatDate(item.uptodate) }}
-                      </template>
-                      <template v-else>
-                        {{ formatDate(item.date) }}
-                      </template>
-                    </span>
-                    <span class="hist-detail hist-qty">{{ item.quantity }}</span>
-                    <span class="hist-status hist-equip-status">
-                      <span v-if="item.status && item.status.toLowerCase() === 'returned'">👍 Returned</span>
-                      <span v-else-if="item.status && item.status.toLowerCase() === 'approved'">✅ Approved</span>
-                      <span v-else-if="item.status && item.status.toLowerCase() === 'disapproved'">❌ Disapproved</span>
-                      <span v-else-if="item.status && item.status.toLowerCase() === 'pending'">⌛ Pending</span>
-                      <span v-else-if="item.status && item.status.toLowerCase() === 'return-pending'">⏪ Return-pending</span>
-                      <span v-else-if="item.status">- {{ item.status }}</span>
-                      <span v-else>-</span>
-                    </span>
-                     <span class="hist-file">
-  <button class="toggle-btn" @click="toggleExpand(group.items[0].id)">
-    <i class="pi pi-paperclip"></i>
-  </button>
-  <button class="pdfmake-btn small-btn" @click="downloadBookingPdf(item)" style="margin-left:8px;" title="ดาวน์โหลด PDF">
-  <i class="pi pi-file-pdf"></i>
-</button>
+                        style="margin-left: 8px;"
+                      >
+                        Cancel
+                      </button>
+                    </td>
+                  </tr>
 
+                  <!-- แถวแสดงไฟล์แนบ -->
+                  <tr v-show="expandedRows.includes(group.items[0].id)">
+                    <td colspan="7" style="padding: 0;">
+                      <div class="hist-file-detail-box" style="margin: 8px 12px;">
+                        <div class="hist-file-header"><b>ไฟล์แนบ</b></div>
 
-</span>
-                    <span class="hist-action"></span>
-                  </div>
-                  <div v-for="item in group.items" :key="item.id + '-file-detail'">
-                    <transition name="slide">
-                      <div class="hist-file-detail-box" v-show="expandedRows.includes(item.id)">
-                        <div class="hist-file-header">
-                          <b>ไฟล์แนบ</b>
-                          
-                        </div>
-                        <div v-if="Array.isArray(item.attachment) && item.attachment.length">
-                          <table class="attached-files-table">
-                            <thead>
-                              <tr>
-                                <th>#</th>
-                                <th>ชื่อไฟล์</th>
-                                <th>ดาวน์โหลด</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              <tr v-for="(attachId, idx) in item.attachment" :key="attachId">
-                                <td>{{ idx + 1 }}</td>
-                                <td>{{ item.fileName[idx] || '-' }}</td>
-                                <td>
-                                  <a
-                                    :href="`${API_BASE}/api/history/file/${item.id}?fileIdx=${idx}`"
-                                    target="_blank"
-                                    class="download-link"
-                                    download
-                                  >ดาวน์โหลด</a>
-                                </td>
-                              </tr>
-                            </tbody>
-                          </table>
-                        </div>
-                        <div v-else class="no-attachment">
-                          - ไม่มีไฟล์แนบ -
-                        </div>
+                        <!-- FIELD: ใช้ไฟล์ของ item แรก -->
+                        <template v-if="group.type === 'field'">
+                          <div v-if="Array.isArray(group.items[0].fileName) && group.items[0].fileName.length">
+                            <table class="attached-files-table">
+                              <thead>
+                                <tr>
+                                  <th>#</th>
+                                  <th>ชื่อไฟล์</th>
+                                  <th>ดาวน์โหลด</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                <tr v-for="(fname, idx) in group.items[0].fileName" :key="idx">
+                                  <td>{{ idx + 1 }}</td>
+                                  <td>{{ fname }}</td>
+                                  <td>
+                                    <a
+                                      :href="`${API_BASE}/api/history/file/${group.items[0].id}?fileIdx=${idx}`"
+                                      target="_blank"
+                                      class="download-link"
+                                      download
+                                    >ดาวน์โหลด</a>
+                                  </td>
+                                </tr>
+                              </tbody>
+                            </table>
+                          </div>
+                          <div v-else class="no-attachment">- ไม่มีไฟล์แนบ -</div>
+                        </template>
+
+                        <!-- EQUIPMENT: ไล่ทีละรายการ -->
+                        <template v-else>
+                          <div v-for="item in group.items" :key="item.id + '-files'">
+                            <div style="font-weight:600; margin:6px 0 4px 0;">
+                              {{ item.name || '-' }} (จำนวน {{ item.quantity ?? '-' }})
+                            </div>
+
+                            <div v-if="Array.isArray(item.fileName) && item.fileName.length">
+                              <table class="attached-files-table" style="margin-bottom:10px;">
+                                <thead>
+                                  <tr>
+                                    <th>#</th>
+                                    <th>ชื่อไฟล์</th>
+                                    <th>ดาวน์โหลด</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  <tr v-for="(fname, idx) in item.fileName" :key="idx">
+                                    <td>{{ idx + 1 }}</td>
+                                    <td>{{ fname }}</td>
+                                    <td>
+                                      <a
+                                        :href="`${API_BASE}/api/history/file/${item.id}?fileIdx=${idx}`"
+                                        target="_blank"
+                                        class="download-link"
+                                        download
+                                      >ดาวน์โหลด</a>
+                                    </td>
+                                  </tr>
+                                </tbody>
+                              </table>
+                            </div>
+                            <div v-else class="no-attachment" style="margin-bottom:10px;">- ไม่มีไฟล์แนบ -</div>
+                          </div>
+                        </template>
                       </div>
-                    </transition>
-                  </div>
-                </div>
-              </div>
-            </template>
+                    </td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
           </div>
+
+          <!-- Pagination -->
           <div class="pagination-control">
             <button @click="prevPage" :disabled="currentPage === 1">ย้อนกลับ</button>
             <span>หน้า {{ currentPage }} / {{ totalPages }}</span>
@@ -277,15 +286,20 @@
       <footer class="foot">
         <div class="footer-left">
           <p>
-            Sport Complex – Mae Fah Luang University | Tel. 0-5391-7821 | Facebook:
-            <a href="https://www.facebook.com/mfusportcomplex" target="_blank">MFU Sports Complex Center</a> |
-            Email: <a href="mailto:sport-complex@mfu.ac.th">sport-complex@mfu.ac.th</a>
+            Sport Complex – Mae Fah Luang University |
+            Tel: 0-5391-7820 and 0-5391-7821 | Facebook:
+            <a href="https://www.facebook.com/mfusportcomplex" target="_blank">MFU Sports Complex Center</a>
+            |
+            Email:
+            <a href="mailto:sport-complex@mfu.ac.th">sport-complex@mfu.ac.th</a>
           </p>
         </div>
       </footer>
     </div>
   </div>
 </template>
+
+
 
 
 
@@ -344,6 +358,8 @@ function statusLabel(status) {
     default: return status;
   }
 }
+
+
 
 export default {
   data() {
@@ -443,6 +459,34 @@ export default {
     this.currentPage = 1 // ถ้าใช้ pagination
     // filter จะถูกทำงานอัตโนมัติผ่าน computed
   },
+
+  uniqueListByName(items) {
+  // ตัดซ้ำแบบ case-insensitive และเก็บรูปเดิมของชื่อแรกที่พบ
+  const seen = new Set();
+  const out = [];
+  for (const it of (items || [])) {
+    const original = (it?.name ?? '').trim();
+    if (!original) continue;
+    const key = original.toLowerCase();
+    if (!seen.has(key)) {
+      seen.add(key);
+      out.push(original);
+    }
+  }
+  return out;
+},
+
+quantitiesForGroup(group) {
+  if (!group || group.type !== 'equipment') return '-';
+  // เลือกรายการที่ returned ก่อน (ถ้ามี)
+  const returned = group.items.filter(
+    it => (it.status || '').toLowerCase() === 'returned'
+  );
+  const useList = returned.length ? returned : group.items;
+  return useList.map(it => (it.quantity ?? '-')).join(', ');
+},
+
+
   
   async downloadBookingPdf(item) {
     try {
@@ -1643,6 +1687,50 @@ doc.text(`โทร ${data.tel || '-'}`, 430, 100);
   background: transparent;
   z-index: 1001;
 }
+
+
+/* ===== Table look & feel (matching "history" page) ===== */
+.table-x-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.history-table {
+  background-color: #fff;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 4px 10px rgb(0 0 0 / 0.1);
+}
+
+.history-table th,
+.history-table td {
+  border-bottom: 1px solid #ddd;
+  padding: 10px;
+  font-size: 0.95rem;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.history-table th {
+  background-color: #1e3a8a;
+  color: #fff;
+}
+
+.history-table tbody tr:hover {
+  background-color: #f0f4ff;
+}
+
+.history-table td.col-center {
+  text-align: center;
+}
+
+@media (max-width: 540px) {
+  .history-table {
+    min-width: 760px; /* บังคับให้เลื่อนแนวนอนได้บนจอเล็ก */
+    white-space: nowrap;
+  }
+}
+
 
 
 </style>

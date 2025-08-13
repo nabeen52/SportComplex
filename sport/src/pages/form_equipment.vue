@@ -75,7 +75,7 @@
       <div class="form-container">
         <div class="form-header">
           <h3>แบบฟอร์มการยืมอุปกรณ์/วัสดุ/ครุภัณฑ์</h3>
-          <p> ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง โทร 053-917820</p>
+          <p> โทร: 0-5391-7820 เเละ 0-5391-7821 E-mail: sport-complex@mfu.ac.th</p>
         </div>
         <div class="form-grid">
           <!-- Name -->
@@ -229,7 +229,7 @@
       :min-date="new Date()"
       :state="!(touched && showError && !form.start_date)"
       :disabled="isFormLocked"
-      placeholder="วัน/เดือน/พ.ศ."
+      placeholder="วัน/เดือน/ปี"
       style="width:48%"
       locale="th"
       :hide-input-icon="true"
@@ -242,7 +242,7 @@
       :min-date="dpStart || new Date()"
       :state="!(touched && showError && !form.end_date)"
       :disabled="isFormLocked"
-      placeholder="วัน/เดือน/พ.ศ."
+      placeholder="วัน/เดือน/ปี"
       style="width:48%"
       locale="th"
       :hide-input-icon="true"
@@ -263,7 +263,7 @@
       :max-date="dpEnd || null"
       :disabled="!form.start_date || !form.end_date || isFormLocked"
       :state="!(touched && showError && !form.receive_date)"
-      placeholder="วัน/เดือน/พ.ศ."
+      placeholder="วัน/เดือน/ปี"
       style="width:48%"
       locale="th"
       :hide-input-icon="true"
@@ -396,7 +396,7 @@
         <div class="footer-left">
           <p>
             Sport Complex – Mae Fah Luang University |
-            Tel. 0-5391-7821 | Facebook:
+            Tel: 0-5391-7820 and 0-5391-7821 | Facebook:
             <a href="https://www.facebook.com/mfusportcomplex" target="_blank">MFU Sports Complex Center</a>
             |
             Email:

@@ -278,9 +278,11 @@
         <div class="footer-left">
           <p>
             Sport Complex – Mae Fah Luang University |
-            Tel. 0-5391-7821 | Facebook:
-            <a href="https://www.facebook.com/mfusportcomplex" target="_blank">MFU Sports Complex Center</a> |
-            Email: <a href="mailto:sport-complex@mfu.ac.th">sport-complex@mfu.ac.th</a>
+            Tel: 0-5391-7820 and 0-5391-7821 | Facebook:
+            <a href="https://www.facebook.com/mfusportcomplex" target="_blank">MFU Sports Complex Center</a>
+            |
+            Email:
+            <a href="mailto:sport-complex@mfu.ac.th">sport-complex@mfu.ac.th</a>
           </p>
         </div>
       </footer>
@@ -325,7 +327,9 @@ export default {
       cameraImage: null,
       returnGroupBookingId: null, // booking_id ของกลุ่มที่จะ return
       filterType: 'all', // 'all', 'field', 'equipment'
-       isSubmittingReturnPhoto: false, // <<== ตัวแปรป้องกันการส่งซ้ำ
+      isSubmittingReturnPhoto: false, // <<== ตัวแปรป้องกันการส่งซ้ำ
+      refreshTimer: null,   // ⬅ ใช้ setInterval
+    _lastSnapshot: '',
     }
   },
   
@@ -422,6 +426,50 @@ paginatedHistory() {
 
 
   methods: {
+
+    _makeSnapshot(rows = []) {
+    // เก็บฟิลด์ที่ทำให้หน้าจอเปลี่ยน เช่น id, status, วันที่สำคัญ
+    const lite = (rows || []).map(r => ({
+      id: r.id || r._id,
+      b: r.booking_id,
+      t: r.type,
+      n: r.name,
+      s: (r.status || '').toLowerCase(),
+      ra: r.returnedAt || '',
+      ua: r.updatedAt || '',
+      aa: r.approvedAt || '',
+      da: r.disapprovedAt || '',
+      ca: r.createdAt || '',
+      q:  r.quantity || ''
+    }));
+    return JSON.stringify(lite);
+  },
+
+  async fetchAndRenderHistories() {
+    try {
+      const userId = localStorage.getItem('user_id');
+      const { data } = await axios.get(`${API_BASE}/api/history?user_id=${userId}`);
+
+      // เติมฟิลด์ช่วยเรียงเหมือนเดิม
+      const next = this.addSortDateToHistories(data);
+
+      // กันกระพริบตาราง: อัปเดตก็ต่อเมื่อข้อมูล “ต่าง” จากรอบก่อน
+      const snap = this._makeSnapshot(next);
+      if (snap !== this._lastSnapshot) {
+        this.histories = next;
+        this.currentPage = 1;         // รีเซ็ตหน้าให้ถูกต้อง
+        this._lastSnapshot = snap;
+      }
+    } catch (e) {
+      this.histories = [];
+    }
+  },
+
+  async reloadHistories() {
+  await this.fetchAndRenderHistories();
+},
+
+
      pruneOldNotifications() {
     const cutoff = Date.now() - (7 * 24 * 60 * 60 * 1000); // 7 วันย้อนหลัง
     this.notifications = this.notifications.filter(n => (n?.timestamp ?? 0) >= cutoff);
@@ -595,14 +643,13 @@ async reloadHistories() {
   });
   if (confirmed.isConfirmed) {
     try {
-      await Promise.all(group.items.map(item =>
-        axios.delete(`${API_BASE}/api/history/${item.id}`)
-      ));
-      await this.reloadHistories(); // <<--- เพิ่มบรรทัดนี้
-      Swal.fire('Cancelled!', '', 'success');
-    } catch (err) {
-      Swal.fire('Error', 'deletion failed', 'error');
-    }
+    await Promise.all(group.items.map(item =>
+      axios.delete(`${API_BASE}/api/history/${item.id}`)
+    ));
+    Swal.fire('Cancelled!', '', 'success');
+  } catch (error) {
+    Swal.fire('Error', 'Something went wrong', 'error');
+  }
   }
 },
 
@@ -619,12 +666,12 @@ async reloadHistories() {
   });
   if (confirmed.isConfirmed) {
     try {
-      await axios.delete(`${API_BASE}/api/history/${itemId}`);
-      await this.reloadHistories(); // <<--- เพิ่มบรรทัดนี้
-      Swal.fire('Cancelled!', '', 'success');
-    } catch (err) {
-      Swal.fire('Error', 'deletion failed', 'error');
-    }
+    await axios.delete(`${API_BASE}/api/history/${itemId}`);
+    await this.fetchAndRenderHistories();  // ⬅ เพิ่ม
+    Swal.fire('Cancelled!', '', 'success');
+  } catch (error) {
+    Swal.fire('Error', 'Something went wrong', 'error');
+  }
   }
 },
 
@@ -776,6 +823,7 @@ async reloadHistories() {
       await this.$nextTick();
       this.openCamera();
     },
+
     retakePhoto() {
       this.cameraImage = null;
       this.openCamera();
@@ -813,43 +861,60 @@ async reloadHistories() {
     },
     
     async submitReturnPhoto() {
+  // กันการกดซ้ำ
   if (this.isSubmittingReturnPhoto) return;
   this.isSubmittingReturnPhoto = true;
 
-  if (!this.cameraImage || !this.returnGroupBookingId) {
-    this.isSubmittingReturnPhoto = false;
-    return;
-  }
-  const ids = this.histories
-    .filter(h => h.booking_id === this.returnGroupBookingId)
-    .map(h => h.id);
   try {
-    // PATCH ทุก id ที่ booking_id ตรงกัน
-    if (ids.length > 0) {
-      await Promise.all(
-        ids.map(id =>
-          axios.patch(
-            `${API_BASE}/api/history/${id}/request-return`,
-            {
-              attachment: this.cameraImage,
-              fileName: "return_photo.png",
-              fileType: "image/png"
-            }
-          )
-        )
-      );
-      this.histories = this.histories.map(h =>
-        ids.includes(h.id) ? { ...h, status: 'Return-pending' } : h
-      );
+    // ตรวจว่ามีรูปและมี booking_id กลุ่มที่จะคืน
+    if (!this.cameraImage || !this.returnGroupBookingId) {
+      this.$swal('ผิดพลาด', 'ไม่พบรูปหรือหมายเลขรายการที่ต้องการคืน', 'error');
+      return;
+    }
+
+    // หา id ทั้งหมดที่อยู่ใน booking_id เดียวกัน
+    const ids = this.histories
+      .filter(h => h.booking_id === this.returnGroupBookingId)
+      .map(h => h.id);
+
+    if (ids.length === 0) {
+      this.$swal('ผิดพลาด', 'ไม่พบบันทึกในกลุ่มนี้', 'error');
+      return;
+    }
+
+    // ส่งคำขอคืนให้ทุกรายการในกลุ่ม
+    await Promise.all(
+      ids.map(id =>
+        axios.patch(`${API_BASE}/api/history/${id}/request-return`, {
+          attachment: this.cameraImage,
+          fileName: 'return_photo.png',
+          fileType: 'image/png',
+        })
+      )
+    );
+
+    // ปิดกล้อง/ล้างสถานะ modal
+    if (this.cameraStream) {
+      try {
+        this.cameraStream.getTracks().forEach(t => t.stop());
+      } catch {}
+      this.cameraStream = null;
     }
     this.showCamera = false;
     this.cameraImage = null;
     this.returnGroupBookingId = null;
+
+    // 🔄 รีเฟรชตารางทันทีหลังส่งคืนสำเร็จ (ไม่ต้องรีเฟรชหน้า)
+    await this.fetchAndRenderHistories();
+
     this.$swal('ส่งสำเร็จ!', 'ขอคืนอุปกรณ์เรียบร้อย', 'success');
   } catch (err) {
+    console.error(err);
     this.$swal('ผิดพลาด', 'ส่งข้อมูลไม่สำเร็จ', 'error');
+  } finally {
+    // ปลดล็อกปุ่ม
+    this.isSubmittingReturnPhoto = false;
   }
-  this.isSubmittingReturnPhoto = false;
 },
 
     async fetchNotifications() {
@@ -968,10 +1033,21 @@ closeNotifications() {
     this.showAnnouncementBar = false;
   }
 
+   try {
+    this.lastSeenTimestamp = parseInt(localStorage.getItem('lastSeenTimestamp') || '0');
+    await this.fetchAndRenderHistories();     // ⬅ โหลดรอบแรก
+  } catch {
+    this.histories = [];
+  }
+
   // โหลดแจ้งเตือนและตะกร้า
   await this.fetchNotifications();
   this.polling = setInterval(this.fetchNotifications, 30000);
   await this.loadCart();
+
+   this.refreshTimer = setInterval(this.fetchAndRenderHistories, 8000);
+   this._onVisibility = () => { if (!document.hidden) this.fetchAndRenderHistories(); };
+  document.addEventListener('visibilitychange', this._onVisibility);
 },
 watch: {
   filterType() {
@@ -980,6 +1056,8 @@ watch: {
 },
   beforeUnmount() {
     clearInterval(this.polling);
+    clearInterval(this.refreshTimer);
+    document.removeEventListener('visibilitychange', this._onVisibility);
   }
 
 

@@ -6,15 +6,15 @@
         <p class="sidebar-title">ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง</p>
       </div>
       <nav class="nav-links">
-        <router-link to="/dashboard" exact-active-class="active"><i class="pi pi-chart-pie"></i> Dashboard</router-link>
-        <router-link to="/home_admin" exact-active-class="active"><i class="pi pi-megaphone"></i> Edit News</router-link>
-        <router-link to="/edit_field" active-class="active"><i class="pi pi-map-marker"></i> Edit Field</router-link>
-        <router-link to="/edit_equipment" active-class="active"><i class="pi pi-clipboard"></i> Edit Equipment</router-link>
-        <router-link to="/booking_field_admin" active-class="active"><i class="pi pi-map-marker"></i> Book Field</router-link>
-        <router-link to="/approve_field" active-class="active"><i class="pi pi-verified"></i> Approve</router-link>
-        <router-link to="/return_admin" active-class="active"><i class="pi pi-box"></i> Return</router-link>
-        <router-link to="/members" active-class="active"><i class="pi pi-user-edit"></i> Member</router-link>
-        <router-link to="/history_admin" active-class="active"><i class="pi pi-history"></i> History System</router-link>
+         <router-link to="/dashboard" exact-active-class="active"><i class="pi pi-chart-pie"></i> แดชบอร์ด</router-link>
+        <router-link to="/home_admin" exact-active-class="active"><i class="pi pi-megaphone"></i> แก้ไขข่าว</router-link>
+        <router-link to="/edit_field" active-class="active"><i class="pi pi-map-marker"></i> แก้ไขสนาม</router-link>
+        <router-link to="/edit_equipment" active-class="active"><i class="pi pi-clipboard"></i> แก้ไขอุปกรณ์ </router-link>
+        <router-link to="/booking_field_admin" active-class="active"><i class="pi pi-map-marker"></i> จองสนาม</router-link>
+        <router-link to="/approve_field" active-class="active"><i class="pi pi-verified"></i> อนุมัติ</router-link>
+        <router-link to="/return_admin" active-class="active"><i class="pi pi-box"></i> รับคืนอุปกรณ์ </router-link>
+        <router-link to="/members" active-class="active"><i class="pi pi-user-edit"></i> พนักงาน/ผู้ดูแล </router-link>
+        <router-link to="/history_admin" active-class="active"><i class="pi pi-history"></i> ระบบประวัติการทำรายการ</router-link>
       </nav>
     </aside>
 
@@ -137,9 +137,11 @@
         <div class="footer-left">
           <p>
             Sport Complex – Mae Fah Luang University |
-            Tel. 0-5391-7821 | Facebook:
-            <a href="https://www.facebook.com/mfusportcomplex" target="_blank">MFU Sports Complex Center</a> |
-            Email: <a href="mailto:sport-complex@mfu.ac.th">sport-complex@mfu.ac.th</a>
+            Tel: 0-5391-7820 and 0-5391-7821 | Facebook:
+            <a href="https://www.facebook.com/mfusportcomplex" target="_blank">MFU Sports Complex Center</a>
+            |
+            Email:
+            <a href="mailto:sport-complex@mfu.ac.th">sport-complex@mfu.ac.th</a>
           </p>
         </div>
       </footer>
@@ -176,6 +178,8 @@ export default {
       isMobile: window.innerWidth <= 600,
       grouped: [],
       lastSeenTimestamp: 0,
+      refreshTimer: null,
+    _lastSnapshot: '',
     }
   },
   computed: {
@@ -185,6 +189,132 @@ export default {
     }
   },
   methods: {
+
+     _makeSnapshot(groups) {
+    // เก็บเฉพาะ field สำคัญ เพื่อตรวจเปลี่ยนแปลง
+    const lite = groups.map(g => ({
+      t: g.type,
+      b: g.booking_id || '',
+      items: g.items.map(it => ({
+        id: it.id,
+        name: it.name,
+        qty: it.quantity,
+        date: it.date,
+        s: it.startTime, e: it.endTime,
+        u: it.user_id
+      }))
+    }));
+    return JSON.stringify(lite);
+  },
+
+   async fetchAndGroup() {
+    try {
+      // 1) users (ถ้าจำเป็นครั้งแรก)
+      if (!Object.keys(this.userMap || {}).length) {
+        const userRes = await axios.get(`${API_BASE}/api/users`);
+        this.userMap = {};
+        userRes.data.forEach(u => {
+          this.userMap[u.user_id] =
+            (u.firstname && u.lastname) ? `${u.firstname} ${u.lastname}` : (u.name || u.user_id);
+        });
+      }
+
+      // 2) ข้อมูลอนุมัติ
+      const res = await axios.get(`${API_BASE}/api/history/approve_field`);
+      const bookings = (res.data || []).map((h, idx) => ({
+        id: h._id?.$oid || h._id || idx + 1,
+        name: h.name || "-",
+        requester: h.requester || "-",
+        user_id: h.user_id || "-",
+        booking_id: h.booking_id || "",
+        type: h.type || "field",
+        since: h.since || "-",
+        uptodate: h.uptodate || "-",
+        reason: h.reason || h.reasons || "-",
+        zone: h.zone || "-",
+        quantity: h.quantity || "-",
+        date: h.date || "-",
+        startTime: h.startTime || "",
+        endTime: h.endTime || "",
+      }));
+
+      // 3) group ข้อมูล
+      const fields = bookings
+        .filter(b => b.type === 'field')
+        .map(f => ({ type: 'field', items: [f], booking_id: f.booking_id || '' }));
+
+      const equipGroups = {};
+      bookings.filter(b => b.type === 'equipment').forEach(eq => {
+        const key = eq.booking_id || 'single_' + eq.id;
+        if (!equipGroups[key]) equipGroups[key] = [];
+        equipGroups[key].push(eq);
+      });
+      const equipments = Object.entries(equipGroups).map(([booking_id, items]) => ({
+        type: 'equipment',
+        booking_id,
+        items
+      }));
+
+      const next = [...fields, ...equipments];
+
+      // 4) อัปเดตเฉพาะเมื่อข้อมูลเปลี่ยนจริง ๆ (กันการกระพริบตาราง)
+      const snap = this._makeSnapshot(next);
+      if (snap !== this._lastSnapshot) {
+        this.grouped = next;
+        this._lastSnapshot = snap;
+      }
+    } catch (err) {
+      console.error('โหลดข้อมูล approve_field ไม่สำเร็จ:', err);
+    }
+  },
+
+  async approveGroup(group) {
+  const result = await Swal.fire({ /* …เดิม… */ });
+  if (!result.isConfirmed) return;
+
+  const adminUserId = localStorage.getItem('user_id');
+  const approveDate = new Date().toISOString();
+
+  await Promise.all(group.items.map(item => {
+    let url, data;
+    if (item.type === 'field') {
+      url = `${API_BASE}/api/history/${item.id}/approve_field`;
+      data = { admin_id: adminUserId, approvedAt: approveDate };
+    } else {
+      url = `${API_BASE}/api/history/${item.id}/approve_equipment`;
+      data = { staff_id: adminUserId, approvedAt: approveDate };
+    }
+    return axios.patch(url, data);
+  }));
+
+  Swal.fire('Approved!', 'The booking has been approved.', 'success');
+
+  // ⬇️ ดึงข้อมูลใหม่ทันที
+  await this.fetchAndGroup();
+},
+
+async cancelGroup(group) {
+  const result = await Swal.fire({ /* …เดิม… */ });
+  if (!result.isConfirmed) return;
+
+  const adminId = localStorage.getItem('user_id');
+  await Promise.all(
+    group.items.map(item =>
+      axios.patch(
+        item.type === 'field'
+          ? `${API_BASE}/api/history/${item.id}/disapprove_field`
+          : `${API_BASE}/api/history/${item.id}/disapprove_equipment`,
+        { admin_id: adminId }
+      )
+    )
+  );
+
+  Swal.fire('Cancelled!', 'The booking has been cancelled.', 'error');
+
+  // ⬇️ ดึงข้อมูลใหม่ทันที
+  await this.fetchAndGroup();
+},
+
     formatDate(dateInput) {
       if (!dateInput || dateInput === "-") return '-';
       const date = new Date(dateInput);
@@ -964,10 +1094,15 @@ doc.text(`โทร ${data.tel || '-'}`, 430, 100);
       console.error('โหลดข้อมูล booking ไม่สำเร็จ:', err);
     }
 
+    await this.fetchAndGroup();
     // 3. โหลด notifications และ start polling
      this.lastSeenTimestamp = parseInt(localStorage.getItem(ADMIN_LAST_SEEN_KEY) || '0');
     await this.fetchNotifications();
     this.polling = setInterval(this.fetchNotifications, 30000);
+    
+    this.refreshTimer = setInterval(this.fetchAndGroup, 8000);
+    this._onVisibility = () => { if (!document.hidden) this.fetchAndGroup(); };
+    document.addEventListener('visibilitychange', this._onVisibility);
 
     // เพิ่ม event listener สำหรับคลิกข้างนอก dropdown
     document.addEventListener('mousedown', this.handleClickOutside);

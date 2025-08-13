@@ -1,84 +1,56 @@
 <template>
   <div class="layout" :class="{ 'sidebar-closed': isSidebarClosed }">
+    <!-- Sidebar -->
     <aside class="sidebar" :class="{ closed: isSidebarClosed }">
       <div class="sidebar-header">
         <img src="/img/logo.png" alt="logo" class="logo" />
-        <p class="sidebar-title">ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหวง</p>
+        <p class="sidebar-title">ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง</p>
       </div>
       <nav class="nav-links">
-        <router-link to="/dashboard" exact-active-class="active">
-          <i class="pi pi-chart-pie"></i> Dashboard
-        </router-link>
-        <router-link to="/home_admin" exact-active-class="active">
-          <i class="pi pi-megaphone"></i> Edit News
-        </router-link>
-        <router-link to="/edit_field" active-class="active">
-          <i class="pi pi-map-marker"></i> Edit Field
-        </router-link>
-        <router-link to="/edit_equipment" active-class="active">
-          <i class="pi pi-clipboard"></i> Edit Equipment
-        </router-link>
-        <router-link to="/booking_field_admin" active-class="active">
-          <i class="pi pi-map-marker"></i> Book Field
-        </router-link>
-        <router-link to="/approve_field" active-class="active">
-          <i class="pi pi-verified"></i> Approve
-        </router-link>
-        <router-link to="/return_admin" active-class="active">
-          <i class="pi pi-box"></i> Return
-        </router-link>
-        <router-link to="/members" active-class="active">
-          <i class="pi pi-user-edit"></i> Member
-        </router-link>
-        <router-link to="/history_admin" active-class="active">
-          <i class="pi pi-history"></i> History System
-        </router-link>
+         <router-link to="/dashboard" exact-active-class="active"><i class="pi pi-chart-pie"></i> แดชบอร์ด</router-link>
+        <router-link to="/home_admin" exact-active-class="active"><i class="pi pi-megaphone"></i> แก้ไขข่าว</router-link>
+        <router-link to="/edit_field" active-class="active"><i class="pi pi-map-marker"></i> แก้ไขสนาม</router-link>
+        <router-link to="/edit_equipment" active-class="active"><i class="pi pi-clipboard"></i> แก้ไขอุปกรณ์ </router-link>
+        <router-link to="/booking_field_admin" active-class="active"><i class="pi pi-map-marker"></i> จองสนาม</router-link>
+        <router-link to="/approve_field" active-class="active"><i class="pi pi-verified"></i> อนุมัติ</router-link>
+        <router-link to="/return_admin" active-class="active"><i class="pi pi-box"></i> รับคืนอุปกรณ์ </router-link>
+        <router-link to="/members" active-class="active"><i class="pi pi-user-edit"></i> พนักงาน/ผู้ดูแล </router-link>
+        <router-link to="/history_admin" active-class="active"><i class="pi pi-history"></i> ระบบประวัติการทำรายการ</router-link>
       </nav>
     </aside>
 
-    <div
-      v-if="isMobile && !isSidebarClosed"
-      class="sidebar-overlay"
-      @click="toggleSidebar"
-    ></div>
+    <div v-if="isMobile && !isSidebarClosed" class="sidebar-overlay" @click="toggleSidebar"></div>
 
     <div class="main">
+      <!-- Topbar -->
       <header class="topbar">
         <button class="menu-toggle" @click="toggleSidebar">☰</button>
         <div class="topbar-actions">
           <div style="position: relative; display: inline-block;">
-  <div
-    v-if="showNotifications"
-    class="notification-backdrop"
-    @click="closeNotifications"
-  ></div>
+            <div v-if="showNotifications" class="notification-backdrop" @click="closeNotifications"></div>
 
-  <button class="notification-btn" @click="toggleNotifications">
-    <i class="pi pi-bell"></i>
-    <span v-if="unreadCount > 0" class="badge">{{ unreadCount }}</span>
-  </button>
+            <button class="notification-btn" @click="toggleNotifications">
+              <i class="pi pi-bell"></i>
+              <span v-if="unreadCount > 0" class="badge">{{ unreadCount }}</span>
+            </button>
 
-  <div v-if="showNotifications" class="notification-dropdown">
-    <ul>
-      <li
-        v-for="(noti, idx) in notifications.slice(0, 10)"
-        :key="noti.id || idx"
-        :class="['notification-item', noti.type || '', { unread: noti.timestamp > lastSeenTimestamp }]"
-      >
-        {{ noti.message }}
-      </li>
-      <li v-if="notifications.length === 0" class="no-noti">ไม่มีแจ้งเตือน</li>
-    </ul>
-  </div>
-</div>
+            <div v-if="showNotifications" class="notification-dropdown">
+              <ul>
+                <li v-for="(noti, idx) in notifications.slice(0, 10)" :key="noti.id || idx"
+                    :class="['notification-item', noti.type || '', { unread: noti.timestamp > lastSeenTimestamp }]">
+                  {{ noti.message }}
+                </li>
+                <li v-if="notifications.length === 0" class="no-noti">ไม่มีแจ้งเตือน</li>
+              </ul>
+            </div>
+          </div>
           <router-link to="/profile_admin"><i class="pi pi-user"></i></router-link>
         </div>
       </header>
 
+      <!-- Body -->
       <div class="histbody">
-        <h1 style="padding-left: 50px; display: flex; justify-content: center;">
-          Return Pending Equipment
-        </h1>
+        <h1 style="display: flex; justify-content: center;">Return Pending Equipment</h1>
 
         <div class="table-container">
           <table class="approve-table">
@@ -90,20 +62,19 @@
               </tr>
             </thead>
             <tbody>
-              <template
-                v-for="group in equipmentGroups"
-                :key="group.booking_id || 'noid_' + group.items[0].id"
-              >
-                <tr v-for="item in group.items" :key="item.id">
-                  <td style="text-align:left;">{{ item.name }}</td>
-                  <td>{{ item.amount }}</td>
-                  <td>
-                    <button class="return-btn" @click="returnGroup(group)">
-                      Return
-                    </button>
-                  </td>
-                </tr>
-              </template>
+              <tr v-for="group in equipmentGroups" :key="group.booking_id || 'noid_' + group.items[0].id">
+                <td style="text-align:center;">
+                  <!-- รวมชื่ออุปกรณ์เป็น comma-separated -->
+                  {{ group.items.map(i => i.name).join(', ') }}
+                </td>
+                <td>
+                  <!-- รวมจำนวนทั้งหมด -->
+                  {{ group.items.reduce((sum, i) => sum + i.amount, 0) }}
+                </td>
+                <td>
+                  <button class="return-btn" @click="returnGroup(group)">Return</button>
+                </td>
+              </tr>
               <tr v-if="equipmentGroups.length === 0">
                 <td colspan="3" style="color:#999; text-align:center;">
                   ไม่พบรายการยืมที่รอคืน
@@ -114,19 +85,23 @@
         </div>
       </div>
 
+      <!-- Footer -->
       <footer class="foot">
         <div class="footer-left">
           <p>
             Sport Complex – Mae Fah Luang University |
-            Tel. 0-5391-7821 | Facebook:
-            <a href="https://www.facebook.com/mfusportcomplex" target="_blank">MFU Sports Complex Center</a> |
-            Email: <a href="mailto:sport-complex@mfu.ac.th">sport-complex@mfu.ac.th</a>
+            Tel: 0-5391-7820 and 0-5391-7821 | Facebook:
+            <a href="https://www.facebook.com/mfusportcomplex" target="_blank">MFU Sports Complex Center</a>
+            |
+            Email:
+            <a href="mailto:sport-complex@mfu.ac.th">sport-complex@mfu.ac.th</a>
           </p>
         </div>
       </footer>
     </div>
   </div>
 </template>
+
 
 
 <script>
@@ -186,6 +161,28 @@ export default {
     toggleSidebar() {
       this.isSidebarClosed = !this.isSidebarClosed
     },
+    formatNamesWithQty(items) {
+  // รวมชื่อที่ซ้ำกันในกลุ่มเดียวกัน แล้วสรุปจำนวนต่อชื่อ
+  // ได้ผลลัพธ์เป็น "ลูกบาส (2), ลูกฟุตบอล (1)" เป็นต้น
+  const acc = new Map();
+  for (const it of (items || [])) {
+    const name = String(it?.name ?? '').trim();
+    if (!name) continue;
+    const qty = Number(it?.amount ?? it?.quantity ?? 0) || 0;
+    acc.set(name, (acc.get(name) ?? 0) + qty);
+  }
+  return Array.from(acc.entries())
+    .map(([n, q]) => `${n}${q ? ` (${q})` : ''}`)
+    .join(', ');
+},
+
+sumQty(items) {
+  return (items || []).reduce(
+    (sum, it) => sum + (Number(it?.amount ?? it?.quantity ?? 0) || 0),
+    0
+  );
+},
+
     toggleNotifications() {
     this.showNotifications = !this.showNotifications;
     if (this.showNotifications) {

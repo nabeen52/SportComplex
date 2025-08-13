@@ -67,7 +67,7 @@
         <div class="form-container">
           <div class="form-header">
             <h3>แบบฟอร์มขออนุมัติใช้สถานที่ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง</h3>
-            <p>โทร 053-917-8201 E-mail Sport-complex@mfu.ac.th</p>
+            <p><b>โทร 0-5391-7820 และ 0-5391-7821 | E-mail: sport-complex@mfu.ac.th</b></p>
           </div>
           <form @submit.prevent="handleSubmit" enctype="multipart/form-data" class="booking-form">
             <div class="form-grid">
@@ -95,7 +95,7 @@
                 :format="formatBE"
                 :enable-time-picker="false"
                 :state="!(showValidate && missingFields.date)"
-                placeholder="วัน/เดือน/พ.ศ."
+                placeholder="วัน/เดือน/ปี"
                 locale="th"
                 :hide-input-icon="true"
                 class="dp-like-custom"
@@ -122,24 +122,25 @@
 
           <div class="form-row" style="position:relative;">
           <label>
-            ชื่อหน่วยงาน
-            <span v-if="touched && (showError && !agencyInput)" style="color:red">*</span>
-          </label>
-          <input
-            ref="agencyInputEl"
-            class="custom-input"
-            type="text"
-            v-model="agencySearch"
-            @click="maybeEnterEdit"
-            @input="filterAgency"
-            @focus="onAgencyFocus"
-            @blur="onAgencyBlur"
-            :readonly="isFormLocked || (isAgencySelected && !!agencyInput && !isAgencyEditing)"
-            placeholder="ค้นหาหรือเลือกหน่วยงาน"
-            autocomplete="off"
-            :class="{ 'is-invalid': touched && showError && !agencyInput }"
-            style="flex:1"
-          />
+  ชื่อหน่วยงาน
+  <span v-if="showValidate && (missingFields.agency || missingFields.agencyOther)" class="required-star">*</span>
+</label>
+<input
+  ref="agencyInputEl"
+  class="custom-input"
+  type="text"
+  v-model="agencySearch"
+  @click="maybeEnterEdit"
+  @input="filterAgency"
+  @focus="onAgencyFocus"
+  @blur="onAgencyBlur"
+  :readonly="isFormLocked || (isAgencySelected && !!agencyInput && !isAgencyEditing)"
+  placeholder="ค้นหาหรือเลือกหน่วยงาน"
+  autocomplete="off"
+  :class="['custom-input', { 'input-error': showValidate && (missingFields.agency || missingFields.agencyOther) }]"
+  style="flex:1"
+/>
+
 
 
   <ul v-if="agencyDropdownOpen && filteredAgencyOptions.length" class="agency-dropdown">
@@ -215,7 +216,7 @@
       :enable-time-picker="false"
       :min-date="minBookingDateObj"
       :state="!(showValidate && missingFields.since)"
-      placeholder="วัน/เดือน/พ.ศ."
+      placeholder="วัน/เดือน/ปี"
       locale="th"
       :hide-input-icon="true"
       style="width:48%"
@@ -227,7 +228,7 @@
       :enable-time-picker="false"
       :min-date="dpStart || minBookingDateObj"
       :state="!(showValidate && missingFields.uptodate)"
-      placeholder="วัน/เดือน/พ.ศ."
+      placeholder="วัน/เดือน/ปี"
       locale="th"
       :hide-input-icon="true"
       style="width:48%"
@@ -261,33 +262,45 @@
 <!-- ชื่อผู้ขอใช้สถานที่ / รหัสนักศึกษา/พนักงาน -->
 <div class="form-row">
   <label>
-    ชื่อผู้ขอใช้สถานที่
-    <span v-if="showValidate && !username_form" class="required-star">*</span>
+  ชื่อผู้ขอใช้สถานที่
+  <span v-if="showValidate && missingFields.username_form" class="required-star">*</span>
+</label>
+<input
+  type="text"
+  :class="inputClass('username_form')"
+  v-model="username_form"
+  placeholder="กรอกชื่อผู้ขอใช้สถานที่"
+/>
+
+  <!-- ✅ จองแทนผู้อื่น: อยู่ใต้ช่องนี้เลย ไม่กินแถวของ grid -->
+  <label class="proxy-inline" style="margin-top:6px;">
+    <input
+      id="proxyToggle"
+      type="checkbox"
+      v-model="isProxyBooking"
+      class="proxy-toggle"
+    />
+    จองแทนผู้อื่น
   </label>
-  <input
-    type="text"
-    class="custom-input"
-    v-model="username_form"
-    placeholder="กรอกชื่อผู้ขอใช้สถานที่"
-  />
 </div>
 
 <div class="form-row">
   <label>
-    รหัสนักศึกษา/พนักงาน
-    <span v-if="showValidate && !id_form" class="required-star">*</span>
-  </label>
-  <input
+  รหัสนักศึกษา/พนักงาน
+  <span v-if="showValidate && missingFields.id_form" class="required-star">*</span>
+</label>
+<input
   type="text"
-  class="custom-input"
+  :class="inputClass('id_form')"
   v-model="id_form"
   placeholder="กรอกรหัสนักศึกษา/รหัสพนักงาน"
   inputmode="numeric"
   pattern="\d*"
   @input="onIdFormInput"
-  maxlength="13"  
+  maxlength="13"
 />
 </div>
+
 
 <!-- เฉพาะถ้า isProxyBooking === true -->
 <div class="form-row" v-if="isProxyBooking">
@@ -508,13 +521,15 @@
           </form>
         </div>
       </div>
-      <footer class="foot">
+     <footer class="foot">
         <div class="footer-left">
           <p>
             Sport Complex – Mae Fah Luang University |
-            Tel. 053-9177821 | Facebook:
-            <a href="https://www.facebook.com/mfusportcomplex" target="_blank">MFU Sports Complex Center</a> |
-            Email: <a href="mailto:sport-complex@mfu.ac.th">sport-complex@mfu.ac.th</a>
+            Tel: 0-5391-7820 and 0-5391-7821 | Facebook:
+            <a href="https://www.facebook.com/mfusportcomplex" target="_blank">MFU Sports Complex Center</a>
+            |
+            Email:
+            <a href="mailto:sport-complex@mfu.ac.th">sport-complex@mfu.ac.th</a>
           </p>
         </div>
       </footer>
@@ -970,7 +985,8 @@ function saveFormToSession() {
       otherAgencyDetail: otherAgencyDetail.value,
       proxyUserId: proxyUserId.value,
       isProxyBooking: isProxyBooking.value,
-      selectedFileNames: selectedFiles.value.map(f => f.name),
+      // ❌ ลบบรรทัดนี้
+      // selectedFileNames: selectedFiles.value.map(f => f.name),
       proxyStudentName: proxyStudentName.value,
       proxyStudentId: proxyStudentId.value,
       username_form: username_form.value,
@@ -978,6 +994,7 @@ function saveFormToSession() {
     })
   )
 }
+
 function loadFormFromSession() {
   const data = sessionStorage.getItem('form_field_save')
   if (data) {
@@ -989,7 +1006,8 @@ function loadFormFromSession() {
       otherAgencyDetail.value = d.otherAgencyDetail || ''
       proxyUserId.value = d.proxyUserId || ''
       isProxyBooking.value = d.isProxyBooking || false
-      selectedFiles.value = (d.selectedFileNames || []).map(name => ({ name }))
+      // ❌ อย่าตั้ง selectedFiles จากชื่อไฟล์ปลอม
+      // selectedFiles.value = (d.selectedFileNames || []).map(name => ({ name }))
       dateRange.value = [formData.value.since, formData.value.uptodate]
       proxyStudentName.value = d.proxyStudentName || ''
       proxyStudentId.value = d.proxyStudentId || ''
@@ -1104,6 +1122,8 @@ function validateTel() {
 }
 function validateFields() {
   const fields = {}
+
+  // ฟิลด์บังคับหลัก
   const requiredFields = [
     'aw', 'date', 'tel', 'name_activity', 'reasons',
     'since', 'uptodate', 'since_time', 'until_thetime',
@@ -1113,7 +1133,15 @@ function validateFields() {
     if (!formData.value[k] || String(formData.value[k]).trim() === '') fields[k] = true
   })
 
-  // กรณีจองแทน ต้องกรอกชื่อ/รหัสผู้ถูกจองแทน
+  // ✅ ต้องกรอกเสมอ: ชื่อผู้ขอใช้สถานที่ / รหัสนักศึกษา-พนักงาน
+  if (!username_form.value || username_form.value.trim() === '') {
+    fields['username_form'] = true
+  }
+  if (!id_form.value || id_form.value.trim() === '') {
+    fields['id_form'] = true
+  }
+
+  // กรณีจองแทน เพิ่มเติม
   if (isProxyBooking.value) {
     if (!formData.value.requester || String(formData.value.requester).trim() === '') {
       fields['requester'] = true
@@ -1124,23 +1152,23 @@ function validateFields() {
     if (!proxyStudentId.value || proxyStudentId.value.trim() === '') {
       fields['proxyStudentId'] = true
     }
-    if (!username_form.value || username_form.value.trim() === '') {
-  fields['username_form'] = true
-    }
-    if (!id_form.value || id_form.value.trim() === '') {
-      fields['id_form'] = true
-    }
   }
-  // หน่วยงาน "อื่นๆ" ต้องกรอกเพิ่ม
-  if (!finalAgency.value || String(finalAgency.value).trim() === '') fields['agency'] = true
-  if (agencyInput.value === 'อื่นๆ' && (!customAgency.value || String(customAgency.value).trim() === ''))
-    fields['agencyOther'] = true
 
-  // ถ้ามีโซน ต้องกรอกโซน
-  if (hasZone.value && (!formData.value.zone || String(formData.value.zone).trim() === '')) fields['zone'] = true
+  // ✅ หน่วยงาน (รวมกรณี 'อื่นๆ')
+  if (!finalAgency.value || String(finalAgency.value).trim() === '') fields['agency'] = true
+  if (agencyInput.value === 'อื่นๆ' && (!customAgency.value || String(customAgency.value).trim() === '')) {
+    fields['agencyOther'] = true
+  }
+
+  // โซน (ถ้าอาคารนั้นมีโซน)
+  if (hasZone.value && (!formData.value.zone || String(formData.value.zone).trim() === '')) {
+    fields['zone'] = true
+  }
+
+  // ต้องมี user_id (จากผู้ล็อกอิน)
   if (!proxyUserId.value || String(proxyUserId.value).trim() === '') fields['userId'] = true
 
-  // ต้องแนบไฟล์
+  // ✅ ไฟล์แนบอย่างน้อย 1
   if (selectedFiles.value.length === 0) {
     fields['files'] = true
     fileError.value = true
@@ -1148,7 +1176,7 @@ function validateFields() {
     fileError.value = false
   }
 
-  // ** Validation กลุ่ม 2: ขอใช้ระบบสาธารณูปโภค **
+  // กลุ่ม 2: ระบบสาธารณูปโภค (ถ้าเลือก "ต้องการ" ต้องมีค่าอย่างน้อย 1 ช่อง)
   if (formData.value.utilityRequest === 'yes') {
     const utilityFilled =
       (formData.value.turnon_air && String(formData.value.turnon_air).trim() !== '') ||
@@ -1156,22 +1184,18 @@ function validateFields() {
       (formData.value.turnon_lights && String(formData.value.turnon_lights).trim() !== '') ||
       (formData.value.turnoff_lights && String(formData.value.turnoff_lights).trim() !== '') ||
       (formData.value.other && String(formData.value.other).trim() !== '')
-    if (!utilityFilled) {
-      fields['utilityGroup'] = true
-    }
+    if (!utilityFilled) fields['utilityGroup'] = true
   }
 
-  // ** Validation กลุ่ม 3: ขอใช้รายการประกอบอาคาร **
+  // กลุ่ม 3: รายการประกอบอาคาร (ถ้าเลือก "ต้องการ" ต้องมีค่าอย่างน้อย 1 ช่อง)
   if (formData.value.facilityRequest === 'yes') {
     const facilityFilled =
       (formData.value.amphitheater && String(formData.value.amphitheater).trim() !== '') ||
       (formData.value.need_equipment && String(formData.value.need_equipment).trim() !== '')
-    if (!facilityFilled) {
-      fields['facilityGroup'] = true
-    }
+    if (!facilityFilled) fields['facilityGroup'] = true
   }
 
-  // *** Validation เบอร์โทร ***
+  // ✅ ตรวจรูปแบบเบอร์โทร (3–10 หลักตัวเลข)
   const tel = formData.value.tel || ''
   if (!tel || tel.length < 3 || tel.length > 10 || !/^\d{3,10}$/.test(tel)) {
     fields['tel'] = true
@@ -1180,9 +1204,11 @@ function validateFields() {
     telError.value = false
   }
 
+  // สรุปผล
   missingFields.value = fields
   return Object.keys(fields).length === 0
 }
+
 function fileToBase64(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
@@ -1198,17 +1224,27 @@ async function handleSubmit() {
     return
   }
 
-  try {
-    // --- เก็บค่า zone ใช้ต่อ ---
-    localStorage.setItem('zoneSelected', formData.value.zone || '')
+  // ✅ ใช้ไฟล์จริงเท่านั้น
+  const realFiles = selectedFiles.value.filter(f => f instanceof File || f instanceof Blob)
+  if (realFiles.length === 0 && window._tempSelectedFiles?.length) {
+    // เผื่อ selectedFiles ถูกทับ ให้ดึงกลับจาก global
+    selectedFiles.value = window._tempSelectedFiles.filter(f => f instanceof File || f instanceof Blob)
+  }
 
-    // --- ใช้ FormData ตรงกับ backend (multer) ---
+  // ถ้ายังไม่มีไฟล์จริง ให้แจ้งเตือน
+  if (selectedFiles.value.length === 0) {
+    fileError.value = true
+    Swal.fire({ icon: 'warning', title: 'ไม่มีไฟล์แนบ', text: 'กรุณาเลือกไฟล์อีกครั้ง', confirmButtonText: 'ตกลง' })
+    return
+  }
+
+  try {
+    localStorage.setItem('zoneSelected', formData.value.zone || '')
     const fd = new FormData()
 
-    // แนบไฟล์: field name ต้องเป็น 'files'
+    // ✅ แนบเฉพาะไฟล์จริง
     selectedFiles.value.forEach(f => fd.append('files', f))
 
-    // แนบฟิลด์อื่น ๆ เป็นสตริง
     const payload = {
       ...formData.value,
       agency: (finalAgency.value ?? ''),
@@ -1222,13 +1258,15 @@ async function handleSubmit() {
     Object.entries(payload).forEach(([k, v]) => fd.append(k, v ?? ''))
 
     const res = await axios.post(`${API_BASE}/api/booking_field`, fd, {
-      // headers: { 'Content-Type': 'multipart/form-data' },
-      withCredentials: true, // สำคัญมาก เพราะ /api ถูกหุ้มด้วย requireLogin
+      withCredentials: true,
     })
 
     localStorage.setItem('bookingId', res.data.bookingId)
     localStorage.setItem('username_form', username_form.value || '')
     localStorage.setItem('id_form', id_form.value || '')
+
+    // เก็บไฟล์จริงไว้สำหรับกด Back/Next อีกรอบ
+    window._tempSelectedFiles = selectedFiles.value
 
     router.push('/form_field3')
   } catch (err) {
@@ -1236,6 +1274,7 @@ async function handleSubmit() {
     Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: 'บันทึกข้อมูลไม่สำเร็จ', confirmButtonText: 'ตกลง' })
   }
 }
+
 
 function handleClear() {
   sessionStorage.removeItem('form_field_save')

@@ -7,33 +7,15 @@
         <p class="sidebar-title">ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง</p>
       </div>
       <nav class="nav-links">
-        <router-link to="/dashboard" exact-active-class="active">
-          <i class="pi pi-chart-pie"></i> Dashboard
-        </router-link>
-        <router-link to="/home_admin" exact-active-class="active">
-          <i class="pi pi-megaphone"></i> Edit News
-        </router-link>
-        <router-link to="/edit_field" active-class="active">
-          <i class="pi pi-map-marker"></i> Edit Field
-        </router-link>
-        <router-link to="/edit_equipment" active-class="active">
-          <i class="pi pi-clipboard"></i> Edit Equipment
-        </router-link>
-        <router-link to="/booking_field_admin" active-class="active">
-          <i class="pi pi-map-marker"></i> Book Field
-        </router-link>
-        <router-link to="/approve_field" active-class="active">
-          <i class="pi pi-verified"></i> Approve
-        </router-link>
-        <router-link to="/return_admin" active-class="active">
-            <i class="pi pi-box"></i> Return
-          </router-link>
-        <router-link to="/members" active-class="active">
-          <i class="pi pi-user-edit"></i> Member
-        </router-link>
-        <router-link to="/history_admin" active-class="active">
-          <i class="pi pi-history"></i> History System
-        </router-link>
+         <router-link to="/dashboard" exact-active-class="active"><i class="pi pi-chart-pie"></i> แดชบอร์ด</router-link>
+        <router-link to="/home_admin" exact-active-class="active"><i class="pi pi-megaphone"></i> แก้ไขข่าว</router-link>
+        <router-link to="/edit_field" active-class="active"><i class="pi pi-map-marker"></i> แก้ไขสนาม</router-link>
+        <router-link to="/edit_equipment" active-class="active"><i class="pi pi-clipboard"></i> แก้ไขอุปกรณ์ </router-link>
+        <router-link to="/booking_field_admin" active-class="active"><i class="pi pi-map-marker"></i> จองสนาม</router-link>
+        <router-link to="/approve_field" active-class="active"><i class="pi pi-verified"></i> อนุมัติ</router-link>
+        <router-link to="/return_admin" active-class="active"><i class="pi pi-box"></i> รับคืนอุปกรณ์ </router-link>
+        <router-link to="/members" active-class="active"><i class="pi pi-user-edit"></i> พนักงาน/ผู้ดูแล </router-link>
+        <router-link to="/history_admin" active-class="active"><i class="pi pi-history"></i> ระบบประวัติการทำรายการ</router-link>
       </nav>
     </aside>
 <div v-if="!isSidebarClosed && isMobile" class="sidebar-backdrop" @click="toggleSidebar"></div>
@@ -257,9 +239,11 @@
         <div class="footer-left">
           <p>
             Sport Complex – Mae Fah Luang University |
-            Tel. 053-917-7821 | Facebook:
-            <a href="https://www.facebook.com/mfusportcomplex" target="_blank">MFU Sports Complex Center</a> |
-            Email: <a href="mailto:sport-complex@mfu.ac.th">sport-complex@mfu.ac.th</a>
+            Tel: 0-5391-7820 and 0-5391-7821 | Facebook:
+            <a href="https://www.facebook.com/mfusportcomplex" target="_blank">MFU Sports Complex Center</a>
+            |
+            Email:
+            <a href="mailto:sport-complex@mfu.ac.th">sport-complex@mfu.ac.th</a>
           </p>
         </div>
       </footer>

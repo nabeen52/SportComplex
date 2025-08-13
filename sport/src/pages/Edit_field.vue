@@ -113,9 +113,12 @@
       <footer class="foot">
         <div class="footer-left">
           <p>
-            Sport Complex – Mae Fah Luang University | Tel. 0-5391-7821 |
-            Facebook: <a href="https://www.facebook.com/mfusportcomplex" target="_blank">MFU Sports Complex Center</a>
-            | Email: <a href="mailto:sport-complex@mfu.ac.th">sport-complex@mfu.ac.th</a>
+            Sport Complex – Mae Fah Luang University |
+            Tel: 0-5391-7820 and 0-5391-7821 | Facebook:
+            <a href="https://www.facebook.com/mfusportcomplex" target="_blank">MFU Sports Complex Center</a>
+            |
+            Email:
+            <a href="mailto:sport-complex@mfu.ac.th">sport-complex@mfu.ac.th</a>
           </p>
         </div>
       </footer>
@@ -136,15 +139,15 @@ export default {
       
       isSidebarClosed: false,
       navs: [
-        { to: "/dashboard", label: "Dashboard", icon: "pi pi-chart-pie", exact: true },
-        { to: "/home_admin", label: "Edit News", icon: "pi pi-megaphone", exact: true },
-        { to: "/edit_field", label: "Edit Field", icon: "pi pi-map-marker" },
-        { to: "/edit_equipment", label: "Edit Equipment", icon: "pi pi-clipboard" },
-        { to: "/booking_field_admin", label: "Book Field", icon: "pi pi-map-marker" },
-        { to: "/approve_field", label: "Approve", icon: "pi pi-verified" },
-        { to: "/return_admin", label: "Return", icon: "pi pi-box" },
-        { to: "/members", label: "Member", icon: "pi pi-user-edit" },
-        { to: "/history_admin", label: "History System", icon: "pi pi-history" }
+        { to: "/dashboard", label: "แดชบอร์ด", icon: "pi pi-chart-pie", exact: true },
+        { to: "/home_admin", label: "แก้ไขข่าว", icon: "pi pi-megaphone", exact: true },
+        { to: "/edit_field", label: "แก้ไขสนาม", icon: "pi pi-map-marker" },
+        { to: "/edit_equipment", label: "แก้ไขอุปกรณ์", icon: "pi pi-clipboard" },
+        { to: "/booking_field_admin", label: "จองสนาม", icon: "pi pi-map-marker" },
+        { to: "/approve_field", label: "อนุมัติ", icon: "pi pi-verified" },
+        { to: "/return_admin", label: "รับคืนอุปกรณ์", icon: "pi pi-box" },
+        { to: "/members", label: "พนักงาน/ผู้ดูแล", icon: "pi pi-user-edit" },
+        { to: "/history_admin", label: "ระบบประวัติการทำรายการ", icon: "pi pi-history" }
       ],
       topbar: [
         { to: "/profile_admin", icon: "pi pi-user" }
