@@ -56,9 +56,9 @@
           <table class="approve-table">
             <thead>
               <tr>
-                <th>ชื่ออุปกรณ์</th>
-                <th>จำนวน</th>
-                <th>การกระทำ</th>
+                <th>Equipment Name</th>
+                <th>Amount</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -96,6 +96,7 @@
             Email:
             <a href="mailto:sport-complex@mfu.ac.th">sport-complex@mfu.ac.th</a>
           </p>
+          <p>© 2025 Center for Information Technology Services, Mae Fah Luang University. All rights reserved.</p>
         </div>
       </footer>
     </div>
@@ -387,7 +388,7 @@ sumQty(items) {
           )
         );
         Swal.fire({
-          title: 'สำเร็จ!',
+          title: 'สำเร็จ',
           text: `คุณได้คืนอุปกรณ์กลุ่มนี้แล้ว`,
           icon: 'success',
           timer: 1500,

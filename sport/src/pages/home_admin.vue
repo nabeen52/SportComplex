@@ -113,6 +113,7 @@
             Email:
             <a href="mailto:sport-complex@mfu.ac.th">sport-complex@mfu.ac.th</a>
           </p>
+          <p>© 2025 Center for Information Technology Services, Mae Fah Luang University. All rights reserved.</p>
         </div>
       </footer>
     </div>
@@ -280,7 +281,7 @@ pruneOldNotifications() {
               const res = await axios.post(`${API_BASE}/api/img_news`, { img: ev.target.result });
               this.images.push(res.data.data);
               this.currentImageIndex = this.images.length - 1;
-              Swal.fire('เพิ่มรูปภาพแล้ว!', '', 'success');
+              Swal.fire('เพิ่มรูปภาพแล้ว', '', 'success');
             } catch {
               Swal.fire('Error', 'เพิ่มภาพล้มเหลว', 'error');
             }
@@ -322,7 +323,7 @@ pruneOldNotifications() {
                 try {
                   await axios.put(`${API_BASE}/api/img_news/${imgId}`, { img: ev.target.result });
                   this.images[this.currentImageIndex].img = ev.target.result;
-                  Swal.fire('เปลี่ยนรูปภาพเรียบร้อยแล้ว!', '', 'success');
+                  Swal.fire('เปลี่ยนรูปภาพเรียบร้อยแล้ว', '', 'success');
                 } catch {
                   Swal.fire('Error', 'บันทึกภาพล้มเหลว', 'error');
                 }
@@ -376,14 +377,14 @@ pruneOldNotifications() {
         });
         this.latestAnnouncement = this.announcementInput;
         this.announcementInput = "";
-        Swal.fire('อัปเดตประกาศแล้ว!', '', 'success');
+        Swal.fire('อัปเดตประกาศแล้ว', '', 'success');
       } catch {
         Swal.fire('Error', 'บันทึกประกาศล้มเหลว', 'error');
       }
     },
     async confirmDelete() {
       const result = await Swal.fire({
-        title: "ลบประกาศ?",
+        title: "ลบประกาศ",
         text: "คุณต้องการลบประกาศนี้ใช่หรือไม่?",
         icon: "warning",
         showCancelButton: true,
@@ -394,7 +395,7 @@ pruneOldNotifications() {
         try {
           await axios.delete(`${API_BASE}/api/announcement`);
           this.latestAnnouncement = "";
-          Swal.fire('ลบประกาศเรียบร้อย!', '', 'success');
+          Swal.fire('ลบประกาศเรียบร้อย', '', 'success');
         } catch {
           Swal.fire('Error', 'ลบประกาศล้มเหลว', 'error');
         }

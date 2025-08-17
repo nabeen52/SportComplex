@@ -97,6 +97,7 @@
             Email:
             <a href="mailto:sport-complex@mfu.ac.th">sport-complex@mfu.ac.th</a>
           </p>
+          <p>© 2025 Center for Information Technology Services, Mae Fah Luang University. All rights reserved.</p>
         </div>
       </footer>
     </div>
@@ -321,10 +322,10 @@ pruneOldNotifications() {
           const res = await axios.post(`${API_BASE}/api/equipments`, formValues);
           if (res.data.success) {
             this.equipments.push(res.data.data);
-            Swal.fire('เพิ่มสำเร็จ!', '', 'success');
+            Swal.fire('เพิ่มสำเร็จ', '', 'success');
           }
         } catch (err) {
-          Swal.fire('ผิดพลาด!', err.response?.data?.message || err.message, 'error');
+          Swal.fire('ผิดพลาด', err.response?.data?.message || err.message, 'error');
         }
       }
     },
@@ -415,10 +416,10 @@ pruneOldNotifications() {
           const res = await axios.patch(`${API_BASE}/api/equipments/${id}`, result.value);
           if (res.data.success) {
             this.equipments[index] = res.data.data;
-            Swal.fire('แก้ไขสำเร็จ!', '', 'success');
+            Swal.fire('แก้ไขสำเร็จ', '', 'success');
           }
         } catch (err) {
-          Swal.fire('ผิดพลาด!', err.response?.data?.message || err.message, 'error');
+          Swal.fire('ผิดพลาด', err.response?.data?.message || err.message, 'error');
         }
       }
 
@@ -428,9 +429,9 @@ pruneOldNotifications() {
           const id = equipment._id;
           await axios.delete(`${API_BASE}/api/equipments/${id}`);
           this.equipments.splice(index, 1);
-          Swal.fire('ลบแล้ว!', '', 'success');
+          Swal.fire('ลบแล้ว', '', 'success');
         } catch (err) {
-          Swal.fire('ผิดพลาด!', err.response?.data?.message || err.message, 'error');
+          Swal.fire('ผิดพลาด', err.response?.data?.message || err.message, 'error');
         }
       }
     }

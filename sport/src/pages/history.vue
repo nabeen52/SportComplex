@@ -19,13 +19,13 @@
           <i class="pi pi-history"></i> History
         </router-link>
       </nav>
-
     </aside>
-<div
-  v-if="!isSidebarClosed"
-  class="sidebar-overlay"
-  @click="toggleSidebar"
-></div>
+
+    <div
+      v-if="!isSidebarClosed"
+      class="sidebar-overlay"
+      @click="toggleSidebar"
+    ></div>
 
     <div class="main">
       <header class="topbar">
@@ -63,18 +63,9 @@
       </header>
 
       <div style="background-color: #dbe9f4;">
-        <!-- <transition name="slide-down">
-          <div class="announcement-bar" v-if="showAnnouncementBar">
-            <i class="pi pi-megaphone announcement-icon"></i>
-            <div class="announcement-bar-text">{{ announcement }}</div>
-            <button class="close-announcement-btn" @click="showAnnouncementBar = false">
-              <i class="pi pi-times" style="color: red;"></i>
-            </button>
-          </div>
-        </transition> -->
-
         <div class="histbody">
           <h1 style="padding-left: 50px; display: flex; justify-content: center;">History</h1>
+
           <div style="display:flex; justify-content:center; margin-bottom: 12px;">
             <button
               :class="['filter-btn', { active: filterType === 'all' }]"
@@ -92,119 +83,111 @@
             >Equipment</button>
           </div>
 
-
           <div class="table-x-scroll">
-          <!-- ตารางแสดงผล -->
-         <table class="history-table" style="width: 90%; margin: 0 auto; border-collapse: collapse;">
-  <thead>
-    <tr>
-      <th style="border-bottom: 2px solid #ccc; padding: 8px;">Date</th>
-      <th style="border-bottom: 2px solid #ccc; padding: 8px;">Type</th>
-      <th style="border-bottom: 2px solid #ccc; padding: 8px;">Name</th>
-      
-      <!-- <th style="border-bottom: 2px solid #ccc; padding: 8px;">จำนวน</th> -->
-      <th style="border-bottom: 2px solid #ccc; padding: 8px;">Time/Amount</th>
-      <th style="border-bottom: 2px solid #ccc; padding: 8px;">Status</th>
-      <th style="border-bottom: 2px solid #ccc; padding: 8px;">Action</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr
-      v-for="(group, idx) in paginatedHistory"
-      :key="group.type + '_' + (group.booking_id || idx)"
-    >
+            <table class="history-table" style="width: 90%; margin: 0 auto; border-collapse: collapse;">
+              <colgroup>
+                <col style="width:13%"><!-- Date -->
+                <col style="width:15%"><!-- Type -->
+                <col style="width:18%"><!-- Name -->
+                <col style="width:15%"><!-- Time/Amount -->
+                <col style="width:15%"><!-- Status -->
+                <col style="width:15%"><!-- Action -->
+              </colgroup>
 
-      <td style="padding: 8px; text-align: center;">
-        {{ formatDateOnly(group.items[0].date) }}
-      </td>
+              <thead>
+                <tr>
+                  <th style="border-bottom: 2px solid #ccc; padding: 8px;">Date</th>
+                  <th style="border-bottom: 2px solid #ccc; padding: 8px;">Type</th>
+                  <th class="name-col" style="border-bottom: 2px solid #ccc; padding: 8px;">Name</th>
+                  <th style="border-bottom: 2px solid #ccc; padding: 8px;">Time/Amount</th>
+                  <th class="status-head" style="border-bottom: 2px solid #ccc; padding: 8px;">Status</th>
+                  <th class="action-head" style="border-bottom: 2px solid #ccc; padding: 8px;">Action</th>
+                </tr>
+              </thead>
 
-      <!-- ประเภท -->
-      <td style="padding: 8px; text-align: center; text-transform: capitalize;">
-        {{ group.type }}
-      </td>
-      <!-- <td style="padding: 8px; text-align: center;">
-        {{ typeLabel(group.type) }}
-      </td> -->
+              <tbody>
+                <tr
+                  v-for="(group, idx) in paginatedHistory"
+                  :key="group.type + '_' + (group.booking_id || idx)"
+                >
+                  <!-- Date -->
+                  <td style="padding: 8px; text-align: center;">
+                    {{ formatDateOnly(group.items[0].date) }}
+                  </td>
 
+                  <!-- Type -->
+                  <td style="padding: 8px; text-align: center; text-transform: capitalize;">
+                    {{ group.type }}
+                  </td>
 
-      <td class="col-center" style="padding: 8px; max-width: 300px;">
-  <template v-if="group.type === 'field'">
-    <div style="text-align:center; width:100%;">{{ group.items[0].name }}</div>
-  </template>
-  <template v-else>
-    <div style="text-align:center;">
-      <!-- รวมชื่อและจำนวนใน 1 บรรทัด -->
-      {{ group.items.map(item => item.name).join(', ') }}
-    </div>
-  </template>
-</td>
+                  <!-- Name -->
+                  <td class="name-cell" style="padding: 8px; max-width: 300px;">
+                    <template v-if="group.type === 'field'">
+                      {{ group.items[0].name }}
+                    </template>
+                    <template v-else>
+                      {{ group.items.map(item => item.name).join(', ') }}
+                    </template>
+                  </td>
 
-    <!-- เวลา -->
-      <td style="padding: 8px; text-align: center;">
-  <template v-if="group.type === 'field'">
-     {{ formatTimeRange(group.items[0].startTime, group.items[0].endTime) }}
-  </template>
-  <template v-else-if="group.type === 'equipment'">
-    <span>
-  {{ group.items.map(item => item.quantity || '-').join(', ') }}
-</span>
-  </template>
-</td>
-      <td style="padding: 8px; text-align: center;">
-        <template v-if="group.items[0].status === 'Canceled'">
-          <span class="canceled-status">🚫 Canceled</span>
-        </template>
-        <template v-else-if="group.items[0].status === 'Disapproved'">
-          <span class="disapproved-status">❌ Disapproved</span>
-        </template>
-        <template v-else-if="group.items[0].status === 'Approved'">
-          <span class="approved-status">✅ Approved</span>
-        </template>
-        <template v-else-if="group.items[0].status === 'Returned'">
-          <span class="returned-status">👍 Returned</span>
-        </template>
-        <template v-else-if="group.items[0].status === 'Pending'">
-          <span class="pending-status">⏳ Pending</span>
-        </template>
-        <template v-else-if="group.items[0].status === 'Return-pending'">
-          <span class="return-pending-status">📦 Return-pending</span>
-        </template>
-        <template v-else>
-          <span>{{ group.items[0].status }}</span>
-        </template>
-      </td>
-      <td style="padding: 8px; text-align: center;">
-        <button
-          v-if="group.type === 'field' && group.items[0].status === 'Pending'"
-          class="cancel-btn"
-          @click="cancelItem(group.items[0].id)"
-          style="margin-right: 4px;"
-        >
-          Cancel
-        </button>
-        <button
-          v-if="group.type === 'equipment' && group.items.every(item => item.status === 'Pending')"
-          class="cancel-btn"
-          @click="cancelGroup(group)"
-          style="margin-right: 4px;"
-        >
-          Cancel
-        </button>
-        <button class="remark-btn" @click="detailGroup(group)">Detail</button>
-        <button
-          v-if="showReturnButton(group)"
-          class="return-btn"
-          @click="returnItemGroup(group)"
-          style="margin-left: 4px;"
-        >
-          Return
-        </button>
-      </td>
-    </tr>
-  </tbody>
-</table>
-</div>
+                  <!-- Time/Amount -->
+                  <td style="padding: 8px; text-align: center;">
+                    <template v-if="group.type === 'field'">
+                      {{ formatTimeRange(group.items[0].startTime + ' น.', group.items[0].endTime + ' น.') }}
+                    </template>
+                    <template v-else-if="group.type === 'equipment'">
+                      <span>{{ group.items.map(item => item.quantity || '-').join(', ') }}</span>
+                    </template>
+                  </td>
 
+                  <!-- Status -->
+                  <td class="status-cell">
+                    <template v-if="group.items[0].status === 'Canceled'">
+                      <span class="canceled-status">Canceled</span>
+                    </template>
+                    <template v-else-if="group.items[0].status === 'Disapproved'">
+                      <span class="disapproved-status">Disapproved</span>
+                    </template>
+                    <template v-else-if="group.items[0].status === 'Approved'">
+                      <span class="approved-status">Approved</span>
+                    </template>
+                    <template v-else-if="group.items[0].status === 'Returned'">
+                      <span class="returned-status">Returned</span>
+                    </template>
+                    <template v-else-if="group.items[0].status === 'Pending'">
+                      <span class="pending-status">Pending</span>
+                    </template>
+                    <template v-else-if="group.items[0].status === 'Return-pending'">
+                      <span class="return-pending-status">Return-pending</span>
+                    </template>
+                    <template v-else>
+                      <span>{{ group.items[0].status }}</span>
+                    </template>
+                  </td>
+
+                  <!-- Action: ช่องซ้าย = Cancel/Return (ช่องเดียวกัน), กลาง = Detail, ขวา = ที่ว่าง -->
+                  <td class="action-cell">
+                    <div class="action-grid">
+                      <!-- ช่องที่ 1: Cancel หรือ Return -->
+                      <template v-if="showCancelButton(group)">
+                        <button class="cancel-btn" @click="cancelForGroup(group)">Cancel</button>
+                      </template>
+                      <template v-else-if="showReturnButton(group)">
+                        <button class="return-btn" @click="returnItemGroup(group)">Return</button>
+                      </template>
+                      <span v-else class="btn-placeholder"></span>
+
+                      <!-- ช่องที่ 2: Detail (อยู่ตรงกลางเสมอ) -->
+                      <button class="remark-btn" @click="detailGroup(group)">Detail</button>
+
+                      <!-- ช่องที่ 3: เว้นว่างคงตำแหน่ง -->
+                      <span class="btn-placeholder"></span>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
 
           <div class="pagination-control" style="margin-top: 16px;">
             <button @click="prevPage" :disabled="currentPage === 1">Back</button>
@@ -227,6 +210,7 @@
           style="width: 100vw; height: 100vh; object-fit: contain; background: black;"
         ></video>
         <canvas ref="cameraCanvas" style="display: none;"></canvas>
+
         <div
           style="position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%); display: flex; gap: 20px;"
         >
@@ -243,6 +227,7 @@
             ยกเลิก
           </button>
         </div>
+
         <div
           v-if="cameraImage"
           style="position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; background: black; display: flex; align-items: center; justify-content: center;"
@@ -261,7 +246,7 @@
               style="background: #22c55e; color: white; border: none; padding: 14px 48px; border-radius: 30px; font-weight: 700; font-size: 1.2rem; cursor: pointer;"
             >
               <span v-if="isSubmittingReturnPhoto">กำลังส่ง...</span>
-  <span v-else>ส่งรูปคืน</span>
+              <span v-else>ส่งรูปคืน</span>
             </button>
             <button
               @click="retakePhoto"
@@ -274,7 +259,7 @@
       </div>
       <!-- END MODAL กล้อง fullscreen -->
 
-      <footer class="foot">
+     <footer class="foot">
         <div class="footer-left">
           <p>
             Sport Complex – Mae Fah Luang University |
@@ -284,11 +269,14 @@
             Email:
             <a href="mailto:sport-complex@mfu.ac.th">sport-complex@mfu.ac.th</a>
           </p>
+          <p>© 2025 Center for Information Technology Services, Mae Fah Luang University. All rights reserved.</p>
         </div>
       </footer>
     </div>
   </div>
 </template>
+
+
 
 
 <script>
@@ -359,17 +347,25 @@ groupedHistories() {
     groupMap[groupKey].items.push(item);
   });
 
-  // ถ้า booking_id เดียวกัน มี status 'returned' อย่างน้อย 1 ชิ้น ให้โชว์เฉพาะ 'returned' เท่านั้น
+  // 1) ถ้ามี returned อย่างน้อย 1 ชิ้น ให้โชว์เฉพาะ returned
   Object.values(groupMap).forEach(group => {
-    const hasReturned = group.items.some(item => (item.status || '').toLowerCase() === 'returned');
+    const hasReturned = group.items.some(it => (it.status || '').toLowerCase() === 'returned');
     if (hasReturned) {
-      group.items = group.items.filter(item => (item.status || '').toLowerCase() === 'returned');
+      group.items = group.items.filter(it => (it.status || '').toLowerCase() === 'returned');
     }
   });
 
-  
+  // 2) ถ้ากลุ่มมีทั้ง approved และ return-pending ให้โชว์เฉพาะ return-pending
+  Object.values(groupMap).forEach(group => {
+    const statuses = group.items.map(it => (it.status || '').toLowerCase());
+    const hasReturnPending = statuses.includes('return-pending');
+    const hasApproved      = statuses.includes('approved');
+    if (hasReturnPending && hasApproved) {
+      group.items = group.items.filter(it => (it.status || '').toLowerCase() === 'return-pending');
+    }
+  });
 
-  // ฟังก์ชันเลือกวันที่ "ใหม่สุด" ของกลุ่ม (เหมือนเดิม)
+  // ฟังก์ชันเลือกวันที่ใหม่สุดของกลุ่ม (ตามของเดิม)
   function getGroupLatestDate(group) {
     const dates = group.items.map(it =>
       new Date(
@@ -389,6 +385,7 @@ groupedHistories() {
 
   return Object.values(groupMap).sort((a, b) => getGroupLatestDate(b) - getGroupLatestDate(a));
 },
+
 
 
 
@@ -427,6 +424,38 @@ paginatedHistory() {
 
   methods: {
 
+    showCancelButton(group) {
+    // field: ยกเลิกได้เฉพาะ Pending แถวแรก
+    if (group.type === 'field') {
+      return group.items[0]?.status === 'Pending';
+    }
+    // equipment: ทุกชิ้นในกลุ่มต้องเป็น Pending ถึงจะยกเลิกทั้งกลุ่มได้
+    if (group.type === 'equipment') {
+      return group.items.length > 0 && group.items.every(it => it.status === 'Pending');
+    }
+    return false;
+  },
+
+  cancelForGroup(group) {
+    if (group.type === 'field') {
+      return this.cancelItem(group.items[0].id);
+    }
+    if (group.type === 'equipment') {
+      return this.cancelGroup(group);
+    }
+  },
+
+  // เดิมมีอยู่แล้ว (ย้ำว่าให้คงไว้เหมือนเดิม)
+  showReturnButton(group) {
+    // ปุ่ม Return แสดงเมื่อเป็นอุปกรณ์ทั้งหมด Approved และยังไม่มี Return-pending/Returned ในกลุ่ม
+    return (
+      group.type === 'equipment' &&
+      group.items.length > 0 &&
+      group.items.every(item => item.status === 'Approved') &&
+      !group.items.some(item => item.status === 'Returned' || item.status === 'Return-pending')
+    );
+  },
+
     _makeSnapshot(rows = []) {
     // เก็บฟิลด์ที่ทำให้หน้าจอเปลี่ยน เช่น id, status, วันที่สำคัญ
     const lite = (rows || []).map(r => ({
@@ -444,6 +473,14 @@ paginatedHistory() {
     }));
     return JSON.stringify(lite);
   },
+
+  esc (s) {
+  return String(s ?? '-')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/\n/g,'<br>')
+},
+
+
 
   async fetchAndRenderHistories() {
     try {
@@ -646,7 +683,7 @@ async reloadHistories() {
     await Promise.all(group.items.map(item =>
       axios.delete(`${API_BASE}/api/history/${item.id}`)
     ));
-    Swal.fire('Cancelled!', '', 'success');
+    Swal.fire('Cancelled', '', 'success');
   } catch (error) {
     Swal.fire('Error', 'Something went wrong', 'error');
   }
@@ -668,7 +705,7 @@ async reloadHistories() {
     try {
     await axios.delete(`${API_BASE}/api/history/${itemId}`);
     await this.fetchAndRenderHistories();  // ⬅ เพิ่ม
-    Swal.fire('Cancelled!', '', 'success');
+    Swal.fire('Cancelled', '', 'success');
   } catch (error) {
     Swal.fire('Error', 'Something went wrong', 'error');
   }
@@ -676,108 +713,89 @@ async reloadHistories() {
 },
 
     detailGroup(group) {
-  // ฟังก์ชันแปลงเวลาให้อยู่ในรูปแบบ HH:mm
   const formatTime = (timeStr) => {
-    if (!timeStr) return '-';
-    if (/^\d{2}:\d{2}$/.test(timeStr)) return timeStr;
-    const date = new Date(`1970-01-01T${timeStr}`);
-    if (!isNaN(date)) {
-      return date.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', hour12: false });
-    }
-    return timeStr;
-  };
+  if (!timeStr) return '-'
+  // ตัด "น." เดิมออกถ้ามี แล้วค่อยใส่ใหม่
+  const raw = String(timeStr).trim().replace(/\s*น\.?$/,'')
+  if (/^\d{1,2}:\d{2}$/.test(raw)) return `${raw} น.`
+  const d = new Date(`1970-01-01T${raw}`)
+  if (!isNaN(d)) {
+    const hhmm = d.toLocaleTimeString('th-TH', { hour:'2-digit', minute:'2-digit', hour12:false })
+    return `${hhmm} น.`
+  }
+  return `${raw} น.`
+}
 
-  // ฟังก์ชันแสดงช่วงเวลา start - end
-  const formatTimeRange = (start, end) => {
-    const startFormatted = formatTime(start);
-    const endFormatted = formatTime(end);
-    if (startFormatted === '-' && endFormatted === '-') return '-';
-    if (startFormatted !== '-' && endFormatted !== '-') {
-      return `${startFormatted} - ${endFormatted}`;
-    }
-    return startFormatted !== '-' ? startFormatted : endFormatted;
-  };
+const formatTimeRange = (start, end) => {
+  const a = formatTime(start), b = formatTime(end)
+  if (a === '-' && b === '-') return '-'
+  if (a !== '-' && b !== '-') return `${a} - ${b}`
+  return a !== '-' ? a : b
+}
 
-  let html = '';
+
+  let html = ''
 
   if (group.type === 'field') {
-    const item = group.items[0];
-    const startTime = item.startTime || item.since_time || '';
-    const endTime = item.endTime || item.until_thetime || '';
-
-    const timeRange = formatTimeRange(startTime, endTime);
+    const item = group.items[0]
+    const startTime = item.startTime || item.since_time || ''
+    const endTime   = item.endTime   || item.until_thetime || ''
+    const timeRange = formatTimeRange(startTime, endTime)
 
     html = `
-      <div style="text-align:left;">
-        <b>Field Name:</b> ${item.name || '-'}<br>
-        <b>Name:</b> ${item.requester || '-'}<br>
-        <b>Book for:</b> ${item.proxyStudentName || '-'}<br>
-        <b>Date:</b> ${item.date ? new Date(item.date).toLocaleDateString() : '-'}<br>
-        <b>เTime:</b> ${timeRange}<br>
-        <b>Status:</b> ${item.status || '-'}
-        ${item.status === 'Canceled' ? ' 🚫' : ''}
-        <br>
-        <button id="pdf-btn" class="pdfmake-btn" style="margin-top:10px;">Dowmload PDF form</button>
+      <div class="swal-booking">
+        <div class="label"><b>Field Name</b></div><div class="value">${this.esc(item.name)}</div>
+        <div class="label"><b>Name</b></div><div class="value">${this.esc(item.requester)}</div>
+        <div class="label"><b>Date</b></div><div class="value">${this.esc(this.formatDateOnly(item.date))}</div>
+        <div class="label"><b>Time</b></div><div class="value">${this.esc(timeRange)}</div>
+        <div class="label"><b>Book for</b></div><div class="value">${this.esc(item.proxyStudentName || '-')}</div>
+        <div class="label"><b>Status</b></div><div class="value">${this.esc(item.status)}</div>
+        <div style="grid-column:1/-1;margin-top:10px;">
+          <button id="pdf-btn" class="pdfmake-btn">Download PDF form</button>
+        </div>
       </div>
-    `;
-  } else if (group.type === 'equipment') {
-    const firstItem = group.items[0];
+    `
+  } else {
+    // ===== equipment =====
+    const firstItem = group.items[0]
+    const isOneDayBorrow = (!firstItem.since && !firstItem.uptodate)
+    const showPdfButton  = !isOneDayBorrow
 
-    // เช็คว่าเป็นการยืมวันเดียวไหม จาก since และ uptodate
-    const isOneDayBorrow = (firstItem.since == null || firstItem.since === '') && (firstItem.uptodate == null || firstItem.uptodate === '');
+    let statusToShow = ''
+    if (group.items.every(i => i.status === 'Return-pending')) statusToShow = 'Return-pending'
+    else if (group.items.every(i => i.status === 'Returned'))   statusToShow = 'Returned'
+    else if (group.items.every(i => i.status === 'Approved'))   statusToShow = 'Approved'
+    else if (group.items.every(i => i.status === 'Pending'))    statusToShow = 'Pending'
+    else if (group.items.every(i => i.status === 'Disapproved'))statusToShow = 'Disapproved'
+    else statusToShow = (group.items[0]?.status || '')
 
-    // แสดงปุ่ม PDF เฉพาะกรณีที่ไม่ใช่การยืมวันเดียว
-    let showPdfButton = !isOneDayBorrow;
+    const shown = group.items.filter(i => i.status === statusToShow)
+    const rows = shown.map((item, idx) => `
+      <div class="label"><b>Equipment ${idx+1}</b></div><div class="value">${this.esc(item.name)}</div>
+      <div class="label"><b>Amount</b></div><div class="value">${this.esc(item.quantity)}</div>
+      <div class="label"><b>Name</b></div><div class="value">${this.esc(item.requester)}</div>
+      
+      <div class="label"><b>Date</b></div><div class="value">${this.esc(this.formatDateOnly(item.date))}</div>
+      <div class="label"><b>Status</b></div><div class="value">${this.esc(item.status)}</div>
+      <div class="label"><b>Return date</b></div><div class="value">${this.esc(item.returnedAt ? this.formatDateOnly(item.returnedAt) : '-')}</div>
+      ${
+        (item.status === "Returned" || item.status === "Return-pending") && item.attachment
+        ? `<div style="grid-column:1/-1;margin-top:6px;">
+             <img src="${item.attachment}" style="max-width:220px;max-height:150px;object-fit:contain;border-radius:10px;border:1.5px solid #bbb;cursor:pointer"
+                  onclick="window.__showFullReturnPhoto && window.__showFullReturnPhoto('${item.attachment}')">
+             <div style="font-size:0.9em;color:#888;margin-top:0.3em;">(Click image to view full.)</div>
+           </div>`
+        : ''
+      }
+      <div style="grid-column:1/-1;border-bottom:1px dashed #bbb;margin:6px 0;"></div>
+    `).join('')
 
-    // หาสถานะหลักที่จะแสดง (ถ้ามีหลายสถานะในกลุ่ม)
-    let statusToShow = '';
-    if (group.items.every(item => item.status === 'Return-pending')) {
-      statusToShow = 'Return-pending';
-    } else if (group.items.every(item => item.status === 'Returned')) {
-      statusToShow = 'Returned';
-    } else if (group.items.every(item => item.status === 'Approved')) {
-      statusToShow = 'Approved';
-    } else if (group.items.every(item => item.status === 'Pending')) {
-      statusToShow = 'Pending';
-    } else if (group.items.every(item => item.status === 'Disapproved')) {
-      statusToShow = 'Disapproved';
-    } else {
-      const shown = group.items.filter(it => this.itemShowCondition(it, group));
-      statusToShow = shown.length > 0 ? shown[0].status : '';
-    }
-
-    const shownItems = group.items.filter(item => item.status === statusToShow);
-
-    html = '<div style="text-align:left;">';
-    if (shownItems.length === 0) {
-      html += `<div>ไม่มีรายการ</div>`;
-    } else {
-      shownItems.forEach((item, i) => {
-        html += `
-          <div style="margin-bottom:8px;padding-bottom:8px;border-bottom:1px dashed #bbb;">
-            <b>Equipment ${i + 1}:</b> ${item.name || '-'}<br>
-            <b>Amount:</b> ${item.quantity || '-'}<br>
-            <b>Name:</b> ${item.requester || '-'}<br>
-            <b>Date:</b> ${item.date ? new Date(item.date).toLocaleDateString() : '-'}<br>
-            <b>Status:</b> ${item.status || '-'}<br>
-            <b>Return date:</b> ${item.returnedAt ? this.formatDateOnly(item.returnedAt) : '-'}<br>
-            ${
-              (item.status === "Returned" || item.status === "Return-pending") && item.attachment
-                ? `<div style="margin-top:6px;">
-                    <img src="${item.attachment}" style="max-width:180px;max-height:120px;object-fit:contain;border-radius:10px;border:1.5px solid #bbb;cursor:pointer" 
-                      onclick="window.__showFullReturnPhoto && window.__showFullReturnPhoto('${item.attachment}')">
-                    <div style="font-size:0.9em;color:#888;margin-top:0.3em;">(Click on the image to view it in full screen.)</div>
-                  </div>`
-                : ''
-            }
-          </div>
-        `;
-      });
-    }
-    if (showPdfButton) {
-      html += `<button id="pdf-btn" class="pdfmake-btn" style="margin-top:10px;">Download PDF form</button>`;
-    }
-    html += '</div>';
+    html = `
+      <div class="swal-booking">
+        ${rows || `<div style="grid-column:1/-1">ไม่มีรายการ</div>`}
+        ${showPdfButton ? `<div style="grid-column:1/-1;margin-top:10px;"><button id="pdf-btn" class="pdfmake-btn">Download PDF form</button></div>` : '' }
+      </div>
+    `
   }
 
   Swal.fire({
@@ -786,37 +804,24 @@ async reloadHistories() {
     confirmButtonText: 'Close',
     confirmButtonColor: '#3085d6',
     didOpen: () => {
-      // BIND CLICK ให้ปุ่ม PDF เฉพาะกรณีที่ปุ่มมีอยู่จริง
-     const pdfBtn = document.getElementById('pdf-btn');
-    if (pdfBtn) {
-      pdfBtn.addEventListener('click', () => {
-        this.downloadBookingPdf(group.booking_id);
-      });
-    }
-      // ฟังก์ชันดูรูปเต็มจอ
+      const pdfBtn = document.getElementById('pdf-btn')
+      if (pdfBtn) pdfBtn.addEventListener('click', () => this.downloadBookingPdf(group.booking_id))
+
+      // viewer รูปเต็ม
       window.__showFullReturnPhoto = (img) => {
-        const imgWin = window.open("", "_blank");
-        imgWin.document.write(`
-          <html>
-            <head>
-              <title>รูปคืนอุปกรณ์</title>
-              <style>
-                body { background:#111;margin:0;display:flex;align-items:center;justify-content:center;height:100vh;}
-                img { max-width:100vw;max-height:100vh;object-fit:contain;border-radius:16px;box-shadow:0 8px 30px #0008;}
-              </style>
-            </head>
-            <body onclick="window.close()">
-              <img src="${img}" alt="รูปคืนอุปกรณ์" />
-            </body>
-          </html>
-        `);
+        const w = window.open("", "_blank")
+        w.document.write(`
+          <html><head><title>รูปคืนอุปกรณ์</title>
+          <style>body{background:#111;margin:0;display:flex;align-items:center;justify-content:center;height:100vh}
+                 img{max-width:100vw;max-height:100vh;object-fit:contain;border-radius:16px;box-shadow:0 8px 30px #0008}</style>
+          </head><body onclick="window.close()"><img src="${img}"></body></html>
+        `)
       }
     },
-    willClose: () => {
-      window.__showFullReturnPhoto = undefined;
-    }
-  });
+    willClose: () => { window.__showFullReturnPhoto = undefined }
+  })
 },
+
     async returnItemGroup(group) {
       this.showCamera = true;
       this.returnGroupBookingId = group.booking_id;
@@ -1103,19 +1108,7 @@ watch: {
   align-items: center;
   gap: 8px;
 }
-.cancel-btn {
-  padding: 4px 10px;
-  background-color: #ff4d4f;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 0.8rem;
-  transition: background-color 0.3s;
-}
-.cancel-btn:hover {
-  background-color: #d9363e;
-}
+
 .return-btn {
   padding: 4px 10px;
   background-color: #03a9f4;
@@ -1151,20 +1144,7 @@ watch: {
   color: #6b7280;
   cursor: not-allowed;
 }
-/* .remark-btn {
-  background-color: #213555;
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  padding: 4px 14px;
-  cursor: pointer;
-  margin-left: 8px;
-  font-size: 0.95rem;
-  transition: background 0.2s;
-}
-.remark-btn:hover {
-  background-color: #4268a3;
-} */
+
 .slide-down-enter-active,
 .slide-down-leave-active {
   transition: all 0.5s cubic-bezier(0.23, 1, 0.32, 1);
@@ -1239,19 +1219,19 @@ watch: {
   font-size: 1rem;
 }
 .disapproved-status {
-  color: #f39c12;
+  color: #ff1900;
   font-weight: bold;
   padding: 2px 12px;
-  background: #fff7e0;
+  background: #f1d1d1;
   border-radius: 10px;
   display: inline-block;
   font-size: 1rem;
 }
 .returned-status {
-  color: #1557b2;
+  color: #f5f5f5;
   font-weight: bold;
   padding: 2px 12px;
-  background: #e0f0ff;
+  background: #88898a;
   border-radius: 10px;
   display: inline-block;
   font-size: 1rem;
@@ -1451,20 +1431,6 @@ watch: {
   background-color: #4268a3;
 }
 
-/* .return-btn {
-  padding: 4px 8px;
-  background-color: #1eac36;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 0.85rem;
-}
-.return-btn:hover {
-  background-color: #178129;
-} */
-
-/* สถานะต่าง ๆ ให้อยู่ในตาราง */
 .canceled-status,
 .approved-status,
 .disapproved-status,
@@ -1511,6 +1477,118 @@ watch: {
     white-space: nowrap;
   }
 }
+</style>
+
+<style>
+/* ----- ปรับกล่อง SweetAlert ----- */
+.swal2-popup{
+  width:auto;
+  max-width:min(720px,92vw);
+  padding:24px 26px 22px;
+  font-family:inherit;
+}
+@supports (width:fit-content){ .swal2-popup{ width:fit-content; } }
+.swal2-title{ margin-bottom:10px!important; }
+
+/* ----- จัด 2 คอลัมน์: หัวข้อซ้าย-รายละเอียดขวา ----- */
+.swal2-popup .swal-booking{
+  display:grid;
+  grid-template-columns:160px 1fr; /* ปรับได้ */
+  column-gap:12px;
+  row-gap:8px;
+  text-align:left;
+  margin-inline:auto;
+  max-width:min(680px,86vw);
+}
+.swal2-popup .swal-booking .label{
+  justify-self:end;
+  white-space:nowrap;
+  font-weight:700;
+  line-height:1.6;
+}
+.swal2-popup .swal-booking .value{
+  justify-self:start;
+  white-space:pre-wrap;
+  word-break:break-word;
+  line-height:1.6;
+  max-width:clamp(260px,56vw,560px);
+}
+.swal2-popup .swal-booking .full{ grid-column:1 / -1; }
+
+.history-table {
+  table-layout: fixed;
+}
+
+/* หัวคอลัมน์ Name ให้ชิดซ้ายด้วย */
+.history-table th.name-col {
+  text-align: center !important;
+  padding-left: 0;   /* เอา padding ซ้ายออก ไม่ให้หัวข้อเอียงไปซ้าย */
+}
+
+/* เซลล์ Name ชิดซ้าย + เว้นซ้ายเท่ากันทุกแถว */
+.history-table td.name-cell {
+  text-align: left !important;
+  padding-left: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+
+/* ให้คอลัมน์ Action จัดปุ่มเป็น 3 ช่องคงที่ */
+.action-cell { padding: 8px; text-align: center; }
+
+.action-grid{
+  display: inline-grid;
+  grid-template-columns: 68px 84px 84px; /* Cancel | Detail | Return */
+  align-items: center;
+  column-gap: 8px;
+  justify-content: center;
+}
+
+/* ทำให้ปุ่มทั้งสามกว้างเท่ากัน */
+.action-grid .cancel-btn,
+.action-grid .remark-btn,
+.action-grid .return-btn,
+.action-grid .btn-placeholder{
+  width: var(--action-w);
+  white-space: nowrap;
+}
+
+/* ช่องว่างหลอก: กินพื้นที่เท่าปุ่ม แต่ไม่มองเห็น */
+.btn-placeholder{
+  visibility: hidden;
+  display: inline-block;
+  height: 28px;       /* สูงพอกับปุ่ม ดูสวยขึ้น */
+}
+
+/* เพิ่มระยะห่างระหว่าง Status กับ Action */
+.status-cell{
+  text-align: center;
+  padding: 8px 24px 8px 8px;   
+}
+.action-cell{
+  text-align: center;
+  padding: 8px 8px 8px 24px;   
+}
+
+/* ให้หัวข้อ Status อยู่กึ่งกลางคอลัมน์ */
+.history-table th.status-head{
+  text-align: center !important;
+  padding-left: 0 !important;   /* ตัดระยะซ้ายออกเพื่อให้กึ่งกลางจริง */
+}
+
+/* คงข้อมูลในช่อง Status ให้ชิดซ้ายตามเดิม */
+.history-table td.status-cell{
+  text-align: left !important;
+  padding-left: 16px !important;
+}
+
+
+.history-table td.action-cell {
+  padding-left:90px !important;  
+}
+
 
 
 </style>

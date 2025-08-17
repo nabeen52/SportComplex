@@ -151,6 +151,7 @@
             Email:
             <a href="mailto:sport-complex@mfu.ac.th">sport-complex@mfu.ac.th</a>
           </p>
+          <p>© 2025 Center for Information Technology Services, Mae Fah Luang University. All rights reserved.</p>
         </div>
       </footer>
     </div>
@@ -351,39 +352,99 @@ export default {
       }
     },
     async approveGroup(group) {
-      const result = await Swal.fire({
-        title: 'อนุมัติรายการนี้?',
-        text: 'อนุมัติรายการยืมอุปกรณ์นี้?',
-        icon: 'question',
-        showCancelButton: true,
-        confirmButtonText: 'อนุมัติ',
-        cancelButtonText: 'ยกเลิก',
-        confirmButtonColor: '#50b053',
-        cancelButtonColor: '#999'
-      });
-      if (result.isConfirmed) {
-        const staffId = localStorage.getItem('user_id');
-        try {
-          await Promise.all(group.items.map(item =>
-            axios.patch(`${API_BASE}/api/history/${item.id}/approve_equipment`, {
-              staff_id: staffId
-            })
-          ));
-          group.items.forEach(item => {
-            item.status = 'Approved';
-          });
-          Swal.fire('Approved!', 'รายการทั้งหมดถูกอนุมัติ', 'success');
-          this.fetchPendingEquipments();
-        } catch (e) {
-          Swal.fire('Error', e.message || 'Approve failed', 'error');
-          console.error('Approve error:', e);
-        }
-      }
-    },
+  const ask = await Swal.fire({
+    title: 'อนุมัติรายการนี้',
+    text: 'คุณต้องการอนุมัติรายการยืมอุปกรณ์นี้?',
+    icon: 'question',
+    showCancelButton: true,
+    confirmButtonText: 'อนุมัติ',
+    cancelButtonText: 'ยกเลิก',
+    confirmButtonColor: '#50b053',
+    cancelButtonColor: '#999'
+  });
+  if (!ask.isConfirmed) return;
+
+  const staffId = localStorage.getItem('user_id');
+
+  // error บางแบบ (เช่น อนุมัติไว้แล้ว) ให้นับเป็น "สำเร็จ"
+  const isAlreadyApprovedError = (err) => {
+    const code = err?.response?.status;
+    const msg  = (err?.response?.data?.message || err?.message || '').toLowerCase();
+    return code === 409 ||
+           (code === 400 && /already|approved|อนุมัติแล้ว|ซ้ำ/.test(msg));
+  };
+
+  const results = await Promise.allSettled(
+    group.items.map(item =>
+      axios.patch(`${API_BASE}/api/history/${item.id}/approve_equipment`, { staff_id: staffId })
+        .then(() => ({ ok: true, item }))
+        .catch(err => ({ ok: isAlreadyApprovedError(err), err, item }))
+    )
+  );
+
+  const logicalSuccessIdx = [];
+  const hardFailed = [];
+  results.forEach((r, i) => {
+    const payload = r.status === 'fulfilled' ? r.value : r.reason;
+    if (payload.ok) logicalSuccessIdx.push(i);
+    else hardFailed.push({ i, name: group.items[i]?.name, err: payload.err });
+  });
+
+  // อัปเดตสถานะฝั่ง UI สำหรับตัวที่สำเร็จ
+  logicalSuccessIdx.forEach(i => { group.items[i].status = 'Approved'; });
+
+  // ฟังก์ชันตรวจซ้ำว่า booking นี้ “approved หมดแล้วจริงไหม”
+  const verifyAllApproved = async () => {
+    try {
+      const res = await axios.get(`${API_BASE}/api/history`);
+      const all = Array.isArray(res.data) ? res.data : [];
+      const items = all.filter(h =>
+        h.type !== 'field' &&
+        (h.booking_id || `single_${h._id?.$oid || h._id}`) === group.booking_id
+      );
+      if (items.length === 0) return logicalSuccessIdx.length > 0; // fallback
+      return items.every(h => (h.status || '').toLowerCase() === 'approved');
+    } catch {
+      return logicalSuccessIdx.length > 0; // fallback เมื่อเช็คไม่ได้
+    }
+  };
+
+  let allApproved = hardFailed.length === 0;
+  if (!allApproved && logicalSuccessIdx.length > 0) {
+    // ถ้ามี “สำเร็จบางส่วน” ให้ตรวจซ้ำจาก backend
+    allApproved = await verifyAllApproved();
+  }
+
+  if (allApproved) {
+    // ✅ ให้ขึ้นเป็น success ไปเลย
+    group.items.forEach(it => (it.status = 'Approved'));
+    Swal.fire({
+      title: 'สำเร็จ',
+      text: 'รายการทั้งหมดถูกอนุมัติ',
+      icon: 'success',
+      timer: 1500,
+      showConfirmButton: false
+    });
+  } else if (logicalSuccessIdx.length > 0) {
+    const failedNames = hardFailed.map(f => f.name || `#${f.i + 1}`).join(', ');
+    Swal.fire({
+      title: 'สำเร็จบางส่วน',
+      html: `อนุมัติสำเร็จ ${logicalSuccessIdx.length} รายการ<br>ล้มเหลว ${hardFailed.length} รายการ<br><small>ที่ล้มเหลว: ${failedNames}</small>`,
+      icon: 'warning'
+    });
+  } else {
+    Swal.fire('Error', 'อนุมัติไม่สำเร็จ', 'error');
+  }
+
+  this.fetchPendingEquipments(); // refresh รายการ
+},
+
+
+
     async cancelGroup(group) {
       const result = await Swal.fire({
-        title: 'ไม่อนุมัติรายการ?',
-        text: 'ไม่อนุมัติรายการยืมอุปกรณ์นี้?',
+        title: 'ไม่อนุมัติรายการ',
+        text: 'คุณต้องการไม่อนุมัติรายการยืมอุปกรณ์นี้?',
         icon: 'warning',
         showCancelButton: true,
         confirmButtonText: 'ไม่อนุมัติ',
@@ -401,30 +462,35 @@ export default {
         group.items.forEach(item => {
           item.status = 'Disapproved';
         });
-        Swal.fire('Cancelled!', 'รายการทั้งหมดถูกยกเลิก', 'error');
+        Swal.fire('Cancelled', 'รายการทั้งหมดถูกยกเลิก', 'error');
         this.fetchPendingEquipments();
       }
     },
     detailGroup(group) {
-      let html = '<div style="text-align:left;">';
-      group.items.forEach((item, i) => {
-        html += `
-          <div style="margin-bottom:8px;padding-bottom:8px;border-bottom:1px dashed #bbb;">
-            <b>อุปกรณ์ที่ ${i + 1}:</b> ${item.name || '-'}<br>
-            <b>จำนวน:</b> ${item.quantity || '-'}<br>
-            <b>ชื่อผู้ขอใช้:</b> ${this.usersMap[item.user_id] || item.requester || item.user_id || "-"}<br>
-            <b>วันที่ขอยืม:</b> ${item.date ? new Date(item.date).toLocaleDateString() : '-'}<br>
-          </div>
-        `;
-      });
-      html += '</div>';
-      Swal.fire({
-        title: 'รายละเอียดรายการยืมอุปกรณ์',
-        html,
-        confirmButtonText: 'ปิด',
-        confirmButtonColor: '#3085d6'
-      });
-    },
+  let html = '<div style="text-align:left;">';
+  group.items.forEach((item, i) => {
+    html += `
+      <div style="margin-bottom:12px; padding-bottom:12px; border-bottom:1px dashed #bbb;">
+        <div style="display:grid; grid-template-columns: 150px auto; gap: 10px;">
+          <div><b>อุปกรณ์ที่ ${i + 1}</b></div> <div>${item.name || '-'}</div>
+          <div><b>จำนวน</b></div> <div>${item.quantity || '-'}</div>
+          <div><b>ชื่อผู้ขอใช้</b></div> <div>${this.usersMap[item.user_id] || item.requester || item.user_id || "-"}</div>
+          <div><b>วันที่ขอยืม</b></div> <div>${item.date ? new Date(item.date).toLocaleDateString() : '-'}</div>
+        </div>
+      </div>
+    `;
+  });
+  html += '</div>';
+
+  Swal.fire({
+    title: 'รายละเอียดรายการยืมอุปกรณ์',
+    html,
+    confirmButtonText: 'ปิด',
+    confirmButtonColor: '#3085d6',
+    width: 600   // ✅ กำหนดความกว้าง popup ให้อ่านง่าย
+  });
+},
+
     async returnGroup(group) {
   const staffId = localStorage.getItem('user_id');
   const itemWithPhoto = group.items.find(item => !!item.attachment || !!item.returnPhoto || !!item.fileData);
@@ -554,7 +620,7 @@ export default {
       if (uptodate) item.uptodate = uptodate;
     });
     Swal.fire({
-      title: 'สำเร็จ!',
+      title: 'สำเร็จ',
       text: `คุณได้คืนอุปกรณ์กลุ่มนี้แล้ว`,
       icon: 'success',
       timer: 1500,

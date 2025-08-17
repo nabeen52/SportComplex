@@ -62,7 +62,7 @@
         <div class="title-row">
           <h2>Management</h2>
           <div class="filter-group">
-            <button :class="['filter-btn', { active: filter === 'all' }]" @click="filter = 'all'">ทั้งหมด</button>
+            <button :class="['filter-btn', { active: filter === 'all' }]" @click="filter = 'all'">All</button>
             <button :class="['filter-btn', { active: filter === 'Staff' }]" @click="filter = 'Staff'">Staff</button>
             <button :class="['filter-btn', { active: filter === 'Admin' }]" @click="filter = 'Admin'">Admin</button>
           </div>
@@ -74,16 +74,16 @@
           <table class="member-table">
             <thead>
               <tr>
-                <th>ID</th>
-                <th>ชื่อ</th>
-                <th>อีเมล</th>
-                <th>ตำแหน่ง</th>
+                <!-- <th>ID</th> -->
+                <th>Name</th>
+                <th>Email</th>
+                <th>Admin/Staff</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="(Member, index) in filteredMembers" :key="index">
-                <td>{{ Member.id }}</td>
+                <!-- <td>{{ Member.id }}</td> -->
                 <td>{{ Member.name }}</td>
                 <td>
                   {{ Member.email }}
@@ -116,6 +116,7 @@
             Email:
             <a href="mailto:sport-complex@mfu.ac.th">sport-complex@mfu.ac.th</a>
           </p>
+          <p>© 2025 Center for Information Technology Services, Mae Fah Luang University. All rights reserved.</p>
         </div>
       </footer>
     </div>
@@ -305,7 +306,7 @@ export default {
           }
           await axios.patch(`${API_BASE}/api/members/${encodeURIComponent(formValues.email)}`, formValues);
           await this.loadMembers();
-          Swal.fire('เลื่อนตำแหน่งสำเร็จ!', '', 'success');
+          Swal.fire('เลื่อนตำแหน่งสำเร็จ', '', 'success');
         } catch (err) {
           Swal.fire('ผิดพลาด', err.response?.data?.message || 'ไม่สามารถทำรายการได้', 'error');
         }
@@ -350,7 +351,7 @@ export default {
           const oldEmail = Member.email;
           await axios.patch(`${API_BASE}/api/members/${encodeURIComponent(oldEmail)}`, result.value);
           this.Members[index] = { ...this.Members[index], ...result.value };
-          Swal.fire('แก้ไขสำเร็จ!', '', 'success');
+          Swal.fire('แก้ไขสำเร็จ', '', 'success');
         } catch (err) {
           Swal.fire('ผิดพลาด', 'ไม่สามารถบันทึกข้อมูลได้', 'error');
         }
@@ -373,7 +374,7 @@ export default {
               position: 'user'
             });
             await this.loadMembers();
-            Swal.fire('เปลี่ยนสถานะเป็นผู้ใช้ทั่วไปแล้ว!', '', 'success');
+            Swal.fire('เปลี่ยนสถานะเป็นผู้ใช้ทั่วไปแล้ว', '', 'success');
           } catch (err) {
             Swal.fire('ผิดพลาด', 'ไม่สามารถเปลี่ยนสถานะได้', 'error');
           }
@@ -496,16 +497,39 @@ export default {
   border-radius: 12px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.08);
 }
+/* ใหม่ */
 .member-table th, .member-table td {
   padding: 0.7rem 1rem;
-  text-align: left;
   border-bottom: 1px solid #e2e8f0;
 }
 .member-table th {
   background: #1e3a8a;
   color: #fff;
   font-weight: 600;
+  text-align: center;       /* <- จัดหัวตารางให้อยู่ตรงกลาง */
+  vertical-align: middle;
 }
+.member-table td {
+  text-align: left;         /* เนื้อหายังคงชิดซ้ายเหมือนเดิม */
+}
+/* จัดกึ่งกลางคอลัมน์ Admin/Staff และ Actions */
+.member-table td:nth-child(3),
+.member-table td:nth-child(4) {
+  text-align: center;
+}
+
+/* ขยับคอลัมน์ Name และ Email ไปทางขวาเพิ่มขึ้น */
+.member-table td:nth-child(1),
+.member-table td:nth-child(2) {
+  padding-left: 2rem;   /* ปรับเป็น 1.5rem/2.5rem ได้ตามชอบ */
+}
+
+/* เผื่อปุ่ม Edit อยู่กลางเซลล์สวย ๆ */
+.member-table td:nth-child(4) .edit-btn,
+.member-table td:nth-child(4) span {
+  display: inline-block;
+}
+
 .member-table tr:last-child td {
   border-bottom: none;
 }

@@ -93,6 +93,7 @@
             Email:
             <a href="mailto:sport-complex@mfu.ac.th">sport-complex@mfu.ac.th</a>
           </p>
+          <p>© 2025 Center for Information Technology Services, Mae Fah Luang University. All rights reserved.</p>
         </div>
       </footer>
     </div>
@@ -240,9 +241,9 @@ async function confirmToggle(item) {
       const res = await axios.patch(`${API_BASE}/api/equipments/${item._id}`, { visible: willEnable })
       // อัปเดตสถานะบนหน้าจอทันที
       item.visible = res.data.data.visible
-      Swal.fire('สำเร็จ!', `สถานะอุปกรณ์ถูก${willEnable ? 'เปิด' : 'ปิด'}แล้ว`, 'success')
+      Swal.fire('สำเร็จ', `สถานะอุปกรณ์ถูก${willEnable ? 'เปิด' : 'ปิด'}แล้ว`, 'success')
     } catch (err) {
-      Swal.fire('ผิดพลาด!', err.response?.data?.message || err.message, 'error')
+      Swal.fire('ผิดพลาด', err.response?.data?.message || err.message, 'error')
     }
   }
 }

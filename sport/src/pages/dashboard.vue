@@ -181,58 +181,71 @@
 
         <!-- Card 2: อุปกรณ์กีฬา -->
         <div class="dashboard-section">
-         <div class="dashboard-section-header">
-  <div class="header-spacer"></div>
-  <h2 class="dashboard-title">สถิติการใช้งาน "อุปกรณ์กีฬา"</h2>
-  <button @click="exportEquipPDF" class="export-btn equip">ExportPDF</button>
+  <div class="dashboard-section-header">
+    <div class="header-spacer"></div>
+    <h2 class="dashboard-title">สถิติการใช้งาน "อุปกรณ์กีฬา"</h2>
+    <button @click="exportEquipPDF" class="export-btn equip">ExportPDF</button>
+  </div>
+
+  <!-- ตัวกรอง: ตั้งแต่ เดือน/ปี ถึง เดือน/ปี -->
+  <div class="filter-options" style="margin-bottom:0;">
+    <label>ตั้งแต่:
+      <select v-model="equipOverallStartMonth">
+        <option v-for="(m, i) in months" :key="'es-'+i" :value="i+1">{{ m }}</option>
+      </select>
+      <select v-model="equipOverallStartYear">
+        <option v-for="y in years" :key="'ey1-'+y" :value="y">{{ y }}</option>
+      </select>
+    </label>
+    <label>ถึง:
+      <select v-model="equipOverallEndMonth">
+        <option v-for="(m, i) in months" :key="'ee-'+i" :value="i+1">{{ m }}</option>
+      </select>
+      <select v-model="equipOverallEndYear">
+        <option v-for="y in years" :key="'ey2-'+y" :value="y">{{ y }}</option>
+      </select>
+    </label>
+  </div>
+
+  <div class="chart-container overall">
+    <Line :data="overallEquipChartData" :options="overallEquipChartOptions" :key="equipOverallUpdateKey" />
+
+    <!-- legend ใต้กราฟ (กดเพื่อซ่อน/แสดงเส้น) -->
+    <div class="chart-legend">
+      <span
+        v-for="(ds, idx) in overallEquipChartData.datasets"
+        :key="'elegend-'+(ds.label||idx)"
+        class="legend-item"
+        :style="{
+          color: ds._hidden ? '#ccc' : ds.borderColor,
+          cursor: 'pointer',
+          marginRight: '22px',
+          fontWeight: ds._hidden ? 'normal' : 'bold'
+        }"
+        @click="toggleEquipLine(idx)"
+      >
+        <span
+          class="legend-color"
+          :style="{
+            background: ds.borderColor,
+            border: ds._hidden ? '2px solid #ccc' : `2px solid ${ds.borderColor}`,
+            opacity: ds._hidden ? 0.33 : 1
+          }"
+        ></span>
+        {{ ds.label }}
+      </span>
+    </div>
+  </div>
 </div>
-
-          <div class="filter-options">
-  <label>ชื่ออุปกรณ์:
-    <select v-model="selectedEquipName">
-      <option value="">ทั้งหมด</option>
-      <option v-for="name in allEquipNames" :key="name" :value="name">{{ name }}</option>
-    </select>
-  </label>
-
-  <label>เดือน:
-    <select v-model="equipStartMonth">
-      <option v-for="(m, i) in months" :key="i" :value="i+1">{{ m }}</option>
-    </select>
-  </label>
-  <label>ปี:
-    <select v-model="equipStartYear">
-      <option v-for="y in years" :key="y" :value="y">{{ y }}</option>
-    </select>
-  </label>
-  <span>ถึง</span>
-  <label>เดือน:
-    <select v-model="equipEndMonth">
-      <option v-for="(m, i) in months" :key="i" :value="i+1">{{ m }}</option>
-    </select>
-  </label>
-  <label>ปี:
-    <select v-model="equipEndYear">
-      <option v-for="y in years" :key="y" :value="y">{{ y }}</option>
-    </select>
-  </label>
-
-  <label>แสดงสูงสุด:
-    <select v-model="equipShowLimit">
-      <option :value="null">ทั้งหมด</option>
-      <option v-for="n in [5,10,15,20,50,100]" :key="n" :value="n">{{ n }} รายการ</option>
-    </select>
-  </label>
 </div>
-
          
-         <UnitUsageChart
+         <!-- <UnitUsageChart
   :units="filteredEquipUnits"
   unitType="equipment"
   yLabel="จำนวนการใช้งาน"
 />
         </div>
-      </div>
+      </div> -->
 
       <!-- Footer -->
       <footer class="foot">
@@ -245,6 +258,7 @@
             Email:
             <a href="mailto:sport-complex@mfu.ac.th">sport-complex@mfu.ac.th</a>
           </p>
+          <p>© 2025 Center for Information Technology Services, Mae Fah Luang University. All rights reserved.</p>
         </div>
       </footer>
     </div>
@@ -257,6 +271,14 @@ import axios from 'axios'
 import UnitUsageChart from '@/components/UnitUsageChart.vue'
 import jsPDF from 'jspdf'
 import { Line } from 'vue-chartjs'
+import {
+  Chart,
+  LineElement, PointElement, LinearScale, CategoryScale,
+  Title, Tooltip, Legend
+} from 'chart.js'
+
+// >>> ต้องมีบรรทัดนี้ใน dashboard.vue ด้วย <<<
+Chart.register(LineElement, PointElement, LinearScale, CategoryScale, Title, Tooltip, Legend)
 
 import '@/assets/fonts/Sarabun-Regular-normal.js'
 import '@/assets/fonts/Sarabun-Bold-normal.js'
@@ -313,7 +335,7 @@ const overallMonths = months  // ["มกราคม", ... "ธันวาค�
 const selectedFieldName = ref('')
 const selectedFieldMonth = ref('')
 
-const years = [currentYear, currentYear - 1, currentYear - 2]
+const years = [currentYear - 3,currentYear - 2,currentYear - 1,currentYear, currentYear + 1, currentYear + 2, currentYear + 3]
 const selectedFieldYear = ref(currentYear)
 const fieldShowLimit = ref(5)
 
@@ -325,6 +347,118 @@ const equipShowLimit = ref(5)
 
 const allFields = ref([]) // รายชื่อสนามทั้งหมด (master)
 const isSingleEquipMode = computed(() => !!selectedEquipName.value);
+// ==== อุปกรณ์กีฬาแบบภาพรวมรายเดือน ====
+const equipOverallStartMonth = ref(1)
+const equipOverallStartYear  = ref(currentYear)
+const equipOverallEndMonth   = ref(12)
+const equipOverallEndYear    = ref(currentYear)
+const equipOverallUpdateKey  = ref(0)
+
+// รายชื่ออุปกรณ์ทั้งหมด (สำหรับทำเส้นละอุปกรณ์)
+const allEquipNamesOverall = computed(() => {
+  const names = new Set()
+  equipUnits.value.forEach(u => {
+    if (u.name) names.add(u.name)
+  })
+  return Array.from(names)
+})
+
+// ข้อมูลกราฟอุปกรณ์ (X = เดือนช่วงที่เลือก, Y = จำนวนการใช้งาน, เส้น = อุปกรณ์)
+const overallEquipChartData = computed(() => {
+  // 1) คำนวณจำนวนเดือนในช่วง
+  const yStart = Number(equipOverallStartYear.value)
+  const yEnd   = Number(equipOverallEndYear.value)
+  const mStart = Number(equipOverallStartMonth.value)
+  const mEnd   = Number(equipOverallEndMonth.value)
+
+  const countMonth = (yEnd - yStart) * 12 + (mEnd - mStart) + 1
+  const labels = []
+  const monthYearList = []
+  for (let i = 0; i < countMonth; i++) {
+    const y = yStart + Math.floor((mStart - 1 + i) / 12)
+    const m = ((mStart - 1 + i) % 12) + 1
+    labels.push(`${months[m - 1]} ${y}`)
+    monthYearList.push({ m, y })
+  }
+
+  // 2) ทำ datasets สำหรับแต่ละอุปกรณ์
+  const colorList = [
+    "#e57373","#64b5f6","#81c784","#ffd54f","#ba68c8","#7986cb","#4db6ac","#ff8a65","#a1887f",
+    "#f06292","#9575cd","#4fc3f7","#aed581","#fff176","#dce775","#ffd54f","#a1887f","#90caf9","#ffb74d",
+  ]
+ const datasets = allEquipNamesOverall.value.map((equipName, i) => {
+  const dataArr = monthYearList.map(({ m, y }) => {
+    let sum = 0
+    equipUnits.value.forEach(u => {
+      if (!u.usageByMonthYear) return
+      if (u.name !== equipName) return        // เช็คชื่อที่ระดับ doc แทน
+      u.usageByMonthYear.forEach(row => {
+        // แถวใน usageByMonthYear มีแค่ year, month, usage
+        if (row.year === y && row.month === m) {
+          sum += row.usage || 0
+        }
+      })
+    })
+    return sum
+  })
+    const c = colorList[i % colorList.length]
+    return {
+      label: equipName,
+      data: dataArr,
+      borderColor: c,
+      backgroundColor: c + "22",
+      fill: false,
+      tension: 0.32,
+      pointRadius: 2,
+      borderWidth: 2,
+      _hidden: false,
+      hidden: false,
+    }
+  })
+
+  return { labels, datasets }
+})
+
+function toggleEquipLine(idx) {
+  const ds = overallEquipChartData.value.datasets[idx]
+  ds._hidden = !ds._hidden
+  ds.hidden = ds._hidden
+  equipOverallUpdateKey.value++
+}
+
+const overallEquipChartOptions = computed(() => ({
+  responsive: true,
+  maintainAspectRatio: false,
+  interaction: { mode: 'nearest', intersect: false },
+  elements: { point: { radius: 3, hitRadius: 10, hoverRadius: 5 } },
+  plugins: {
+    legend: { display: false },
+    title: { display: false },
+    tooltip: {
+      enabled: true,
+      callbacks: {
+        // บรรทัดหัว tooltip = เดือน/ปี
+        title: (items) => (items && items[0]?.label) || '',
+        // แสดง "ชื่ออุปกรณ์: 20 ครั้ง"
+        label: (ctx) => {
+          const v = (ctx.raw ?? ctx.parsed?.y ?? 0);
+          return `${ctx.dataset.label}: ${Number(v).toLocaleString('th-TH')} ครั้ง`;
+        }
+      }
+    }
+  },
+  scales: {
+    x: { title: { display: false } },
+    y: {
+      beginAtZero: true,
+      title: { display: true, text: "จำนวนการใช้งาน" }
+    }
+  },
+  datasets: {
+    line: { hidden: (context) => context?.dataset?._hidden === true }
+  }
+}))
+
 
 // สำหรับดึงชื่อสนามทั้งหมด
 const allFieldNamesOverall = computed(() =>
@@ -408,13 +542,21 @@ function toggleOverallLine(idx) {
 const overallFieldChartOptions = computed(() => ({
   responsive: true,
   maintainAspectRatio: false,
+  interaction: { mode: 'nearest', intersect: false },
+elements: { point: { radius: 3, hitRadius: 10, hoverRadius: 5 } },
   plugins: {
-    legend: { display: false }, // เอา legend ออกจากกราฟ, มาอยู่ใต้กราฟแทน
+    legend: { display: false },
     title: { display: false },
     tooltip: {
       enabled: true,
       callbacks: {
-        label: (ctx) => `${ctx.dataset.label}: ${ctx.formattedValue} ชม.`
+        // บรรทัดหัว = เดือน/ปี
+        title: (items) => (items && items[0]?.label) || '',
+        // แสดง "ชื่อสนาม: 35 ชม."
+        label: (ctx) => {
+          const v = (ctx.raw ?? ctx.parsed?.y ?? 0);
+          return `${ctx.dataset.label}: ${Number(v).toLocaleString('th-TH')} ชม.`;
+        }
       }
     }
   },
@@ -427,13 +569,11 @@ const overallFieldChartOptions = computed(() => ({
   },
   datasets: {
     line: {
-      hidden: function(context) {
-        // ใช้ ds._hidden ถ้ามี
-        return context.dataset._hidden === true
-      }
+      hidden: (context) => context?.dataset?._hidden === true
     }
   }
 }))
+
 
 // ==== กระดิ่งแจ้งเตือน ====
 const showNotifications = ref(false)
@@ -660,7 +800,7 @@ function exportOverallFieldPDF() {
   exportPDF(
     fieldSummaries,
     'รายงานสถิติการใช้ "สนามกีฬาโดยภาพรวม"',
-    'overall-field-usage-report.pdf',
+    'สถิติการใช้งาน สนามกีฬาโดยภาพรวม.pdf',
     periodText,
     'overall'
   );
@@ -672,7 +812,7 @@ function exportFieldPDF() {
   exportPDF(
     filteredFieldUnits.value,
     'รายงานสถิติการใช้สนามกีฬาของหน่วยงาน',
-    'field-usage-report.pdf',
+    'สถิติการใช้งาน สนามกีฬาของหน่วยงาน.pdf',
     [
       `ชื่อสนาม: ${selectedFieldName.value || 'ทั้งหมด'}`,
       `เดือน: ${selectedFieldMonth.value ? months[selectedFieldMonth.value - 1] : 'ทั้งหมด'}`,
@@ -682,19 +822,25 @@ function exportFieldPDF() {
   )
 }
 function exportEquipPDF() {
+  const chartData = overallEquipChartData.value
+  const summaries = chartData.datasets.map(ds => ({
+    unit: ds.label,
+    usage: ds.data.reduce((a,b) => a + (b || 0), 0)
+  }))
+
+  const periodText =
+    `ช่วง: ${months[equipOverallStartMonth.value - 1]} ${equipOverallStartYear.value} ` +
+    `ถึง ${months[equipOverallEndMonth.value - 1]} ${equipOverallEndYear.value}`
+
   exportPDF(
-    filteredEquipUnits.value,
+    summaries,
     'รายงานสถิติการใช้อุปกรณ์กีฬา',
-    'equipment-usage-report.pdf',
-    [
-      `ชื่ออุปกรณ์: ${selectedEquipName.value || 'ทั้งหมด'}`,
-      `เดือน: ${selectedEquipMonth.value ? months[selectedEquipMonth.value - 1] : 'ทั้งหมด'}`,
-      `ปี: ${selectedEquipYear.value || 'ทั้งหมด'}`,
-      `แสดงสูงสุด: ${equipShowLimit.value ? equipShowLimit.value + ' รายการ' : 'ทั้งหมด'}`
-    ].join('   '),
-    'equipment'   // <- เพิ่มตรงนี้
+    'สถิติการใช้งาน อุปกรณ์กีฬา.pdf',
+    periodText,
+    'equipment' // ให้แสดง "รวมการใช้งาน: ... ครั้ง"
   )
 }
+
 
 
 function exportPDF(data, header, filename, filterSummary, type = 'field') {

@@ -124,83 +124,89 @@
             </div>
 
             <!-- ข้อ 1 -->
-            <div class="form-row mt-30 bold" style="margin-left: 0; margin-bottom: 6px;">
-              <span>1. ขออนุมัติใช้สถานที่</span>
-            </div>
-            <div class="form-row block-row" style="margin-left: 80px; margin-bottom: 0px;">
-              <span>อาคาร :</span>
-              <span class="line-field block-text">{{ info.building }}</span>
-            </div>
-            <div class="form-row block-row" style="margin-left: 80px; margin-bottom: 22px;">
-              <span>ตำแหน่งพื้นที่/ห้องที่ต้องการใช้ :</span>
-              <span class="line-field block-text">
-                {{ info.zone && info.zone.trim() !== '' ? info.zone : '-' }}
-              </span>
-            </div>
+        
+        <!-- ข้อ 1 -->
+        <div class="form-row mt-30 bold" style="margin-left: 0; margin-top: 8px; margin-bottom: 6px;">
+          <span>1. ขออนุมัติใช้สถานที่</span>
+        </div>
+        <div class="form-row block-row" style="margin-left: 80px; margin-bottom: 0px;">
+          <span>อาคาร :</span>
+          <span class="line-field block-text">{{ info.building }}</span>
+        </div>
+        <!-- แก้ margin-bottom 22px → 8px -->
+        <div class="form-row block-row" style="margin-left: 80px; margin-bottom: 8px;">
+          <span>ตำแหน่งพื้นที่/ห้องที่ต้องการใช้ :</span>
+          <span class="line-field block-text">
+            {{ info.zone && info.zone.trim() !== '' ? info.zone : '-' }}
+          </span>
+        </div>
 
-            <!-- ข้อ 2 -->
-            <div class="form-row mt-30 bold" style="margin-left: 0; margin-bottom: 8px;">
-              <span>2. ขออนุมัติใช้ระบบสาธารณูปโภค</span>
-              <input type="radio" value="yes" :checked="isUtilityYes(info.utilityRequest)" disabled/>
-              <label style="margin-right: 18px;">เลือก</label>
-              <input type="radio" value="no" :checked="isUtilityNo(info.utilityRequest)" disabled/>
-              <label>ไม่เลือก</label>
-            </div>
+        <!-- ข้อ 2 -->
+        <!-- แก้ mt-30 → margin-top:8px -->
+        <div class="form-row bold" style="margin-left: 0; margin-top: 8px; margin-bottom: 8px;">
+          <span>2. ขออนุมัติใช้ระบบสาธารณูปโภค</span>
+          <input type="radio" value="yes" :checked="isUtilityYes(info.utilityRequest)" disabled/>
+          <label style="margin-right: 18px;">เลือก</label>
+          <input type="radio" value="no" :checked="isUtilityNo(info.utilityRequest)" disabled/>
+          <label>ไม่เลือก</label>
+        </div>
 
-            <!-- ตารางสาธารณูปโภค: ปรับระยะให้ชิด + คุมความกว้างคอลัมน์ด้วย colgroup -->
-            <div v-if="isUtilityYes(info.utilityRequest)" style="margin-left:80px;">
-              <table class="util-table">
-                <colgroup>
-                  <col class="c-label" />
-                  <col class="c-time" />
-                  <col class="c-sep" />
-                  <col class="c-time" />
-                </colgroup>
-                <tr>
-                  <td class="util-label">2.1 เปิดเครื่องปรับอากาศตั้งแต่ :</td>
-                  <td class="time">{{ formatTimeTH(info.turnon_air) }}</td>
-                  <td class="sep">ถึง</td>
-                  <td class="time">{{ formatTimeTH(info.turnoff_air) }}</td>
-                </tr>
-                <tr>
-                  <td class="util-label">2.2 ไฟฟ้าส่องสว่างตั้งแต่ :</td>
-                  <td class="time">{{ formatTimeTH(info.turnon_lights) }}</td>
-                  <td class="sep">ถึง</td>
-                  <td class="time">{{ formatTimeTH(info.turnoff_lights) }}</td>
-                </tr>
-                <tr>
-                  <td class="util-label">2.3 อื่นๆ :</td>
-                  <td class="other-value" colspan="3">
-                    {{ info.other && info.other.trim() !== '' ? info.other : '-' }}
-                  </td>
-                </tr>
-              </table>
+        <!-- ตารางสาธารณูปโภค -->
+        <div v-if="isUtilityYes(info.utilityRequest)" style="margin-left:80px;">
+          <table class="util-table">
+            <colgroup>
+              <col class="c-label" />
+              <col class="c-time" />
+              <col class="c-sep" />
+              <col class="c-time" />
+            </colgroup>
+            <tr>
+              <td class="util-label">2.1 เปิดเครื่องปรับอากาศตั้งแต่ :</td>
+              <td class="time">{{ formatTimeTH(info.turnon_air) }}</td>
+              <td class="sep">ถึง</td>
+              <td class="time">{{ formatTimeTH(info.turnoff_air) }}</td>
+            </tr>
+            <tr>
+              <td class="util-label">2.2 ไฟฟ้าส่องสว่างตั้งแต่ :</td>
+              <td class="time">{{ formatTimeTH(info.turnon_lights) }}</td>
+              <td class="sep">ถึง</td>
+              <td class="time">{{ formatTimeTH(info.turnoff_lights) }}</td>
+            </tr>
+            <tr>
+              <td class="util-label">2.3 อื่นๆ :</td>
+              <td class="other-value" colspan="3">
+                {{ info.other && info.other.trim() !== '' ? info.other : '-' }}
+              </td>
+            </tr>
+          </table>
+        </div>
 
-              <div style="margin-left:0px; margin-top: 10px;">
-                <span style="font-weight: bold; font-size: 13.5px;">
-                  *ต้องได้รับการอนุมัติจากรองอธิการบดีผู้กำกับดูแล และสำเนาเอกสารถึงฝ่ายอนุรักษ์พลังงาน
-                </span>
-              </div>
-            </div>
+        <div style="margin-top:0px;">
+          <span style="font-weight:bold; font-size: 15px;">
+            *ต้องได้รับการอนุมัติจากรองอธิการบดีผู้กำกับดูแล และสำเนาเอกสารถึงฝ่ายอนุรักษ์พลังงาน
+          </span>
+        </div>
 
-            <div class="form-row mt-30 bold" style="margin-left: 0; margin-bottom: 8px;">
-              <span>3. ขออนุมัติรายการประกอบอาคาร</span>
-              <input type="radio" value="yes" :checked="isFacilityYes(info.facilityRequest)" disabled/>
-              <label style="margin-right: 18px;">เลือก</label>
-              <input type="radio" value="no" :checked="isFacilityNo(info.facilityRequest)" disabled/>
-              <label>ไม่เลือก</label>
-            </div>
+        <!-- ข้อ 3 -->
+        <!-- แก้ mt-30 → margin-top:8px -->
+        <div class="form-row bold" style="margin-left: 0; margin-top: 8px; margin-bottom: 8px;">
+          <span>3. ขออนุมัติรายการประกอบอาคาร</span>
+          <input type="radio" value="yes" :checked="isFacilityYes(info.facilityRequest)" disabled/>
+          <label style="margin-right: 18px;">เลือก</label>
+          <input type="radio" value="no" :checked="isFacilityNo(info.facilityRequest)" disabled/>
+          <label>ไม่เลือก</label>
+        </div>
 
-            <div v-if="isFacilityYes(info.facilityRequest)">
-              <div class="form-row block-row" style="margin-left: 80px; margin-bottom: 5px;">
-                <span style="white-space: nowrap;">3.1 ดึงอัฒจันทร์ภายในอาคารเฉลิมพระเกียรติฯ :</span>
-                <span class="line-field block-text force-inline">{{ info.amphitheater && info.amphitheater.trim() !== '' ? info.amphitheater : '-' }}</span>
-              </div>
-              <div class="form-row block-row" style="margin-left: 80px; margin-bottom: 22px;">
-                <span style="white-space: nowrap;">3.2 อุปกรณ์กีฬา (โปรดระบุรายการและจำนวน) :</span>
-                <span class="line-field block-text force-inline">{{ info.need_equipment && info.need_equipment.trim() !== '' ? info.need_equipment : '-' }}</span>
-              </div>
-            </div>
+        <div v-if="isFacilityYes(info.facilityRequest)">
+          <div class="form-row block-row" style="margin-left: 80px; margin-bottom: 5px;">
+            <span style="white-space: nowrap;">3.1 ดึงอัฒจันทร์ภายในอาคารเฉลิมพระเกียรติฯ :</span>
+            <span class="line-field block-text force-inline">{{ info.amphitheater && info.amphitheater.trim() !== '' ? info.amphitheater : '-' }}</span>
+          </div>
+          <div class="form-row block-row" style="margin-left: 80px; margin-bottom: 22px;">
+            <span style="white-space: nowrap;">3.2 อุปกรณ์กีฬา (โปรดระบุรายการและจำนวน) :</span>
+            <span class="line-field block-text force-inline">{{ info.need_equipment && info.need_equipment.trim() !== '' ? info.need_equipment : '-' }}</span>
+          </div>
+        </div>
 
             <div style="margin-top:5px;">
               <span style="font-weight:bold; font-size: 15px;">
@@ -220,6 +226,7 @@
                   <td>
                     ลงชื่อ...........................................<br><br>
                     <span style=" white-space: nowrap;">
+                      <div style="margin:8px 0 6px;"></div>
                       ( {{ info.username_form || '-' }} )
                     </span>
                     <br><br>
@@ -228,12 +235,14 @@
                   </td>
                   <td>
                     ลงชื่อ...........................................<br><br>
+                    <div style="margin:10px 0 6px;"></div>
                     (.................................................)<br><br>
                     อาจารย์/ที่ปรึกษาโครงการ<br><br>
                     วันที่............/............/............
                   </td>
                   <td>
                     ลงชื่อ...........................................<br><br>
+                    <div style="margin:10px 0 6px;"></div>
                     (.................................................)<br><br>
                     คณบดี/หัวหน้าหน่วยงาน<br><br>
                     วันที่............/............/............
@@ -272,9 +281,12 @@
                             <span class="dot-line dot-line-custom"></span>
                           </div>
                           <div class="dot-line"></div>
-                          <div style="margin:12px 0 6px;">
+                          <div style="margin:30px 0 6px;">
                             (<span class="dot-line short"></span>)
                           </div>
+                           <div style="margin:4px 0 8px;">
+      <span class="dot-line short"></span>
+    </div>
                           <div style="margin-bottom: 6px;">
                             วันที่ <span class="dot-line date"></span>
                           </div>
@@ -297,9 +309,12 @@
                             <span class="dot-line dot-line-custom"></span>
                           </div>
                           <div class="dot-line"></div>
-                          <div style="margin:12px 0 6px;">
+                          <div style="margin:30px 0 6px;">
                             (<span class="dot-line short"></span>)
                           </div>
+                                          <div style="margin:4px 0 8px;">
+      <span class="dot-line short"></span>
+    </div>
                           <div style="margin-bottom: 6px;">
                             วันที่ <span class="dot-line date"></span>
                           </div>
@@ -322,9 +337,12 @@
                           <div class="dot-line"></div>
                           <div style="margin-bottom: 7px;"></div>
                           <div class="dot-line"></div>
-                          <div style="margin:12px 0 6px;">
+                          <div style="margin:30px 0 6px;">
                             (<span class="dot-line short"></span>)
                           </div>
+                                          <div style="margin:4px 0 8px;">
+      <span class="dot-line short"></span>
+    </div>
                           <div style="margin-bottom: 6px;">
                             วันที่ <span class="dot-line date"></span>
                           </div>
@@ -341,7 +359,7 @@
                 หมายเหตุ: ให้นักศึกษา/ผู้รับผิดชอบแนบเอกสารโครงการหรือกำหนดการเพื่อประกอบการพิจารณา
               </span>
             </div>
-
+</div>
             <!-- โชว์ไฟล์แนบ -->
             <div v-if="fileAttachments && fileAttachments.length > 0" class="form-row mt-30">
               <span>ไฟล์แนบ</span>
@@ -370,11 +388,11 @@
               <button id="btnNext" @click="handleNext">Next</button>
             </div>
           </div>
-        </div>
+        
       </div>
 
       <!-- Footer (moved inside .main) -->
-      <footer class="foot">
+    <footer class="foot">
         <div class="footer-left">
           <p>
             Sport Complex – Mae Fah Luang University |
@@ -384,6 +402,7 @@
             Email:
             <a href="mailto:sport-complex@mfu.ac.th">sport-complex@mfu.ac.th</a>
           </p>
+          <p>© 2025 Center for Information Technology Services, Mae Fah Luang University. All rights reserved.</p>
         </div>
       </footer>
     </div>
@@ -437,10 +456,16 @@ function exportToPDF() {
     filename: pdfFilename,
     image: { type: 'jpeg', quality: 0.98 },
     html2canvas: { scale: 2, useCORS: true },
-    jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
+    jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' },
+    pagebreak: { mode: ['css'] }
   }
-  html2pdf().from(element).set(opt).save()
+  // inject style ก่อน export
+  element.classList.add('pdf-export')
+  html2pdf().from(element).set(opt).save().then(() => {
+    element.classList.remove('pdf-export')
+  })
 }
+
 function htmlToPdfBlob(elementId) {
   return new Promise((resolve, reject) => {
     const element = document.getElementById(elementId)
@@ -459,6 +484,16 @@ function htmlToPdfBlob(elementId) {
       .catch(reject)
   })
 }
+
+async function uploadPdfBlob(pdfBlob) {
+  const fd = new FormData()
+  fd.append('file', pdfBlob, 'booking.pdf')
+  const up = await axios.post(`${API_BASE}/api/upload`, fd, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+  return up.data?.fileUrl // สมมติ API คืน {fileUrl}
+}
+
 
 async function fetchNotifications() {
   if (!userId) return
@@ -635,9 +670,11 @@ onMounted(async () => {
 
 async function uploadTempFilesAndGetUrls() {
   const filesToUpload = Array.isArray(window._tempSelectedFiles) ? window._tempSelectedFiles : []
+  if (!filesToUpload.length) return []
   const uploaded = []
   for (const f of filesToUpload) {
     const fd = new FormData()
+    // ถ้า backend ของคุณต้องการ key 'files' ให้เปลี่ยนเป็น fd.append('files', f)
     fd.append('file', f)
     const up = await axios.post(`${API_BASE}/api/upload`, fd, {
       headers: { 'Content-Type': 'multipart/form-data' },
@@ -658,26 +695,29 @@ async function handleNext() {
   try {
     const bookingId = localStorage.getItem('bookingId')
     if (!bookingId) {
-      Swal.fire('ไม่พบ bookingId')
-      return
+      Swal.fire('ไม่พบ bookingId'); return
     }
+
+    // 1) สร้าง PDF (เลิก base64)
     const pdfBlob = await htmlToPdfBlob('pdf-section')
 
+    // (ให้ผู้ใช้ดาวน์โหลดเหมือนเดิม)
     const url = window.URL.createObjectURL(pdfBlob)
     const link = document.createElement('a')
     link.href = url
-    link.download = 'แบบฟอร์มขออนุมัติใช้สถานที่ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง.pdf'
-    document.body.appendChild(link)
-    link.click()
-    setTimeout(() => {
-      window.URL.revokeObjectURL(url)
-      link.remove()
-    }, 100)
+    link.download = pdfFilename
+    document.body.appendChild(link); link.click()
+    setTimeout(() => { window.URL.revokeObjectURL(url); link.remove() }, 80)
 
-    const pdfBase64 = await blobToBase64(pdfBlob)
+    // 2) อัปโหลด PDF ไป storage → ได้ URL กลับมา
+    const pdfUrl = await uploadPdfBlob(pdfBlob)
 
+    // 3) (ออปชัน) อัปโหลด temp files ที่เพิ่งแนบ (ถ้ายัง)
+    const hasTemp = Array.isArray(window._tempSelectedFiles) && window._tempSelectedFiles.length > 0
+    const uploadedNow = hasTemp ? await uploadTempFilesAndGetUrls() : []
+
+    // 4) รวมไฟล์ทั้งหมดให้เป็น URL ไม่ใช่ไฟล์จริงหรือ base64
     const bookingData = { ...info.value }
-    const uploadedNow = await uploadTempFilesAndGetUrls()
     const multerFiles = Array.isArray(bookingData.files) ? bookingData.files : []
     const allAttachments = [
       ...multerFiles.map(f => f.fileUrl || f.url).filter(Boolean),
@@ -687,8 +727,8 @@ async function handleNext() {
       ...multerFiles.map(f => f.originalName || f.fileName || 'ไฟล์แนบ'),
       ...uploadedNow.map(f => f.fileName || 'ไฟล์แนบ'),
     ]
-    const uploadFiles = []
 
+    // 5) ส่ง /api/history โดย “ไม่” แนบ base64
     const payload = {
       user_id: bookingData.user_id,
       name: bookingData.building,
@@ -707,31 +747,32 @@ async function handleNext() {
       date: new Date(),
       proxyStudentName: bookingData.proxyStudentName || '',
       proxyStudentId: bookingData.proxyStudentId || '',
-      bookingPdf: pdfBase64,
+      bookingPdfUrl: pdfUrl,     // ✅ ใช้ URL แทน base64
     }
 
     await axios.post(`${API_BASE}/api/history`, payload)
 
     sessionStorage.removeItem('form_field_save')
     window._tempSelectedFiles = []
-
     localStorage.removeItem('username_form')
     localStorage.removeItem('id_form')
-
     router.push('/form_field4')
   } catch (err) {
-    if (err?.response?.status === 409) {
+    if (err?.response?.status === 413) {
       Swal.fire({
-        title: 'คำขอซ้ำ',
-        text: err.response.data.message || 'คุณมีรายการที่รออนุมัติอยู่แล้ว',
-        icon: 'warning'
+        icon: 'error',
+        title: 'ไฟล์รวมใหญ่เกินไป',
+        text: 'กรุณาลดจำนวน/ขนาดไฟล์ หรือบีบอัดก่อน แล้วลองอีกครั้ง',
       })
+    } else if (err?.response?.status === 409) {
+      Swal.fire({ icon: 'warning', title: 'คำขอซ้ำ', text: err.response.data.message || 'คุณมีรายการที่รออนุมัติอยู่แล้ว' })
     } else {
       Swal.fire('เกิดข้อผิดพลาดในการบันทึกข้อมูล', err?.response?.data?.message || err.message, 'error')
     }
     console.error(err)
   }
 }
+
 
 function formatTimeTH(timeStr) {
   if (!timeStr || typeof timeStr !== 'string') return '-'
@@ -742,24 +783,39 @@ function formatTimeTH(timeStr) {
 </script>
 
 <style scoped>
-/* Stepper */
 .headStepper {
-  background: #fff;
-  margin: 15px auto;
-  width: 90%; max-width: 900px;
+  position: sticky;
+  top: 60px;
+  z-index: 10;
+  width: 90%;
+  max-width: 900px;
+  margin: 0 auto 16px;
+  background: rgba(255, 255, 255, 0.85);   /* เดิม #fff -> ให้จางลง */
+  backdrop-filter: blur(2px);               /* เพิ่มความละมุน (รองรับเบราว์เซอร์ส่วนใหญ่) */
   border-radius: 20px;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, .1);
 }
+.stepper{ padding: 20px; border-radius: 20px; }
+
+/* ไม่ต้องมี spacer แล้ว */
+.headStepper-spacer{ display:none; }
+
+/* กันคอนเทนต์โดนบาร์ทับด้านบนครั้งเดียวพอ */
+.main{ padding-top: calc(var(--topbar-h)); }
+
+
+/* เพิ่มพื้นที่ด้านล่างเพื่อให้ label อยู่ “ในกรอบ” */
 .stepper {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 20px;
+  padding: 20px 20px 52px;   /* เดิม 20px -> เพิ่ม padding-bottom */
+  border-radius: 20px;
 }
-.step {
+.step{
+  position: relative;
   display: flex;
   align-items: center;
-  position: relative;
 }
 .avoid-break, .approval-sign-table, .sign-header-table {
   page-break-inside: avoid;
@@ -777,16 +833,18 @@ function formatTimeTH(timeStr) {
 }
 .circle.active { background: #ff4d4f; }
 .circle.completed { background: #ff4d4f; opacity: .5; }
-.label {
-  margin-top: 15px;
-  text-align: center;
-  font-size: 12px;
+/* จัด label ให้อยู่กึ่งกลางวงกลมและไม่เอียงไปทางซ้าย */
+.label{
   position: absolute;
-  top: 40px;
-  left: 16px;
+  top: 45px;                 /* ระยะห่างจากวงกลม ปรับได้ */
+  left: calc(30px / 2);      /* 15px = ครึ่งของเส้นผ่านศูนย์กลางวงกลม */
   transform: translateX(-50%);
+  font-size: 12px;
   white-space: nowrap;
+  text-align: center;
 }
+
+
 .line {
   width: 80px; height: 4px;
   background: #ccc; margin: 0 5px;
@@ -835,7 +893,6 @@ function formatTimeTH(timeStr) {
 }
 
 /* ===== แนวตารางของหัวข้อ 2 (Utility) ===== */
-/* ===== แนวตารางของหัวข้อ 2 (Utility) ===== */
 .util-table {
   border-collapse: collapse;
   table-layout: fixed;
@@ -848,21 +905,20 @@ function formatTimeTH(timeStr) {
 }
 .util-table .util-label { white-space: nowrap; }
 
-/* เปลี่ยนจาก center -> left เพื่อให้ "10:30 น." เริ่มตำแหน่งเดียวกับแถว "อื่นๆ" */
+/* ให้ค่าเวลาเริ่มชิดซ้ายตรงกับแถว "อื่นๆ" */
 .util-table .time {
   white-space: nowrap;
-  text-align: left;      /* <-- แก้จุดนี้ */
-  padding-left: 0;       /* ให้เริ่มติดขอบเหมือนแถว "อื่นๆ" */
+  text-align: left;
+  padding-left: 0;
 }
-
 .util-table .sep { text-align: center; }
 
-/* ให้ค่าในแถว "อื่นๆ" เริ่มตรงจุดเดียวกับตัวเลขเวลา */
+/* ค่าในแถว "อื่นๆ" */
 .util-table .other-value {
   text-align: left;
   white-space: pre-wrap;
   word-break: break-word;
-  padding-left: 0;       /* สำคัญ: ให้เริ่มตำแหน่งเดียวกับ .time */
+  padding-left: 0;
 }
 
 /* คุมความกว้างคอลัมน์คงเดิม */
@@ -972,8 +1028,14 @@ function formatTimeTH(timeStr) {
 .dot-line-custom { flex: 1 1 0; border-bottom: 1.5px dotted #222; min-width: 80px; margin-left: 8px; margin-right: 6px; height: 16px; display: inline-block; }
 
 .pdf-export { padding: 18px !important; }
-.pdf-export * { font-size: 16px !important; }
-.pdf-export h1, .pdf-export h2, .pdf-export h3 { font-size: 20px !important; }
+.pdf-export {
+  font-size: 16px !important;
+}
+.pdf-export h1,
+.pdf-export h2,
+.pdf-export h3 {
+  font-size: 18px !important;
+}
 </style>
 
 <style>

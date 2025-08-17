@@ -91,21 +91,22 @@
         <br /><br />
         <button id="btnNext" @click="handleNext">กลับหน้าแรก</button>
       </div>
-    </div>
 
-    <!-- Footer -->
-    <footer class="foot">
-      <div class="footer-left">
-        <p>
-          Sport Complex – Mae Fah Luang University |
-          Tel. 0-5391-7821 | Facebook:
-          <a href="https://www.facebook.com/mfusportcomplex" target="_blank">MFU Sports Complex Center</a>
-          |
-          Email:
-          <a href="mailto:sport-complex@mfu.ac.th">sport-complex@mfu.ac.th</a>
-        </p>
-      </div>
-    </footer>
+      <!-- Footer -->
+      <footer class="foot">
+        <div class="footer-left">
+          <p>
+            Sport Complex – Mae Fah Luang University |
+            Tel: 0-5391-7820 and 0-5391-7821 | Facebook:
+            <a href="https://www.facebook.com/mfusportcomplex" target="_blank">MFU Sports Complex Center</a>
+            |
+            Email:
+            <a href="mailto:sport-complex@mfu.ac.th">sport-complex@mfu.ac.th</a>
+          </p>
+          <p>© 2025 Center for Information Technology Services, Mae Fah Luang University. All rights reserved.</p>
+        </div>
+      </footer>
+    </div>
   </div>
 </template>
 
@@ -293,7 +294,7 @@ async function loadBookingInfo () {
 
     // ===== Popup จัดแนวด้วย CSS Grid =====
     await Swal.fire({
-      title: 'ส่งคำขอสำเร็จ!',
+      title: 'ส่งคำขอสำเร็จ',
       html: `
         <div class="swal-booking">
           <div class="label"><b>ชื่อกิจกรรม:</b></div>
@@ -309,7 +310,7 @@ async function loadBookingInfo () {
           <div class="value">${esc(formatDateOnly(info.value.since))} - ${esc(formatDateOnly(info.value.uptodate))}</div>
 
           <div class="label"><b>เวลา:</b></div>
-          <div class="value">${esc(info.value.since_time || '-')} - ${esc(info.value.until_thetime || '-')}</div>
+          <div class="value">${esc(info.value.since_time || '-')} น. - ${esc(info.value.until_thetime || '-')} น. </div>
         </div>
       `,
       icon: 'success',
@@ -602,4 +603,40 @@ async function exportPdf (item) {
   /* กันแถวยาวเกินไปเมื่อข้อความยาวมาก */
   max-width: clamp(260px, 56vw, 560px);
 }
+
+/* ให้โครงหน้าสูงเต็มจอ: sidebar + main วางข้างกัน */
+.layout{
+  min-height: 100vh;
+  display: flex;           /* sidebar | main */
+}
+
+/* ให้ .main เป็นคอลัมน์: topbar -> เนื้อหา -> footer */
+.main{
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;            /* กัน overflow แนวนอน */
+}
+
+/* ดัน footer ไปชิดล่างเสมอ */
+.foot{
+  margin-top: auto;        /* ตัวนี้สำคัญที่สุด */
+  flex-shrink: 0;
+  width: 100%;
+  border-radius: 0;        /* กันมุมโค้งดู “ลอย” */
+}
+
+/* ลดช่องว่างท้ายคอนเทนต์ไม่ให้ดัน footer ลอย */
+.form-container{
+  margin-bottom: 12px;
+}
+
+</style>
+
+<style>
+  html, body, #app { height: 100%; margin: 0; }
+</style>
+
+<style>
+@import '../css/style.css';
 </style>

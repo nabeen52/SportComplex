@@ -56,20 +56,22 @@
         </div>
       </header>
       <!-- Stepper -->
-      <div class="headStepper">
-        <div class="stepper">
-          <div v-for="(step, index) in steps" :key="index" class="step">
-            <div
-              class="circle"
-              :class="{ active: index === currentStep, completed: index < currentStep }"
-              @click="goStep(index)"
-              :style="{ cursor: canStepTo(index) ? 'pointer' : 'not-allowed', opacity: canStepTo(index) ? 1 : 0.5 }"
-            ></div>
-            <div class="label">{{ step }}</div>
-            <div v-if="index < steps.length - 1" class="line" :class="{ filled: index < currentStep }"></div>
-          </div>
-        </div>
-      </div>
+<div class="headStepper" role="navigation" aria-label="ขั้นตอน">
+  <div class="stepper">
+    <div v-for="(step, index) in steps" :key="index" class="step">
+      <div
+        class="circle"
+        :class="{ active: index === currentStep, completed: index < currentStep }"
+        @click="goStep(index)"
+        :style="{ cursor: canStepTo(index) ? 'pointer' : 'not-allowed', opacity: canStepTo(index) ? 1 : 0.5 }"
+      ></div>
+      <div class="label">{{ step }}</div>
+      <div v-if="index < steps.length - 1" class="line" :class="{ filled: index < currentStep }"></div>
+    </div>
+  </div>
+</div>
+<!-- spacer กันเนื้อหาโดนทับ (จะถูกซ่อนไว้ใน CSS) -->
+<div class="headStepper-spacer"></div>
 
       <div class="scroll-x-container">
       <div class="form-container">
@@ -215,60 +217,73 @@
           </div>
 
           <!-- ช่วงวันที่ -->
-
 <div class="form-row date-range-row">
   <label>
     ช่วงวันที่
     <span v-if="touched && (showError && (!form.start_date || !form.end_date))" style="color:red">*</span>
   </label>
+
   <div class="date-range-group" style="gap:8px; width:100%">
-    <VueDatePicker
-      v-model="dpStart"
-      :format="formatBE"
-      :enable-time-picker="false"
-      :min-date="new Date()"
-      :state="!(touched && showError && !form.start_date)"
-      :disabled="isFormLocked"
-      placeholder="วัน/เดือน/ปี"
-      style="width:48%"
-      locale="th"
-      :hide-input-icon="true"
-    />
+    <!-- START -->
+    <div :class="{ 'is-invalid-date': touched && showError && !form.start_date }" style="width:48%">
+      <VueDatePicker
+        v-model="dpStart"
+        :format="formatBE"
+        :enable-time-picker="false"
+        :min-date="new Date()"
+        :disabled="isFormLocked"
+        placeholder="วัน/เดือน/ปี"
+        locale="th"
+        :hide-input-icon="true"
+      />
+    </div>
+
     <span>-</span>
-    <VueDatePicker
-      v-model="dpEnd"
-      :format="formatBE"
-      :enable-time-picker="false"
-      :min-date="dpStart || new Date()"
-      :state="!(touched && showError && !form.end_date)"
-      :disabled="isFormLocked"
-      placeholder="วัน/เดือน/ปี"
-      style="width:48%"
-      locale="th"
-      :hide-input-icon="true"
-    />
+
+    <!-- END -->
+    <div :class="{ 'is-invalid-date': touched && showError && !form.end_date }" style="width:48%">
+      <VueDatePicker
+        v-model="dpEnd"
+        :format="formatBE"
+        :enable-time-picker="false"
+        :min-date="dpStart || new Date()"
+        :disabled="isFormLocked"
+        placeholder="วัน/เดือน/ปี"
+        locale="th"
+        :hide-input-icon="true"
+      />
+    </div>
   </div>
+
   <small class="note-text">* กรุณาจองก่อนใช้งานจริง 5 วัน</small>
 </div>
+
 
 <!-- วันที่และเวลาที่มารับของ -->
 <div class="form-row date-range-row">
   <label>วันที่และเวลาที่มารับของ</label>
   <div class="date-range-group" style="gap:8px; width:100%">
-    <VueDatePicker
-      v-model="dpReceive"
-      :format="formatBE"
-      :enable-time-picker="false"
-      :min-date="dpStart || new Date()"
-      :max-date="dpEnd || null"
-      :disabled="!form.start_date || !form.end_date || isFormLocked"
-      :state="!(touched && showError && !form.receive_date)"
-      placeholder="วัน/เดือน/ปี"
+    <!-- วันที่รับของ -->
+    <div
+      :class="{ 'is-invalid-date': touched && showError && !form.receive_date }"
       style="width:48%"
-      locale="th"
-      :hide-input-icon="true"
-    />
+    >
+      <VueDatePicker
+        v-model="dpReceive"
+        :format="formatBE"
+        :enable-time-picker="false"
+        :min-date="dpStart || new Date()"
+        :max-date="dpEnd || null"
+        :disabled="!form.start_date || !form.end_date || isFormLocked"
+        placeholder="วัน/เดือน/ปี"
+        locale="th"
+        :hide-input-icon="true"
+      />
+    </div>
+
     <span>-</span>
+
+    <!-- เวลา -->
     <input
       type="time"
       v-model="form.receive_time"
@@ -280,9 +295,6 @@
     />
   </div>
 </div>
-
-
-
 
 
          <!-- เฉพาะ block แนบไฟล์ใน template -->
@@ -402,6 +414,7 @@
             Email:
             <a href="mailto:sport-complex@mfu.ac.th">sport-complex@mfu.ac.th</a>
           </p>
+          <p>© 2025 Center for Information Technology Services, Mae Fah Luang University. All rights reserved.</p>
         </div>
       </footer>
     </div>
@@ -441,6 +454,11 @@ const dpEnd = ref(null)         // Date | null
 const dpReceive = ref(null)
 
 const lastSeenTimestamp = ref(parseInt(localStorage.getItem('lastSeenTimestamp') || '0'))
+
+
+// จำกัดขนาดไฟล์
+const MAX_FILE_SIZE = 100 * 1024 * 1024;  // 100MB ต่อไฟล์
+const MAX_TOTAL_SIZE = 100 * 1024 * 1024; // รวมสูงสุด 100MB ต่อครั้ง
 
 
 // Date | null
@@ -996,10 +1014,33 @@ function readFileAsDataURL(file) {
 async function handleFileChange(e) {
   const allowed = [".png",".jpg",".jpeg",".pdf",".xls",".xlsx",".doc",".docx"]
   const inputFiles = Array.from(e.target.files || [])
-  const valid = inputFiles.filter(f => allowed.some(ext => f.name.toLowerCase().endsWith(ext)))
-
+  // กรองนามสกุล
+  let valid = inputFiles.filter(f => allowed.some(ext => f.name.toLowerCase().endsWith(ext)))
   if (valid.length !== inputFiles.length) {
     Swal.fire('รองรับเฉพาะไฟล์ .png, .jpg, .jpeg, .pdf, .xls, .xlsx, .doc, .docx', '', 'warning')
+  }
+
+  // กรองขนาดไฟล์รายตัว
+  const overs = valid.filter(f => f.size > MAX_FILE_SIZE)
+  if (overs.length) {
+    Swal.fire({
+      icon: 'warning',
+      title: 'ไฟล์ใหญ่เกินกำหนด',
+      html: overs.map(f => `${f.name} (${Math.round(f.size/1024/1024)}MB)`).join('<br>') +
+            `<br>เพดานไฟล์ละ ${Math.round(MAX_FILE_SIZE/1024/1024)}MB`,
+    })
+  }
+  valid = valid.filter(f => f.size <= MAX_FILE_SIZE)
+
+  // ตรวจขนาดรวม
+  const total = valid.reduce((s, f) => s + f.size, 0)
+  if (total > MAX_TOTAL_SIZE) {
+    Swal.fire({
+      icon: 'warning',
+      title: 'ขนาดรวมไฟล์เกินกำหนด',
+      text: `รวม ${Math.round(total/1024/1024)}MB (เพดาน ${Math.round(MAX_TOTAL_SIZE/1024/1024)}MB)`,
+    })
+    valid = []  // บังคับให้ผู้ใช้เลือกใหม่
   }
 
   // เก็บ File จริงไว้ใช้หน้า 3
@@ -1011,9 +1052,10 @@ async function handleFileChange(e) {
 
   fileError.value = selectedFiles.value.length === 0
 
-  // อนุญาตให้เลือกชื่อเดิมซ้ำ
+  // อนุญาตเลือกชื่อไฟล์ซ้ำรอบถัดไป
   if (fileUploadInput.value) fileUploadInput.value.value = ''
 }
+
 
 
 // พรีวิวจาก selectedFiles ที่มี dataUrl
@@ -1134,21 +1176,32 @@ watch(dpReceive, (d) => {
 </script>
 <style scoped>
 .headStepper {
-  background-color: white;
-  margin: 15px auto;
-  padding: 0px;
+  position: sticky;
+  top: 60px; /* ให้พอดีกับ topbar ของคุณ (ปรับได้เล็กน้อย) */
+  z-index: 10;
   width: 90%;
   max-width: 900px;
+  margin: 0 auto 16px;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(2px);
   border-radius: 20px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, .1);
 }
+
 .stepper {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 20px;
+  padding: 20px 20px 52px; /* เพิ่ม padding ล่าง ให้ label อยู่ในกรอบ */
   border-radius: 20px;
 }
+
+.headStepper-spacer{ display:none; } /* ไม่ต้องใช้ spacer จริง */
+
+.main{ 
+  padding-top: var(--topbar-h); /* กันเนื้อหาถูกทับโดย topbar + stepper */
+}
+
 .step {
   display: flex;
   align-items: center;
@@ -1170,15 +1223,14 @@ watch(dpReceive, (d) => {
   background-color: #ff4d4f;
   opacity: 0.5;
 }
-.label {
-  margin-top: 15px;
-  text-align: center;
-  font-size: 12px;
+.label{
   position: absolute;
-  top: 40px;
-  left: 16px;
+  top: 45px;                 /* ระยะห่างจากวงกลม */
+  left: 15px;                /* ครึ่งเส้นผ่านศูนย์กลางของ circle (30px/2) */
   transform: translateX(-50%);
+  font-size: 12px;
   white-space: nowrap;
+  text-align: center;
 }
 .line {
   height: 4px;
@@ -1668,6 +1720,20 @@ watch(dpReceive, (d) => {
 :deep(.dp__input_wrap .dp__icon) {
   left: 12px;
 }
+
+/* ให้ DatePicker แสดงผล invalid เหมือนช่องอื่น */
+:deep(.is-invalid-date .dp__input) {
+  border-color: #ef4444 !important;
+  background: #ffeaea !important;
+}
+
+/* ==== Sticky Stepper แบบเดียวกับ form_field ==== */
+:root{
+  --topbar-h: 64px;   /* ความสูงแถบบนของคุณ */
+  --subbar-h: 0px;    /* ถ้ามี subbar เพิ่มได้ */
+  --gap: 12px;        /* ระยะห่าง */
+}
+
 
 </style>
 

@@ -122,6 +122,7 @@
             Email:
             <a href="mailto:sport-complex@mfu.ac.th">sport-complex@mfu.ac.th</a>
           </p>
+          <p>© 2025 Center for Information Technology Services, Mae Fah Luang University. All rights reserved.</p>
         </div>
       </footer>
     </div>
@@ -360,7 +361,7 @@ async function handleCheckout() {
       }
 
       await axios.delete(`${API_BASE}/api/cart?user_id=${userId}`)
-      Swal.fire('Sent request successfully !', '', 'success')
+      Swal.fire('Sent request successfully', '', 'success')
       products.value = []
       router.push('/history')
     } catch (err) {
@@ -630,6 +631,25 @@ onBeforeUnmount(() => {
 #btnBackToSelect:hover {
   background-color: #5a6268;
 }
+
+/* ปรับ layout ปุ่มในมือถือ */
+@media (max-width: 480px) {
+  .btn-container {
+    display: flex;
+    flex-direction: column;  /* วางปุ่ม Back/Next คนละบรรทัด */
+    align-items: center;
+    gap: 12px;               /* ระยะห่างระหว่างปุ่ม */
+    padding: 0 20px;
+    text-align: center;
+  }
+
+  #btnBackToSelect,
+  #btnCheckout {
+    width: 100%;             /* ปุ่มเต็มบรรทัดในมือถือ */
+    max-width: 320px;        /* จำกัดความกว้างไม่ให้ยาวเกิน */
+  }
+}
+
 
 
 </style>

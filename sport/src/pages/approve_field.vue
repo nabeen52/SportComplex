@@ -54,13 +54,13 @@
         </div>
       </header>
       <div class="histbody">
-        <h1 style="padding-left: 50px; display: flex; justify-content: center;">อนุมัติสนาม/อุปกรณ์</h1>
+        <h1 style="padding-left: 50px; display: flex; justify-content: center;">Field/Equipment Approve</h1>
 
         <!-- ปุ่มกรอง -->
         <div class="history-filter" style="display: flex; justify-content: center;">
-          <button :class="{ active: filterType === 'all' }" @click="filterType = 'all'">ทั้งหมด</button>
-          <button :class="{ active: filterType === 'field' }" @click="filterType = 'field'">สนาม</button>
-          <button :class="{ active: filterType === 'equipment' }" @click="filterType = 'equipment'">อุปกรณ์</button>
+          <button :class="{ active: filterType === 'all' }" @click="filterType = 'all'">All</button>
+          <button :class="{ active: filterType === 'field' }" @click="filterType = 'field'">Field</button>
+          <button :class="{ active: filterType === 'equipment' }" @click="filterType = 'equipment'">Equipment</button>
         </div>
 
         <!-- ตารางอนุมัติ (table) -->
@@ -68,12 +68,12 @@
           <table class="approve-table">
             <thead>
               <tr>
-                <th>วันที่ทำรายการ</th>
-                <th>ประเภท</th>
-                <th>ชื่อ สนาม/อุปกรณ์</th>
-                <th>เวลา/จำนวน</th>
-                <th>การกระทำ</th>
-                <th>รายละเอียด</th>
+                <th>Transaction date</th>
+                <th>Type</th>
+                <th>Field / Equipment</th>
+                <th>Time / Amount</th>
+                <th>Actions</th>
+                <th>Detail</th>
               </tr>
             </thead>
             <tbody>
@@ -143,6 +143,7 @@
             Email:
             <a href="mailto:sport-complex@mfu.ac.th">sport-complex@mfu.ac.th</a>
           </p>
+          <p>© 2025 Center for Information Technology Services, Mae Fah Luang University. All rights reserved.</p>
         </div>
       </footer>
     </div>
@@ -287,7 +288,7 @@ export default {
     return axios.patch(url, data);
   }));
 
-  Swal.fire('Approved!', 'The booking has been approved.', 'success');
+  Swal.fire('Approved', 'The booking has been approved.', 'success');
 
   // ⬇️ ดึงข้อมูลใหม่ทันที
   await this.fetchAndGroup();
@@ -461,7 +462,7 @@ await Promise.all(
 
     // เอากลุ่มที่อนุมัติแล้วออกจาก list
     this.grouped = this.grouped.filter(g => g !== group);
-    Swal.fire('Approved!', 'The booking has been approved.', 'success');
+    Swal.fire('Approved', 'The booking has been approved.', 'success');
   }
 },
 handleResize() {
@@ -492,80 +493,85 @@ handleResize() {
           )
         );
         this.grouped = this.grouped.filter(g => g !== group)
-        Swal.fire('Cancelled!', 'The booking has been cancelled.', 'error')
+        Swal.fire('Cancelled', 'The booking has been cancelled.', 'error')
       }
     },
-    detailGroup(group) {
-  let html = '<div style="text-align:left;">'
-  if (group.type === 'field') {
-    group.items.forEach((item, i) => {
-      html += `
-        <div style="margin-bottom:8px;padding-bottom:8px;border-bottom:1px dashed #bbb;">
-          <b>ชื่อสนาม:</b> ${item.name || '-'}<br>
-          <b>โซน:</b> ${(item.zone && item.zone !== '-' && item.zone !== '') ? item.zone : '-'}<br>
+   detailGroup(group) {
+  // helper: สร้าง 1 แถว (label/value) ให้ชิดซ้ายเท่ากันหมด
+  const row = (label, value) => `
+    <div style="display:flex; align-items:flex-start; margin-bottom:8px;">
+      <div style="width:160px; font-weight:700; text-align:left;">
+        ${label}
+      </div>
+      <div style="flex:1; text-align:left; padding-left:12px; word-break:break-word;">
+        ${value}
+      </div>
+    </div>
+  `;
 
-          <b>ชื่อผู้ขอใช้:</b> ${this.userMap[item.user_id] || item.requester || item.user_id || "-"}<br>
-          <b>วันที่ขอใช้:</b> ${item.date ? this.formatDate(item.date) : '-'}<br>
-          <b>ช่วงเวลาที่ใช้:</b> 
-          ${item.since ? this.formatDate(item.since) : '-'} - 
-          ${item.uptodate ? this.formatDate(item.uptodate) : '-'}<br>
-        </div>
-      `
-    });
-    // 👇👇 เพิ่มปุ่ม PDF
-    html += `<div style="text-align:center; margin-top:16px;">
-      <button id="pdf-btn" style="background:#213555;color:#fff;padding:6px 18px;border-radius:7px;border:none;cursor:pointer;">ดาวน์โหลด PDF</button>
-    </div>`;
+  // helper: ครอบ container + ปุ่ม PDF
+  const wrap = (title, rowsHtml, showPdf, bookingId) => `
+    <div style="text-align:left; padding-top:2px;">
+      ${rowsHtml}
+      ${showPdf ? `
+        <div style="text-align:center; margin-top:14px;">
+          <button id="pdf-btn" style="background:#213555;color:#fff;padding:8px 18px;border-radius:8px;border:none;cursor:pointer;">
+            ดาวน์โหลด PDF
+          </button>
+        </div>` : ``}
+    </div>
+  `;
+
+  if (group.type === 'field') {
+    const it = group.items[0] || {};
+    const zone = (it.zone && it.zone !== '-' && it.zone !== '') ? it.zone : '-';
+    const requester = this.userMap[it.user_id] || it.requester || it.user_id || '-';
+    const rowsHtml =
+      row('ชื่อสนาม:', it.name || '-') +
+      row('โซน:', zone) +
+      row('ชื่อผู้ขอใช้:', requester) +
+      row('วันที่ขอใช้:', it.date ? this.formatDate(it.date) : '-') +
+      row('ช่วงเวลาที่ใช้:', `${it.since ? this.formatDate(it.since) : '-'} - ${it.uptodate ? this.formatDate(it.uptodate) : '-'}`);
+
     Swal.fire({
-      title: "รายละเอียดสนาม",
-      html,
-      confirmButtonText: "ปิด",
-      confirmButtonColor: "#3085d6",
+      title: 'รายละเอียดสนาม',
+      html: wrap('รายละเอียดสนาม', rowsHtml, true, group.booking_id),
+      confirmButtonText: 'ปิด',
+      confirmButtonColor: '#3085d6',
       didOpen: () => {
-         // BIND CLICK ให้ปุ่ม PDF เฉพาะกรณีที่ปุ่มมีอยู่จริง
-     const pdfBtn = document.getElementById('pdf-btn');
-    if (pdfBtn) {
-      pdfBtn.addEventListener('click', () => {
-        this.downloadBookingPdf(group.booking_id);
-      });
-    }
+        const btn = document.getElementById('pdf-btn');
+        if (btn) btn.addEventListener('click', () => this.downloadBookingPdf(group.booking_id));
       }
     });
   } else {
-    // Equipment
-    group.items.forEach((item, i) => {
-      html += `
-        <div style="margin-bottom:8px;padding-bottom:8px;border-bottom:1px dashed #bbb;">
-          <b>อุปกรณ์ที่ ${i + 1}:</b> ${item.name || '-'}<br>
-          <b>จำนวน:</b> ${item.quantity || '-'}<br>
-          <b>ชื่อผู้ขอใช้:</b> ${this.userMap[item.user_id] || item.requester || item.user_id || "-"}<br>
-          <b>วันที่ขอยืม:</b> ${item.date ? this.formatDate(item.date) : '-'}<br>
-          <b>ช่วงเวลาที่ใช้:</b> 
-          ${item.since ? this.formatDate(item.since) : '-'} - 
-          ${item.uptodate ? this.formatDate(item.uptodate) : '-'}<br>
+    // equipment (โชว์หลายชิ้นได้)
+    let rowsHtml = '';
+    group.items.forEach((item, idx) => {
+      const requester = this.userMap[item.user_id] || item.requester || item.user_id || '-';
+      rowsHtml += `
+        <div style="padding:8px 0; border-bottom:1px dashed #c7c7c7;">
+          ${row(`อุปกรณ์ที่ ${idx + 1}:`, item.name || '-')}
+          ${row('จำนวน:', item.quantity || '-')}
+          ${row('ชื่อผู้ขอใช้:', requester)}
+          ${row('วันที่ขอยืม:', item.date ? this.formatDate(item.date) : '-')}
+          ${row('ช่วงเวลาที่ใช้:', `${item.since ? this.formatDate(item.since) : '-'} - ${item.uptodate ? this.formatDate(item.uptodate) : '-'}`)}
         </div>
-      `
-    });
-    // 👇👇 เพิ่มปุ่ม PDF
-    html += `<div style="text-align:center; margin-top:16px;">
-      <button id="pdf-btn" style="background:#213555;color:#fff;padding:6px 18px;border-radius:7px;border:none;cursor:pointer;">ดาวน์โหลด PDF</button>
-    </div>`;
-    Swal.fire({
-      title: "รายละเอียดอุปกรณ์",
-      html,
-      confirmButtonText: "ปิด",
-      confirmButtonColor: "#3085d6",
-      didOpen: () => {
-    document.getElementById('pdf-btn')?.addEventListener('click', () => {
-      // ส่ง booking_id ของ group ไปโหลด PDF
-      this.downloadBookingPdf(group.booking_id);
+      `;
     });
 
+    Swal.fire({
+      title: 'รายละเอียดอุปกรณ์',
+      html: wrap('รายละเอียดอุปกรณ์', rowsHtml, true, group.booking_id),
+      confirmButtonText: 'ปิด',
+      confirmButtonColor: '#3085d6',
+      didOpen: () => {
+        const btn = document.getElementById('pdf-btn');
+        if (btn) btn.addEventListener('click', () => this.downloadBookingPdf(group.booking_id));
       }
     });
   }
-}
-,
+},
+
 
      // ==== PDF DOWNLOAD BUTTON ====
   async  exportPdf(item) {

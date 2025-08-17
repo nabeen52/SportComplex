@@ -14,6 +14,12 @@
       </nav>
     </aside>
 
+    <div
+  v-if="!isSidebarClosed"
+  class="sidebar-overlay"
+  @click="toggleSidebar"
+></div>
+
     <div class="main">
       <header class="topbar">
         <button class="menu-toggle" @click="toggleSidebar">☰</button>
@@ -88,10 +94,13 @@
         <div class="footer-left">
           <p>
             Sport Complex – Mae Fah Luang University |
-            Tel. 0-5391-7821 | Facebook:
-            <a href="https://www.facebook.com/mfusportcomplex" target="_blank">MFU Sports Complex Center</a> |
-            Email: <a href="mailto:sport-complex@mfu.ac.th">sport-complex@mfu.ac.th</a>
+            Tel: 0-5391-7820 and 0-5391-7821 | Facebook:
+            <a href="https://www.facebook.com/mfusportcomplex" target="_blank">MFU Sports Complex Center</a>
+            |
+            Email:
+            <a href="mailto:sport-complex@mfu.ac.th">sport-complex@mfu.ac.th</a>
           </p>
+          <p>© 2025 Center for Information Technology Services, Mae Fah Luang University. All rights reserved.</p>
         </div>
       </footer>
     </div>
@@ -158,8 +167,8 @@ export default {
       image: this.currentImage
     });
     Swal.fire({
-  title: 'เพิ่มลงตะกร้าแล้ว!',
-  text: `เพิ่ม ${this.selectedQuantity} รายการสำเร็จ`,
+  title: 'Added to cart',
+  text: `Added ${this.selectedQuantity} Success`,
   icon: 'success',
   timer: 1200,
   showConfirmButton: false
@@ -169,7 +178,7 @@ export default {
 
   } catch (err) {
     console.log(err);
-    Swal.fire('เกิดข้อผิดพลาด', err.response?.data?.message || 'ไม่สามารถเพิ่มลงตะกร้าได้', 'error');
+    Swal.fire('An error occurred', err.response?.data?.message || 'Unable to add to cart', 'error');
   }
 },
 
@@ -495,13 +504,6 @@ beforeUnmount() {
 .notification-dropdown::-webkit-scrollbar-track {
   background: transparent;
 }
-
-/* Optional: Effect for unread notification */
-/* .notification-dropdown li.unread {
-  background: linear-gradient(90deg, #f4eaff 60%, #d9e4ff 100%);
-  border-left: 4px solid #8b5cf6;
-} */
-
 .notification-item.approved {
   background: linear-gradient(90deg, #e9fbe7 85%, #cbffdb 100%);
   border-left: 4px solid #38b000;
@@ -527,6 +529,57 @@ beforeUnmount() {
   background: transparent;
   z-index: 1001; /* ต้องน้อยกว่า .notification-dropdown (1002) */
 }
+
+/* ===== Force right section under image on mobile ===== */
+@media (max-width: 480px) {
+  /* ให้ container เรียงเป็นบน-ล่าง แบบง่ายสุด */
+  .probody-flex {
+    display: block;        /* ตัด flex-row เดิมออก */
+    padding: 16px;
+  }
+
+  /* รูปอยู่บนเต็มความกว้าง */
+  .left-column,
+  .right-column {
+    width: 100% !important;
+    max-width: 100% !important;
+    flex: none !important;
+  }
+
+  /* ส่วน Booking ลงมาอยู่ล่างรูป + ยกเลิกความสูง 600px */
+  .right-column {
+    margin-top: 12px;
+    min-height: auto !important;
+    display: block;
+  }
+
+  .field-image {
+    width: 100%;
+    height: auto;
+    max-height: 340px;
+    object-fit: cover !important;
+  }
+
+  .zone-selector { 
+    width: 100%;
+    text-align: left;
+  }
+  .dropdown { width: 100%; }
+
+  /* ปุ่มเต็มบรรทัด (ไม่ลอย) */
+  .booking-btn {
+    position: static !important;
+    width: 100%;
+    height: 48px;
+    border-radius: 12px;
+    margin-top: 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    white-space: nowrap;
+  }
+}
+
 
 
 

@@ -120,6 +120,7 @@
             Email:
             <a href="mailto:sport-complex@mfu.ac.th">sport-complex@mfu.ac.th</a>
           </p>
+          <p>© 2025 Center for Information Technology Services, Mae Fah Luang University. All rights reserved.</p>
         </div>
       </footer>
     </div>
@@ -404,7 +405,7 @@ handleClickOutside(event) {
         try {
           await axios.post(`${API_BASE}/api/fields`, form);
           await this.loadFields();
-          Swal.fire({ title: 'สำเร็จ!', text: 'เพิ่มสนามเรียบร้อยแล้ว', icon: 'success', customClass: { popup: 'custom-swal-popup' } });
+          Swal.fire({ title: 'สำเร็จ', text: 'เพิ่มสนามเรียบร้อยแล้ว', icon: 'success', customClass: { popup: 'custom-swal-popup' } });
         } catch (error) {
           Swal.fire({ icon: 'error', title: 'เกิดข้อผิดพลาด', text: error.response?.data?.message || error.message });
         }
@@ -436,7 +437,7 @@ handleClickOutside(event) {
       if (result.isConfirmed && result.value) {
         await axios.patch(`${API_BASE}/api/fields/${field._id}`, result.value)
         await this.loadFields()
-        Swal.fire({ title: 'สำเร็จ!', text: 'บันทึกข้อมูลเรียบร้อยแล้ว', icon: 'success', customClass: { popup: 'custom-swal-popup' } })
+        Swal.fire({ title: 'สำเร็จ', text: 'บันทึกข้อมูลเรียบร้อยแล้ว', icon: 'success', customClass: { popup: 'custom-swal-popup' } })
       }
       if (result.isDenied) {
         const confirmDelete = await Swal.fire({
@@ -447,7 +448,7 @@ handleClickOutside(event) {
         if (confirmDelete.isConfirmed) {
           await axios.delete(`${API_BASE}/api/fields/${field._id}`)
           await this.loadFields()
-          Swal.fire({ title: 'ลบแล้ว!', text: 'ลบสนามเรียบร้อยแล้ว', icon: 'success', customClass: { popup: 'custom-swal-popup' } })
+          Swal.fire({ title: 'ลบแล้ว', text: 'ลบสนามเรียบร้อยแล้ว', icon: 'success', customClass: { popup: 'custom-swal-popup' } })
         }
       }
     },
@@ -490,7 +491,7 @@ handleClickOutside(event) {
       if (form) {
         await axios.patch(`${API_BASE}/api/fields/${field._id}`, { zones: [...field.zones, form], hasZone: true })
         await this.loadFields()
-        Swal.fire({ title: 'สำเร็จ!', text: 'เพิ่มโซนเรียบร้อยแล้ว', icon: 'success', customClass: { popup: 'custom-swal-popup' } })
+        Swal.fire({ title: 'สำเร็จ', text: 'เพิ่มโซนเรียบร้อยแล้ว', icon: 'success', customClass: { popup: 'custom-swal-popup' } })
       }
     },
 
@@ -538,7 +539,7 @@ handleClickOutside(event) {
         zones[zIndex] = result.value
         await axios.patch(`${API_BASE}/api/fields/${field._id}`, { zones })
         await this.loadFields()
-        Swal.fire({ title: 'สำเร็จ!', text: 'บันทึกข้อมูลเรียบร้อยแล้ว', icon: 'success', customClass: { popup: 'custom-swal-popup' } })
+        Swal.fire({ title: 'สำเร็จ', text: 'บันทึกข้อมูลเรียบร้อยแล้ว', icon: 'success', customClass: { popup: 'custom-swal-popup' } })
       }
       if (result.isDenied) {
         const confirmDelete = await Swal.fire({
@@ -550,7 +551,7 @@ handleClickOutside(event) {
           const zones = field.zones.filter((z, i) => i !== zIndex)
           await axios.patch(`${API_BASE}/api/fields/${field._id}`, { zones })
           await this.loadFields()
-          Swal.fire({ title: 'ลบแล้ว!', text: 'ลบโซนเรียบร้อยแล้ว', icon: 'success', customClass: { popup: 'custom-swal-popup' } })
+          Swal.fire({ title: 'ลบแล้ว', text: 'ลบโซนเรียบร้อยแล้ว', icon: 'success', customClass: { popup: 'custom-swal-popup' } })
         }
       }
     },

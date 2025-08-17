@@ -11,6 +11,7 @@ const cors = require('cors');
 const axios = require('axios');
 const path = require('path');
 const multer = require('multer');
+const storage = multer.memoryStorage();
 const session = require('express-session');
 const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
@@ -47,7 +48,6 @@ const uploadDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });
 }
-app.use('/uploads', express.static(uploadDir));
 // ฟังก์ชันสำหรับส่งอีเมล
 // ฟังก์ชันส่งอีเมล
 async function sendApproveEmail({ to, name, equipment, quantity }) {
@@ -400,8 +400,8 @@ app.use(cors({
     credentials: true
 }));
 
-app.use(express.json({ limit: '100mb' }));
-app.use(express.urlencoded({ limit: '100mb', extended: true }));
+app.use(express.json({ limit: '110mb' }));
+app.use(express.urlencoded({ limit: '110mb', extended: true }));
 
 //login oauth
 
@@ -734,60 +734,66 @@ const bookingFieldUpload = multer({
 
 // สมมติว่าใช้ mongoose model History
 
-app.get('/api/history/pdf', async (req, res) => {
-    const bookingId = req.query.booking_id;
-    if (!bookingId) return res.status(400).json({ error: 'booking_id required' });
+// app.get('/api/history/pdf', async (req, res) => {
+//     const bookingId = req.query.booking_id;
+//     if (!bookingId) return res.status(400).json({ error: 'booking_id required' });
 
-    try {
-        // ค้นหา history ที่มี booking_id นั้น
-        const historyItem = await History.findOne({ booking_id: bookingId }).lean();
+//     try {
+//         // ค้นหา history ที่มี booking_id นั้น
+//         const historyItem = await History.findOne({ booking_id: bookingId }).lean();
 
-        if (!historyItem || !historyItem.bookingPdf) {
-            return res.status(404).json({ error: 'PDF not found' });
-        }
+//         if (!historyItem || !historyItem.bookingPdf) {
+//             return res.status(404).json({ error: 'PDF not found' });
+//         }
 
-        // bookingPdf อาจเก็บเป็น base64 string หรือ Buffer
-        // ถ้าเป็น base64 string:
-        // const pdfBuffer = Buffer.from(historyItem.bookingPdf, 'base64');
-        // หรือถ้าเก็บเป็น Buffer ใน MongoDB แล้วใช้ตรง ๆ ได้เลย
+//         // bookingPdf อาจเก็บเป็น base64 string หรือ Buffer
+//         // ถ้าเป็น base64 string:
+//         // const pdfBuffer = Buffer.from(historyItem.bookingPdf, 'base64');
+//         // หรือถ้าเก็บเป็น Buffer ใน MongoDB แล้วใช้ตรง ๆ ได้เลย
 
-        let pdfBuffer;
-        if (typeof historyItem.bookingPdf === 'string') {
-            pdfBuffer = Buffer.from(historyItem.bookingPdf, 'base64');
-        } else {
-            pdfBuffer = historyItem.bookingPdf;
-        }
+//         let pdfBuffer;
+//         if (typeof historyItem.bookingPdf === 'string') {
+//             pdfBuffer = Buffer.from(historyItem.bookingPdf, 'base64');
+//         } else {
+//             pdfBuffer = historyItem.bookingPdf;
+//         }
 
-        res.set({
-            'Content-Type': 'application/pdf',
-            'Content-Disposition': `attachment; filename=booking_${bookingId}.pdf`,
-            'Content-Length': pdfBuffer.length,
-        });
+//         res.set({
+//             'Content-Type': 'application/pdf',
+//             'Content-Disposition': `attachment; filename=booking_${bookingId}.pdf`,
+//             'Content-Length': pdfBuffer.length,
+//         });
 
-        res.send(pdfBuffer);
+//         res.send(pdfBuffer);
 
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: 'Server error' });
-    }
+//     } catch (err) {
+//         console.error(err);
+//         res.status(500).json({ error: 'Server error' });
+//     }
+// });
+
+// // PDF download by booking_id or _id
+// app.get('/api/history/pdf/:anyid', async (req, res) => {
+//     try {
+//         let doc = await History.findById(req.params.anyid);
+//         if (!doc) doc = await History.findOne({ booking_id: req.params.anyid });
+//         if (!doc || !doc.bookingPdf) return res.status(404).send('Not found');
+//         const pdfBuffer = Buffer.from(doc.bookingPdf, 'base64');
+//         res.set('Content-Type', 'application/pdf');
+//         res.set('Content-Disposition', 'inline; filename="booking-form.pdf"');
+//         res.send(pdfBuffer);
+//     } catch (err) {
+//         console.log('Error download pdf:', err);
+//         res.status(500).send('Server error');
+//     }
+// });
+
+// ตัวเลือก (ถ้าจำเป็น): redirect ถ้ามี bookingPdfUrl
+app.get('/api/history/pdfbyurl/:id', async (req, res) => {
+    const doc = await History.findById(req.params.id).lean();
+    if (!doc || !doc.bookingPdfUrl) return res.status(404).send('Not found');
+    return res.redirect(doc.bookingPdfUrl);
 });
-
-// PDF download by booking_id or _id
-app.get('/api/history/pdf/:anyid', async (req, res) => {
-    try {
-        let doc = await History.findById(req.params.anyid);
-        if (!doc) doc = await History.findOne({ booking_id: req.params.anyid });
-        if (!doc || !doc.bookingPdf) return res.status(404).send('Not found');
-        const pdfBuffer = Buffer.from(doc.bookingPdf, 'base64');
-        res.set('Content-Type', 'application/pdf');
-        res.set('Content-Disposition', 'inline; filename="booking-form.pdf"');
-        res.send(pdfBuffer);
-    } catch (err) {
-        console.log('Error download pdf:', err);
-        res.status(500).send('Server error');
-    }
-});
-
 
 
 
@@ -817,24 +823,33 @@ const upload = multer({
 
 
 
-app.post('/api/upload', upload.single('file'), (req, res) => {
-    if (!req.file) {
-        return res.status(400).json({ success: false, message: 'No file uploaded' });
-    }
-    const fullUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
-    res.json({
-        success: true,
-        fileUrl: fullUrl
+app.post('/api/upload', (req, res, next) => {
+    upload.single('file')(req, res, function (err) {
+        if (err) {
+            console.error('[Multer Error /api/upload]:', err);
+            return res.status(400).json({ success: false, message: err.message });
+        }
+        if (!req.file) {
+            return res.status(400).json({ success: false, message: 'No file uploaded' });
+        }
+        const fullUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
+        return res.json({ success: true, fileUrl: fullUrl });
     });
 });
 
-app.post('/api/uploads', upload.array('files', 20), (req, res) => {
-    if (!req.files || req.files.length === 0) {
-        return res.status(400).json({ success: false, message: 'No files uploaded' });
-    }
-    const baseUrl = `${req.protocol}://${req.get('host')}/uploads/`;
-    const fileUrls = req.files.map(f => baseUrl + f.filename);
-    res.json({ success: true, fileUrls });
+app.post('/api/uploads', (req, res, next) => {
+    upload.array('files', 20)(req, res, function (err) {
+        if (err) {
+            console.error('[Multer Error /api/uploads]:', err);
+            return res.status(400).json({ success: false, message: err.message });
+        }
+        if (!req.files || req.files.length === 0) {
+            return res.status(400).json({ success: false, message: 'No files uploaded' });
+        }
+        const baseUrl = `${req.protocol}://${req.get('host')}/uploads/`;
+        const fileUrls = req.files.map(f => baseUrl + f.filename);
+        return res.json({ success: true, fileUrls });
+    });
 });
 
 // ===========================================================================
@@ -1444,10 +1459,11 @@ app.patch('/api/history/:id/return', async (req, res) => {
         const staffId = req.body.staff_id;
         const staff = await User.findOne({ user_id: staffId });
         const staffName = staff ? staff.name : staffId;
+
         const oldRecord = await History.findById(req.params.id);
         if (!oldRecord) return res.status(404).send({ message: 'Not found' });
 
-        // อัปเดตจำนวนใน Equipment
+        // อัปเดตสต็อก
         await Equipment.updateOne(
             { name: oldRecord.name.trim() },
             { $inc: { quantity: Math.abs(oldRecord.quantity) } }
@@ -1460,7 +1476,7 @@ app.patch('/api/history/:id/return', async (req, res) => {
             quantity: oldRecord.quantity,
             date: new Date(),
             status: 'returned',
-            approvedBy: oldRecord.approvedBy,
+            approvedBy: oldRecord.approvedBy,      // คงค่าอนุมัติเดิมไว้
             approvedById: oldRecord.approvedById,
             returnedBy: staffName,
             returnedById: staffId,
@@ -1469,17 +1485,15 @@ app.patch('/api/history/:id/return', async (req, res) => {
             attachment: oldRecord.attachment || null,
             fileName: oldRecord.fileName || null,
             fileType: oldRecord.fileType || null,
-            booking_id: oldRecord.booking_id || null,  // เพิ่มบรรทัดนี้
+            booking_id: oldRecord.booking_id || null,
             since: oldRecord.since || '',
             uptodate: oldRecord.uptodate || ''
         });
 
         await returnedRecord.save();
-
-        // ลบ record เก่าที่ยังไม่คืน
         await History.findByIdAndDelete(req.params.id);
 
-        // === ส่งอีเมลแจ้ง user ว่าคืนของสำเร็จแล้ว ===
+        // ✅ ส่งอีเมลคืนสำเร็จ พร้อมชื่อผู้อนุมัติเดิม
         try {
             const user = await User.findOne({ user_id: oldRecord.user_id });
             if (user && user.email) {
@@ -1487,7 +1501,8 @@ app.patch('/api/history/:id/return', async (req, res) => {
                     to: user.email,
                     name: user.name || user.email || oldRecord.user_id,
                     equipment: oldRecord.name,
-                    quantity: oldRecord.quantity
+                    quantity: oldRecord.quantity,
+                    approvedBy: oldRecord.approvedBy || ''   // << ส่งชื่อผู้อนุมัติเดิม
                 });
             }
         } catch (mailErr) {
@@ -1502,10 +1517,12 @@ app.patch('/api/history/:id/return', async (req, res) => {
 
 
 
+
 app.patch('/api/history/:id/request-return', async (req, res) => {
     try {
         const oldRecord = await History.findById(req.params.id);
         if (!oldRecord) return res.status(404).send({ message: 'Not found' });
+
         const returnRequest = new History({
             user_id: oldRecord.user_id,
             name: oldRecord.name,
@@ -1518,22 +1535,25 @@ app.patch('/api/history/:id/request-return', async (req, res) => {
             fileType: req.body.fileType || null,
             booking_id: req.body.booking_id || oldRecord.booking_id || null,
             returnPhoto: req.body.attachment || null,
-            // **** เพิ่ม 2 บรรทัดนี้ ****
             since: oldRecord.since || '',
-            uptodate: oldRecord.uptodate || ''
-
+            uptodate: oldRecord.uptodate || '',
+            // ✅ เก็บผู้อนุมัติเดิมไว้ด้วย
+            approvedBy: oldRecord.approvedBy || '',
+            approvedById: oldRecord.approvedById || ''
         });
         await returnRequest.save();
 
-        // ==== แจ้งเตือนคน approve (ถ้ามี) ====
+        // ==== แจ้งเตือนคน approve (เพิ่มชื่อผู้อนุมัติในอีเมล) ====
         try {
             const approverId = oldRecord.approvedById;
             let borrowerName = "";
             const borrower = await User.findOne({ user_id: oldRecord.user_id });
             if (borrower) borrowerName = borrower.name || borrower.email || borrower.user_id;
+
             if (approverId) {
                 await notifyApproverReturnPending({
                     approverId: approverId,
+                    approverName: oldRecord.approvedBy || '', // ✅ ส่งชื่อผู้อนุมัติ
                     userName: borrowerName,
                     equipment: oldRecord.name,
                     quantity: oldRecord.quantity,
@@ -1549,6 +1569,7 @@ app.patch('/api/history/:id/request-return', async (req, res) => {
         res.status(500).send({ message: err.message });
     }
 });
+
 
 
 
@@ -1696,7 +1717,9 @@ app.get('/api/equipments/return-pending', async (req, res) => {
             return {
                 ...p,
                 since: approved?.since || "",
-                uptodate: approved?.uptodate || ""
+                uptodate: approved?.uptodate || "",
+                approvedBy: p.approvedBy || approved?.approvedBy || '',
+                approvedById: p.approvedById || approved?.approvedById || ''
             };
         });
 
@@ -2843,8 +2866,6 @@ app.post('/api/booking_field_upload', bookingFieldUpload.array('files'), async (
         res.status(500).json({ success: false, message: err.message });
     }
 });
-
-
 
 
 

@@ -22,20 +22,26 @@
       </nav>
     </aside>
 
+    <!-- คลิกนอกเพื่อปิด Sidebar -->
     <div
-  v-if="!isSidebarClosed"
-  class="sidebar-overlay"
-  @click="toggleSidebar"
+      v-if="!isSidebarClosed"
+      class="sidebar-overlay"
+      @click="toggleSidebar"
     ></div>
 
+    <!-- Main -->
     <div class="main">
       <!-- Topbar -->
       <header class="topbar">
         <button class="menu-toggle" @click="toggleSidebar">☰</button>
         <div class="topbar-actions">
-          <!-- 🔔 START กระดิ่งแจ้งเตือน -->
-           <div>
-            <div v-if="showNotifications" class="notification-backdrop" @click="closeNotifications"></div>
+          <!-- กระดิ่งแจ้งเตือน -->
+          <div>
+            <div
+              v-if="showNotifications"
+              class="notification-backdrop"
+              @click="closeNotifications"
+            ></div>
             <button class="notification-btn" @click="toggleNotifications">
               <i class="pi pi-bell"></i>
               <span v-if="unreadCount > 0" class="badge">{{ unreadCount }}</span>
@@ -53,12 +59,11 @@
               </ul>
             </div>
           </div>
-          <!-- 🔔 END กระดิ่งแจ้งเตือน -->
-          <router-link to="/cart" class="cart-link">
-              <i class="pi pi-shopping-cart"></i>
-              <span v-if="products.length > 0" class="badge">{{ products.length }}</span>
-          </router-link>
 
+          <router-link to="/cart" class="cart-link">
+            <i class="pi pi-shopping-cart"></i>
+            <span v-if="products.length > 0" class="badge">{{ products.length }}</span>
+          </router-link>
           <router-link to="/profile"><i class="pi pi-user"></i></router-link>
         </div>
       </header>
@@ -70,11 +75,15 @@
             <div
               class="circle"
               :class="{ active: index === currentStep, completed: index < currentStep }"
-              style="cursor:pointer"
-              @click="goStep(index)"
+              style="cursor: not-allowed"
+              @click.stop
             ></div>
             <div class="label">{{ step }}</div>
-            <div v-if="index < steps.length - 1" class="line" :class="{ filled: index < currentStep }"></div>
+            <div
+              v-if="index < steps.length - 1"
+              class="line"
+              :class="{ filled: index < currentStep }"
+            ></div>
           </div>
         </div>
       </div>
@@ -82,27 +91,34 @@
       <!-- Success Message -->
       <div class="form-container">
         <h1 style="display: flex; justify-content: center;">ส่งคำขอสำเร็จ ✅</h1>
+
         <button class="pdfmake-btn" :disabled="!bookingInfo" @click="exportPdf(bookingInfo)">
           ดาวน์โหลด PDF ฟอร์ม
         </button>
-        <br><br>
+
+        <br /><br />
+
         <button id="btnNext" @click="handleNext">กลับหน้าแรก</button>
       </div>
-    </div>
 
-    <!-- Footer -->
-    <footer class="foot">
-      <div class="footer-left">
-        <p>
-          Sport Complex – Mae Fah Luang University |
-          Tel. 0-5391-7821 | Facebook:
-          <a href="https://www.facebook.com/mfusportcomplex" target="_blank">MFU Sports Complex Center</a> |
-          Email: <a href="mailto:sport-complex@mfu.ac.th">sport-complex@mfu.ac.th</a>
-        </p>
-      </div>
-    </footer>
+      <!-- Footer (ย้ายมาไว้ใน .main) -->
+      <footer class="foot" style="margin-top: 20px;">
+        <div class="footer-left">
+          <p>
+            Sport Complex – Mae Fah Luang University |
+            Tel: 0-5391-7820 and 0-5391-7821 | Facebook:
+            <a href="https://www.facebook.com/mfusportcomplex" target="_blank">MFU Sports Complex Center</a>
+            | Email: <a href="mailto:sport-complex@mfu.ac.th">sport-complex@mfu.ac.th</a>
+          </p>
+          <p>
+            © 2025 Center for Information Technology Services, Mae Fah Luang University. All rights reserved.
+          </p>
+        </div>
+      </footer>
+    </div>
   </div>
 </template>
+
 
 <script setup>
 import { ref, onMounted, onBeforeUnmount } from 'vue'
@@ -133,6 +149,27 @@ const notifications = ref([])
 const unreadCount = ref(0)
 const userId = localStorage.getItem('user_id') || ''
 let polling = null
+
+function formatDateOnly(dateTime) {
+  if (!dateTime) return '-'
+  let d
+  if (typeof dateTime === 'string') {
+    const parts = dateTime.split('T')[0].split('-')
+    d = parts.length === 3 ? new Date(parts[0], parts[1]-1, parts[2]) : new Date(dateTime)
+  } else {
+    d = new Date(dateTime)
+  }
+  if (isNaN(d)) return '-'
+  const dd = String(d.getDate()).padStart(2, '0')
+  const mm = String(d.getMonth()+1).padStart(2, '0')
+  const yy = d.getFullYear()+543
+  return `${dd}/${mm}/${yy}`
+}
+function esc(s) {
+  return String(s ?? '-')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/\n/g,'<br>')
+}
 
 function pruneOldNotifications() {
   const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000
@@ -207,52 +244,67 @@ async function loadCart() {
 }
 
 async function loadBookingInfo() {
-  const bookingId = localStorage.getItem('equipment_booking_id');
+  const bookingId = localStorage.getItem('equipment_booking_id')
   if (!bookingId) {
-    await Swal.fire('ไม่พบข้อมูลการจอง');
-    return;
+    await Swal.fire('ไม่พบข้อมูลการจอง')
+    return
   }
   try {
-    const res = await axios.get(`${API_BASE}/api/history`, {
-      params: { booking_id: bookingId }
-    });
+    const res = await axios.get(`${API_BASE}/api/history`, { params: { booking_id: bookingId } })
     const historyList = (res.data || []).filter(
-      h => h.type === 'equipment' && String(h.booking_id) === String(bookingId)
-    );
+      h => (h.type === 'equipment') && String(h.booking_id) === String(bookingId)
+    )
     if (!historyList.length) {
-      await Swal.fire('ไม่พบข้อมูลในประวัติ');
-      return;
+      await Swal.fire('ไม่พบข้อมูลในประวัติ')
+      return
     }
-    bookingInfo.value = historyList[0];
-    let userName = historyList[0].requester || '-';
+
+    bookingInfo.value = historyList[0]
+
+    // ชื่อผู้ใช้
+    let userName = historyList[0].requester || '-'
     if ((!userName || userName === '-') && historyList[0].user_id) {
       try {
-        const userRes = await axios.get(`${API_BASE}/api/user/${historyList[0].user_id}`);
-        userName = userRes.data?.name || historyList[0].user_id;
-      } catch (e) {
-        userName = historyList[0].user_id;
+        const userRes = await axios.get(`${API_BASE}/api/user/${historyList[0].user_id}`)
+        userName = userRes.data?.name || historyList[0].user_id
+      } catch {
+        userName = historyList[0].user_id
       }
     }
-    const itemList = historyList.map(h => {
-      return h.quantity ? `${h.name} (${h.quantity})` : h.name;
-    }).join(', ');
+
+    // รายการอุปกรณ์รวมเป็น string
+    const itemList = historyList
+      .map(h => (h.quantity ? `${h.name} (${h.quantity})` : h.name))
+      .join(', ')
+
+    // ==== Popup แบบเดียวกับ form_field4 (Grid 2 คอลัมน์) ====
     await Swal.fire({
-      title: 'ส่งคำขอสำเร็จ!',
+      title: 'ส่งคำขอสำเร็จ',
       html: `
-        <p><b>ชื่อผู้ใช้:</b> ${userName}</p>
-        <p><b>วันที่ขอยืม:</b> ${historyList[0].since ? new Date(historyList[0].since).toLocaleDateString('th-TH') : '-'}</p>
-        <p><b>วันที่คืน:</b> ${historyList[0].uptodate ? new Date(historyList[0].uptodate).toLocaleDateString('th-TH') : '-'}</p>
-        <p><b>รายการอุปกรณ์:</b> ${itemList || '-'}</p>
+        <div class="swal-booking">
+          <div class="label"><b>ชื่อผู้ใช้:</b></div>
+          <div class="value">${esc(userName)}</div>
+
+          <div class="label"><b>วันที่ขอยืม:</b></div>
+          <div class="value">${esc(formatDateOnly(historyList[0].since))}</div>
+
+          <div class="label"><b>วันที่คืน:</b></div>
+          <div class="value">${esc(formatDateOnly(historyList[0].uptodate))}</div>
+
+          <div class="label"><b>รายการอุปกรณ์:</b></div>
+          <div class="value">${esc(itemList || '-')}</div>
+        </div>
       `,
       icon: 'success',
       confirmButtonText: 'ตกลง',
       allowOutsideClick: false,
       allowEscapeKey: false,
-    });
+    })
   } catch (err) {
-    await Swal.fire('ดึงข้อมูลการจองล้มเหลว', err?.message || '', 'error');
+    await Swal.fire('ดึงข้อมูลการจองล้มเหลว', err?.message || '', 'error')
   }
 }
+
 
 onMounted(() => {
   loadBookingInfo()
@@ -331,14 +383,12 @@ async function exportPdf(item) {
   background-color: #ccc;
   z-index: 1;
   transition: background 0.3s;
+  opacity: 0.6;
+  pointer-events: none; /* ห้ามคลิก */
 }
-.circle.active {
-  background-color: #ff4d4f;
-}
-.circle.completed {
-  background-color: #ff4d4f;
-  opacity: 0.5;
-}
+.circle.active { background-color: #ff4d4f; }
+.circle.completed { background-color: #ff4d4f; opacity: 0.4; }
+
 .label {
   margin-top: 15px;
   text-align: center;
@@ -508,7 +558,43 @@ async function exportPdf(item) {
   margin-left: 4px;
 }
 
+/* โครงหน้าสูงเต็มจอ: sidebar + main วางข้างกัน */
+.layout{
+  min-height: 100vh !important;
+  display: flex !important;
+}
+
+/* ให้ .main เป็นคอลัมน์: topbar -> เนื้อหา -> footer */
+.main{
+  flex: 1 1 auto !important;
+  display: flex !important;
+  flex-direction: column !important;
+  min-width: 0;            /* กัน overflow แนวนอน */
+}
+
+/* ดัน footer ไปชิดล่างอัตโนมัติ */
+.foot{
+  margin-top: auto !important;   /* ตัวนี้ทำให้ footer ไปก้นหน้า */
+  flex-shrink: 0 !important;
+  width: 100% !important;
+  border-radius: 0 !important;   /* ไม่ให้โค้งลอย */
+  margin-bottom: 0 !important;
+  padding-top: 12px;             /* ปรับได้ตามชอบ */
+  padding-bottom: 12px;          /* ปรับได้ตามชอบ */
+}
+
+/* ลดช่องว่างก่อน footer ไม่ให้ดันขึ้น */
+.form-container{
+  margin-bottom: 8px !important; /* หรือ 0 ตามต้องการ */
+}
+
 </style>
+
+<style>
+  /* ให้โครงสร้างสูงเต็มหน้าจอ และตัด margin เริ่มต้นของ body */
+  html, body, #app { height: 100%; margin: 0; }
+</style>
+
 <style>
 @import '../css/style.css';
 </style>

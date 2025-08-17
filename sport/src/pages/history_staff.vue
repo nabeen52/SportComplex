@@ -12,9 +12,6 @@
         <router-link to="/equipment" active-class="active">
           <i class="pi pi-map-marker"></i> อุปกรณ์
         </router-link>
-        <!-- <router-link to="/return" active-class="active">
-          <i class="pi pi-box"></i> Return
-        </router-link> -->
         <router-link to="/history_staff" active-class="active">
           <i class="pi pi-history"></i> ประวัติการทำรายการ
         </router-link>
@@ -22,10 +19,10 @@
     </aside>
 
     <div
-  v-if="!isSidebarClosed && isMobile"
-  class="sidebar-overlay"
-  @click="isSidebarClosed = true"
-></div>
+      v-if="!isSidebarClosed && isMobile"
+      class="sidebar-overlay"
+      @click="isSidebarClosed = true"
+    ></div>
 
     <div class="main">
       <header class="topbar">
@@ -42,62 +39,52 @@
               <span v-if="unreadCount > 0" class="badge">{{ unreadCount }}</span>
             </button>
             <div v-if="showNotifications" class="notification-dropdown">
-            <ul>
-              <li
-                v-for="(noti, idx) in notifications.slice(0, 10)"
-                :key="noti.id || idx"
-                :class="['notification-item', noti.type || '', { unread: noti.timestamp > lastSeenTimestamp }]"
-              >
-                {{ noti.message }}
-              </li>
-              <li v-if="notifications.length === 0" class="no-noti">ไม่มีแจ้งเตือน</li>
-            </ul>
-          </div>
+              <ul>
+                <li
+                  v-for="(noti, idx) in notifications.slice(0, 10)"
+                  :key="noti.id || idx"
+                  :class="['notification-item', noti.type || '', { unread: noti.timestamp > lastSeenTimestamp }]"
+                >
+                  {{ noti.message }}
+                </li>
+                <li v-if="notifications.length === 0" class="no-noti">ไม่มีแจ้งเตือน</li>
+              </ul>
+            </div>
           </div>
           <router-link to="/profile_staff"><i class="pi pi-user"></i></router-link>
         </div>
       </header>
-
-      <!-- <transition name="slide-down">
-        <div v-if="showAnnouncementBar" class="announcement-bar">
-          <i class="pi pi-megaphone announcement-icon"></i>
-          <div class="announcement-bar-text">{{ announcement }}</div>
-          <button class="close-announcement-btn" @click="showAnnouncementBar = false">
-            <i class="pi pi-times" style="color: red;"></i>
-          </button>
-        </div>
-      </transition> -->
 
       <div class="histbody">
         <h1 style="padding-left: 50px; display: flex; justify-content: center;">
           ประวัติการทำรายการ (Staff)
         </h1>
 
+        <!-- ตัวกรองสถานะ -->
         <div style="display: flex; justify-content: center; gap: 10px; margin-bottom: 10px;">
-  <button
-    class="filter-btn"
-    :class="{ 'active-filter': filterStatus === 'approved' }"
-    @click="toggleFilter('approved')"
-  >อนุมัติ</button>
-  <button
-    class="filter-btn"
-    :class="{ 'active-filter': filterStatus === 'disapproved' }"
-    @click="toggleFilter('disapproved')"
-  >ไม่อนุมัติ</button>
-  <button
-    class="filter-btn"
-    :class="{ 'active-filter': filterStatus === 'returned' }"
-    @click="toggleFilter('returned')"
-  >รับคืนอุปกรณ์แล้ว</button>
-  <button
-    class="filter-btn"
-    v-if="filterStatus !== ''"
-    @click="clearFilter"
-  >ลบตัวกรอง</button>
-</div>
+          <button
+            class="filter-btn"
+            :class="{ 'active-filter': filterStatus === 'approved' }"
+            @click="toggleFilter('approved')"
+          >อนุมัติ</button>
+          <button
+            class="filter-btn"
+            :class="{ 'active-filter': filterStatus === 'disapproved' }"
+            @click="toggleFilter('disapproved')"
+          >ไม่อนุมัติ</button>
+          <button
+            class="filter-btn"
+            :class="{ 'active-filter': filterStatus === 'returned' }"
+            @click="toggleFilter('returned')"
+          >รับคืนอุปกรณ์แล้ว</button>
+          <button
+            class="filter-btn"
+            v-if="filterStatus !== ''"
+            @click="clearFilter"
+          >ลบตัวกรอง</button>
+        </div>
 
-
-
+        <!-- ตาราง + แบ่งหน้า -->
         <div class="history-table-container">
           <table class="history-table">
             <thead>
@@ -110,37 +97,55 @@
               </tr>
             </thead>
             <tbody>
-              <tr v-for="(group, gidx) in groupedEquipmentHistories" :key="gidx">
+              <!-- ✅ ใช้รายการที่แบ่งหน้ามาแล้ว -->
+              <tr v-for="(group, gidx) in paginatedEquipmentHistories" :key="gidx">
                 <td>{{ group[0].returnedAt ? formatDate(group[0].returnedAt) : formatDate(group[0].date) }}</td>
-                <td>{{ group[0].name }}</td>
-                <td>{{ group[0].quantity }}</td>
+
+                <td style="text-align:left">
+                  <span v-for="(it, idx) in getDisplayItems(group)" :key="it.id">
+                    {{ it.name }}<span v-if="idx < getDisplayItems(group).length - 1">, </span>
+                  </span>
+                </td>
+
                 <td>
-              <span
-                v-if="group[0].status === 'approved'"
-                  class="status-label status-approved"
-                >✅ ถูกอนุมัติ</span>
-                <!-- >✅ {{ group[0].status }}</span> -->
-              <span
-                v-else-if="group[0].status === 'disapproved'"
-                  class="status-label status-disapproved"
-                >❌ ไม่ถูกอนุมัติ</span>
-                <!-- >❌ {{ group[0].status }}</span> -->
-              <span
-                v-else-if="group[0].status === 'return-pending'"
-                  class="status-label status-return-pending"
-                >กำลังรอรับคืนอุปกรณ์📦</span>
-              <span
-                v-else-if="group[0].status === 'returned'"
-                  class="status-label status-returned"
-                >👍 รับคืนอุปกรณ์แล้ว</span>
-              <span v-else>{{ group[0].status }}</span>
-              </td>
+                  <span v-for="(it, idx) in getDisplayItems(group)" :key="it.id">
+                    {{ it.quantity }}<span v-if="idx < getDisplayItems(group).length - 1">, </span>
+                  </span>
+                </td>
+
+                <td>
+                  <span
+                    v-if="group[0].status === 'approved'"
+                    class="status-label status-approved"
+                  >ถูกอนุมัติ</span>
+                  <span
+                    v-else-if="group[0].status === 'disapproved'"
+                    class="status-label status-disapproved"
+                  >ไม่ถูกอนุมัติ</span>
+                  <span
+                    v-else-if="group[0].status === 'return-pending'"
+                    class="status-label status-return-pending"
+                  >กำลังรอรับคืนอุปกรณ์</span>
+                  <span
+                    v-else-if="group[0].status === 'returned'"
+                    class="status-label status-returned"
+                  >รับคืนอุปกรณ์แล้ว</span>
+                  <span v-else>{{ group[0].status }}</span>
+                </td>
+
                 <td>
                   <button class="remark-btn" @click="detailGroup(group)">รายละเอียด</button>
                 </td>
               </tr>
             </tbody>
           </table>
+        </div>
+
+        <!-- แถบควบคุมหน้า -->
+        <div class="pagination-control" style="margin-top: 12px;">
+          <button @click="prevPage" :disabled="currentPage === 1">Back</button>
+          <span>Pages {{ currentPage }} / {{ totalPages }}</span>
+          <button @click="nextPage" :disabled="currentPage === totalPages">Next</button>
         </div>
       </div>
 
@@ -154,11 +159,13 @@
             Email:
             <a href="mailto:sport-complex@mfu.ac.th">sport-complex@mfu.ac.th</a>
           </p>
+          <p>© 2025 Center for Information Technology Services, Mae Fah Luang University. All rights reserved.</p>
         </div>
       </footer>
     </div>
   </div>
 </template>
+
 
 
 <script>
@@ -182,6 +189,8 @@ export default {
       filterStatus: '',
       isMobile: window.innerWidth <= 600, // ★
       lastSeenTimestamp: 0,
+      currentPage: 1,
+      itemsPerPage: 5, 
     }
   },
   computed: {
@@ -224,7 +233,21 @@ export default {
     }
 
     return arr
-  }
+  },
+
+  // จำนวนหน้าทั้งหมด
+  totalPages() {
+    const total = Math.ceil(this.groupedEquipmentHistories.length / this.itemsPerPage) || 1
+    return total
+  },
+
+  // รายการที่จะแสดงในตารางของหน้าปัจจุบัน
+  paginatedEquipmentHistories() {
+    const start = (this.currentPage - 1) * this.itemsPerPage
+    const end   = start + this.itemsPerPage
+    return this.groupedEquipmentHistories.slice(start, end)
+  },
+
 },
 
   methods: {
@@ -239,6 +262,19 @@ export default {
     this.unreadCount = 0;
   }
 },
+
+   nextPage() {
+    if (this.currentPage < this.totalPages) this.currentPage++
+  },
+  prevPage() {
+    if (this.currentPage > 1) this.currentPage--
+  },
+
+getDisplayItems(group) {
+  const returnedOnly = group.filter(it => (it.status || '').toLowerCase() === 'returned');
+  return returnedOnly.length ? returnedOnly : group;
+},
+
 
 pruneOldNotifications() {
   const cutoff = Date.now() - (7 * 24 * 60 * 60 * 1000);
@@ -312,28 +348,75 @@ pruneOldNotifications() {
 },
 
     detailGroup(group) {
-      let html = '<div style="text-align:left;">'
-      group.forEach((item, i) => {
-        html += `
-          <div style="margin-bottom:8px;padding-bottom:8px;border-bottom:1px dashed #bbb;">
-            <b>อุปกรณ์ที่ ${i+1}:</b> ${item.name || '-'}<br>
-            <b>จำนวน:</b> ${item.quantity || '-'}<br>
-            <b>ชื่อผู้ขอใช้:</b> ${item.requester || '-'}<br>
-            <b>วันที่ขอยืม:</b> ${item.date ? new Date(item.date).toLocaleDateString('th-TH', { year: 'numeric', month: '2-digit', day: '2-digit' }) : '-'}<br>
-            <b>สถานะ:</b> ${item.status || '-'}<br>
-            <b>วันที่คืน:</b> ${item.returnedAt ? this.formatDate(item.returnedAt) : '-'}<br>
-             <b>หมายเหตุ:</b> ${item.remark || '-'}<br>
-          </div>
-        `
-      })
-      html += '</div>'
-      Swal.fire({
-        title: 'รายละเอียดรายการ',
-        html,
-        confirmButtonText: 'ปิด',
-        confirmButtonColor: '#3085d6'
-      })
-    }
+  const esc = (s) => String(s ?? '-')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/\n/g,'<br>');
+
+  const fmtDate = (d) => {
+    const dt = new Date(d);
+    return isNaN(dt) ? '-' : dt.toLocaleDateString('th-TH', { year:'numeric', month:'2-digit', day:'2-digit' });
+  };
+
+  const statusTitle = (s = '') => {
+    const m = (s || '').toLowerCase();
+    if (m === 'approved') return 'ถูกอนุมัติ';
+    if (m === 'pending') return 'รอดำเนินการ';
+    if (m === 'returned') return 'รับคืนอุปกรณ์แล้ว';
+    if (m === 'return-pending') return 'กำลังรอรับคืนอุปกรณ์';
+    if (m === 'disapproved') return 'ไม่ถูกอนุมัติ';
+    if (m === 'canceled' || m === 'cancel') return 'ยกเลิกแล้ว';
+    return s || '-';
+  };
+
+  // ถ้าใน group มี 'returned' อย่างน้อย 1 รายการ → แสดงเฉพาะ returned
+  const returnedOnly = group.filter(it => (it.status || '').toLowerCase() === 'returned');
+  const itemsToShow = returnedOnly.length ? returnedOnly : group;
+
+  const rows = itemsToShow.map((item, idx) => `
+    <div class="label"><b>อุปกรณ์ที่ ${idx + 1}</b></div><div class="value">${esc(item.name)}</div>
+    <div class="label"><b>จำนวน</b></div><div class="value">${esc(item.quantity)}</div>
+    <div class="label"><b>ชื่อผู้ขอใช้</b></div><div class="value">${esc(item.requester || '-')}</div>
+    <div class="label"><b>วันที่ขอยืม</b></div><div class="value">${esc(fmtDate(item.date))}</div>
+    <div class="label"><b>สถานะ</b></div><div class="value">${esc(statusTitle(item.status))}</div>
+    <div class="label"><b>วันที่คืน</b></div><div class="value">${esc(item.returnedAt ? fmtDate(item.returnedAt) : '-')}</div>
+    <div class="label"><b>หมายเหตุ</b></div><div class="value">${esc(item.remark || '-')}</div>
+    <div style="grid-column:1/-1;border-bottom:1px dashed #bbb;margin:8px 0;"></div>
+  `).join('');
+
+  const html = `
+    <style>
+      /* กริด 2 คอลัมน์: หัวข้อซ้าย (กว้างตามเนื้อ) + ค่าข้อมูลขวา (ยืด) */
+      .swal-detail-grid{
+        display:grid;
+        grid-template-columns: max-content 1fr;
+        column-gap: 16px;
+        row-gap: 8px;
+        align-items:start;
+        font-size: 1rem;
+        line-height: 1.6;
+      }
+      .swal-detail-grid .label{ text-align:left; }
+      .swal-detail-grid .value{ text-align:left; }  /* ✅ ค่าข้อมูลชิดซ้าย */
+      @media (max-width: 560px){
+        .swal-detail-grid{ column-gap: 12px; }
+      }
+    </style>
+    <div class="swal-detail-grid">${rows || `<div style="grid-column:1/-1">ไม่มีรายการ</div>`}</div>
+  `;
+
+  Swal.fire({
+    title: 'รายละเอียดรายการ',
+    html,
+    confirmButtonText: 'ปิด',
+    confirmButtonColor: '#3085d6',
+    width: 600
+  });
+}
+
+
+
+
+
   },
   async mounted() {
     
@@ -390,7 +473,20 @@ pruneOldNotifications() {
   beforeUnmount() {
     clearInterval(this.polling)
     window.removeEventListener('resize', this.checkMobile)
+  },
+
+  watch: {
+  filterStatus() {
+    this.currentPage = 1
+  },
+  groupedEquipmentHistories() {
+    // ถ้าข้อมูลเปลี่ยนจนหน้าปัจจุบันเกินจำนวนหน้า ให้ดึงกลับมาหน้าสุดท้ายที่มี
+    if (this.currentPage > this.totalPages) {
+      this.currentPage = this.totalPages
+    }
   }
+},
+
 }
 </script>
 
@@ -676,6 +772,30 @@ pruneOldNotifications() {
   background-color: #1e3a8a;
   color: white;
 }
+
+.pagination-control {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 16px 0 8px 0;
+  gap: 8px;
+}
+.pagination-control button {
+  background: #1d4ed8;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 6px 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.pagination-control button:disabled {
+  background: #e5e7eb;
+  color: #6b7280;
+  cursor: not-allowed;
+}
+
 
 
 

@@ -68,23 +68,6 @@
 
     <div class="profile-details" v-if="info">
       <p>Username : {{ info.name }}</p>
-      <!-- <div class="editable-row">
-      <span>ID :</span>
-      <template v-if="!editId">
-        <span>{{ info.id }}</span>
-        <button
-          v-if="canEditUserId"
-          class="edit-btn"
-          @click="startEdit"
-        >แก้ไข</button>
-      </template>
-      <template v-else>
-        <input v-model="editUserId" style="padding:6px 12px;font-size:1rem;border-radius:4px;border:1px solid #d1d5db;" />
-        <button class="save-btn" @click="saveUserId">บันทึก</button>
-        <button class="cancel-btn" @click="cancelEdit">ยกเลิก</button>
-      </template>
-    </div> -->
-
       <p>Email : {{ info.email }}</p>
     </div>
   </div>
@@ -105,6 +88,7 @@
             Email:
             <a href="mailto:sport-complex@mfu.ac.th">sport-complex@mfu.ac.th</a>
           </p>
+          <p>© 2025 Center for Information Technology Services, Mae Fah Luang University. All rights reserved.</p>
         </div>
       </footer>
     </div>
@@ -197,7 +181,7 @@ async function loadCart() {
 // LOGOUT
 async function logout() {
   const result = await Swal.fire({
-    title: 'Log out?',
+    title: 'Log out',
     text: "Do you want to log out?",
     icon: 'warning',
     showCancelButton: true,

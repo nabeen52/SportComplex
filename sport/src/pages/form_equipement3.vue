@@ -46,20 +46,25 @@
           <router-link to="/profile"><i class="pi pi-user"></i></router-link>
         </div>
       </header>
+
       <!-- Stepper -->
-      <div class="headStepper">
-        <div class="stepper">
-          <div v-for="(step, index) in steps" :key="index" class="step">
-            <div class="circle"
-              :class="{ active: index === currentStep, completed: index < currentStep }"
-              @click="tryGoStep(index)"
-              :style="{ cursor: canGoToStep(index) ? 'pointer' : 'not-allowed', opacity: canGoToStep(index) ? 1 : 0.5 }">
-            </div>
-            <div class="label">{{ step }}</div>
-            <div v-if="index < steps.length - 1" class="line" :class="{ filled: index < currentStep }"></div>
-          </div>
-        </div>
-      </div>
+<div class="headStepper" role="navigation" aria-label="ขั้นตอน">
+  <div class="stepper">
+    <div v-for="(step, index) in steps" :key="index" class="step">
+      <div
+        class="circle"
+        :class="{ active: index === currentStep, completed: index < currentStep }"
+        @click="tryGoStep(index)"
+        :style="{ cursor: canGoToStep(index) ? 'pointer' : 'not-allowed', opacity: canGoToStep(index) ? 1 : 0.5 }"
+      ></div>
+      <div class="label">{{ step }}</div>
+      <div v-if="index < steps.length - 1" class="line" :class="{ filled: index < currentStep }"></div>
+    </div>
+  </div>
+</div>
+<!-- spacer กันเนื้อหาโดนทับ (ซ่อนไว้ใน CSS) -->
+<div class="headStepper-spacer"></div>
+
 
       <div class="scroll-x-container">
       <div class="form-container">
@@ -120,7 +125,7 @@
           โทร {{ booking && booking.number || "-" }}
           มีความประสงค์ขอยืมอุปกรณ์/วัสดุ/ครุภัณฑ์ ของศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง เพื่อใช้ในงาน {{ booking && booking.reason || "-" }}
           สถานที่ใช้งาน {{ booking && booking.location || "-" }}
-          ในวันที่ {{ booking && booking.start_date ? (new Date(booking.start_date)).toLocaleDateString('th-TH') : "-" }}
+          ระหว่างวันที่ {{ booking && booking.start_date ? (new Date(booking.start_date)).toLocaleDateString('th-TH') : "-" }}
           ถึงวันที่ {{ booking && booking.end_date ? (new Date(booking.end_date)).toLocaleDateString('th-TH') : "-" }}
         </div>
 
@@ -160,29 +165,39 @@
               </tr>
             </thead>
             <tbody>
-              <tr>
-                <td style="vertical-align: top; ">
-                  <div style="min-height:50px; margin-bottom: 10px;">
-                    ...............................................................................................<br>
-                    ...............................................................................................<br>
+            <tr>
+              <!-- ซ้าย -->
+              <td class="approval-cell">
+                <div class="approval-content">
+                  <div class="approval-lines">
+                    .......................................................................................<br>
+                    .......................................................................................<br>
                   </div>
-                  <div style="margin-top: 20px;">
-                    ลงชื่อ...............................................................หัวหน้าส่วน<br>
+                  <div class="approval-sign">
+                    ลงชื่อ..........................................................หัวหน้าส่วน<br>
+                    (......................................................................)<br>
                     วันที่.............../.............../...............
                   </div>
-                </td>
-                <td style="vertical-align: top;">
-                  <div style="min-height:50px; margin-bottom: 10px;">
-                    ...............................................................................................<br>
-                    ...............................................................................................<br>
+                </div>
+              </td>
+
+              <!-- ขวา -->
+              <td class="approval-cell">
+                <div class="approval-content">
+                  <div class="approval-lines">
+                    .......................................................................................<br>
+                    .......................................................................................<br>
                   </div>
-                  <div style="margin-top: 20px;">
-                    ลงชื่อ..............................................ผู้ปฏิบัติงาน/ผู้รับผิดชอบ<br>
+                  <div class="approval-sign">
+                    ลงชื่อ........................................ผู้ปฏิบัติงาน/ผู้รับผิดชอบ<br>
+                    (......................................................................)<br>
                     วันที่.............../.............../...............
                   </div>
-                </td>
-              </tr>
-            </tbody>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+
           </table>
         </div>
         <div style="margin-top: 15px;"></div>
@@ -225,15 +240,18 @@
     </div>
     </div>
     <footer class="foot">
-      <div class="footer-left">
-        <p>
-          Sport Complex – Mae Fah Luang University |
-          Tel: 0-5391-7820 and 0-5391-7821 | Facebook:
-          <a href="https://www.facebook.com/mfusportcomplex" target="_blank">MFU Sports Complex Center</a> |
-          Email: <a href="mailto:sport-complex@mfu.ac.th">sport-complex@mfu.ac.th</a>
-        </p>
-      </div>
-    </footer>
+        <div class="footer-left">
+          <p>
+            Sport Complex – Mae Fah Luang University |
+            Tel: 0-5391-7820 and 0-5391-7821 | Facebook:
+            <a href="https://www.facebook.com/mfusportcomplex" target="_blank">MFU Sports Complex Center</a>
+            |
+            Email:
+            <a href="mailto:sport-complex@mfu.ac.th">sport-complex@mfu.ac.th</a>
+          </p>
+          <p>© 2025 Center for Information Technology Services, Mae Fah Luang University. All rights reserved.</p>
+        </div>
+      </footer>
   </div>
 </div>
 </template>
@@ -610,21 +628,31 @@ async function handleNext() {
 
 <style scoped>
 .headStepper {
-  background-color: white;
-  margin: 15px auto;
-  padding: 0px;
+  position: sticky;
+  top: 60px;                 /* ปรับให้พอดีกับความสูง topbar ของคุณ */
+  z-index: 10;
   width: 90%;
   max-width: 900px;
+  margin: 0 auto 16px;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(2px);
   border-radius: 20px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 20px rgba(0,0,0,.1);
 }
+
 .stepper {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 20px;
+  padding: 20px 20px 52px;   /* เพิ่ม padding ล่างให้ label อยู่ในกรอบ */
   border-radius: 20px;
 }
+
+/* spacer ไม่ต้องใช้จริง */
+.headStepper-spacer { display: none; }
+
+.main { padding-top: var(--topbar-h); }
+
 .step {
   display: flex;
   align-items: center;
@@ -644,15 +672,14 @@ async function handleNext() {
   background-color: #ff4d4f;
   opacity: 0.5;
 }
-.label {
-  margin-top: 15px;
-  text-align: center;
-  font-size: 12px;
+.label{
   position: absolute;
-  top: 40px;
-  left: 16px;
+  top: 45px;                 
+  left: 15px;                
   transform: translateX(-50%);
+  font-size: 12px;
   white-space: nowrap;
+  text-align: center;
 }
 .line {
   height: 4px;
@@ -1045,11 +1072,24 @@ async function handleNext() {
   white-space: nowrap; /* ป้องกันคำว่า "ลงชื่อ" หักบรรทัด */
 }
 /* PDF ONLY */
+/* PDF ONLY */
 .pdf-export-font-size {
-  font-size: 14px !important;
+  font-size: 16px !important;   /* ฟอนต์ปกติ */
 }
+
+.pdf-export-font-size h1,
+.pdf-export-font-size h2,
+.pdf-export-font-size h3,
+.pdf-export-font-size .form-row-title,
+.pdf-export-font-size .form-header h3 {
+  font-size: 18px !important;   /* ฟอนต์หัวข้อ */
+  font-weight: bold;
+}
+
+
+
 .pdf-export-header {
-  font-size: 24px !important;
+  font-size: 18px !important;
   font-weight: bold;
 }
 
@@ -1102,6 +1142,34 @@ async function handleNext() {
   width: 100%;
   color: #000;
 }
+
+/* จัดเนื้อหาในช่องความเห็นให้อยู่กึ่งกลางกรอบ */
+.approval-cell { padding: 0; vertical-align: middle; }
+
+.approval-content{
+  min-height: 210px;              /* ปรับความสูงกรอบได้ */
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;  /* ดันลายเซ็นไปล่างของกรอบ */
+  align-items: center;
+  text-align: center;
+  padding: 12px 12px 16px;
+}
+.approval-lines{ 
+  line-height: 1.9; 
+  /* ถ้าอยากเว้นระยะบรรทัดกับลายเซ็นมากขึ้น เพิ่ม margin-bottom ได้ */
+  margin-bottom: 8px; 
+}
+.approval-sign{ 
+  line-height: 1.8; 
+  margin-top: 12px;    /* ปรับเพิ่ม/ลดเพื่อเลื่อนลงหรือขึ้นอีกเล็กน้อย */
+}
+:root{
+  --topbar-h: 64px;   /* ความสูงแถบด้านบนของคุณ */
+  --subbar-h: 0px;    /* ถ้ามี subbar เพิ่ม */
+  --gap: 12px;
+}
+
 
 
 /* หน้าจอเล็ก ลดความยาวเส้นลง */

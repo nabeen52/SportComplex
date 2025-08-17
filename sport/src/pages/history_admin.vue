@@ -69,21 +69,21 @@
 
           <!-- Type filter -->
           <div class="history-filter">
-            <button :class="{ active: historyFilter === 'all' }" @click="setHistoryFilter('all')">ทั้งหมด</button>
-            <button :class="{ active: historyFilter === 'field' }" @click="setHistoryFilter('field')">สถานที่</button>
-            <button :class="{ active: historyFilter === 'equipment' }" @click="setHistoryFilter('equipment')">อุปกรณ์กีฬา</button>
+            <button :class="{ active: historyFilter === 'all' }" @click="setHistoryFilter('all')">All</button>
+            <button :class="{ active: historyFilter === 'field' }" @click="setHistoryFilter('field')">Field</button>
+            <button :class="{ active: historyFilter === 'equipment' }" @click="setHistoryFilter('equipment')">Equipment</button>
           </div>
 
           <!-- Date filter -->
           <div class="date-filter-row">
-            <label>ตั้งแต่</label>
+            <label>From</label>
             <input
               type="date"
               v-model="dateFilterStart"
               @change="onDateFilterChange"
               :max="dateFilterEnd"
             >
-            <label>ถึง</label>
+            <label>to</label>
             <input
               type="date"
               v-model="dateFilterEnd"
@@ -157,14 +157,8 @@
 
                     <!-- สถานะ -->
                     <td style="text-align:center;">
-                      <span v-if="group.items[0].status && group.items[0].status.toLowerCase() === 'returned'">👍 Returned</span>
-                      <span v-else-if="group.items[0].status && group.items[0].status.toLowerCase() === 'approved'">✅ Approved</span>
-                      <span v-else-if="group.items[0].status && group.items[0].status.toLowerCase() === 'disapproved'">❌ Disapproved</span>
-                      <span v-else-if="group.items[0].status && group.items[0].status.toLowerCase() === 'pending'">⌛ Pending</span>
-                      <span v-else-if="group.items[0].status && group.items[0].status.toLowerCase() === 'return-pending'">⏪ Return-pending</span>
-                      <span v-else-if="group.items[0].status && group.items[0].status.toLowerCase() === 'cancel'">🚫 Cancel</span>
-                      <span v-else>-</span>
-                    </td>
+  {{ groupStatus(group) }}
+</td>
 
                     <!-- ไฟล์แนบ / PDF -->
                     <td style="text-align:center;">
@@ -234,9 +228,9 @@
                         <!-- EQUIPMENT: ไล่ทีละรายการ -->
                         <template v-else>
                           <div v-for="item in group.items" :key="item.id + '-files'">
-                            <div style="font-weight:600; margin:6px 0 4px 0;">
+                            <!-- <div style="font-weight:600; margin:6px 0 4px 0;">
                               {{ item.name || '-' }} (จำนวน {{ item.quantity ?? '-' }})
-                            </div>
+                            </div> -->
 
                             <div v-if="Array.isArray(item.fileName) && item.fileName.length">
                               <table class="attached-files-table" style="margin-bottom:10px;">
@@ -293,6 +287,7 @@
             Email:
             <a href="mailto:sport-complex@mfu.ac.th">sport-complex@mfu.ac.th</a>
           </p>
+          <p>© 2025 Center for Information Technology Services, Mae Fah Luang University. All rights reserved.</p>
         </div>
       </footer>
     </div>
@@ -459,6 +454,37 @@ export default {
     this.currentPage = 1 // ถ้าใช้ pagination
     // filter จะถูกทำงานอัตโนมัติผ่าน computed
   },
+  selectItemsForDetail(group) {
+  const items = group?.items || [];
+  const has = (s) => items.some(it => (it.status || '').toLowerCase() === s);
+
+  // ความสำคัญ: returned > return-pending > approved > อื่นๆ
+  if (has('returned'))       return items.filter(it => (it.status || '').toLowerCase() === 'returned');
+  if (has('return-pending')) return items.filter(it => (it.status || '').toLowerCase() === 'return-pending');
+  if (has('approved'))       return items.filter(it => (it.status || '').toLowerCase() === 'approved');
+
+  return items;
+},
+ groupStatus(group) {
+    if (!group || !group.items || !group.items.length) return '-';
+    if (group.type === 'field') {
+      // field มีรายการเดียว ใช้สถานะแถวเดียวได้เลย
+      return (group.items[0].status || '-').toString()
+        .charAt(0).toUpperCase() + (group.items[0].status || '-').toString().slice(1).toLowerCase();
+    }
+
+    // ----- equipment: จัดลำดับความสำคัญสถานะ -----
+    const items = group.items;
+    const has = (s) => items.some(it => (it.status || '').toLowerCase() === s);
+
+    if (has('returned'))        return 'Returned';
+    if (has('return-pending'))  return 'Return-pending';
+    if (has('approved'))        return 'Approved';
+
+    // เผื่อกรณีอื่นๆ
+    const s = (items[0].status || '-').toString();
+    return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+  },
 
   uniqueListByName(items) {
   // ตัดซ้ำแบบ case-insensitive และเก็บรูปเดิมของชื่อแรกที่พบ
@@ -555,59 +581,76 @@ clearDateFilter() {
     (d.getMonth() + 1).toString().padStart(2, '0')
   }/${d.getFullYear()}`
 },
-    showDetailGroup(group) {
-      let html = ''
-      if (group.type === 'field') {
-        const item = group.items[0]
-        html = `
-          <div style="text-align:left;">
-            <b>ชื่อสนาม:</b> ${item.name || '-'}<br>
-            <b>ชื่อผู้ขอใช้:</b> ${item.requester || item.userName || '-'}<br>
-            <b>จองให้ผู้ใช้:</b> ${item.proxyStudentName || '-'}<br>
-            <b>วันที่:</b> ${item.date ? new Date(item.date).toLocaleDateString('th-TH') : '-'}<br>
-            <b>เวลา:</b> ${item.time || '-'}<br>
-            <b>สถานะ:</b> ${item.status || '-'}<br>
-            <b>ผู้อนุมัติ:</b> ${item.approvedBy || '-'}<br>
-            <b>ผู้ไม่อนุมัติ:</b> ${item.disapprovedBy || '-'}<br>
-            <b>ผู้รับคืน:</b> ${item.returnedBy || '-'}<br>
-            <b>ผู้ยกเลิก:</b> ${item.canceledBy || '-'}
+   showDetailGroup(group) {
+  // 1 แถว (label/value)
+  const row = (label, value) => `
+    <div style="display:flex;align-items:flex-start;margin-bottom:8px;">
+      <div style="width:160px;font-weight:700;text-align:left;">${label}</div>
+      <div style="flex:1;text-align:left;padding-left:14px;word-break:break-word;">${value}</div>
+    </div>
+  `;
+  const fmt = (d) => d ? new Date(d).toLocaleDateString('th-TH') : '-';
+
+  let html = '';
+
+ if (group.type === 'field') {
+    // สนาม: แสดงเหมือนเดิม
+    const item = group.items[0] || {};
+    html = `
+      <div style="text-align:left;">
+        ${row('ชื่อสนาม:', item.name || '-')}
+        ${row('ชื่อผู้ขอใช้:', item.requester || item.userName || '-')}
+        ${row('จองให้ผู้ใช้:', item.proxyStudentName || '-')}
+        ${row('วันที่:', fmt(item.date))}
+        ${row('เวลา:', item.time || '-' )}
+        ${row('สถานะ:', item.status || '-')}
+        ${row('ผู้อนุมัติ:', item.approvedBy || '-')}
+        ${row('ผู้ไม่อนุมัติ:', item.disapprovedBy || '-')}
+        ${row('ผู้รับคืน:', item.returnedBy || '-')}
+        ${row('ผู้ยกเลิก:', item.canceledBy || '-')}
+      </div>
+    `;
+  } else if (group.type === 'equipment') {
+    // อุปกรณ์: เลือกรายการตามกฎ (returned > return-pending > approved)
+    const itemsToShow = this.selectItemsForDetail(group);
+
+    html = '<div style="text-align:left;">';
+    if (!itemsToShow.length) {
+      html += `<div>ไม่มีรายการ</div>`;
+    } else {
+      itemsToShow.forEach((item, i) => {
+        const borrowDate =
+          (item.since && item.uptodate)
+            ? `${fmt(item.since)} - ${fmt(item.uptodate)}`
+            : fmt(item.date);
+
+        html += `
+          <div style="padding-bottom:10px;margin-bottom:10px;border-bottom:1px dashed #c7c7c7;">
+            ${row('อุปกรณ์ที่ ' + (i + 1) + ':', item.name || '-')}
+            ${row('จำนวน:', item.quantity ?? '-')}
+            ${row('ชื่อผู้ขอใช้:', item.requester || item.userName || '-')}
+            ${row('วันที่ขอยืม:', borrowDate)}
+            ${row('สถานะ:', item.status || '-')}
+            ${row('วันที่คืน:', item.returnedAt ? fmt(item.returnedAt) : '-')}
+            ${row('ผู้อนุมัติ:', item.approvedBy || '-')}
+            ${row('ผู้ไม่อนุมัติ:', item.disapprovedBy || '-')}
+            ${row('ผู้คืน:', item.returnedBy || '-')}
+            ${row('ผู้ยกเลิก:', item.canceledBy || '-')}
           </div>
-        `
-      } else if (group.type === 'equipment') {
-        html = '<div style="text-align:left;">'
-        if (group.items.length === 0) {
-          html += `<div>ไม่มีรายการ</div>`
-        } else {
-          group.items.forEach((item, i) => {
-            html += `
-              <div style="margin-bottom:8px;padding-bottom:8px;border-bottom:1px dashed #bbb;">
-                <b>อุปกรณ์ที่ ${i + 1}:</b> ${item.name || '-'}<br>
-                <b>จำนวน:</b> ${item.quantity || '-'}<br>
-                <b>ชื่อผู้ขอใช้:</b> ${item.requester || item.userName || '-'}<br>
-                <b>วันที่ขอยืม:</b>
-                ${item.since && item.uptodate
-                  ? `${new Date(item.since).toLocaleDateString('th-TH')} - ${new Date(item.uptodate).toLocaleDateString('th-TH')}`
-                  : item.date ? new Date(item.date).toLocaleDateString('th-TH') : '-'
-                }<br>
-                <b>สถานะ:</b> ${item.status || '-'}<br>
-                <b>วันที่คืน:</b> ${item.returnedAt ? new Date(item.returnedAt).toLocaleDateString('th-TH') : '-'}<br>
-                <b>ผู้อนุมัติ:</b> ${item.approvedBy || '-'}<br>
-                <b>ผู้ไม่อนุมัติ:</b> ${item.disapprovedBy || '-'}<br>
-                <b>ผู้คืน:</b> ${item.returnedBy || '-'}<br>
-                <b>ผู้ยกเลิก:</b> ${item.canceledBy || '-'}
-              </div>
-            `
-          })
-        }
-        html += '</div>'
-      }
-      Swal.fire({
-        title: 'รายละเอียดรายการ',
-        html,
-        confirmButtonText: 'ปิด',
-        confirmButtonColor: '#3085d6'
-      })
-    },
+        `;
+      });
+    }
+    html += '</div>';
+  }
+
+   Swal.fire({
+    title: 'รายละเอียดรายการ',
+    html,
+    confirmButtonText: 'ปิด',
+    confirmButtonColor: '#3085d6'
+  });
+},
+
     
     // ==== PDF DOWNLOAD BUTTON ====
   async  exportPdf(item) {

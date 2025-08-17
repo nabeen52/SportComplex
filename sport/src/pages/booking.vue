@@ -135,6 +135,7 @@
             Email:
             <a href="mailto:sport-complex@mfu.ac.th">sport-complex@mfu.ac.th</a>
           </p>
+          <p>© 2025 Center for Information Technology Services, Mae Fah Luang University. All rights reserved.</p>
         </div>
       </footer>
     </div>
@@ -583,6 +584,21 @@ onBeforeUnmount(() => {
   pointer-events: none;
   letter-spacing: 1px;
 }
+
+/* ปรับปุ่ม booking บนมือถือ ไม่ให้ข้อความล้น */
+@media (max-width: 480px) {
+  .booking-btn {
+    width: 100%;              /* ปุ่มกว้างเต็มจอ */
+    max-width: 100%;          /* กันล้น */
+    font-size: 1rem;          /* ลดขนาดตัวอักษร */
+    padding: 12px 16px;       /* ลด padding */
+    white-space: normal;      /* อนุญาตให้ตัดบรรทัด */
+    word-break: break-word;   /* ตัดคำถ้ายาวเกิน */
+    text-align: center;       /* จัดข้อความตรงกลาง */
+    border-radius: 12px;      /* โค้งสวยงาม */
+  }
+}
+
 
 
 

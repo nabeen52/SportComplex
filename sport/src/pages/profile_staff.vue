@@ -118,6 +118,7 @@
             Email:
             <a href="mailto:sport-complex@mfu.ac.th">sport-complex@mfu.ac.th</a>
           </p>
+          <p>© 2025 Center for Information Technology Services, Mae Fah Luang University. All rights reserved.</p>
         </div>
       </footer>
     </div>
@@ -174,8 +175,8 @@ function checkMobile() {
 // LOGOUT
 async function logout() {
   const result = await Swal.fire({
-    title: 'ต้องการออกจากระบบ-?',
-    text: "คุณต้องการออกจากระบบใช่หรือไม่",
+    title: 'คุณต้องการออกจากระบบหรือไม่',
+    // text: "คุณต้องการออกจากระบบใช่หรือไม่",
     icon: 'warning',
     showCancelButton: true,
     confirmButtonColor: '#3085d6',

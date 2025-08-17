@@ -286,38 +286,54 @@ async function cancelItem(id) {
   }
 }
 function detailGroup(items) {
-  let html = '<div style="text-align:left;">'
+  // สร้าง 1 แถว (label/value) ให้จัดคอลัมน์สวย ๆ
+  const row = (label, value) => `
+    <div style="display:flex; align-items:flex-start; margin-bottom:8px;">
+      <div style="width:160px; font-weight:700; text-align:left;">
+        ${label}
+      </div>
+      <div style="flex:1; text-align:left; padding-left:14px; word-break:break-word;">
+        ${value}
+      </div>
+    </div>
+  `;
+
+  let html = '<div style="text-align:left;">';
+
   items.forEach((item, i) => {
     if (item.type === 'field') {
       html += `
-        <div style="margin-bottom:8px;padding-bottom:8px;border-bottom:1px dashed #bbb;">
-          <b>ชื่อ:</b> ${item.name || '-'}<br>
-          <b>ชื่อผู้ขอใช้:</b> ${item.requester || '-'}<br>
-          <b>วันที่ขอ:</b> ${item.date ? new Date(item.date).toLocaleDateString('th-TH') : '-'}<br>
-          <b>สถานะ:</b> ${item.status || '-'}<br>
+        <div style="margin-bottom:10px; padding-bottom:10px; border-bottom:1px dashed #c7c7c7;">
+          ${row('ชื่อ:', item.name || '-')}
+          ${row('ชื่อผู้ขอใช้:', item.requester || '-')}
+          ${row('วันที่ขอ:', item.date ? new Date(item.date).toLocaleDateString('th-TH') : '-')}
+          ${row('สถานะ:', item.status || '-')}
         </div>
-      `
+      `;
     } else {
       html += `
-        <div style="margin-bottom:8px;padding-bottom:8px;border-bottom:1px dashed #bbb;">
-          <b>ชื่อ:</b> ${item.name || '-'}<br>
-          <b>จำนวน:</b> ${item.quantity || '-'}<br>
-          <b>ชื่อผู้ขอใช้:</b> ${item.requester || '-'}<br>
-          <b>วันที่ขอยืม:</b> ${item.date ? new Date(item.date).toLocaleDateString('th-TH') : '-'}<br>
-          <b>สถานะ:</b> ${item.status || '-'}<br>
-          <b>วันที่คืน:</b> ${item.returnedAt ? formatDate(item.returnedAt) : '-'}
+        <div style="margin-bottom:10px; padding-bottom:10px; border-bottom:1px dashed #c7c7c7;">
+          ${row('ชื่อ:', item.name || '-')}
+          ${row('จำนวน:', item.quantity || '-')}
+          ${row('ชื่อผู้ขอใช้:', item.requester || '-')}
+          ${row('วันที่ขอยืม:', item.date ? new Date(item.date).toLocaleDateString('th-TH') : '-')}
+          ${row('สถานะ:', item.status || '-')}
+          ${row('วันที่คืน:', item.returnedAt ? formatDate(item.returnedAt) : '-')}
         </div>
-      `
+      `;
     }
-  })
-  html += '</div>'
+  });
+
+  html += '</div>';
+
   Swal.fire({
     title: 'รายละเอียดรายการ',
     html,
     confirmButtonText: 'ปิด',
     confirmButtonColor: '#3085d6'
-  })
+  });
 }
+
 
 function formatDate(date) {
   if (!date) return '-'
@@ -475,8 +491,8 @@ function prevPage() {
 
 async function logout() {
   const result = await Swal.fire({
-    title: 'ต้องการออกจากระบบ-?',
-    text: "คุณต้องการออกจากระบบใช่หรือไม่",
+    title: 'คุณต้องการออกจากระบบใช่หรือไม่',
+    // text: "คุณต้องการออกจากระบบใช่หรือไม่",
     icon: 'warning',
     showCancelButton: true,
     confirmButtonColor: '#3085d6',

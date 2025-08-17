@@ -47,27 +47,31 @@
         </div>
       </header>
       <!-- Stepper -->
-      <div class="headStepper">
-        <div class="stepper">
-          <div v-for="(step, index) in steps" :key="index" class="step">
-            <div
-              class="circle"
-              :class="{ active: index === currentStep, completed: index < currentStep }"
-              style="cursor:pointer"
-              @click="goStep(index)"
-            ></div>
-            <div class="label">{{ step }}</div>
-            <div v-if="index < steps.length - 1" class="line" :class="{ filled: index < currentStep }"></div>
-          </div>
-        </div>
-      </div>
+    <!-- Stepper -->
+<div class="headStepper" role="navigation" aria-label="ขั้นตอน">
+  <div class="stepper">
+    <div v-for="(step, index) in steps" :key="index" class="step">
+      <div
+        class="circle"
+        :class="{ active: index === currentStep, completed: index < currentStep }"
+        style="cursor:pointer"
+        @click="goStep(index)"
+      ></div>
+      <div class="label">{{ step }}</div>
+      <div v-if="index < steps.length - 1" class="line" :class="{ filled: index < currentStep }"></div>
+    </div>
+  </div>
+</div>
+<!-- เว้นที่กันเนื้อหาถูกทับ -->
+<div class="headStepper-spacer"></div>
+
 
        <div class="scroll-x-container">
 
         <div class="form-container">
           <div class="form-header">
             <h3>แบบฟอร์มขออนุมัติใช้สถานที่ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง</h3>
-            <p><b>โทร 0-5391-7820 และ 0-5391-7821 | E-mail: sport-complex@mfu.ac.th</b></p>
+            <p><b>โทร: 0-5391-7820 และ 0-5391-7821 | E-mail: sport-complex@mfu.ac.th</b></p>
           </div>
           <form @submit.prevent="handleSubmit" enctype="multipart/form-data" class="booking-form">
             <div class="form-grid">
@@ -410,7 +414,7 @@
               </template>
 
               <!-- ============== 3. ขอใช้รายการประกอบอาคาร ============= -->
-              <div class="form-section-title">3.ขอใช้รายการประกอบอาคาร</div>
+              <div class="form-section-title">3.ขออนุมัติรายการประกอบอาคาร</div>
               <div class="form-row" style="grid-column: span 2;">
                 <div>
                   <label>
@@ -531,6 +535,7 @@
             Email:
             <a href="mailto:sport-complex@mfu.ac.th">sport-complex@mfu.ac.th</a>
           </p>
+          <p>© 2025 Center for Information Technology Services, Mae Fah Luang University. All rights reserved.</p>
         </div>
       </footer>
     </div>
@@ -538,7 +543,7 @@
 </template>
 
 <script setup>
-import { ref, watch, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, watch, computed, onMounted, onBeforeUnmount, onActivated } from 'vue'
 import { useRouter, useRoute, onBeforeRouteLeave } from 'vue-router'
 import axios from 'axios'
 import Swal from 'sweetalert2'
@@ -569,6 +574,9 @@ const proxyStudentId = ref('')
 const lastCheckedIds = new Set()
 const username_form = ref(localStorage.getItem('username_form') || '')
 const id_form = ref(localStorage.getItem('id_form') || '')
+// ---- file size limits ----
+const MAX_FILE_SIZE = 100 * 1024 * 1024;   // 100MB ต่อไฟล์
+const MAX_TOTAL_SIZE = 100 * 1024 * 1024;  // รวมสูงสุด 100MB
 
 const lastSeenTimestamp = ref(parseInt(localStorage.getItem('lastSeenTimestamp') || '0'))
 let polling = null
@@ -860,15 +868,77 @@ function syncDateRange(type) {
 // File Attach
 const selectedFiles = ref([])
 const fileError = ref(false)
-function handleFileChange(event) {
-  let files = Array.from(event.target.files)
+async function compressImage(file, maxW = 1600, quality = 0.8) {
+  return new Promise((resolve) => {
+    const img = new Image()
+    img.onload = () => {
+      const ratio = img.width > maxW ? maxW / img.width : 1
+      const canvas = document.createElement('canvas')
+      canvas.width = Math.floor(img.width * ratio)
+      canvas.height = Math.floor(img.height * ratio)
+      const ctx = canvas.getContext('2d', { alpha: false })
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+      canvas.toBlob(
+        (blob) => resolve(new File([blob], file.name.replace(/\.(jpe?g|png)$/i, '.jpg'), { type: 'image/jpeg' })),
+        'image/jpeg',
+        quality
+      )
+    }
+    img.onerror = () => resolve(file) // พังเมื่อไหร่ ก็ส่งไฟล์เดิมกลับ
+    const reader = new FileReader()
+    reader.onload = (e) => { img.src = e.target.result }
+    reader.readAsDataURL(file)
+  })
+}
+
+async function handleFileChange(event) {
   const allowExt = /\.(png|jpg|jpeg|pdf|xls|xlsx|doc|docx)$/i
-  files = files.filter(f => allowExt.test(f.name))
-  selectedFiles.value = files
+  let files = Array.from(event.target.files).filter(f => allowExt.test(f.name))
+
+  // บีบอัดเฉพาะรูป
+  const processed = []
+  for (const f of files) {
+    if (/\.(png|jpe?g)$/i.test(f.name)) {
+      // ถ้าไฟล์เกิน 1.5MB ค่อยบีบ
+      processed.push(f.size > 1.5 * 1024 * 1024 ? await compressImage(f, 1600, 0.82) : f)
+    } else {
+      processed.push(f)
+    }
+  }
+
+  // ตรวจเพดานต่อไฟล์
+  const overs = processed.filter(f => f.size > MAX_FILE_SIZE)
+  if (overs.length) {
+    Swal.fire({
+  icon: 'warning',
+  title: 'ไฟล์ใหญ่เกินกำหนด',
+  html:
+    overs
+      .map(f => `${f.name} (${Math.round(f.size/1024/1024)}MB)`)
+      .join('<br>') +
+    `<br>เพดานไฟล์ละ ${Math.round(MAX_FILE_SIZE/1024/1024)}MB`,
+})
+  }
+  const accepted = processed.filter(f => f.size <= MAX_FILE_SIZE)
+
+  // ตรวจขนาดรวม
+  const total = accepted.reduce((s, f) => s + f.size, 0)
+  if (total > MAX_TOTAL_SIZE) {
+    Swal.fire({
+  icon: 'warning',
+  title: 'ขนาดรวมไฟล์เกินกำหนด',
+  text: `รวม ${Math.round(total/1024/1024)}MB (เพดาน ${Math.round(MAX_TOTAL_SIZE/1024/1024)}MB)`,
+})
+    fileError.value = true
+    return
+  }
+
+  selectedFiles.value = accepted
   window._tempSelectedFiles = selectedFiles.value
   fileError.value = selectedFiles.value.length === 0
   saveFormToSession()
 }
+
 function clearFiles() {
   selectedFiles.value = []
   window._tempSelectedFiles = []
@@ -985,8 +1055,7 @@ function saveFormToSession() {
       otherAgencyDetail: otherAgencyDetail.value,
       proxyUserId: proxyUserId.value,
       isProxyBooking: isProxyBooking.value,
-      // ❌ ลบบรรทัดนี้
-      // selectedFileNames: selectedFiles.value.map(f => f.name),
+      // ❌ ไม่เก็บรายชื่อไฟล์ปลอม
       proxyStudentName: proxyStudentName.value,
       proxyStudentId: proxyStudentId.value,
       username_form: username_form.value,
@@ -1006,8 +1075,6 @@ function loadFormFromSession() {
       otherAgencyDetail.value = d.otherAgencyDetail || ''
       proxyUserId.value = d.proxyUserId || ''
       isProxyBooking.value = d.isProxyBooking || false
-      // ❌ อย่าตั้ง selectedFiles จากชื่อไฟล์ปลอม
-      // selectedFiles.value = (d.selectedFileNames || []).map(name => ({ name }))
       dateRange.value = [formData.value.since, formData.value.uptodate]
       proxyStudentName.value = d.proxyStudentName || ''
       proxyStudentId.value = d.proxyStudentId || ''
@@ -1054,22 +1121,12 @@ async function goStep(targetStep) {
       return
     }
     try {
-      // const uploadFileIds = []
-      // for (const file of selectedFiles.value) {
-      //   const base64 = await fileToBase64(file)
-      //   const res = await axios.post(`${API_BASE}/api/upload_file`, {
-      //     fileName: file.name,
-      //     fileData: base64,
-      //     user_id: proxyUserId.value
-      //   })
-      //   if (res.data && res.data.id) uploadFileIds.push(res.data.id)
-      // }
+      // (ลบ uploadFiles: uploadFileIds ที่ไม่ถูกประกาศออก)
       const submitData = {
         ...formData.value,
         agency: finalAgency.value ?? '',
         agency_other_detail: otherAgencyDetail.value ?? '',
-        user_id: proxyUserId.value ?? '',
-        uploadFiles: uploadFileIds
+        user_id: proxyUserId.value ?? ''
       }
       const bookingRes = await axios.post(`${API_BASE}/api/booking_field`, submitData)
       localStorage.setItem('bookingId', bookingRes.data.bookingId)
@@ -1466,6 +1523,17 @@ onMounted(async () => {
   dpEnd.value   = safeDate(formData.value.uptodate)
 })
 
+// ✅ โหลดคืนไฟล์ทุกครั้งเมื่อ component ถูก activate (เช่น Back จากหน้า 3)
+onActivated(() => {
+  loadFilesFromGlobal()
+})
+// ✅ ถ้า route เปลี่ยนกลับมาหน้า /form_field ให้โหลดคืนไฟล์ด้วย
+watch(() => route.fullPath, () => {
+  if (route.path === '/form_field') {
+    loadFilesFromGlobal()
+  }
+})
+
 onBeforeUnmount(() => {
   if (polling) clearInterval(polling)
 })
@@ -1499,20 +1567,42 @@ onBeforeUnmount(() => {
   display: flex;
   justify-content: center;
 }
+/* แทนที่บล็อก .headStepper เดิม */
+/* แทนที่กฎเดิมของ .headStepper ทั้งบล็อก */
+
+  :root{
+    --topbar-h: 64px;   /* ความสูงจริงของแถบบนสีน้ำเงิน */
+    --subbar-h: 0px;    /* ถ้ามีแถบรองอีกชั้น ใส่สูงไว้ตรงนี้ เช่น 48px */
+    --gap: 12px;        /* ช่องว่างระหว่างบาร์กับ stepper */
+  }
+
 .headStepper {
-  background-color: white;
-  margin: 15px auto;
-  padding: 0px;
+  position: sticky;
+  top: 60px;
+  z-index: 10;
   width: 90%;
   max-width: 900px;
+  margin: 0 auto 16px;
+  background: rgba(255, 255, 255, 0.85);   /* เดิม #fff -> ให้จางลง */
+  backdrop-filter: blur(2px);               /* เพิ่มความละมุน (รองรับเบราว์เซอร์ส่วนใหญ่) */
   border-radius: 20px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, .1);
 }
+.stepper{ padding: 20px; border-radius: 20px; }
+
+/* ไม่ต้องมี spacer แล้ว */
+.headStepper-spacer{ display:none; }
+
+/* กันคอนเทนต์โดนบาร์ทับด้านบนครั้งเดียวพอ */
+.main{ padding-top: calc(var(--topbar-h)); }
+
+
+/* เพิ่มพื้นที่ด้านล่างเพื่อให้ label อยู่ “ในกรอบ” */
 .stepper {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 20px;
+  padding: 20px 20px 52px;   /* เดิม 20px -> เพิ่ม padding-bottom */
   border-radius: 20px;
 }
 .step {
@@ -1520,6 +1610,7 @@ onBeforeUnmount(() => {
   align-items: center;
   position: relative;
 }
+
 .circle {
   width: 30px;
   height: 30px;
@@ -1536,16 +1627,16 @@ onBeforeUnmount(() => {
   background-color: #ff4d4f;
   opacity: 0.5;
 }
-.label {
-  margin-top: 15px;
-  text-align: center;
-  font-size: 12px;
+.label{
   position: absolute;
-  top: 40px;
-  left: 16px;
+  top: 45px;                 /* ระยะห่างจากวงกลม ปรับได้ */
+  left: calc(30px / 2);      /* 15px = ครึ่งของเส้นผ่านศูนย์กลางวงกลม */
   transform: translateX(-50%);
+  font-size: 12px;
   white-space: nowrap;
+  text-align: center;
 }
+
 .line {
   height: 4px;
   width: 80px;
@@ -2028,6 +2119,7 @@ onBeforeUnmount(() => {
   border-color: #ff4747 !important;
   background-color: #fff0f0 !important;
 }
+
 </style>
 <style>
 @import '../css/style.css';
