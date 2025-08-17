@@ -9,6 +9,7 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 
 const axios = require('axios');
+const mime = require('mime-types');
 const path = require('path');
 const multer = require('multer');
 const storage = multer.memoryStorage();
@@ -1303,6 +1304,7 @@ app.post('/api/history', async (req, res) => {
                 proxyStudentName: req.body.proxyStudentName || '',
                 proxyStudentId: req.body.proxyStudentId || '',
                 bookingPdf: req.body.bookingPdf || null,  // <== ใส่ bookingPdf เผื่อมีในอนาคต
+                bookingPdfUrl: req.body.bookingPdfUrl || null,
                 username_form: req.body.username_form || '',
                 id_form: req.body.id_form || '',
             });
@@ -1619,8 +1621,27 @@ app.get('/api/history/file/:id', async (req, res) => {
         if (!fileData) return res.status(404).send('No file data');
 
         // ถ้าเป็น URL (เช่น "/uploads/xxx.pdf" หรือ "http://...")
-        if (typeof fileData === 'string' && fileData.startsWith('http')) {
-            return res.redirect(fileData);
+        // ✅ NEW: ถ้าเป็น URL เต็ม หรือเป็นพาธ /uploads ให้ redirect/stream ออกไปเลย
+        if (typeof fileData === 'string') {
+            // absolute URL
+            if (/^https?:\/\//i.test(fileData)) {
+                return res.redirect(fileData);
+            }
+            // relative path จาก static (/uploads/xxx.pdf)
+            if (fileData.startsWith('/uploads/')) {
+                // วิธีที่ 1: redirect ไปยัง static
+                const full = `${req.protocol}://${req.get('host')}${fileData}`;
+                return res.redirect(full);
+
+                // วิธีที่ 2 (ทางเลือก): stream จากไฟล์จริง
+                // const abs = path.join(__dirname, fileData); // ระวังไม่ให้ไต่พาธออกนอกโฟลเดอร์
+                // if (fs.existsSync(abs)) {
+                //   res.setHeader('Content-Type', mime.lookup(abs) || 'application/octet-stream');
+                //   res.setHeader('Content-Disposition', `inline; filename="${path.basename(abs)}"`);
+                //   return fs.createReadStream(abs).pipe(res);
+                // }
+                // return res.status(404).send('File not found');
+            }
         }
 
         // ถ้าเป็น base64
@@ -1631,20 +1652,17 @@ app.get('/api/history/file/:id', async (req, res) => {
             }
             base64Data = base64Data.split(',')[1];
         }
-        const fileBuffer = Buffer.from(base64Data, 'base64');
-        // ให้ preview ได้ถ้าเป็น PDF/JPG/PNG
-        const inlineTypes = [
-            'application/pdf', 'image/png', 'image/jpeg', 'image/jpg', 'image/gif'
-        ];
+        const buf = Buffer.from(base64Data, 'base64');
+
+        const inlineTypes = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg', 'image/gif'];
         const dispositionType = inlineTypes.includes(fileType) ? 'inline' : 'attachment';
         res.setHeader('Content-Type', fileType);
         res.setHeader('Content-Disposition', `${dispositionType}; filename="${fileName}"`);
-        res.end(fileBuffer);
+        res.end(buf);
     } catch (e) {
         res.status(500).send('Invalid base64 or server error');
     }
 });
-
 
 
 

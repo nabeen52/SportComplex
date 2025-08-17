@@ -290,8 +290,11 @@ function pruneOldNotifications() {
 }
 
 function loadTempFilesFromPage1() {
-  tempFiles.value = Array.isArray(window._equipTempFiles) ? window._equipTempFiles : []
+  const equipFiles = Array.isArray(window._equipTempFiles) ? window._equipTempFiles : []
+  const fieldFiles = Array.isArray(window._fieldTempFiles) ? window._fieldTempFiles : []
+  tempFiles.value = [...equipFiles, ...fieldFiles]
 }
+
 function toggleNotifications() {
   showNotifications.value = !showNotifications.value
   if (showNotifications.value) {
@@ -302,6 +305,18 @@ function toggleNotifications() {
 }
 
 const PDF_FILENAME = 'แบบฟอร์มการยืมอุปกรณ์-วัสดุ-ครุภัณฑ์.pdf'
+
+
+async function uploadPdfBlob(pdfBlob) {
+  const fd = new FormData()
+  fd.append('file', pdfBlob, 'equipment-booking.pdf')
+  const up = await axios.post(`${API_BASE}/api/upload`, fd, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    maxBodyLength: Infinity,
+    maxContentLength: Infinity,
+  })
+  return up.data?.fileUrl
+}
 
 function exportToPDF() {
   smartPageBreak();
@@ -572,14 +587,24 @@ async function handleNext() {
   }
   isLoading.value = true
   try {
-    // 1) สร้าง PDF สำหรับแนบ (เหมือนเดิม)
+    // 1) สร้าง PDF เป็น Blob (ไม่ทำ base64)
     const pdfBlob = await htmlToPdfBlob('pdf-section')
-    const pdfBase64 = await blobToBase64(pdfBlob)
 
-    // 2) อัปโหลดไฟล์ “จริง” ที่เลือกมาจากหน้าแรก
-    const uploaded = await uploadTempFiles()  // [{fileId,fileName,mimeType,fileUrl}]
+    // 2) ให้ผู้ใช้ดาวน์โหลดไฟล์ PDF เหมือนเดิม
+    const link = document.createElement('a')
+    link.href = URL.createObjectURL(pdfBlob)
+    link.download = PDF_FILENAME
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
 
-    // 3) บันทึก history (แนบเป็น URL/Id ของไฟล์ที่อัปโหลดแล้ว ไม่ใช่ base64)
+    // 3) อัปโหลด PDF ไปที่ server เพื่อเอา URL มาเก็บใน DB
+    const pdfUrl = await uploadPdfBlob(pdfBlob)
+
+    // 4) อัปโหลดไฟล์แนบจริงที่ผู้ใช้เลือก (ได้เป็น URL/ID กลับมา)
+    const uploaded = await uploadTempFiles()  // [{fileName,mimeType,fileUrl}]
+
+    // 5) บันทึก history โดย “แนบเป็น URL” (ไม่ใช่ base64)
     for (const item of equipmentList.value) {
       await axios.post(`${API_BASE}/api/history`, {
         booking_id: bookingIdFromServer,
@@ -590,7 +615,7 @@ async function handleNext() {
         quantity: item.quantity,
         status: 'pending',
         agency: booking.value.agency || booking.value.school_of || '',
-        attachment: uploaded.map(u => u.fileUrl || u.fileId).filter(Boolean), // เก็บ url หรือ id
+        attachment: uploaded.map(u => u.fileUrl || u.fileId).filter(Boolean),
         fileName: uploaded.map(u => u.fileName),
         fileType: uploaded.map(u => u.mimeType),
         reason: booking.value.reason || '',
@@ -598,22 +623,14 @@ async function handleNext() {
         uptodate: booking.value.end_date || '',
         receive_date: booking.value.receive_date || '',
         receive_time: booking.value.receive_time || '',
-        bookingPdf: pdfBase64
+        bookingPdfUrl: pdfUrl,            // ✅ เก็บ URL ของไฟล์ PDF
       })
     }
 
-    // 4) โหลดไฟล์ PDF ให้ผู้ใช้ (เหมือนเดิม)
-    const link = document.createElement('a')
-    link.href = URL.createObjectURL(pdfBlob)
-    link.download = PDF_FILENAME
-    document.body.appendChild(link)
-    link.click()
-    link.remove()
-
-    // 5) เคลียร์รถเข็น + temp files + localStorage
+    // 6) เคลียร์รถเข็น/ไฟล์ชั่วคราว/Local Storage แล้วไปหน้าสำเร็จ
     await axios.delete(`${API_BASE}/api/cart`, { data: { user_id: booking.value.user_id } })
-    window._equipTempFiles = []                    // <<<< เคลียร์ temp files
-    localStorage.removeItem('equipmentFormData')   // เก็บไว้แค่ booking id
+    window._equipTempFiles = []
+    localStorage.removeItem('equipmentFormData')
     localStorage.setItem('equipment_booking_id', bookingIdFromServer)
 
     router.push('/form_equipment4')
@@ -623,6 +640,7 @@ async function handleNext() {
     isLoading.value = false
   }
 }
+
 
 </script>
 

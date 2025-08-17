@@ -39,6 +39,7 @@ const historySchema = new mongoose.Schema({
     id_form: { type: String, default: '' },
     // --- เพิ่ม field นี้สำหรับเก็บ PDF โดยเฉพาะ ---
     bookingPdf: { type: String, default: null }, // <<-- เพิ่มตรงนี้
+    bookingPdfUrl: { type: String, default: null },  // URL ไฟล์จริง
 
 }, {
     timestamps: true // <--- **เพิ่มตรงนี้!!**
