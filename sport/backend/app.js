@@ -801,7 +801,16 @@ app.get('/api/history/pdfbyurl/:id', async (req, res) => {
 
 
 // ============ Multer + Static Uploads (upload file to ./uploads) ==========
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
+    setHeaders: (res, filePath) => {
+        if (filePath.endsWith('.pdf')) {
+            res.setHeader('Content-Type', 'application/pdf');
+            res.setHeader('X-Content-Type-Options', 'nosniff');
+            res.setHeader('Accept-Ranges', 'bytes');
+        }
+    }
+}));
+
 
 const upload = multer({
     storage: multer.diskStorage({
@@ -1357,6 +1366,7 @@ app.post('/api/history', async (req, res) => {
                 agency: req.body.agency || '',
                 booking_id: req.body.booking_id || '',
                 bookingPdf: req.body.bookingPdf || null,  // <== สำคัญ!
+                bookingPdfUrl: req.body.bookingPdfUrl || null, // ✅ เพิ่มบรรทัดนี้
                 username_form: req.body.username_form || '',
                 id_form: req.body.id_form || '',
             });
@@ -1623,26 +1633,19 @@ app.get('/api/history/file/:id', async (req, res) => {
         // ถ้าเป็น URL (เช่น "/uploads/xxx.pdf" หรือ "http://...")
         // ✅ NEW: ถ้าเป็น URL เต็ม หรือเป็นพาธ /uploads ให้ redirect/stream ออกไปเลย
         if (typeof fileData === 'string') {
-            // absolute URL
             if (/^https?:\/\//i.test(fileData)) {
-                return res.redirect(fileData);
+                const proxied = `${req.protocol}://${req.get('host')}/file-proxy/pdf?url=${encodeURIComponent(fileData)}`;
+                return res.redirect(proxied);
             }
-            // relative path จาก static (/uploads/xxx.pdf)
             if (fileData.startsWith('/uploads/')) {
-                // วิธีที่ 1: redirect ไปยัง static
+                // เสิร์ฟจาก static ของตัวเอง (ถ้า static ของคุณตั้ง header ถูกอยู่)
                 const full = `${req.protocol}://${req.get('host')}${fileData}`;
+                // หรือจะผ่าน proxy ให้เหมือนกันก็ได้:
+                // const proxied = `${req.protocol}://${req.get('host')}/file-proxy/pdf?url=${encodeURIComponent(full)}`;
                 return res.redirect(full);
-
-                // วิธีที่ 2 (ทางเลือก): stream จากไฟล์จริง
-                // const abs = path.join(__dirname, fileData); // ระวังไม่ให้ไต่พาธออกนอกโฟลเดอร์
-                // if (fs.existsSync(abs)) {
-                //   res.setHeader('Content-Type', mime.lookup(abs) || 'application/octet-stream');
-                //   res.setHeader('Content-Disposition', `inline; filename="${path.basename(abs)}"`);
-                //   return fs.createReadStream(abs).pipe(res);
-                // }
-                // return res.status(404).send('File not found');
             }
         }
+
 
         // ถ้าเป็น base64
         let base64Data = fileData;
@@ -1664,6 +1667,33 @@ app.get('/api/history/file/:id', async (req, res) => {
     }
 });
 
+// ===== PDF Proxy (fix header) =====
+app.get('/file-proxy/pdf', async (req, res) => {
+    try {
+        const { url } = req.query;
+        if (!url) return res.status(400).send('Missing url');
+
+        // ป้องกัน SSRF: อนุญาตเฉพาะโดเมนที่ไว้ใจได้
+        const allowHost = ['reserv-scc.mfu.ac.th'];
+        const u = new URL(url);
+        if (!allowHost.includes(u.hostname)) return res.status(403).send('Forbidden host');
+
+        const resp = await axios.get(url, { responseType: 'stream' });
+
+        // บังคับ header ให้ viewer ของ Chrome ทำงาน
+        res.setHeader('Content-Type', 'application/pdf');
+        if (resp.headers['content-length']) {
+            res.setHeader('Content-Length', resp.headers['content-length']);
+        }
+        res.setHeader('Accept-Ranges', 'bytes');
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+
+        resp.data.pipe(res);
+    } catch (err) {
+        console.error('[file-proxy/pdf] error:', err.message);
+        res.status(502).send('Failed to fetch PDF');
+    }
+});
 
 
 
@@ -2823,23 +2853,102 @@ app.post('/api/booking_equipment_and_history', async (req, res) => {
 app.get('/api/history/:id/file/:idx', async (req, res) => {
     try {
         const historyItem = await History.findById(req.params.id);
-        const idx = parseInt(req.params.idx, 10);
-        if (!historyItem || !historyItem.attachment || !historyItem.attachment[idx]) {
+        const idxRaw = parseInt(req.params.idx, 10);
+        const idx = Number.isNaN(idxRaw) ? 0 : idxRaw;
+
+        if (!historyItem || !historyItem.attachment) {
             return res.status(404).send('File not found');
         }
-        const base64Data = historyItem.attachment[idx];
-        // ⭐️ ใส่ default แบบนี้
-        const mimeType = (historyItem.fileType && historyItem.fileType[idx]) || historyItem.fileType || 'application/octet-stream';
-        const fileName = (historyItem.fileName && historyItem.fileName[idx]) || 'download';
 
-        const fileBuffer = Buffer.from(base64Data, 'base64');
-        res.set('Content-Type', mimeType || 'application/octet-stream');
-        res.set('Content-Disposition', `attachment; filename="${fileName}"`);
-        res.send(fileBuffer);
+        // รองรับทั้ง array และ single value
+        const attachment =
+            Array.isArray(historyItem.attachment)
+                ? historyItem.attachment[idx]
+                : historyItem.attachment;
+
+        if (!attachment) {
+            return res.status(404).send('File not found');
+        }
+
+        // mimeType / fileName รองรับทั้ง array และ single
+        let mimeType =
+            (Array.isArray(historyItem.fileType) && historyItem.fileType[idx]) ||
+            historyItem.fileType ||
+            'application/octet-stream';
+
+        let fileName =
+            (Array.isArray(historyItem.fileName) && historyItem.fileName[idx]) ||
+            historyItem.fileName ||
+            'attachment';
+
+        // 1) ถ้าเป็น URL ภายนอก -> redirect
+        if (typeof attachment === 'string' && /^https?:\/\//i.test(attachment)) {
+            // ถ้าเป็น PDF แนะนำผ่าน proxy เพื่อบังคับ header ให้ viewer แสดงแน่ ๆ
+            if (mimeType === 'application/pdf') {
+                const proxied = `${req.protocol}://${req.get('host')}/file-proxy/pdf?url=${encodeURIComponent(attachment)}`;
+                return res.redirect(proxied);
+            }
+            return res.redirect(attachment);
+        }
+
+        // 2) ถ้าเป็น path ในเซิร์ฟเวอร์ตัวเอง เช่น /uploads/xxx.pdf -> redirect ให้ static เสิร์ฟ
+        if (typeof attachment === 'string' && attachment.startsWith('/uploads/')) {
+            const full = `${req.protocol}://${req.get('host')}${attachment}`;
+            return res.redirect(full);
+        }
+
+        // 3) ถ้าเป็น data URL (data:<mime>;base64,xxxx)
+        let base64Data = attachment;
+        if (typeof base64Data === 'string' && base64Data.startsWith('data:')) {
+            // ดึง mimetype จาก prefix ถ้าไม่ได้ส่งมาจาก DB
+            if (!mimeType || mimeType === 'application/octet-stream') {
+                const semi = base64Data.indexOf(';');
+                if (semi > 5) {
+                    mimeType = base64Data.substring(5, semi);
+                }
+            }
+            // ตัด prefix 'data:...;base64,' ออก
+            const comma = base64Data.indexOf(',');
+            base64Data = comma >= 0 ? base64Data.slice(comma + 1) : base64Data;
+        }
+
+        // 4) ณ จุดนี้ถือว่าเป็น base64 ล้วน
+        const buffer = Buffer.from(base64Data, 'base64');
+
+        // แสดง inline สำหรับประเภทที่ดูบนเบราว์เซอร์ได้
+        const inlineTypes = [
+            'application/pdf',
+            'image/png',
+            'image/jpeg',
+            'image/jpg',
+            'image/gif',
+            'image/webp',
+            'text/plain'
+        ];
+        const disposition = inlineTypes.includes(mimeType) ? 'inline' : 'attachment';
+
+        // กันชื่อไฟล์มีอักขระผิดปกติเล็กน้อย
+        if (!fileName || typeof fileName !== 'string') fileName = 'download';
+        // ถ้าเป็น PDF แต่ชื่อไฟล์ไม่มี .pdf ใส่ให้ (optional ช่วย UX)
+        if (mimeType === 'application/pdf' && !fileName.toLowerCase().endsWith('.pdf')) {
+            fileName += '.pdf';
+        }
+
+        res.setHeader('Content-Type', mimeType || 'application/octet-stream');
+        res.setHeader('Content-Disposition', `${disposition}; filename="${fileName}"`);
+        // เฉพาะ PDF ใส่ header เพิ่ม เพื่อเบราว์เซอร์/ปลั๊กอินแสดงผลดีขึ้น
+        if (mimeType === 'application/pdf') {
+            res.setHeader('X-Content-Type-Options', 'nosniff');
+            res.setHeader('Accept-Ranges', 'bytes');
+        }
+
+        return res.send(buffer);
     } catch (error) {
-        res.status(500).send(error.message);
+        console.error('[GET /api/history/:id/file/:idx] error:', error);
+        return res.status(500).send(error.message || 'Server error');
     }
 });
+
 
 
 
