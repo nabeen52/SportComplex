@@ -12,7 +12,13 @@ const axios = require('axios');
 const mime = require('mime-types');
 const path = require('path');
 const multer = require('multer');
-const storage = multer.memoryStorage();
+const storage = multer.diskStorage({
+    destination: (_, __, cb) => cb(null, UPLOAD_ROOT),
+    filename: (_, file, cb) => {
+        const ext = path.extname(file.originalname || '');
+        cb(null, `${Date.now()}-${Math.round(Math.random() * 1e9)}${ext || '.pdf'}`);
+    }
+});
 const session = require('express-session');
 const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
@@ -30,6 +36,9 @@ const bcrypt = require('bcrypt');
 const UploadFile = require('./models/upload_file');
 const BookingField = require('./models/booking_field');
 const app = express();
+const UPLOAD_ROOT = process.env.UPLOAD_ROOT || '/data/uploads';
+if (!fs.existsSync(UPLOAD_ROOT)) fs.mkdirSync(UPLOAD_ROOT, { recursive: true });
+
 
 const jwt = require('jsonwebtoken');
 const SECRET = process.env.JWT_SECRET || "YOUR_SUPER_SECRET";
@@ -44,7 +53,7 @@ const transporter = nodemailer.createTransport({
     }
 });
 
-
+const upload = multer({ storage, limits: { fileSize: 110 * 1024 * 1024 } });
 const uploadDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });
@@ -76,7 +85,24 @@ async function sendApproveEmail({ to, name, equipment, quantity }) {
         console.error('ส่งเมลไม่สำเร็จ:', err);
     }
 }
+// บันทึกรูปโปรไฟล์จาก Google
+async function saveGoogleProfilePic(picUrl, userId) {
+    try {
+        const response = await axios.get(picUrl, { responseType: 'arraybuffer' });
+        const imgPath = path.join(UPLOAD_ROOT, `profile-${userId}.jpg`);
+        fs.writeFileSync(imgPath, response.data);
+        return `/uploads/profile-${userId}.jpg`;
+    } catch (e) { console.error('Download google profile error:', e.message); return null; }
+}
 
+// bookingFieldUpload
+const bookingFieldUpload = multer({
+    storage: multer.diskStorage({
+        destination: (_, __, cb) => cb(null, UPLOAD_ROOT),
+        filename: (_, file, cb) => cb(null, `${Date.now()}-${Math.round(Math.random() * 1E9)}${path.extname(file.originalname)}`)
+    }),
+    limits: { fileSize: 10 * 1024 * 1024 }
+});
 // Helper: ดึงอีเมล staff ทั้งหมดในระบบ (role staff/admin)
 async function getStaffEmails() {
     const staff = await User.find({ role: 'staff', email: { $exists: true, $ne: "" } });
@@ -717,18 +743,18 @@ function calcTotalHours(since, uptodate, startTime, endTime) {
 
 }
 
-const bookingFieldUpload = multer({
-    storage: multer.diskStorage({
-        destination: function (req, file, cb) {
-            cb(null, './uploads/');
-        },
-        filename: function (req, file, cb) {
-            const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-            cb(null, uniqueSuffix + path.extname(file.originalname));
-        }
-    }),
-    limits: { fileSize: 10 * 1024 * 1024 }
-});
+// const bookingFieldUpload = multer({
+//     storage: multer.diskStorage({
+//         destination: function (req, file, cb) {
+//             cb(null, './uploads/');
+//         },
+//         filename: function (req, file, cb) {
+//             const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+//             cb(null, uniqueSuffix + path.extname(file.originalname));
+//         }
+//     }),
+//     limits: { fileSize: 10 * 1024 * 1024 }
+// });
 
 
 
@@ -801,9 +827,9 @@ app.get('/api/history/pdfbyurl/:id', async (req, res) => {
 
 
 // ============ Multer + Static Uploads (upload file to ./uploads) ==========
-app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
-    setHeaders: (res, filePath) => {
-        if (filePath.endsWith('.pdf')) {
+app.use('/uploads', express.static(UPLOAD_ROOT, {
+    setHeaders(res, p) {
+        if (p.endsWith('.pdf')) {
             res.setHeader('Content-Type', 'application/pdf');
             res.setHeader('X-Content-Type-Options', 'nosniff');
             res.setHeader('Accept-Ranges', 'bytes');
@@ -812,40 +838,46 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
 }));
 
 
-const upload = multer({
-    storage: multer.diskStorage({
-        destination: function (req, file, cb) {
-            cb(null, uploadDir);               // ใช้ absolute path
-        },
-        filename: function (req, file, cb) {
-            const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
-            cb(null, unique + path.extname(file.originalname));
-        }
-    }),
-    fileFilter: function (req, file, cb) {
-        const allowed = ['.png', '.jpg', '.jpeg', '.pdf', '.xls', '.xlsx', '.doc', '.docx'];
-        return allowed.includes(path.extname(file.originalname).toLowerCase())
-            ? cb(null, true)
-            : cb(new Error('Unsupported file type'), false);
-    }
+
+// const upload = multer({
+//     storage: multer.diskStorage({
+//         destination: function (req, file, cb) {
+//             cb(null, uploadDir);               // ใช้ absolute path
+//         },
+//         filename: function (req, file, cb) {
+//             const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
+//             cb(null, unique + path.extname(file.originalname));
+//         }
+//     }),
+//     fileFilter: function (req, file, cb) {
+//         const allowed = ['.png', '.jpg', '.jpeg', '.pdf', '.xls', '.xlsx', '.doc', '.docx'];
+//         return allowed.includes(path.extname(file.originalname).toLowerCase())
+//             ? cb(null, true)
+//             : cb(new Error('Unsupported file type'), false);
+//     }
+// });
+
+
+
+app.post('/api/upload', upload.single('file'), (req, res) => {
+    const publicUrl = `https://reserv-scc.mfu.ac.th/uploads/${req.file.filename}`;
+    // บันทึก publicUrl ลง MongoDB ในฟิลด์ที่ใช้อยู่ (attachment/bookingPdfUrl ฯลฯ)
+    res.json({ ok: true, url: publicUrl, file: req.file });
 });
 
-
-
-
-app.post('/api/upload', (req, res, next) => {
-    upload.single('file')(req, res, function (err) {
-        if (err) {
-            console.error('[Multer Error /api/upload]:', err);
-            return res.status(400).json({ success: false, message: err.message });
-        }
-        if (!req.file) {
-            return res.status(400).json({ success: false, message: 'No file uploaded' });
-        }
-        const fullUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
-        return res.json({ success: true, fileUrl: fullUrl });
-    });
-});
+// app.post('/api/upload', (req, res, next) => {
+//     upload.single('file')(req, res, function (err) {
+//         if (err) {
+//             console.error('[Multer Error /api/upload]:', err);
+//             return res.status(400).json({ success: false, message: err.message });
+//         }
+//         if (!req.file) {
+//             return res.status(400).json({ success: false, message: 'No file uploaded' });
+//         }
+//         const fullUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
+//         return res.json({ success: true, fileUrl: fullUrl });
+//     });
+// });
 
 app.post('/api/uploads', (req, res, next) => {
     upload.array('files', 20)(req, res, function (err) {
