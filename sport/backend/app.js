@@ -12,13 +12,7 @@ const axios = require('axios');
 const mime = require('mime-types');
 const path = require('path');
 const multer = require('multer');
-const storage = multer.diskStorage({
-    destination: '/data/uploads',
-    filename: (req, file, cb) => {
-        const ext = path.extname(file.originalname || '');
-        cb(null, `${Date.now()}-${Math.round(Math.random() * 1e9)}${ext || '.pdf'}`);
-    }
-});
+const storage = multer.memoryStorage();
 const session = require('express-session');
 const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
@@ -838,11 +832,7 @@ const upload = multer({
 
 
 
-app.post('/api/upload', upload.single('file'), (req, res) => {
-  const publicUrl = `https://reserv-scc.mfu.ac.th/uploads/${req.file.filename}`;
-  // บันทึก publicUrl ลง MongoDB ในฟิลด์ที่ใช้อยู่ (attachment/bookingPdfUrl ฯลฯ)
-  res.json({ ok: true, url: publicUrl, file: req.file });
-});
+
 app.post('/api/upload', (req, res, next) => {
     upload.single('file')(req, res, function (err) {
         if (err) {
@@ -2863,102 +2853,23 @@ app.post('/api/booking_equipment_and_history', async (req, res) => {
 app.get('/api/history/:id/file/:idx', async (req, res) => {
     try {
         const historyItem = await History.findById(req.params.id);
-        const idxRaw = parseInt(req.params.idx, 10);
-        const idx = Number.isNaN(idxRaw) ? 0 : idxRaw;
-
-        if (!historyItem || !historyItem.attachment) {
+        const idx = parseInt(req.params.idx, 10);
+        if (!historyItem || !historyItem.attachment || !historyItem.attachment[idx]) {
             return res.status(404).send('File not found');
         }
+        const base64Data = historyItem.attachment[idx];
+        // ⭐️ ใส่ default แบบนี้
+        const mimeType = (historyItem.fileType && historyItem.fileType[idx]) || historyItem.fileType || 'application/octet-stream';
+        const fileName = (historyItem.fileName && historyItem.fileName[idx]) || 'download';
 
-        // รองรับทั้ง array และ single value
-        const attachment =
-            Array.isArray(historyItem.attachment)
-                ? historyItem.attachment[idx]
-                : historyItem.attachment;
-
-        if (!attachment) {
-            return res.status(404).send('File not found');
-        }
-
-        // mimeType / fileName รองรับทั้ง array และ single
-        let mimeType =
-            (Array.isArray(historyItem.fileType) && historyItem.fileType[idx]) ||
-            historyItem.fileType ||
-            'application/octet-stream';
-
-        let fileName =
-            (Array.isArray(historyItem.fileName) && historyItem.fileName[idx]) ||
-            historyItem.fileName ||
-            'attachment';
-
-        // 1) ถ้าเป็น URL ภายนอก -> redirect
-        if (typeof attachment === 'string' && /^https?:\/\//i.test(attachment)) {
-            // ถ้าเป็น PDF แนะนำผ่าน proxy เพื่อบังคับ header ให้ viewer แสดงแน่ ๆ
-            if (mimeType === 'application/pdf') {
-                const proxied = `${req.protocol}://${req.get('host')}/file-proxy/pdf?url=${encodeURIComponent(attachment)}`;
-                return res.redirect(proxied);
-            }
-            return res.redirect(attachment);
-        }
-
-        // 2) ถ้าเป็น path ในเซิร์ฟเวอร์ตัวเอง เช่น /uploads/xxx.pdf -> redirect ให้ static เสิร์ฟ
-        if (typeof attachment === 'string' && attachment.startsWith('/uploads/')) {
-            const full = `${req.protocol}://${req.get('host')}${attachment}`;
-            return res.redirect(full);
-        }
-
-        // 3) ถ้าเป็น data URL (data:<mime>;base64,xxxx)
-        let base64Data = attachment;
-        if (typeof base64Data === 'string' && base64Data.startsWith('data:')) {
-            // ดึง mimetype จาก prefix ถ้าไม่ได้ส่งมาจาก DB
-            if (!mimeType || mimeType === 'application/octet-stream') {
-                const semi = base64Data.indexOf(';');
-                if (semi > 5) {
-                    mimeType = base64Data.substring(5, semi);
-                }
-            }
-            // ตัด prefix 'data:...;base64,' ออก
-            const comma = base64Data.indexOf(',');
-            base64Data = comma >= 0 ? base64Data.slice(comma + 1) : base64Data;
-        }
-
-        // 4) ณ จุดนี้ถือว่าเป็น base64 ล้วน
-        const buffer = Buffer.from(base64Data, 'base64');
-
-        // แสดง inline สำหรับประเภทที่ดูบนเบราว์เซอร์ได้
-        const inlineTypes = [
-            'application/pdf',
-            'image/png',
-            'image/jpeg',
-            'image/jpg',
-            'image/gif',
-            'image/webp',
-            'text/plain'
-        ];
-        const disposition = inlineTypes.includes(mimeType) ? 'inline' : 'attachment';
-
-        // กันชื่อไฟล์มีอักขระผิดปกติเล็กน้อย
-        if (!fileName || typeof fileName !== 'string') fileName = 'download';
-        // ถ้าเป็น PDF แต่ชื่อไฟล์ไม่มี .pdf ใส่ให้ (optional ช่วย UX)
-        if (mimeType === 'application/pdf' && !fileName.toLowerCase().endsWith('.pdf')) {
-            fileName += '.pdf';
-        }
-
-        res.setHeader('Content-Type', mimeType || 'application/octet-stream');
-        res.setHeader('Content-Disposition', `${disposition}; filename="${fileName}"`);
-        // เฉพาะ PDF ใส่ header เพิ่ม เพื่อเบราว์เซอร์/ปลั๊กอินแสดงผลดีขึ้น
-        if (mimeType === 'application/pdf') {
-            res.setHeader('X-Content-Type-Options', 'nosniff');
-            res.setHeader('Accept-Ranges', 'bytes');
-        }
-
-        return res.send(buffer);
+        const fileBuffer = Buffer.from(base64Data, 'base64');
+        res.set('Content-Type', mimeType || 'application/octet-stream');
+        res.set('Content-Disposition', `attachment; filename="${fileName}"`);
+        res.send(fileBuffer);
     } catch (error) {
-        console.error('[GET /api/history/:id/file/:idx] error:', error);
-        return res.status(500).send(error.message || 'Server error');
+        res.status(500).send(error.message);
     }
 });
-
 
 
 
