@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 
-mongoose.connect('mongodb://root:password@mongo:27017/SportComplex?authSource=admin')
+// mongoose.connect('mongodb://root:password@mongo:27017/SportComplex?authSource=admin')
 
 const userSchema = new mongoose.Schema({
     // username: String,

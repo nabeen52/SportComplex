@@ -110,6 +110,24 @@ import axios from 'axios';
 const API_BASE = import.meta.env.VITE_API_BASE
 const ADMIN_LAST_SEEN_KEY = 'admin_lastSeenTimestamp' // ใช้คีย์เดียวทุกหน้าแอดมิน
 
+// วางไว้ด้านบน <script> หลัง import axios แล้ว
+const uploadImage = async (file) => {
+  const fd = new FormData();
+  fd.append('file', file);                 // << สำคัญ: ต้องใช้ชื่อฟิลด์ 'file' ให้ตรง backend
+  const res = await axios.post(`${API_BASE}/api/upload`, fd, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    withCredentials: true,                 // ใช้ session ของ passport
+  });
+  return res.data?.fileUrl;                // backend คืน key ชื่อ fileUrl
+};
+
+const normalizeImageUrl = (img) => {
+  if (!img) return '/img/default.png';
+  if (img.startsWith('data:image/')) return img;            // สำหรับของเก่าที่เป็น base64
+  if (img.startsWith('/uploads/') || img.startsWith('http')) return img;
+  if (img.startsWith('/img/')) return img;
+  return `/img/${img}`;
+};
 
 export default {
   data() {
@@ -285,43 +303,25 @@ pruneOldNotifications() {
         showCancelButton: true,
         confirmButtonText: 'เพิ่ม',
         cancelButtonText: 'ยกเลิก',
-        preConfirm: async () => {
-          const name = document.getElementById('name').value.trim();
-          const quantity = document.getElementById('quantity').value;
-          const fileInput = document.getElementById('image');
-          const visible = document.getElementById('visible').value === 'true';
+       preConfirm: async () => {
+  const name = document.getElementById('name').value.trim();
+  const quantity = document.getElementById('quantity').value;
+  const fileInput = document.getElementById('image');
+  const visible = document.getElementById('visible').value === 'true';
+  if (!name || quantity === '' || parseInt(quantity) < 0) { Swal.showValidationMessage('กรุณากรอกข้อมูลให้ครบ และจำนวนต้องไม่ติดลบ'); return false; }
+  if (!fileInput.files[0]) { Swal.showValidationMessage('กรุณาเลือกรูปภาพ'); return false; }
+  Swal.showLoading();
+  const imageUrl = await uploadImage(fileInput.files[0]);   // << ใช้ไฟล์จริง
+  return { name, quantity: parseInt(quantity), image: imageUrl, visible };
+}
 
-          if (!name || quantity === '' || parseInt(quantity) < 0) {
-            Swal.showValidationMessage('กรุณากรอกข้อมูลให้ครบ และจำนวนต้องไม่ติดลบ');
-            return false;
-          }
-          if (!fileInput.files[0]) {
-            Swal.showValidationMessage('กรุณาเลือกรูปภาพ');
-            return false;
-          }
-          // แปลงเป็น base64
-          const toBase64 = file => new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.readAsDataURL(file);
-            reader.onload = () => resolve(reader.result);
-            reader.onerror = error => reject(error);
-          });
-          const imageBase64 = await toBase64(fileInput.files[0]);
-
-          return {
-            name,
-            quantity: parseInt(quantity),
-            image: imageBase64,
-            visible
-          };
-        }
       });
 
       if (formValues) {
         try {
           const res = await axios.post(`${API_BASE}/api/equipments`, formValues);
           if (res.data.success) {
-            this.equipments.push(res.data.data);
+            this.equipments.push({ ...res.data.data, image: normalizeImageUrl(res.data.data.image) });
             Swal.fire('เพิ่มสำเร็จ', '', 'success');
           }
         } catch (err) {
@@ -380,33 +380,16 @@ pruneOldNotifications() {
         denyButtonText: 'ลบ',
         cancelButtonText: 'ยกเลิก',
         preConfirm: async () => {
-          const nameVal = document.getElementById('name').value;
-          const quantityVal = document.getElementById('quantity').value;
-          const fileInput = document.getElementById('image');
-          const visibleVal = document.getElementById('visible').value === 'true';
+  const nameVal = document.getElementById('name').value.trim();
+  const quantityVal = document.getElementById('quantity').value;
+  const fileInput = document.getElementById('image');
+  const visibleVal = document.getElementById('visible').value === 'true';
+  if (!nameVal || quantityVal === '' || parseInt(quantityVal) < 0) { Swal.showValidationMessage('กรุณากรอกข้อมูลให้ครบ และจำนวนต้องไม่ติดลบ'); return false; }
+  let imageToSave = equipment.image;
+  if (fileInput.files[0]) { Swal.showLoading(); imageToSave = await uploadImage(fileInput.files[0]); }
+  return { name: nameVal, quantity: parseInt(quantityVal), image: imageToSave, visible: visibleVal };
+}
 
-          if (nameVal.trim() === '' || quantityVal === '' || parseInt(quantityVal) < 0) {
-            Swal.showValidationMessage('กรุณากรอกข้อมูลให้ครบ และจำนวนต้องไม่ติดลบ');
-            return false;
-          }
-          let imageToSave = equipment.image;
-          if (fileInput.files[0]) {
-            const toBase64 = file => new Promise((resolve, reject) => {
-              const reader = new FileReader();
-              reader.readAsDataURL(file);
-              reader.onload = () => resolve(reader.result);
-              reader.onerror = error => reject(error);
-            });
-            imageToSave = await toBase64(fileInput.files[0]);
-          }
-
-          return {
-            name: nameVal,
-            quantity: parseInt(quantityVal),
-            image: imageToSave,
-            visible: visibleVal
-          };
-        }
       });
 
       if (result.isConfirmed && result.value) {
@@ -415,7 +398,7 @@ pruneOldNotifications() {
           const id = equipment._id;
           const res = await axios.patch(`${API_BASE}/api/equipments/${id}`, result.value);
           if (res.data.success) {
-            this.equipments[index] = res.data.data;
+            this.equipments[index] = { ...res.data.data, image: normalizeImageUrl(res.data.data.image) };
             Swal.fire('แก้ไขสำเร็จ', '', 'success');
           }
         } catch (err) {
@@ -440,8 +423,9 @@ pruneOldNotifications() {
     this.checkMobile();
     window.addEventListener('resize', this.checkMobile);
     try {
-      const res = await axios.get(`${API_BASE}/api/equipments`);
-      this.equipments = res.data;
+     const res = await axios.get(`${API_BASE}/api/equipments`, { withCredentials: true });
+this.equipments = (res.data || []).map(e => ({ ...e, image: normalizeImageUrl(e.image) }));
+
     } catch (e) {
       console.error(e);
       this.equipments = [];

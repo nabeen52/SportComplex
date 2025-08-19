@@ -31,6 +31,33 @@ const UploadFile = require('./models/upload_file');
 const BookingField = require('./models/booking_field');
 const app = express();
 
+
+// วางใกล้ๆ ส่วนอื่นที่ set uploads/ อยู่แล้ว
+const uploadRoot = path.join(__dirname, 'uploads');
+const newsDir = path.join(uploadRoot, 'news');
+if (!fs.existsSync(newsDir)) fs.mkdirSync(newsDir, { recursive: true });
+
+const sanitize = (name) => name.replace(/[^\w.-]/g, '_');
+
+const storageNews = multer.diskStorage({
+    destination: (req, file, cb) => cb(null, newsDir),
+    filename: (req, file, cb) => {
+        const ext = path.extname(file.originalname);
+        const base = path.basename(file.originalname, ext);
+        cb(null, `${Date.now()}_${sanitize(base)}${ext}`);
+    }
+});
+
+const uploadNews = multer({
+    storage: storageNews,
+    limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+    fileFilter: (req, file, cb) => {
+        const ok = ['.png', '.jpg', '.jpeg', '.webp'].includes(path.extname(file.originalname).toLowerCase());
+        cb(ok ? null : new Error('Only images are allowed'), ok);
+    }
+});
+
+
 const jwt = require('jsonwebtoken');
 const SECRET = process.env.JWT_SECRET || "YOUR_SUPER_SECRET";
 const nodemailer = require('nodemailer');
@@ -2572,58 +2599,88 @@ app.get('/api/uploadfile/:id', async (req, res) => {
 
 
 // ==================== News Image API ====================
+// ============= IMG_NEWS API (FILE-BASED) =============
+
+// GET: list images (คืน absolute URL ใน img_url, fallback ให้ข้อมูลเก่าแบบ base64 ถ้ามี)
+// ถ้าใช้ Mongoose
+// แนะนำให้เปิด timestamps ใน schema ด้วย (timestamps: true)
+// และรองรับฟิลด์ order หากอนาคตอยากจัดเองจากหลังบ้าน
 app.get('/api/img_news', async (req, res) => {
     try {
-        const news = await ImgNews.find();
-        res.send(news);
-    } catch (err) {
-        res.status(500).send({ message: err.message });
+        const rows = await ImgNews.find({}, { img_url: 1, order: 1, createdAt: 1 })
+            .sort({ order: 1, createdAt: 1, _id: 1 })   // เก่าก่อน=ซ้าย, ใหม่ทีหลัง=ขวา
+            .lean();
+        res.json(rows);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
     }
 });
-app.get('/api/img_news/:id', async (req, res) => {
+
+
+// POST: อัปโหลดรูปใหม่ (multipart/form-data, field name = "image")
+app.post('/api/img_news', uploadNews.single('image'), async (req, res) => {
     try {
-        const news = await ImgNews.findById(req.params.id);
-        if (!news) return res.status(404).send({ message: 'Not found' });
-        res.send(news);
-    } catch (err) {
-        res.status(500).send({ message: err.message });
+        if (!req.file) return res.status(400).json({ error: 'no file' });
+        const relPath = `/uploads/news/${req.file.filename}`;
+        const created = await ImgNews.create({ img_url: relPath });
+        const base = `${req.protocol}://${req.get('host')}`;
+        res.json({ success: true, data: { _id: created._id, img_url: `${base}${relPath}` } });
+    } catch (e) {
+        console.error('POST /api/img_news error:', e);
+        res.status(500).json({ error: 'cannot create image' });
     }
 });
-app.put('/api/img_news/:id', async (req, res) => {
+
+// PUT: แทนที่ไฟล์รูปของรายการเดิม
+app.put('/api/img_news/:id', uploadNews.single('image'), async (req, res) => {
     try {
-        const { img } = req.body;
-        const updated = await ImgNews.findByIdAndUpdate(req.params.id, { img }, { new: true });
-        if (!updated) return res.status(404).send({ message: 'ไม่พบข้อมูล' });
-        res.send({ success: true, data: updated });
-    } catch (err) {
-        res.status(500).send({ message: err.message });
+        const id = req.params.id;
+        const doc = await ImgNews.findById(id);
+        if (!doc) return res.status(404).json({ error: 'not found' });
+
+        // ไม่มีไฟล์ใหม่ -> คืนค่าปัจจุบัน
+        if (!req.file) {
+            const base = `${req.protocol}://${req.get('host')}`;
+            return res.json({ success: true, data: { _id: doc._id, img_url: doc.img_url ? `${base}${doc.img_url}` : '' } });
+        }
+
+        // ลบไฟล์เก่า (ถ้าเป็นไฟล์ใน /uploads)
+        if (doc.img_url && doc.img_url.startsWith('/uploads/')) {
+            const oldAbs = path.join(__dirname, doc.img_url);
+            try { if (fs.existsSync(oldAbs)) fs.unlinkSync(oldAbs); } catch (_) { }
+        }
+
+        const relPath = `/uploads/news/${req.file.filename}`;
+        doc.img_url = relPath;
+        // ไม่ใช้ base64 แล้ว
+        if (doc.img) doc.img = undefined;
+        await doc.save();
+
+        const base = `${req.protocol}://${req.get('host')}`;
+        res.json({ success: true, data: { _id: doc._id, img_url: `${base}${relPath}` } });
+    } catch (e) {
+        console.error('PUT /api/img_news/:id error:', e);
+        res.status(500).json({ error: 'cannot update image' });
     }
 });
+
+// DELETE: ลบเอกสาร + ไฟล์จริง
 app.delete('/api/img_news/:id', async (req, res) => {
     try {
-        const deleted = await ImgNews.findByIdAndDelete(req.params.id);
-        if (!deleted) return res.status(404).send({ message: 'ไม่พบข้อมูล' });
-        res.send({ success: true });
-    } catch (err) {
-        res.status(500).send({ message: err.message });
-    }
-});
-app.post('/api/img_news', async (req, res) => {
-    try {
-        const { img } = req.body;
-        const news = new ImgNews({ img: img || "" });
-        await news.save();
-        res.send({ success: true, data: news });
-    } catch (err) {
-        res.status(500).send({ message: err.message });
-    }
-});
-app.delete('/api/img_news/:id/permanent', async (req, res) => {
-    try {
-        await ImgNews.findByIdAndDelete(req.params.id);
-        res.send({ success: true });
-    } catch (err) {
-        res.status(500).send({ message: err.message });
+        const id = req.params.id;
+        const doc = await ImgNews.findById(id);
+        if (!doc) return res.status(404).json({ error: 'not found' });
+
+        if (doc.img_url && doc.img_url.startsWith('/uploads/')) {
+            const abs = path.join(__dirname, doc.img_url);
+            try { if (fs.existsSync(abs)) fs.unlinkSync(abs); } catch (_) { }
+        }
+
+        await ImgNews.deleteOne({ _id: id });
+        res.json({ success: true });
+    } catch (e) {
+        console.error('DELETE /api/img_news/:id error:', e);
+        res.status(500).json({ error: 'cannot delete image' });
     }
 });
 

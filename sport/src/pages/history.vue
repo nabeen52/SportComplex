@@ -424,6 +424,171 @@ paginatedHistory() {
 
   methods: {
 
+     // --- helpers เดิมคงไว้ ---
+  normalizePdfUrl(raw) {
+  if (!raw) return null;
+  let u = String(raw).trim();
+
+  // ทำ absolute ให้หมด
+  if (!/^https?:\/\//i.test(u)) {
+    u = new URL(u.startsWith('/') ? u : `/${u}`, window.location.origin).href;
+  }
+  // อัปเกรดเป็น https ถ้าหน้าเป็น https
+  if (location.protocol === 'https:' && u.startsWith('http://')) {
+    u = 'https://' + u.slice('http://'.length);
+  }
+  return u;
+},
+
+pickPdfUrlFromGroupItems(items) {
+  if (!Array.isArray(items)) return null;
+
+  // 1) ฟิลด์ตรง ๆ
+  const hitDirect = items.find(h => h?.bookingPdfUrl || h?.booking_pdf_url);
+  if (hitDirect) return hitDirect.bookingPdfUrl || hitDirect.booking_pdf_url;
+
+  // 2) แนบไฟล์ (ทั้ง array และ string เดี่ยว)
+  const hitAttach = items.find(h =>
+    (Array.isArray(h?.attachment) && h.attachment.length > 0) ||
+    (typeof h?.attachment === 'string' && h.attachment)
+  );
+  if (hitAttach) {
+    return Array.isArray(hitAttach.attachment) ? hitAttach.attachment[0] : hitAttach.attachment;
+  }
+
+  // (เผื่อบางระบบใช้ฟิลด์อื่น)
+  const hitAlt = items.find(h => h?.pdfUrl || h?.pdf_url || h?.fileUrl);
+  if (hitAlt) return hitAlt.pdfUrl || hitAlt.pdf_url || hitAlt.fileUrl;
+
+  return null;
+},
+
+  pickPdfUrl(list) {
+    if (!Array.isArray(list)) return null;
+    const haveDirect = list.find(h => h?.bookingPdfUrl || h?.booking_pdf_url) || null;
+    if (haveDirect) return haveDirect.bookingPdfUrl || haveDirect.booking_pdf_url || null;
+    const haveAttach = list.find(h => Array.isArray(h?.attachment) && h.attachment[0]);
+    return haveAttach ? haveAttach.attachment[0] : null;
+  },
+  getFileNameFromUrl(u, fallback = 'booking.pdf') {
+  try {
+    const { pathname } = new URL(u);
+    const name = decodeURIComponent(pathname.split('/').pop() || '');
+    return name || fallback;
+  } catch { return fallback; }
+},
+
+  // ====== ใหม่: ดาวน์โหลดจาก URL โดยบังคับ save ลงเครื่อง ======
+  async _downloadFromUrl(finalUrl, fallbackName) {
+  const resp = await fetch(finalUrl, { credentials: 'include' });
+  if (!resp.ok) throw new Error('DIRECT_DOWNLOAD_FAILED');
+  const blob = await resp.blob();
+  const blobUrl = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = blobUrl;
+  a.download = this.getFileNameFromUrl(finalUrl, fallbackName);
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(blobUrl);
+},
+
+   // ====== ใหม่: fallback ไป API (ลองทั้ง query และ path) ======
+  async _downloadFromApi(bookingId) {
+  // แบบ query
+  try {
+    const r1 = await axios.get(`${API_BASE}/api/history/pdf`, {
+      params: { booking_id: bookingId },
+      responseType: 'blob'
+    });
+    const url = URL.createObjectURL(new Blob([r1.data], { type: 'application/pdf' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `booking_${bookingId}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    return;
+  } catch {}
+
+  // แบบ path
+  const r2 = await axios.get(`${API_BASE}/api/history/pdf/${bookingId}`, { responseType: 'blob' });
+  const url = URL.createObjectURL(new Blob([r2.data], { type: 'application/pdf' }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `booking_${bookingId}.pdf`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+},
+
+async downloadPdfFromGroup(group) {
+  try {
+    const bookingId = group?.booking_id;
+    if (!bookingId) {
+      await Swal.fire('ผิดพลาด', 'ไม่พบ booking_id', 'error');
+      return;
+    }
+
+    // 1) ดึง URL จาก items ในกลุ่มที่แสดงบนหน้า
+    const picked = this.pickPdfUrlFromGroupItems(group.items || []);
+    const finalUrl = this.normalizePdfUrl(picked);
+
+    // 2) ถ้ามี URL → ดาวน์โหลดตรง (บังคับเซฟไฟล์)
+    if (finalUrl) {
+      try {
+        await this._downloadFromUrl(finalUrl, `booking_${bookingId}.pdf`);
+        return;
+      } catch {
+        // 3) ถ้า URL ใช้ไม่ได้ (404/403/CORS) → fallback API
+        await this._downloadFromApi(bookingId);
+        return;
+      }
+    }
+
+    // 4) ไม่มี URL ในกลุ่มเลย → fallback API
+    await this._downloadFromApi(bookingId);
+  } catch (e) {
+    await Swal.fire('ผิดพลาด', 'ไม่สามารถดาวน์โหลดไฟล์ได้', 'error');
+    console.error(e);
+  }
+},
+
+  // ====== ปุ่ม Download PDF form -> ใช้ logic เหมือน form_field4 ======
+  async downloadBookingPdfLikeField4(bookingId, type) {
+    try {
+      if (!bookingId) {
+        await Swal.fire('ผิดพลาด', 'ไม่พบ booking_id', 'error');
+        return;
+      }
+      // 1) ดึง history ของ booking นี้ แล้วเลือก URL
+      const { data } = await axios.get(`${API_BASE}/api/history`, { params: { booking_id: bookingId } });
+      const list = (data || []).filter(h => String(h.booking_id) === String(bookingId) && (!type || h.type === type));
+      const picked = this.pickPdfUrl(list);
+      const finalUrl = this.normalizePdfUrl(picked);
+
+      // 2) ถ้ามี URL -> ลองดาวน์โหลดตรง
+      if (finalUrl) {
+        try {
+          await this._downloadFromUrl(finalUrl, `booking_${bookingId}.pdf`);
+          return;
+        } catch {
+          // 3) URL ใช้ไม่ได้ -> fallback API
+          await this._downloadFromApi(bookingId);
+          return;
+        }
+      }
+
+      // 4) ไม่มี URL ใน history -> fallback API ทันที
+      await this._downloadFromApi(bookingId);
+    } catch (e) {
+      await Swal.fire('ผิดพลาด', 'ไม่สามารถดาวน์โหลดไฟล์ได้', 'error');
+      console.error(e);
+    }
+  },
+
     showCancelButton(group) {
     // field: ยกเลิกได้เฉพาะ Pending แถวแรก
     if (group.type === 'field') {
@@ -804,8 +969,10 @@ const formatTimeRange = (start, end) => {
     confirmButtonText: 'Close',
     confirmButtonColor: '#3085d6',
     didOpen: () => {
-      const pdfBtn = document.getElementById('pdf-btn')
-      if (pdfBtn) pdfBtn.addEventListener('click', () => this.downloadBookingPdf(group.booking_id))
+      const pdfBtn = document.getElementById('pdf-btn');
+      if (pdfBtn) {
+        pdfBtn.addEventListener('click', () => this.downloadPdfFromGroup(group));
+      }
 
       // viewer รูปเต็ม
       window.__showFullReturnPhoto = (img) => {
@@ -1491,29 +1658,37 @@ watch: {
 .swal2-title{ margin-bottom:10px!important; }
 
 /* ----- จัด 2 คอลัมน์: หัวข้อซ้าย-รายละเอียดขวา ----- */
+/* ----- ปรับกล่อง SweetAlert: Detail list ----- */
+/* === Force left align inside SweetAlert2 content === */
+.swal2-html-container{
+  text-align: left !important;   /* << เปลี่ยนจาก center เป็น left */
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+/* กริดรายละเอียด: ให้ตัวกริดเองไม่ถูก center */
 .swal2-popup .swal-booking{
-  display:grid;
-  grid-template-columns:160px 1fr; /* ปรับได้ */
-  column-gap:12px;
-  row-gap:8px;
-  text-align:left;
-  margin-inline:auto;
-  max-width:min(680px,86vw);
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  column-gap: 14px;
+  row-gap: 8px;
+  justify-items: start;          /* << ให้ทุก cell ชิดซ้าย */
+  margin: 0 !important;          /* << ตัด auto-center ทิ้ง */
 }
-.swal2-popup .swal-booking .label{
-  justify-self:end;
-  white-space:nowrap;
-  font-weight:700;
-  line-height:1.6;
-}
+
+/* label + value ชิดซ้ายจริง ๆ */
+.swal2-popup .swal-booking .label,
 .swal2-popup .swal-booking .value{
-  justify-self:start;
-  white-space:pre-wrap;
-  word-break:break-word;
-  line-height:1.6;
-  max-width:clamp(260px,56vw,560px);
+  justify-self: start !important;
+  text-align: left !important;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
-.swal2-popup .swal-booking .full{ grid-column:1 / -1; }
+
+/* (ถ้ามี) บรรทัดเต็มหน้ากว้าง */
+.swal2-popup .swal-booking .full{ grid-column: 1 / -1; }
+
 
 .history-table {
   table-layout: fixed;

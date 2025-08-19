@@ -175,9 +175,12 @@ function pruneOldNotifications() {
 // แปลง path รูป
 function resolveImagePath(img) {
   if (!img) return '/img/default.png'
-  if (img.startsWith('data:image/')) return img
-  if (img.startsWith('/img/')) return img
-  return `/img/${img}`
+  const s = String(img)
+  if (s.startsWith('data:image/')) return s
+  if (s.startsWith('/img/')) return s
+  if (s.startsWith('http://') || s.startsWith('https://')) return s
+  if (s.startsWith('/uploads/')) return `${API_BASE}${s}`
+  return `/img/${s}`
 }
 
 // ภาพปกหลักสนาม

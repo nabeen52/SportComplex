@@ -131,6 +131,24 @@ import Swal from 'sweetalert2'
 import axios from 'axios'
 const API_BASE = import.meta.env.VITE_API_BASE
 const ADMIN_LAST_SEEN_KEY = 'admin_lastSeenTimestamp'
+// วางไว้ด้านบน <script> หลัง import axios แล้ว
+const uploadImage = async (file) => {
+  const fd = new FormData();
+  fd.append('file', file);                 // << สำคัญ: ต้องใช้ชื่อฟิลด์ 'file' ให้ตรง backend
+  const res = await axios.post(`${API_BASE}/api/upload`, fd, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    withCredentials: true,                 // ใช้ session ของ passport
+  });
+  return res.data?.fileUrl;                // backend คืน key ชื่อ fileUrl
+};
+
+const normalizeImageUrl = (img) => {
+  if (!img) return '/img/default.png';
+  if (img.startsWith('data:image/')) return img;            // สำหรับของเก่าที่เป็น base64
+  if (img.startsWith('/uploads/') || img.startsWith('http')) return img;
+  if (img.startsWith('/img/')) return img;
+  return `/img/${img}`;
+};
 
 
 export default {
@@ -321,17 +339,14 @@ handleClickOutside(event) {
       try {
         const res = await axios.get(`${API_BASE}/api/fields`);
         this.fields = (res.data || []).map(f => ({
-          ...f,
-          visible: f.visible !== undefined ? f.visible : true,
-          hasZone: f.hasZone !== undefined ? f.hasZone : false,
-          zones: (f.zones || []).map(z => ({
-            ...z,
-            image: this.getImageUrl(z.image),
-            active: z.active !== undefined ? z.active : true,
-          })),
-          image: this.getImageUrl(f.image),
-          showZones: false,
-        }));
+  ...f,
+  visible: f.visible ?? true,
+  hasZone: f.hasZone ?? false,
+  zones: (f.zones || []).map(z => ({ ...z, image: normalizeImageUrl(z.image), active: z.active ?? true })),
+  image: normalizeImageUrl(f.image),
+  showZones: false,
+}));
+
         console.log('Loaded fields:', this.fields);
       } catch (err) {
         console.error('Error loading fields:', err);
@@ -389,17 +404,19 @@ handleClickOutside(event) {
         confirmButtonText: '<i class="pi pi-check"></i> เพิ่มสนาม',
         cancelButtonText: '<i class="pi pi-times"></i> ยกเลิก',
         customClass: { popup: 'custom-swal-popup modern-popup', confirmButton: 'custom-confirm-btn', cancelButton: 'custom-cancel-btn' },
-        preConfirm: async () => {
-          const name = document.getElementById('name').value.trim();
-          const file = document.getElementById('image').files[0];
-          const visible = document.getElementById('visible').value === 'true';
-          const hasZone = document.querySelector('input[name="hasZone"]:checked').value === 'true';
-          if (!name) { Swal.showValidationMessage('กรุณากรอกชื่อสถานที่'); return false; }
-          if (!file) { Swal.showValidationMessage('กรุณาเลือกรูปภาพ'); return false; }
-          Swal.showLoading();
-          const base64 = await this.fileToBase64(file);
-          return { name, image: base64, visible, hasZone, zones: [] };
-        }
+     preConfirm: async () => {
+  const name = document.getElementById('name').value.trim();
+  const file = document.getElementById('image').files[0];
+  const visible = document.getElementById('visible').value === 'true';
+  const hasZone = document.querySelector('input[name="hasZone"]:checked').value === 'true';
+  if (!name) { Swal.showValidationMessage('กรุณากรอกชื่อสถานที่'); return false; }
+  if (!file) { Swal.showValidationMessage('กรุณาเลือกรูปภาพ'); return false; }
+  Swal.showLoading();
+  const imageUrl = await uploadImage(file);                 // << ใช้ไฟล์จริง
+  return { name, image: imageUrl, visible, hasZone, zones: [] };
+}
+
+
       });
       if (form) {
         try {
@@ -421,18 +438,16 @@ handleClickOutside(event) {
         confirmButtonText: '<i class="pi pi-save"></i> บันทึก', denyButtonText: '<i class="pi pi-trash"></i> ลบ', cancelButtonText: '<i class="pi pi-times"></i> ยกเลิก',
         customClass: { popup: 'custom-swal-popup modern-popup', confirmButton: 'custom-confirm-btn', denyButton: 'custom-deny-btn', cancelButton: 'custom-cancel-btn' },
         preConfirm: async () => {
-          const name = document.getElementById('name').value.trim()
-          const file = document.getElementById('image').files[0]
-          const visible = document.getElementById('visible').value === 'true'
-          const hasZone = document.querySelector('input[name="hasZone"]:checked').value === 'true'
-          if (!name) { Swal.showValidationMessage('กรุณากรอกชื่อสถานที่'); return false }
-          let imageUrl = field.image
-          if (file) {
-            Swal.showLoading()
-            imageUrl = await this.fileToBase64(file)
-          }
-          return { name, image: imageUrl, visible, hasZone }
-        }
+  const name = document.getElementById('name').value.trim();
+  const file = document.getElementById('image').files[0];
+  const visible = document.getElementById('visible').value === 'true';
+  const hasZone = document.querySelector('input[name="hasZone"]:checked').value === 'true';
+  if (!name) { Swal.showValidationMessage('กรุณากรอกชื่อสถานที่'); return false; }
+  let imageUrl = field.image;
+  if (file) { Swal.showLoading(); imageUrl = await uploadImage(file); }
+  return { name, image: imageUrl, visible, hasZone };
+}
+
       })
       if (result.isConfirmed && result.value) {
         await axios.patch(`${API_BASE}/api/fields/${field._id}`, result.value)
@@ -477,16 +492,17 @@ handleClickOutside(event) {
         confirmButtonText: '<i class="pi pi-plus"></i> เพิ่มโซน',
         cancelButtonText: '<i class="pi pi-times"></i> ยกเลิก',
         customClass: { popup: 'custom-swal-popup modern-popup', confirmButton: 'custom-confirm-btn', cancelButton: 'custom-cancel-btn' },
-        preConfirm: async () => {
-          const zoneName = document.getElementById('zoneName').value.trim()
-          const zoneStatus = document.getElementById('zoneStatus').value
-          const zoneFile = document.getElementById('zoneImage').files[0]
-          if (!zoneName) { Swal.showValidationMessage('กรุณากรอกชื่อโซน'); return false }
-          if (!zoneFile) { Swal.showValidationMessage('กรุณาเลือกรูปภาพโซน'); return false }
-          Swal.showLoading()
-          const base64 = await this.fileToBase64(zoneFile)
-          return { name: zoneName, status: zoneStatus, active: zoneStatus === 'เปิด', image: base64 }
-        }
+       preConfirm: async () => {
+  const zoneName = document.getElementById('zoneName').value.trim();
+  const zoneStatus = document.getElementById('zoneStatus').value;
+  const zoneFile = document.getElementById('zoneImage').files[0];
+  if (!zoneName) { Swal.showValidationMessage('กรุณากรอกชื่อโซน'); return false; }
+  if (!zoneFile) { Swal.showValidationMessage('กรุณาเลือกรูปภาพโซน'); return false; }
+  Swal.showLoading();
+  const imageUrl = await uploadImage(zoneFile);             // << ใช้ไฟล์จริง
+  return { name: zoneName, status: zoneStatus, active: zoneStatus === 'เปิด', image: imageUrl };
+}
+
       })
       if (form) {
         await axios.patch(`${API_BASE}/api/fields/${field._id}`, { zones: [...field.zones, form], hasZone: true })
@@ -521,18 +537,16 @@ handleClickOutside(event) {
         showCancelButton: true, showDenyButton: true, scrollbarPadding: false,
         confirmButtonText: '<i class="pi pi-save"></i> บันทึก', denyButtonText: '<i class="pi pi-trash"></i> ลบ', cancelButtonText: '<i class="pi pi-times"></i> ยกเลิก',
         customClass: { popup: 'custom-swal-popup modern-popup', confirmButton: 'custom-confirm-btn', denyButton: 'custom-deny-btn', cancelButton: 'custom-cancel-btn' },
-        preConfirm: async () => {
-          const zoneName = document.getElementById('zoneName').value.trim()
-          const zoneStatus = document.getElementById('zoneStatus').value
-          const zoneFile = document.getElementById('zoneImage').files[0]
-          if (!zoneName) { Swal.showValidationMessage('กรุณากรอกชื่อโซน'); return false }
-          let imageUrl = zone.image
-          if (zoneFile) {
-            Swal.showLoading()
-            imageUrl = await this.fileToBase64(zoneFile)
-          }
-          return { name: zoneName, status: zoneStatus, active: zoneStatus === 'เปิด', image: imageUrl }
-        }
+       preConfirm: async () => {
+  const zoneName = document.getElementById('zoneName').value.trim();
+  const zoneStatus = document.getElementById('zoneStatus').value;
+  const zoneFile = document.getElementById('zoneImage').files[0];
+  if (!zoneName) { Swal.showValidationMessage('กรุณากรอกชื่อโซน'); return false; }
+  let imageUrl = zone.image;
+  if (zoneFile) { Swal.showLoading(); imageUrl = await uploadImage(zoneFile); }
+  return { name: zoneName, status: zoneStatus, active: zoneStatus === 'เปิด', image: imageUrl };
+}
+
       })
       if (result.isConfirmed && result.value) {
         const zones = [...field.zones]

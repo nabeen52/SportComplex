@@ -136,12 +136,25 @@ const router = useRouter()
 function checkMobile() {
   isMobile.value = window.innerWidth <= 600
 }
+// แก้ path รูปภาพให้ถูกต้อง
 function resolveImagePath(img) {
   if (!img) return '/img/default.png'
-  if (img.startsWith('data:image/')) return img
-  if (img.startsWith('/img/')) return img
-  return `/img/${img}`
+  const s = String(img)
+
+  // เป็น data-uri หรือ static ในโฟลเดอร์ /img ของ frontend
+  if (s.startsWith('data:image/')) return s
+  if (s.startsWith('/img/')) return s
+
+  // เป็น URL เต็มจากเซิร์ฟเวอร์ (http/https) — ใช้เลย
+  if (s.startsWith('http://') || s.startsWith('https://')) return s
+
+  // เป็นพาธไฟล์อัปโหลดจาก backend เช่น /uploads/xxxx.jpg
+  if (s.startsWith('/uploads/')) return `${API_BASE}${s}`
+
+  // อย่างอื่นๆ (เช่น เก็บชื่อไฟล์เฉยๆ) ให้ลองมองใน /img ของ frontend
+  return `/img/${s}`
 }
+
 
 function toggleSidebar() {
   isSidebarClosed.value = !isSidebarClosed.value

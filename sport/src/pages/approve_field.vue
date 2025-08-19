@@ -191,6 +191,124 @@ export default {
   },
   methods: {
 
+    normalizePdfUrl(raw) {
+  if (!raw) return null;
+  let u = String(raw).trim();
+  if (u.startsWith('/')) u = new URL(u, window.location.origin).href;
+  return u;
+},
+
+
+pickPdfUrl(list) {
+  if (!Array.isArray(list) || list.length === 0) return null;
+  const direct = list.find(h => h?.bookingPdfUrl || h?.booking_pdf_url);
+  if (direct) return direct.bookingPdfUrl || direct.booking_pdf_url;
+  const attach = list.find(h => Array.isArray(h?.attachment) && h.attachment[0]);
+  return attach ? attach.attachment[0] : null;
+},
+
+getFileNameFromUrl(u, fallback = 'booking.pdf') {
+  try {
+    const { pathname } = new URL(u);
+    const name = decodeURIComponent(pathname.split('/').pop() || '');
+    return name || fallback;
+  } catch { return fallback; }
+},
+
+async downloadBlobUrl(fileUrl, fallbackName) {
+  try {
+    // ลองโหลดด้วย https ก่อน (กัน mixed content)
+    let finalUrl = fileUrl;
+    let resp = await fetch(finalUrl, { credentials: 'include' });
+    // ถ้าไม่ ok และเป็น https ลอง downgrade กลับ http (เผื่อ path ยังไม่รองรับ https)
+    if (!resp.ok && /^https:\/\//i.test(finalUrl)) {
+      const httpUrl = 'http://' + finalUrl.slice('https://'.length);
+      resp = await fetch(httpUrl, { credentials: 'include' });
+      if (resp.ok) finalUrl = httpUrl;
+    }
+    if (!resp.ok) throw new Error('download failed');
+
+    const blob = await resp.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = this.getFileNameFromUrl(finalUrl, fallbackName);
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(blobUrl);
+  } catch (e) {
+    Swal.fire('ผิดพลาด', 'ไม่สามารถดาวน์โหลดไฟล์ได้', 'error');
+  }
+},
+
+// โหลด PDF ตรง ๆ แบบเดียวกับ form_field4
+async downloadBookingPdf(target) {
+  const bookingId  = typeof target === 'string' ? target : (target?.booking_id || '');
+  const typeFilter = typeof target === 'object' ? (target?.type || '') : '';
+
+  if (!bookingId) {
+    Swal.fire('ผิดพลาด','ไม่พบ booking_id สำหรับดาวน์โหลด PDF','error');
+    return;
+  }
+
+  try {
+    // 1) ดึง history (บางระบบไม่รองรับ query -> จึงกรองเองเสมอ)
+    const resHist = await axios.get(`${API_BASE}/api/history`, { params: { booking_id: bookingId } });
+    let list = Array.isArray(resHist.data) ? resHist.data : [];
+
+    // 2) กรองด้วย booking_id แบบเข้ม และ type (ถ้ามี)
+    list = list.filter(h => String(h?.booking_id || '') === String(bookingId));
+    if (typeFilter) list = list.filter(h => (h?.type || '').toLowerCase() === typeFilter.toLowerCase());
+
+    // 3) เผื่อมีหลายเอกสาร: เอาอันล่าสุดสุดก่อน
+    list.sort((a,b) => new Date(b.updatedAt || b.createdAt || b.date || 0) - new Date(a.updatedAt || a.createdAt || a.date || 0));
+
+    const picked = this.pickPdfUrl(list);
+    const rawUrl = this.normalizePdfUrl(picked);
+
+    if (!rawUrl) {
+      Swal.fire('ผิดพลาด','ไม่พบ URL ของไฟล์ PDF สำหรับรายการนี้','error');
+      return;
+    }
+
+    // 4) พยายามโหลดด้วยโปรโตคอลเดิมก่อน
+    try {
+      const resp = await fetch(rawUrl, { credentials: 'include' });
+      if (!resp.ok) throw new Error('not ok');
+      const blob = await resp.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = this.getFileNameFromUrl(rawUrl, `booking_${bookingId}.pdf`);
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(blobUrl);
+      return;
+    } catch (_) {
+      // 5) ถ้าเป็น https แล้วโหลดไม่ได้ → ลองเปิด http ในแท็บใหม่ (เลี่ยง mixed‑content บล็อก)
+      if (/^https:\/\//i.test(rawUrl)) {
+        const httpUrl = 'http://' + rawUrl.slice('https://'.length);
+        window.open(httpUrl, '_blank', 'noopener');  // top‑level navigation -> ไม่โดนบล็อก
+        return;
+      }
+      // ถ้าเดิมเป็น http แล้วพัง ลองอัพเกรด https ดู
+      if (/^http:\/\//i.test(rawUrl)) {
+        const httpsUrl = 'https://' + rawUrl.slice('http://'.length);
+        window.open(httpsUrl, '_blank', 'noopener');
+        return;
+      }
+      throw _;
+    }
+  } catch (err) {
+    console.error('downloadBookingPdf error:', err);
+    Swal.fire('ผิดพลาด','ดาวน์โหลด PDF ไม่สำเร็จ','error');
+  }
+},
+
+
+
      _makeSnapshot(groups) {
     // เก็บเฉพาะ field สำคัญ เพื่อตรวจเปลี่ยนแปลง
     const lite = groups.map(g => ({
@@ -270,50 +388,87 @@ export default {
   },
 
   async approveGroup(group) {
-  const result = await Swal.fire({ /* …เดิม… */ });
+  const result = await Swal.fire({
+    title: 'Approve รายการนี้ทั้งหมด?',
+    text: 'ยืนยันการอนุมัติสำหรับรายการนี้',
+    icon: 'question',
+    showCancelButton: true,
+    confirmButtonText: 'อนุมัติ',
+    cancelButtonText: 'ยกเลิก',
+    confirmButtonColor: '#0cad00',
+    cancelButtonColor: '#999'
+  });
   if (!result.isConfirmed) return;
 
   const adminUserId = localStorage.getItem('user_id');
   const approveDate = new Date().toISOString();
 
-  await Promise.all(group.items.map(item => {
-    let url, data;
-    if (item.type === 'field') {
-      url = `${API_BASE}/api/history/${item.id}/approve_field`;
-      data = { admin_id: adminUserId, approvedAt: approveDate };
-    } else {
-      url = `${API_BASE}/api/history/${item.id}/approve_equipment`;
-      data = { staff_id: adminUserId, approvedAt: approveDate };
-    }
-    return axios.patch(url, data);
-  }));
+  // แสดงโหลด
+  Swal.fire({ title: 'กำลังดำเนินการ...', didOpen: () => Swal.showLoading(), allowOutsideClick: false, allowEscapeKey: false });
 
-  Swal.fire('Approved', 'The booking has been approved.', 'success');
+  try {
+    // ยิง patch ทีละรายการใน group ให้ตรง endpoint
+    await Promise.all(
+      group.items.map(item => {
+        const isField = (item.type || group.type) === 'field';
+        const url = isField
+          ? `${API_BASE}/api/history/${item.id}/approve_field`
+          : `${API_BASE}/api/history/${item.id}/approve_equipment`;
+        const data = isField
+          ? { admin_id: adminUserId, approvedAt: approveDate }
+          : { staff_id: adminUserId, approvedAt: approveDate };
+        return axios.patch(url, data);
+      })
+    );
 
-  // ⬇️ ดึงข้อมูลใหม่ทันที
-  await this.fetchAndGroup();
+    // โหลดข้อมูลใหม่จากเซิร์ฟเวอร์ให้ตรงกับ DB เสมอ
+    await this.fetchAndGroup();
+
+    Swal.fire('สำเร็จ', 'อนุมัติเรียบร้อยแล้ว', 'success');
+  } catch (err) {
+    console.error('approveGroup error:', err);
+    Swal.fire('ผิดพลาด', 'ไม่สามารถอนุมัติได้', 'error');
+  }
 },
 
+
 async cancelGroup(group) {
-  const result = await Swal.fire({ /* …เดิม… */ });
+  const result = await Swal.fire({
+    title: 'Cancel รายการนี้ทั้งหมด?',
+    text: 'ยืนยันการไม่อนุมัติสำหรับรายการนี้',
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonText: 'ยืนยันไม่อนุมัติ',
+    cancelButtonText: 'กลับ',
+    confirmButtonColor: '#ff4d4f',
+    cancelButtonColor: '#999'
+  });
   if (!result.isConfirmed) return;
 
   const adminId = localStorage.getItem('user_id');
-  await Promise.all(
-    group.items.map(item =>
-      axios.patch(
-        item.type === 'field'
+
+  // แสดงโหลด
+  Swal.fire({ title: 'กำลังดำเนินการ...', didOpen: () => Swal.showLoading(), allowOutsideClick: false, allowEscapeKey: false });
+
+  try {
+    await Promise.all(
+      group.items.map(item => {
+        const isField = (item.type || group.type) === 'field';
+        const url = isField
           ? `${API_BASE}/api/history/${item.id}/disapprove_field`
-          : `${API_BASE}/api/history/${item.id}/disapprove_equipment`,
-        { admin_id: adminId }
-      )
-    )
-  );
+          : `${API_BASE}/api/history/${item.id}/disapprove_equipment`;
+        return axios.patch(url, { admin_id: adminId });
+      })
+    );
 
-  Swal.fire('Cancelled!', 'The booking has been cancelled.', 'error');
+    // โหลดข้อมูลใหม่จากเซิร์ฟเวอร์
+    await this.fetchAndGroup();
 
-  // ⬇️ ดึงข้อมูลใหม่ทันที
-  await this.fetchAndGroup();
+    Swal.fire('Cancelled', 'ยกเลิกรายการเรียบร้อยแล้ว', 'success');
+  } catch (err) {
+    console.error('cancelGroup error:', err);
+    Swal.fire('ผิดพลาด', 'ไม่สามารถยกเลิกได้', 'error');
+  }
 },
 
     formatDate(dateInput) {
@@ -328,33 +483,7 @@ async cancelGroup(group) {
     toggleSidebar() {
       this.isSidebarClosed = !this.isSidebarClosed
     },
-     async downloadBookingPdf(bookingId) {
-    if (!bookingId) {
-      Swal.fire('ผิดพลาด', 'ไม่พบ booking_id สำหรับดาวน์โหลด PDF', 'error');
-      return;
-    }
-    try {
-      const response = await axios.get(`${API_BASE}/api/history/pdf`, {
-        params: { booking_id: bookingId },
-        responseType: 'blob'  // ให้ axios รู้ว่าเป็นไฟล์
-      });
-      
-      // สร้างลิงก์ดาวน์โหลด
-      const blob = new Blob([response.data], { type: 'application/pdf' });
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `booking_${bookingId}.pdf`);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
-      
-    } catch (err) {
-      Swal.fire('ผิดพลาด', 'ดาวน์โหลด PDF ไม่สำเร็จ', 'error');
-      console.error(err);
-    }
-  },
+     
     toggleNotifications() {
   this.showNotifications = !this.showNotifications;
   if (this.showNotifications) {
@@ -428,74 +557,74 @@ pruneOldNotifications() {
     // ไม่ต้องแจ้ง error
   }
 },
-    async approveGroup(group) {
-  const result = await Swal.fire({
-    title: 'Are you sure?',
-    text: 'Approve รายการนี้ทั้งหมด?',
-    icon: 'question',
-    showCancelButton: true,
-    confirmButtonText: 'Yes, approve it!',
-    cancelButtonText: 'Cancel',
-    confirmButtonColor: '#0cad00',
-    cancelButtonColor: '#d90004'
-  });
+//     async approveGroup(group) {
+//   const result = await Swal.fire({
+//     title: 'Are you sure?',
+//     text: 'Approve รายการนี้ทั้งหมด?',
+//     icon: 'question',
+//     showCancelButton: true,
+//     confirmButtonText: 'Yes, approve it!',
+//     cancelButtonText: 'Cancel',
+//     confirmButtonColor: '#0cad00',
+//     cancelButtonColor: '#d90004'
+//   });
 
-  if (result.isConfirmed) {
-    // ===== จุดนี้ต้องใช้ user_id ที่เป็น string =====
-    // ดึงจาก localStorage หรือ state manager
-    const adminUserId = localStorage.getItem('user_id');
-const approveDate = new Date().toISOString();
+//   if (result.isConfirmed) {
+//     // ===== จุดนี้ต้องใช้ user_id ที่เป็น string =====
+//     // ดึงจาก localStorage หรือ state manager
+//     const adminUserId = localStorage.getItem('user_id');
+// const approveDate = new Date().toISOString();
 
-await Promise.all(
-  group.items.map(item => {
-    let url, data;
-    if (item.type === 'field') {
-      url = `${API_BASE}/api/history/${item.id}/approve_field`;
-      data = { admin_id: adminUserId, approvedAt: approveDate };
-    } else {
-      url = `${API_BASE}/api/history/${item.id}/approve_equipment`;
-      data = { staff_id: adminUserId, approvedAt: approveDate };
-    }
-    return axios.patch(url, data);
-  })
-);
+// await Promise.all(
+//   group.items.map(item => {
+//     let url, data;
+//     if (item.type === 'field') {
+//       url = `${API_BASE}/api/history/${item.id}/approve_field`;
+//       data = { admin_id: adminUserId, approvedAt: approveDate };
+//     } else {
+//       url = `${API_BASE}/api/history/${item.id}/approve_equipment`;
+//       data = { staff_id: adminUserId, approvedAt: approveDate };
+//     }
+//     return axios.patch(url, data);
+//   })
+// );
 
-    // เอากลุ่มที่อนุมัติแล้วออกจาก list
-    this.grouped = this.grouped.filter(g => g !== group);
-    Swal.fire('Approved', 'The booking has been approved.', 'success');
-  }
-},
+//     // เอากลุ่มที่อนุมัติแล้วออกจาก list
+//     this.grouped = this.grouped.filter(g => g !== group);
+//     Swal.fire('Approved', 'The booking has been approved.', 'success');
+//   }
+// },
 handleResize() {
     this.isMobile = window.innerWidth <= 800;
     if (!this.isMobile) this.isSidebarClosed = false;
   },
-    async cancelGroup(group) {
-      const result = await Swal.fire({
-        title: 'Are you sure?',
-        text: 'Cancel รายการนี้ทั้งหมด?',
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonText: 'Yes, cancel it!',
-        cancelButtonText: 'Back',
-        confirmButtonColor: '#ff4d4f',
-        cancelButtonColor: '#999'
-      })
-      if (result.isConfirmed) {
-        const adminId = localStorage.getItem('user_id');
-        await Promise.all(
-          group.items.map(item =>
-            axios.patch(
-              item.type === 'field'
-                ? `${API_BASE}/api/history/${item.id}/disapprove_field`
-                : `${API_BASE}/api/history/${item.id}/disapprove_equipment`,
-              { admin_id: adminId }
-            )
-          )
-        );
-        this.grouped = this.grouped.filter(g => g !== group)
-        Swal.fire('Cancelled', 'The booking has been cancelled.', 'error')
-      }
-    },
+    // async cancelGroup(group) {
+    //   const result = await Swal.fire({
+    //     title: 'Are you sure?',
+    //     text: 'Cancel รายการนี้ทั้งหมด?',
+    //     icon: 'warning',
+    //     showCancelButton: true,
+    //     confirmButtonText: 'Yes, cancel it!',
+    //     cancelButtonText: 'Back',
+    //     confirmButtonColor: '#ff4d4f',
+    //     cancelButtonColor: '#999'
+    //   })
+    //   if (result.isConfirmed) {
+    //     const adminId = localStorage.getItem('user_id');
+    //     await Promise.all(
+    //       group.items.map(item =>
+    //         axios.patch(
+    //           item.type === 'field'
+    //             ? `${API_BASE}/api/history/${item.id}/disapprove_field`
+    //             : `${API_BASE}/api/history/${item.id}/disapprove_equipment`,
+    //           { admin_id: adminId }
+    //         )
+    //       )
+    //     );
+    //     this.grouped = this.grouped.filter(g => g !== group)
+    //     Swal.fire('Cancelled', 'The booking has been cancelled.', 'error')
+    //   }
+    // },
    detailGroup(group) {
   // helper: สร้าง 1 แถว (label/value) ให้ชิดซ้ายเท่ากันหมด
   const row = (label, value) => `
@@ -516,7 +645,7 @@ handleResize() {
       ${showPdf ? `
         <div style="text-align:center; margin-top:14px;">
           <button id="pdf-btn" style="background:#213555;color:#fff;padding:8px 18px;border-radius:8px;border:none;cursor:pointer;">
-            ดาวน์โหลด PDF
+            ดูไฟล์ PDF
           </button>
         </div>` : ``}
     </div>
@@ -540,7 +669,7 @@ handleResize() {
       confirmButtonColor: '#3085d6',
       didOpen: () => {
         const btn = document.getElementById('pdf-btn');
-        if (btn) btn.addEventListener('click', () => this.downloadBookingPdf(group.booking_id));
+        if (btn) btn.addEventListener('click', () => this.downloadBookingPdf(group));
       }
     });
   } else {
@@ -565,15 +694,15 @@ handleResize() {
       confirmButtonText: 'ปิด',
       confirmButtonColor: '#3085d6',
       didOpen: () => {
-        const btn = document.getElementById('pdf-btn');
-        if (btn) btn.addEventListener('click', () => this.downloadBookingPdf(group.booking_id));
-      }
+            const btn = document.getElementById('pdf-btn');
+            if (btn) btn.addEventListener('click', () => this.downloadBookingPdf(group));
+          }
     });
   }
 },
 
 
-     // ==== PDF DOWNLOAD BUTTON ====
+   // ==== PDF DOWNLOAD BUTTON ====
   async  exportPdf(item) {
   // --------- ฟังก์ชันย่อยสำหรับ field ---------
   function formatDate(date) {

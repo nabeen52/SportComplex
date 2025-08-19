@@ -91,18 +91,30 @@
 
       <section class="hero">
         <div class="carousel-container" v-if="images.length > 0">
-         <button class="carousel-btn left" @click="prevImage">❮</button>
-          <img :src="images[currentImage]?.img" class="hero-image" alt="สนามกีฬา" @click="openLightbox(images[currentImage]?.img)"
-  style="cursor: zoom-in" />
-          <button class="carousel-btn right" @click="nextImage">❯</button>
-        </div>
-        <div v-else style="text-align:center; padding:2rem; color:gray;">ไม่มีรูปภาพ</div>
-         <div class="carousel-indicator">
+  <button class="carousel-btn left" @click="prevImage">❮</button>
+
+  <img
+    :key="currentImage"
+    :src="resolveImg(images[currentImage])"
+    class="hero-image"
+    alt="สนามกีฬา"
+    @click="openLightbox(resolveImg(images[currentImage]))"
+    style="cursor: zoom-in"
+  />
+
+
+  <button class="carousel-btn right" @click="nextImage">❯</button>
+</div><!-- วงกลมสลับรูป -->
+<div class="carousel-indicator" v-if="images.length > 1">
   <span
     v-for="(img, idx) in images"
-    :key="idx"
-    :class="['carousel-dot', { active: currentImage === idx }]"
+    :key="img._id || idx"
+    class="carousel-dot"
+    :class="{ active: idx === currentImage }"
     @click="goToImage(idx)"
+    :aria-label="`ไปที่รูปที่ ${idx+1}`"
+    role="button"
+    tabindex="0"
   ></span>
 </div>
       </section>
@@ -166,7 +178,9 @@ export default {
       products: [],
       isLightboxOpen: false,
       lightboxImage: null,
-      lastSeenTimestamp: 0
+      lastSeenTimestamp: 0,
+      slideDirection: 'right', // 'left' หรือ 'right'
+
     }
   },
   computed: {
@@ -182,8 +196,7 @@ export default {
     }
   },
   async mounted() {
-    // ------- บรรทัดสำคัญ (ต้องมี) ---------
-    axios.defaults.withCredentials = true
+  axios.defaults.withCredentials = true
 
   this.lastSeenTimestamp = parseInt(localStorage.getItem('lastSeenTimestamp') || '0');
 
@@ -192,50 +205,52 @@ export default {
     this.$router.push('/login');
     return;
   }
-  this.startAutoPlay();
 
-    this.setUserIdFromLocalStorage()
-    if (!this.userId) {
-      this.$router.push('/login')
-      return
-    }
-    this.startAutoPlay()
+  // โหลดประกาศ
+  try {
+    const res = await axios.get(`${API_BASE}/api/announcement`)
+    const ann = res.data?.announce?.trim() || ""
+    this.announcement = ann
+    this.showAnnouncementBar = !!ann
+  } catch {
+    this.announcement = ""
+    this.showAnnouncementBar = false
+  }
 
-    // โหลดประกาศ
-    try {
-      const res = await axios.get(`${API_BASE}/api/announcement`)
-      const ann = res.data?.announce?.trim() || ""
-      this.announcement = ann
-      this.showAnnouncementBar = !!ann
-    } catch {
-      this.announcement = ""
-      this.showAnnouncementBar = false
-    }
+  // โหลดรูป carousel
+  try {
+    const imgRes = await axios.get(`${API_BASE}/api/img_news`);
+    this.images = (imgRes.data || []).sort((a, b) => {
+      const ao = Number.isFinite(a?.order) ? a.order : Number.POSITIVE_INFINITY;
+      const bo = Number.isFinite(b?.order) ? b.order : Number.POSITIVE_INFINITY;
+      if (ao !== bo) return ao - bo;
+      const ac = a?.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const bc = b?.createdAt ? new Date(b.createdAt).getTime() : 0;
+      if (ac !== bc) return ac - bc;
+      return String(a?._id || '').localeCompare(String(b?._id || ''));
+    });
+    this.currentImage = 0;
+  } catch {
+    this.images = [];
+  }
 
-    // โหลดรูป carousel
-    try {
-      const imgRes = await axios.get(`${API_BASE}/api/img_news`)
-      this.images = imgRes.data.length ? imgRes.data : []
-      this.currentImage = 0
-    } catch {
-      this.images = []
-    }
+  // โหลดตะกร้า + แจ้งเตือน
+  await this.loadCart()
+  await this.fetchNotifications()
+  this.polling = setInterval(this.fetchNotifications, 30000)
 
-    // โหลดตะกร้าสินค้า
-    await this.loadCart()
+  // เริ่ม auto-play หลังจากข้อมูลพร้อมแล้ว
+  this.startAutoPlay()
 
-    // โหลดแจ้งเตือน
-    await this.fetchNotifications()
-    this.polling = setInterval(this.fetchNotifications, 30000)
+  window.addEventListener('storage', this.setUserIdFromLocalStorage)
+},
 
-    // ตั้ง watcher ฟังการเปลี่ยน localStorage (กรณี login/logout)
-    window.addEventListener('storage', this.setUserIdFromLocalStorage)
-  },
   beforeUnmount() {
-    clearInterval(this.intervalId)
-    if (this.polling) clearInterval(this.polling)
-    window.removeEventListener('storage', this.setUserIdFromLocalStorage)
-  },
+  this.stopAutoPlay()
+  if (this.polling) clearInterval(this.polling)
+  window.removeEventListener('storage', this.setUserIdFromLocalStorage)
+},
+
   methods: {
     setUserIdFromLocalStorage() {
       let userId = localStorage.getItem('user_id')
@@ -265,6 +280,17 @@ export default {
     localStorage.setItem('lastSeenTimestamp', this.lastSeenTimestamp);
     this.unreadCount = 0;
   }
+},
+resolveImg(item) {
+  if (!item) return '';
+  const url = item.img_url || item.img; // เผื่อข้อมูลเก่าที่ยังเป็น img (base64)
+  if (!url) return '';
+  // ถ้า backend ส่งมาเป็น http(s) เต็มๆ ก็ใช้ได้เลย
+  if (/^https?:\/\//i.test(url)) return url;
+  // ถ้าเป็นพาธขึ้นต้นด้วย / (เช่น /uploads/...) ให้ต่อหน้า API_BASE
+  if (url.startsWith('/')) return `${API_BASE}${url}`;
+  // อื่นๆ (เช่น ชื่อไฟล์ล้วน) ก็ประกอบเป็น absolute จาก API_BASE เช่นกัน
+  return `${API_BASE}/${url.replace(/^\//, '')}`;
 },
 
     pruneOldNotifications() {
@@ -330,32 +356,62 @@ export default {
       this.showNotifications = false
     },
     nextImage() {
-      if (!this.images.length) return
-      this.currentImage = (this.currentImage + 1) % this.images.length
-      this.resetAutoPlay()
-    },
+    if (!this.images.length) return
+    const nextIdx = (this.currentImage + 1) % this.images.length
+    this.setCurrentImage(nextIdx, 'right')
+    this.restartAutoPlay()
+  },
     prevImage() {
-      if (!this.images.length) return
-      this.currentImage = (this.currentImage - 1 + this.images.length) % this.images.length
-      this.resetAutoPlay()
-    },
-    startAutoPlay() {
-      this.intervalId = setInterval(() => {
-        if (this.images.length) {
-          this.currentImage = (this.currentImage + 1) % this.images.length
-        }
-      }, 5000)
-    },
-    resetAutoPlay() {
+    if (!this.images.length) return
+    const prevIdx = (this.currentImage - 1 + this.images.length) % this.images.length
+    this.setCurrentImage(prevIdx, 'left')
+    this.restartAutoPlay()
+  },
+   startAutoPlay(delay = 5000) {
+    this.stopAutoPlay()
+    this.intervalId = setInterval(this.autoNext, delay)
+  }
+, stopAutoPlay() {
+    if (this.intervalId) {
       clearInterval(this.intervalId)
-      this.startAutoPlay()
-    },
-
+      this.intervalId = null
+    }
+  },
+     restartAutoPlay() {
+    this.stopAutoPlay()
+    // กัน timer ชนกับแอนิเมชัน
+    setTimeout(() => this.startAutoPlay(), 800)
+  },
+ autoNext() {
+    if (!this.images.length) return
+    const nextIdx = (this.currentImage + 1) % this.images.length // วิ่งไปขวาเสมอ
+    this.setCurrentImage(nextIdx, 'right')
+  },
     goToImage(idx) {
-  this.currentImage = idx
-  this.resetAutoPlay()
-}
-,
+    if (!this.images.length || idx === this.currentImage) return
+    const total = this.images.length
+    const forward = (idx - this.currentImage + total) % total
+    const backward = (this.currentImage - idx + total) % total
+    this.setCurrentImage(idx, forward <= backward ? 'right' : 'left')
+    this.restartAutoPlay()
+  },
+  // ===== กำหนดทิศทาง + อัปเดตรูปปัจจุบัน =====
+  setCurrentImage(nextIdx, forceDir) {
+    if (forceDir) {
+      this.slideDirection = forceDir
+    } else {
+      const total = this.images.length
+      const forward = (nextIdx - this.currentImage + total) % total
+      const backward = (this.currentImage - nextIdx + total) % total
+      this.slideDirection = forward <= backward ? 'right' : 'left'
+    }
+    this.currentImage = nextIdx
+  },
+
+  // ===== ของเดิมคงไว้/ปรับให้ชี้มาที่ logic ใหม่ =====
+  resetAutoPlay() { this.restartAutoPlay() },
+
+  closeNotifications() { this.showNotifications = false },
     async loadCart() {
       try {
         const res = await axios.get(`${API_BASE}/api/cart?user_id=${this.userId}`)
@@ -404,6 +460,7 @@ export default {
 .hero-image[src] {
   opacity: 1;
 }
+
 
 
 .carousel-container {

@@ -472,10 +472,10 @@ export default {
     html += `
       <div style="margin-bottom:12px; padding-bottom:12px; border-bottom:1px dashed #bbb;">
         <div style="display:grid; grid-template-columns: 150px auto; gap: 10px;">
-          <div><b>อุปกรณ์ที่ ${i + 1}</b></div> <div>${item.name || '-'}</div>
-          <div><b>จำนวน</b></div> <div>${item.quantity || '-'}</div>
-          <div><b>ชื่อผู้ขอใช้</b></div> <div>${this.usersMap[item.user_id] || item.requester || item.user_id || "-"}</div>
-          <div><b>วันที่ขอยืม</b></div> <div>${item.date ? new Date(item.date).toLocaleDateString() : '-'}</div>
+          <div><b>อุปกรณ์ที่ ${i + 1}:</b></div> <div>${item.name || '-'}</div>
+          <div><b>จำนวน:</b></div> <div>${item.quantity || '-'}</div>
+          <div><b>ชื่อผู้ขอใช้:</b></div> <div>${this.usersMap[item.user_id] || item.requester || item.user_id || "-"}</div>
+          <div><b>วันที่ขอยืม:</b></div> <div>${item.date ? new Date(item.date).toLocaleDateString() : '-'}</div>
         </div>
       </div>
     `;

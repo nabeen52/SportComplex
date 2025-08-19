@@ -373,13 +373,13 @@ pruneOldNotifications() {
   const itemsToShow = returnedOnly.length ? returnedOnly : group;
 
   const rows = itemsToShow.map((item, idx) => `
-    <div class="label"><b>อุปกรณ์ที่ ${idx + 1}</b></div><div class="value">${esc(item.name)}</div>
-    <div class="label"><b>จำนวน</b></div><div class="value">${esc(item.quantity)}</div>
-    <div class="label"><b>ชื่อผู้ขอใช้</b></div><div class="value">${esc(item.requester || '-')}</div>
-    <div class="label"><b>วันที่ขอยืม</b></div><div class="value">${esc(fmtDate(item.date))}</div>
-    <div class="label"><b>สถานะ</b></div><div class="value">${esc(statusTitle(item.status))}</div>
-    <div class="label"><b>วันที่คืน</b></div><div class="value">${esc(item.returnedAt ? fmtDate(item.returnedAt) : '-')}</div>
-    <div class="label"><b>หมายเหตุ</b></div><div class="value">${esc(item.remark || '-')}</div>
+    <div class="label"><b>อุปกรณ์ที่ ${idx + 1}:</b></div><div class="value">${esc(item.name)}</div>
+    <div class="label"><b>จำนวน:</b></div><div class="value">${esc(item.quantity)}</div>
+    <div class="label"><b>ชื่อผู้ขอใช้:</b></div><div class="value">${esc(item.requester || '-')}</div>
+    <div class="label"><b>วันที่ขอยืม:</b></div><div class="value">${esc(fmtDate(item.date))}</div>
+    <div class="label"><b>สถานะ:</b></div><div class="value">${esc(statusTitle(item.status))}</div>
+    <div class="label"><b>วันที่คืน:</b></div><div class="value">${esc(item.returnedAt ? fmtDate(item.returnedAt) : '-')}</div>
+    <div class="label"><b>หมายเหตุ:</b></div><div class="value">${esc(item.remark || '-')}</div>
     <div style="grid-column:1/-1;border-bottom:1px dashed #bbb;margin:8px 0;"></div>
   `).join('');
 

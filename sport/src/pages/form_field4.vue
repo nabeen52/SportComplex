@@ -84,10 +84,21 @@
         </div>
       </div>
 
-      <!-- Success card (หน้าเอง เผื่ออยากให้ผู้ใช้ดาวน์โหลด PDF/กลับหน้าแรก) -->
+      <!-- Success card -->
       <div class="form-container">
         <h1 style="display:flex;justify-content:center;">ส่งคำขอสำเร็จ ✅</h1>
-        <button class="pdfmake-btn" @click="() => { exportPdf(info) }">ดาวน์โหลด PDF ฟอร์ม</button>
+
+        <!-- ใช้ logic เดียวกับ form_equipment4 -->
+        <button
+          class="pdfmake-btn"
+          :disabled="!finalPdfUrl"
+          @click="downloadPdf"
+        >
+          ดาวน์โหลด PDF ฟอร์ม
+        </button>
+
+        <p>555</p>
+
         <br /><br />
         <button id="btnNext" @click="handleNext">กลับหน้าแรก</button>
       </div>
@@ -111,7 +122,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import Swal from 'sweetalert2'
 import axios from 'axios'
@@ -135,7 +146,7 @@ const lastSeenTimestamp = ref(parseInt(localStorage.getItem('lastSeenTimestamp')
 let polling = null
 
 function pruneOldNotifications () {
-  const cutoff = Date.now() - (7 * 24 * 60 * 60 * 1000) // 7 วัน
+  const cutoff = Date.now() - (7 * 24 * 60 * 60 * 1000)
   notifications.value = notifications.value.filter(n => (n?.timestamp ?? 0) >= cutoff)
 }
 
@@ -148,9 +159,7 @@ function toggleNotifications () {
   }
 }
 
-function closeNotifications () {
-  showNotifications.value = false
-}
+function closeNotifications () { showNotifications.value = false }
 
 async function fetchNotifications () {
   if (!userId) return
@@ -197,7 +206,7 @@ async function fetchNotifications () {
     }
 
     unreadCount.value = notifications.value.filter(n => n.timestamp > lastSeenTimestamp.value).length
-  } catch (err) {
+  } catch {
     // ignore
   }
 }
@@ -208,21 +217,10 @@ async function loadCart () {
   try {
     const res = await axios.get(`${API_BASE}/api/cart?user_id=${userId}`)
     products.value = res.data
-  } catch (err) {
+  } catch {
     products.value = []
   }
 }
-
-onMounted(() => {
-  lastSeenTimestamp.value = parseInt(localStorage.getItem('lastSeenTimestamp') || '0')
-  fetchNotifications()
-  polling = setInterval(fetchNotifications, 30000)
-  loadCart()
-})
-
-onBeforeUnmount(() => {
-  if (polling) clearInterval(polling)
-})
 
 // ======= Page state =======
 const router = useRouter()
@@ -239,21 +237,17 @@ function goStep (idx) {
   router.push(stepRoutes[idx])
 }
 
+// === Utility for BE date ===
 function formatDateOnly (dateTime) {
   if (!dateTime) return '-'
   let dateObj
   if (typeof dateTime === 'string') {
     const parts = dateTime.split('T')[0].split('-')
-    if (parts.length === 3) {
-      dateObj = new Date(parts[0], parts[1] - 1, parts[2])
-    } else {
-      dateObj = new Date(dateTime)
-    }
+    dateObj = parts.length === 3 ? new Date(parts[0], parts[1] - 1, parts[2]) : new Date(dateTime)
   } else {
     dateObj = new Date(dateTime)
   }
   if (isNaN(dateObj)) return '-'
-
   const day = String(dateObj.getDate()).padStart(2, '0')
   const month = String(dateObj.getMonth() + 1).padStart(2, '0')
   const year = dateObj.getFullYear() + 543
@@ -270,6 +264,87 @@ function esc (s) {
     .replace(/\n/g, '<br>')
 }
 
+// ====== PDF logic (เหมือน form_equipment4) ======
+const pdfUrl = ref(null)
+const finalPdfUrl = computed(() => pdfUrl.value)
+
+function normalizePdfUrl (raw) {
+  if (!raw) return null
+  let u = String(raw).trim()
+  if (u.startsWith('/')) u = new URL(u, window.location.origin).href
+  if (location.protocol === 'https:' && u.startsWith('http://')) {
+    u = 'https://' + u.slice('http://'.length)
+  }
+  return u
+}
+
+function pickPdfUrl (list) {
+  if (!Array.isArray(list)) return null
+  const haveDirect = list.find(h => h?.bookingPdfUrl || h?.booking_pdf_url) || null
+  if (haveDirect) return haveDirect.bookingPdfUrl || haveDirect.booking_pdf_url || null
+  const haveAttach = list.find(h => Array.isArray(h?.attachment) && h.attachment[0])
+  return haveAttach ? haveAttach.attachment[0] : null
+}
+
+function getFileNameFromUrl (u, fallback = 'booking.pdf') {
+  try {
+    const { pathname } = new URL(u)
+    const name = decodeURIComponent(pathname.split('/').pop() || '')
+    return name || fallback
+  } catch {
+    return fallback
+  }
+}
+
+async function downloadPdf () {
+  try {
+    const url = finalPdfUrl.value
+    if (!url) {
+      await Swal.fire('ผิดพลาด', 'ไม่พบ URL ของไฟล์ PDF', 'error')
+      return
+    }
+    const resp = await fetch(url, { credentials: 'include' })
+    if (!resp.ok) throw new Error('download failed')
+
+    const blob = await resp.blob()
+    const blobUrl = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = blobUrl
+    const fallbackName = `booking_${info.value?.booking_id || localStorage.getItem('bookingId') || Date.now()}.pdf`
+    a.download = getFileNameFromUrl(url, fallbackName)
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(blobUrl)
+  } catch (e) {
+    await Swal.fire('ผิดพลาด', 'ไม่สามารถดาวน์โหลดไฟล์ได้', 'error')
+  }
+}
+
+// (เผื่อเรียกด้วย item เฉพาะจุด)
+async function exportPdf (item) {
+  try {
+    let urlFromItem =
+      item?.bookingPdfUrl ||
+      item?.booking_pdf_url ||
+      (Array.isArray(item?.attachment) ? item.attachment[0] : null) ||
+      item?.pdfUrl ||
+      item?.pdf_url ||
+      null
+
+    const chosen = normalizePdfUrl(urlFromItem || pdfUrl.value)
+    if (chosen) {
+      const w = window.open(chosen, '_blank', 'noopener,noreferrer')
+      if (!w) location.href = chosen
+      return
+    }
+    await Swal.fire('ผิดพลาด', 'ไม่พบ URL ของไฟล์ PDF ในรายการนี้', 'error')
+  } catch {
+    await Swal.fire('ผิดพลาด', 'ไม่พบไฟล์ PDF หรือพาธไม่ถูกต้อง', 'error')
+  }
+}
+
+// ====== Load data ======
 async function loadBookingInfo () {
   const bookingId = localStorage.getItem('bookingId')
   if (!bookingId) {
@@ -277,10 +352,22 @@ async function loadBookingInfo () {
     return
   }
   try {
+    // ข้อมูลรายละเอียดจองสนาม
     const res = await axios.get(`${API_BASE}/api/booking_field/${bookingId}`)
     info.value = res.data
     info.value.type = 'field'
 
+    // ดึง URL PDF จาก history ที่ booking_id ตรงกัน (เหมือน equipment4)
+    try {
+      const resHist = await axios.get(`${API_BASE}/api/history`, { params: { booking_id: bookingId } })
+      const list = (resHist.data || []).filter(
+        h => (h.type === 'field') && String(h.booking_id) === String(bookingId)
+      )
+      const picked = pickPdfUrl(list)
+      pdfUrl.value = normalizePdfUrl(picked)
+    } catch { /* เงียบไว้ (ไม่มี URL ก็ให้ปุ่ม disable) */ }
+
+    // ดึงชื่อผู้ขอ (เหมือนเดิม)
     if (info.value.user_id) {
       try {
         const userRes = await axios.get(`${API_BASE}/api/user/${info.value.user_id}`)
@@ -292,7 +379,7 @@ async function loadBookingInfo () {
       info.value.requester = '-'
     }
 
-    // ===== Popup จัดแนวด้วย CSS Grid =====
+    // Popup สรุป
     await Swal.fire({
       title: 'ส่งคำขอสำเร็จ',
       html: `
@@ -322,47 +409,29 @@ async function loadBookingInfo () {
     Swal.fire('ดึงข้อมูลไม่สำเร็จ')
   }
 }
-onMounted(loadBookingInfo)
+
+onMounted(() => {
+  lastSeenTimestamp.value = parseInt(localStorage.getItem('lastSeenTimestamp') || '0')
+  loadBookingInfo()
+  fetchNotifications()
+  polling = setInterval(fetchNotifications, 30000)
+  loadCart()
+})
+
+onBeforeUnmount(() => { if (polling) clearInterval(polling) })
 
 function handleNext () {
   localStorage.removeItem('bookingId')
   localStorage.removeItem('fieldName')
   localStorage.removeItem('equipment_upload_file')
   sessionStorage.clear()
-
   if (window._tempSelectedFiles) window._tempSelectedFiles = []
   sessionStorage.removeItem('form_field_save')
-
   setTimeout(() => {
     const fileInput = document.getElementById('fileUploadInput')
     if (fileInput) fileInput.value = ''
   }, 100)
-
   router.push('/home_user')
-}
-
-// ------------------ PDF MULTI-PAGE -------------------
-async function exportPdf (item) {
-  const bookingId = item.booking_field_id || item.booking_equipment_id || item.booking_id
-  if (!bookingId) {
-    Swal.fire('ผิดพลาด', 'ไม่พบ booking_id สำหรับรายการนี้', 'error')
-    return
-  }
-  try {
-    const res = await axios.get(`${API_BASE}/api/history/pdf/${bookingId}`, {
-      responseType: 'blob'
-    })
-    const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }))
-    const link = document.createElement('a')
-    link.href = url
-    link.setAttribute('download', `booking_${bookingId}.pdf`)
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    window.URL.revokeObjectURL(url)
-  } catch (err) {
-    Swal.fire('ผิดพลาด', 'ไม่พบไฟล์ PDF', 'error')
-  }
 }
 </script>
 
@@ -376,48 +445,13 @@ async function exportPdf (item) {
   border-radius: 20px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
 }
-.stepper {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-  border-radius: 20px;
-}
-.step {
-  display: flex;
-  align-items: center;
-  position: relative;
-}
-.circle {
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  background-color: #ccc;
-  z-index: 1;
-  transition: background 0.3s;
-  opacity: 0.6;
-  pointer-events: none;
-}
+.stepper { display: flex; align-items: center; justify-content: center; padding: 20px; border-radius: 20px; }
+.step { display: flex; align-items: center; position: relative; }
+.circle { width: 30px; height: 30px; border-radius: 50%; background-color: #ccc; z-index: 1; transition: background 0.3s; opacity: 0.6; pointer-events: none; }
 .circle.active { background-color: #ff4d4f; }
 .circle.completed { background-color: #ff4d4f; opacity: 0.4; }
-.label {
-  margin-top: 15px;
-  text-align: center;
-  font-size: 12px;
-  position: absolute;
-  top: 40px;
-  left: 16px;
-  transform: translateX(-50%);
-  white-space: nowrap;
-}
-.line {
-  height: 4px;
-  width: 80px;
-  background-color: #ccc;
-  margin: 0 5px;
-  z-index: 0;
-  transition: background 0.3s;
-}
+.label { margin-top: 15px; text-align: center; font-size: 12px; position: absolute; top: 40px; left: 16px; transform: translateX(-50%); white-space: nowrap; }
+.line { height: 4px; width: 80px; background-color: #ccc; margin: 0 5px; z-index: 0; transition: background 0.3s; }
 .line.filled { background-color: #ff4d4f; }
 
 .form-container {
@@ -460,15 +494,8 @@ async function exportPdf (item) {
   border: none;
   animation: fadeDown 0.22s;
 }
-@keyframes fadeDown {
-  0% { opacity: 0; transform: translateY(-24px); }
-  100% { opacity: 1; transform: translateY(0); }
-}
-.notification-dropdown ul {
-  padding: 0;
-  margin: 0;
-  list-style: none;
-}
+@keyframes fadeDown { 0% { opacity: 0; transform: translateY(-24px); } 100% { opacity: 1; transform: translateY(0); } }
+.notification-dropdown ul { padding: 0; margin: 0; list-style: none; }
 .notification-dropdown li {
   background: linear-gradient(90deg, #f6fafd 88%, #e2e7f3 100%);
   margin: 0.2em 0.8em;
@@ -487,56 +514,19 @@ async function exportPdf (item) {
   transition: background 0.2s;
 }
 .notification-dropdown li:not(:last-child) { margin-bottom: 0.15em; }
-.notification-dropdown li::before {
-  content: "🔔";
-  font-size: 1.2em;
-  margin-right: 7px;
-  color: #1976d2;
-  opacity: 0.80;
-}
-.notification-dropdown li.no-noti {
-  background: #f2f3f6;
-  color: #a7aab7;
-  justify-content: center;
-  font-style: italic;
-}
+.notification-dropdown li::before { content: "🔔"; font-size: 1.2em; margin-right: 7px; color: #1976d2; opacity: 0.80; }
+.notification-dropdown li.no-noti { background: #f2f3f6; color: #a7aab7; justify-content: center; font-style: italic; }
 .notification-dropdown::-webkit-scrollbar { width: 7px; }
-.notification-dropdown::-webkit-scrollbar-thumb {
-  background: #e1e7f5;
-  border-radius: 10px;
-}
+.notification-dropdown::-webkit-scrollbar-thumb { background: #e1e7f5; border-radius: 10px; }
 .notification-dropdown::-webkit-scrollbar-track { background: transparent; }
-.notification-item.approved {
-  background: linear-gradient(90deg, #e9fbe7 85%, #cbffdb 100%);
-  border-left: 4px solid #38b000;
-  color: #228c22;
-}
-.notification-item.disapproved {
-  background: linear-gradient(90deg, #ffeaea 85%, #ffd6d6 100%);
-  border-left: 4px solid #ff6060;
-  color: #b91423;
-}
+.notification-item.approved { background: linear-gradient(90deg, #e9fbe7 85%, #cbffdb 100%); border-left: 4px solid #38b000; color: #228c22; }
+.notification-item.disapproved { background: linear-gradient(90deg, #ffeaea 85%, #ffd6d6 100%); border-left: 4px solid #ff6060; color: #b91423; }
 .notification-item.canceled,
-.notification-item.cancel {
-  background: linear-gradient(90deg, #f9d7d7 80%, #e26a6a 100%);
-  border-left: 4px solid #bb2124;
-  color: #91061a;
-}
-.notification-item.returned {
-  background: linear-gradient(90deg, #e0f0ff 85%, #b6e0ff 100%);
-  border-left: 4px solid #1976d2;
-  color: #1976d2;
-}
-.notification-item {
-  transition: background 0.3s, border-color 0.3s, color 0.3s;
-}
+.notification-item.cancel { background: linear-gradient(90deg, #f9d7d7 80%, #e26a6a 100%); border-left: 4px solid #bb2124; color: #91061a; }
+.notification-item.returned { background: linear-gradient(90deg, #e0f0ff 85%, #b6e0ff 100%); border-left: 4px solid #1976d2; color: #1976d2; }
+.notification-item { transition: background 0.3s, border-color 0.3s, color 0.3s; }
 
-.notification-backdrop {
-  position: fixed;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: transparent;
-  z-index: 1001;
-}
+.notification-backdrop { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: transparent; z-index: 1001; }
 
 /* ปุ่ม PDF */
 .pdfmake-btn {
@@ -553,84 +543,26 @@ async function exportPdf (item) {
 .pdfmake-btn:hover { background-color: #7e0f0fdf; }
 </style>
 
-<!-- สไตล์ “global” สำหรับ SweetAlert2 (อยู่นอก scoped เพื่อให้มีผลกับ popup) -->
+<!-- Global SweetAlert2 styles -->
 <style>
-/* ขนาดและระยะของ popup – ให้ย่อตามเนื้อหา และขยายเมื่อข้อมูลยาว */
-.swal2-popup {
-  /* เดิม: width: min(680px, 92vw);  ==> ปรับให้ยืด/หดตามเนื้อหา */
-  width: auto;
-  max-width: min(720px, 92vw);
-  padding: 24px 26px 22px;
-  font-family: inherit;
-}
-@supports (width: fit-content) {
-  .swal2-popup { width: fit-content; }
-}
-
-.swal2-title {
-  margin-bottom: 10px !important;
-}
-
-/* กล่องข้อมูลแบบ 2 คอลัมน์: label / value  */
+.swal2-popup { width: auto; max-width: min(720px, 92vw); padding: 24px 26px 22px; font-family: inherit; }
+@supports (width: fit-content) { .swal2-popup { width: fit-content; } }
+.swal2-title { margin-bottom: 10px !important; }
 .swal2-popup .swal-booking {
   display: grid;
-  grid-template-columns: auto 1fr; /* คอลัมน์ซ้ายกว้างตามป้ายกำกับ, ขวาเต็มที่ */
-  column-gap: 12px;
-  row-gap: 8px;
-  text-align: left;
-
-  /* จัดทั้งบล็อกให้อยู่กึ่งกลางของ popup */
-  margin-inline: auto;
-
-  /* จำกัดความกว้างสูงสุดของบล็อกเนื้อหา เพื่อให้ขึ้นบรรทัดใหม่เมื่อยาว */
-  max-width: min(680px, 86vw);
+  grid-template-columns: auto 1fr;
+  column-gap: 12px; row-gap: 8px; text-align: left;
+  margin-inline: auto; max-width: min(680px, 86vw);
 }
-
-/* ป้ายกำกับชิดขวา → อักษรตัวสุดท้ายเรียงแนวเดียวกัน */
-.swal2-popup .swal-booking .label {
-  justify-self: end;
-  white-space: nowrap;
-  font-weight: 700;
-}
-
-/* ค่า/ข้อมูลชิดซ้าย → อักษรตัวแรกเรียงแนวเดียวกัน, รองรับขึ้นบรรทัดใหม่ */
+.swal2-popup .swal-booking .label { justify-self: end; white-space: nowrap; font-weight: 700; }
 .swal2-popup .swal-booking .value {
-  justify-self: start;
-  white-space: pre-wrap;   /* เคารพ \n */
-  word-break: break-word;  /* ตัดคำเมื่อยาว */
-  line-height: 1.6;
-
-  /* กันแถวยาวเกินไปเมื่อข้อความยาวมาก */
+  justify-self: start; white-space: pre-wrap; word-break: break-word; line-height: 1.6;
   max-width: clamp(260px, 56vw, 560px);
 }
-
-/* ให้โครงหน้าสูงเต็มจอ: sidebar + main วางข้างกัน */
-.layout{
-  min-height: 100vh;
-  display: flex;           /* sidebar | main */
-}
-
-/* ให้ .main เป็นคอลัมน์: topbar -> เนื้อหา -> footer */
-.main{
-  flex: 1 1 auto;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;            /* กัน overflow แนวนอน */
-}
-
-/* ดัน footer ไปชิดล่างเสมอ */
-.foot{
-  margin-top: auto;        /* ตัวนี้สำคัญที่สุด */
-  flex-shrink: 0;
-  width: 100%;
-  border-radius: 0;        /* กันมุมโค้งดู “ลอย” */
-}
-
-/* ลดช่องว่างท้ายคอนเทนต์ไม่ให้ดัน footer ลอย */
-.form-container{
-  margin-bottom: 12px;
-}
-
+.layout{ min-height: 100vh; display: flex; }
+.main{ flex: 1 1 auto; display: flex; flex-direction: column; min-width: 0; }
+.foot{ margin-top: auto; flex-shrink: 0; width: 100%; border-radius: 0; }
+.form-container{ margin-bottom: 12px; }
 </style>
 
 <style>

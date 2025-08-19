@@ -92,10 +92,19 @@
       <div class="form-container">
         <h1 style="display: flex; justify-content: center;">ส่งคำขอสำเร็จ ✅</h1>
 
-        <button class="pdfmake-btn" :disabled="!bookingInfo" @click="exportPdf(bookingInfo)">
+        <!-- <button class="pdfmake-btn" :disabled="!bookingInfo" @click="exportPdf(bookingInfo)">
           ดาวน์โหลด PDF ฟอร์ม
-        </button>
+        </button> -->
 
+          <button
+            class="pdfmake-btn"
+            :disabled="!finalPdfUrl"
+            @click="downloadPdf()"
+          >
+            ดาวน์โหลด PDF ฟอร์ม
+          </button>
+      <p>6666</p>
+        
         <br /><br />
 
         <button id="btnNext" @click="handleNext">กลับหน้าแรก</button>
@@ -121,7 +130,7 @@
 
 
 <script setup>
-import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
 import Swal from 'sweetalert2'
 import axios from 'axios'
 import { useRouter } from 'vue-router'
@@ -142,6 +151,10 @@ const bookingInfo = ref(null)
 const steps = ['กรอกข้อมูล', 'ยืนยันข้อมูล', 'สำเร็จ']
 const currentStep = ref(3)
 const isSidebarClosed = ref(false)
+
+const pdfUrl = ref(null)
+
+
 
 // Notification State
 const showNotifications = ref(false)
@@ -259,40 +272,30 @@ async function loadBookingInfo() {
       return
     }
 
+    // เซ็ตข้อมูลหลัก
     bookingInfo.value = historyList[0]
 
-    // ชื่อผู้ใช้
+    // >>> จุดสำคัญ: ดึง URL จากทุก record ของ booking เดียวกัน แล้ว normalize <<<
+    const picked = pickPdfUrl(historyList)
+    pdfUrl.value = normalizePdfUrl(picked)
+
+    // ===== Popup เดิม =====
     let userName = historyList[0].requester || '-'
     if ((!userName || userName === '-') && historyList[0].user_id) {
       try {
         const userRes = await axios.get(`${API_BASE}/api/user/${historyList[0].user_id}`)
         userName = userRes.data?.name || historyList[0].user_id
-      } catch {
-        userName = historyList[0].user_id
-      }
+      } catch { userName = historyList[0].user_id }
     }
-
-    // รายการอุปกรณ์รวมเป็น string
-    const itemList = historyList
-      .map(h => (h.quantity ? `${h.name} (${h.quantity})` : h.name))
-      .join(', ')
-
-    // ==== Popup แบบเดียวกับ form_field4 (Grid 2 คอลัมน์) ====
+    const itemList = historyList.map(h => (h.quantity ? `${h.name} (${h.quantity})` : h.name)).join(', ')
     await Swal.fire({
       title: 'ส่งคำขอสำเร็จ',
       html: `
         <div class="swal-booking">
-          <div class="label"><b>ชื่อผู้ใช้:</b></div>
-          <div class="value">${esc(userName)}</div>
-
-          <div class="label"><b>วันที่ขอยืม:</b></div>
-          <div class="value">${esc(formatDateOnly(historyList[0].since))}</div>
-
-          <div class="label"><b>วันที่คืน:</b></div>
-          <div class="value">${esc(formatDateOnly(historyList[0].uptodate))}</div>
-
-          <div class="label"><b>รายการอุปกรณ์:</b></div>
-          <div class="value">${esc(itemList || '-')}</div>
+          <div class="label"><b>ชื่อผู้ใช้:</b></div><div class="value">${esc(userName)}</div>
+          <div class="label"><b>วันที่ขอยืม:</b></div><div class="value">${esc(formatDateOnly(historyList[0].since))}</div>
+          <div class="label"><b>วันที่คืน:</b></div><div class="value">${esc(formatDateOnly(historyList[0].uptodate))}</div>
+          <div class="label"><b>รายการอุปกรณ์:</b></div><div class="value">${esc(itemList || '-')}</div>
         </div>
       `,
       icon: 'success',
@@ -324,35 +327,101 @@ function handleNext() {
 }
 
 // ------------------ PDF MULTI-PAGE -------------------
-// --- ใน <script setup>
-async function exportPdf(item) {
-  const bookingId = item.booking_field_id || item.booking_equipment_id || item.booking_id;
-  if (!bookingId) {
-    Swal.fire('ผิดพลาด', 'ไม่พบ booking_id สำหรับรายการนี้', 'error');
-    return;
+
+function normalizePdfUrl(raw) {
+  if (!raw) return null
+  let u = String(raw).trim()
+  if (u.startsWith('/')) u = new URL(u, window.location.origin).href
+  if (location.protocol === 'https:' && u.startsWith('http://')) {
+    u = 'https://' + u.slice('http://'.length)
   }
+  return u
+}
+
+function pickPdfUrl(list) {
+  if (!Array.isArray(list)) return null
+  const haveDirect =
+    list.find(h => h?.bookingPdfUrl || h?.booking_pdf_url) || null
+  if (haveDirect) {
+    return (
+      haveDirect.bookingPdfUrl ||
+      haveDirect.booking_pdf_url ||
+      null
+    )
+  }
+  const haveAttach = list.find(h => Array.isArray(h?.attachment) && h.attachment[0])
+  return haveAttach ? haveAttach.attachment[0] : null
+}
+
+const finalPdfUrl = computed(() => pdfUrl.value)
+
+function getFileNameFromUrl(u, fallback = 'booking.pdf') {
   try {
-    const res = await axios.get(`${API_BASE}/api/history/pdf/${bookingId}`, {
-      responseType: 'blob'
-    });
-    const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', `booking_${bookingId}.pdf`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(url);
-  } catch (err) {
-    Swal.fire('ผิดพลาด', 'ไม่พบไฟล์ PDF', 'error');
+    const { pathname } = new URL(u);
+    const name = decodeURIComponent(pathname.split('/').pop() || '');
+    return name || fallback;
+  } catch {
+    return fallback;
   }
 }
 
+async function downloadPdf() {
+  try {
+    const url = finalPdfUrl.value;
+    if (!url) {
+      await Swal.fire('ผิดพลาด', 'ไม่พบ URL ของไฟล์ PDF', 'error');
+      return;
+    }
+
+    // ดึงไฟล์เป็น blob แล้วสั่งดาวน์โหลด (กันบราวเซอร์เปิดดูเอง)
+    const resp = await fetch(url, { credentials: 'include' }); // โดเมนเดียวกัน OK
+    if (!resp.ok) throw new Error('download failed');
+
+    const blob = await resp.blob();
+    const blobUrl = URL.createObjectURL(blob);
+
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    // ตั้งชื่อไฟล์จาก URL หรือ booking_id
+    const fallbackName = `booking_${bookingInfo.value?.booking_id || Date.now()}.pdf`;
+    a.download = getFileNameFromUrl(url, fallbackName);
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(blobUrl);
+  } catch (e) {
+    await Swal.fire('ผิดพลาด', 'ไม่สามารถดาวน์โหลดไฟล์ได้', 'error');
+  }
+}
+
+async function exportPdf(item) {
+  try {
+    // พยายามดึง URL จากตัว item ก่อน (รองรับหลายชื่อฟิลด์ + แนบไฟล์)
+    let urlFromItem =
+      item?.bookingPdfUrl ||
+      item?.booking_pdf_url ||
+      (Array.isArray(item?.attachment) ? item.attachment[0] : null) ||
+      item?.pdfUrl ||
+      item?.pdf_url ||
+      null
+
+    // ถ้า state มีแล้ว (จาก loadBookingInfo) ให้ใช้เลย
+    const chosen = normalizePdfUrl(urlFromItem || pdfUrl.value)
+
+    if (chosen) {
+      const w = window.open(chosen, '_blank', 'noopener,noreferrer')
+      if (!w) location.href = chosen // กัน popup ถูกบล็อก
+      return
+    }
+
+    await Swal.fire('ผิดพลาด', 'ไม่พบ URL ของไฟล์ PDF ในรายการนี้', 'error')
+  } catch {
+    await Swal.fire('ผิดพลาด', 'ไม่พบไฟล์ PDF หรือพาธไม่ถูกต้อง', 'error')
+  }
+}
+
+
 </script>
-
-
-
-
 <style scoped>
 /* ...style เดิมของคุณ... */
 .headStepper{

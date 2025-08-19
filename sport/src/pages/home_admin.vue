@@ -85,8 +85,11 @@
           <p>*อัตราส่วนภาพควรเป็น 9:5 </p>
         </div>
         <div class="hero-wrapper">
-          <img v-if="images.length && images[currentImageIndex]?.img" :src="images[currentImageIndex]?.img"
-            class="hero-image" />
+          <img
+  v-if="images.length && (images[currentImageIndex]?.img_url || images[currentImageIndex]?.img)"
+  :src="images[currentImageIndex]?.img_url || images[currentImageIndex]?.img"
+  class="hero-image"
+/>
           <div v-else class="hero-image"
             style="display:flex;align-items:center;justify-content:center;background:#eee;">
             <span style="color:#999;">ไม่มีรูป</span>
@@ -127,6 +130,15 @@ import axios from 'axios';
 
 const API_BASE = import.meta.env.VITE_API_BASE
 const ADMIN_LAST_SEEN_KEY = 'admin_lastSeenTimestamp'
+
+// วางใน <script> ใกล้ๆ methods อื่น
+function resolveNewsUrl(u) {
+  if (!u) return ''
+  const s = String(u)
+  if (s.startsWith('http://') || s.startsWith('https://')) return s   // เป็น URL เต็ม ใช้ได้เลย
+  if (s.startsWith('/uploads/')) return `${API_BASE}${s}`             // พาธจากแบ็กเอนด์
+  return s                                                            // เผื่ออนาคตมีแบบอื่น
+}
 
 export default {
   data() {
@@ -259,101 +271,124 @@ pruneOldNotifications() {
     // ---------------------------
     // ====== Image News ========
     // ---------------------------
-    async reloadImages() {
-      try {
-        const res = await axios.get(`${API_BASE}/api/img_news`);
-        this.images = res.data;
-        this.currentImageIndex = 0;
-      } catch (err) {
-        this.images = [];
-      }
-    },
+   async reloadImages() {
+  try {
+    const res = await axios.get(`${API_BASE}/api/img_news`)
+    const rows = Array.isArray(res.data) ? res.data : []
+    // ต่อโดเมนให้รูปที่เป็น /uploads/...
+    this.images = rows.map(r => ({
+      ...r,
+      img_url: resolveNewsUrl(r.img_url || r.img)   // รองรับฟิลด์เก่าๆ
+    }))
+    this.currentImageIndex = 0
+  } catch (err) {
+    this.images = []
+  }
+},
+
+
     async addImage() {
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.accept = 'image/*';
-      input.onchange = async e => {
-        const file = e.target.files[0];
-        if (file) {
-          const reader = new FileReader();
-          reader.onload = async ev => {
-            try {
-              const res = await axios.post(`${API_BASE}/api/img_news`, { img: ev.target.result });
-              this.images.push(res.data.data);
-              this.currentImageIndex = this.images.length - 1;
-              Swal.fire('เพิ่มรูปภาพแล้ว', '', 'success');
-            } catch {
-              Swal.fire('Error', 'เพิ่มภาพล้มเหลว', 'error');
-            }
-          };
-          reader.readAsDataURL(file);
-        }
-      };
-      input.click();
-    },
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/*';
+  input.onchange = async e => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const fd = new FormData();
+      fd.append('image', file); // ← ชื่อ field ต้องเป็น 'image' ให้ตรงกับ backend
+      const res = await axios.post(`${API_BASE}/api/img_news`, fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      const created = res.data?.data;
+      if (created) {
+        this.images.push(created);
+        this.currentImageIndex = this.images.length - 1;
+        Swal.fire('เพิ่มรูปภาพแล้ว', '', 'success');
+      } else {
+        Swal.fire('Error', 'เพิ่มภาพล้มเหลว', 'error');
+      }
+    } catch {
+      Swal.fire('Error', 'เพิ่มภาพล้มเหลว', 'error');
+    }
+  };
+  input.click();
+},
+
     async handleEdit() {
-      const imgObj = this.images[this.currentImageIndex];
-      const imgId = imgObj._id;
-      const result = await Swal.fire({
-        title: 'คุณต้องการทำอะไรกับรูปภาพนี้?',
-        showDenyButton: true,
+  const imgObj = this.images[this.currentImageIndex];
+  if (!imgObj) return;
+  const imgId = imgObj._id;
+
+  const result = await Swal.fire({
+    title: 'คุณต้องการทำอะไรกับรูปภาพนี้?',
+    showDenyButton: true,
+    showCancelButton: true,
+    confirmButtonText: 'เลือกรูปจากไฟล์',
+    denyButtonText: `ลบรูปนี้`,
+    cancelButtonText: 'ยกเลิก'
+  });
+
+  if (result.isConfirmed) {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = async e => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      const confirmRes = await Swal.fire({
+        title: 'ยืนยันการแก้ไข',
+        text: 'คุณต้องการเปลี่ยนรูปภาพนี้ใช่หรือไม่?',
+        icon: 'question',
         showCancelButton: true,
-        confirmButtonText: 'เลือกรูปจากไฟล์',
-        denyButtonText: `ลบรูปนี้`,
+        confirmButtonText: 'ยืนยัน',
         cancelButtonText: 'ยกเลิก'
       });
-      if (result.isConfirmed) {
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.accept = 'image/*';
-        input.onchange = async e => {
-          const file = e.target.files[0];
-          if (file) {
-            const reader = new FileReader();
-            reader.onload = async ev => {
-              const confirmRes = await Swal.fire({
-                title: 'ยืนยันการแก้ไข',
-                text: 'คุณต้องการเปลี่ยนรูปภาพนี้ใช่หรือไม่?',
-                icon: 'question',
-                showCancelButton: true,
-                confirmButtonText: 'ยืนยัน',
-                cancelButtonText: 'ยกเลิก'
-              });
-              if (confirmRes.isConfirmed) {
-                try {
-                  await axios.put(`${API_BASE}/api/img_news/${imgId}`, { img: ev.target.result });
-                  this.images[this.currentImageIndex].img = ev.target.result;
-                  Swal.fire('เปลี่ยนรูปภาพเรียบร้อยแล้ว', '', 'success');
-                } catch {
-                  Swal.fire('Error', 'บันทึกภาพล้มเหลว', 'error');
-                }
-              }
-            };
-            reader.readAsDataURL(file);
-          }
-        };
-        input.click();
-      } else if (result.isDenied) {
-        const delRes = await Swal.fire({
-          title: 'คุณแน่ใจหรือไม่?',
-          text: 'คุณต้องการลบรูปภาพนี้ใช่หรือไม่?',
-          icon: 'warning',
-          showCancelButton: true,
-          confirmButtonText: 'ลบ',
-          cancelButtonText: 'ยกเลิก'
+      if (!confirmRes.isConfirmed) return;
+
+      try {
+        const fd = new FormData();
+        fd.append('image', file); // ← ต้องชื่อ 'image'
+        const res = await axios.put(`${API_BASE}/api/img_news/${imgId}`, fd, {
+          headers: { 'Content-Type': 'multipart/form-data' },
         });
-        if (delRes.isConfirmed) {
-          try {
-            await axios.delete(`${API_BASE}/api/img_news/${imgId}`);
-            this.images.splice(this.currentImageIndex, 1);
-            this.currentImageIndex = Math.max(0, this.currentImageIndex - 1);
-            Swal.fire('ลบรูปภาพแล้ว', '', 'success');
-          } catch {
-            Swal.fire('Error', 'ลบภาพล้มเหลว', 'error');
-          }
+        const updated = res.data?.data;
+        if (updated?.img_url) {
+          // เคลียร์ cache (กันเบราว์เซอร์แคชรูปเดิม)
+          const bust = `${updated.img_url}${updated.img_url.includes('?') ? '&' : '?'}t=${Date.now()}`;
+          this.images[this.currentImageIndex].img_url = bust;
+          Swal.fire('เปลี่ยนรูปภาพเรียบร้อยแล้ว', '', 'success');
+        } else {
+          Swal.fire('Error', 'บันทึกภาพล้มเหลว', 'error');
         }
+      } catch {
+        Swal.fire('Error', 'บันทึกภาพล้มเหลว', 'error');
       }
-    },
+    };
+    input.click();
+
+  } else if (result.isDenied) {
+    const delRes = await Swal.fire({
+      title: 'คุณแน่ใจหรือไม่?',
+      text: 'คุณต้องการลบรูปภาพนี้ใช่หรือไม่?',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'ลบ',
+      cancelButtonText: 'ยกเลิก'
+    });
+    if (!delRes.isConfirmed) return;
+
+    try {
+      await axios.delete(`${API_BASE}/api/img_news/${imgId}`);
+      this.images.splice(this.currentImageIndex, 1);
+      this.currentImageIndex = Math.max(0, this.currentImageIndex - 1);
+      Swal.fire('ลบรูปภาพแล้ว', '', 'success');
+    } catch {
+      Swal.fire('Error', 'ลบภาพล้มเหลว', 'error');
+    }
+  }
+},
 
     // ---------------------------
     // ==== Announcement ========
