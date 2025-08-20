@@ -237,7 +237,7 @@
                                   <tr>
                                     <th>#</th>
                                     <th>ชื่อไฟล์</th>
-                                    <th>ดาวน์โหลด</th>
+                                    <th>ดูไฟล์แนบ</th>
                                   </tr>
                                 </thead>
                                 <tbody>
@@ -249,7 +249,7 @@
                                         class="download-link"
                                         @click="downloadAttachedFile(item, idx, fname)"
                                       >
-                                        ดาวน์โหลด
+                                        ดูไฟล์แนบ
                                       </button>
                                     </td>
                                   </tr>
