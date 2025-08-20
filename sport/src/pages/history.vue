@@ -910,7 +910,7 @@ const formatTimeRange = (start, end) => {
     html = `
       <div class="swal-booking">
         <div class="label"><b>Field Name</b></div><div class="value">${this.esc(item.name)}</div>
-        <div class="label"><b>Name</b></div><div class="value">${this.esc(item.requester)}</div>
+        <div class="label"><b>Name</b></div><div class="value">${this.esc(item.username_form || '-')}</div>
         <div class="label"><b>Date</b></div><div class="value">${this.esc(this.formatDateOnly(item.date))}</div>
         <div class="label"><b>Time</b></div><div class="value">${this.esc(timeRange)}</div>
         <div class="label"><b>Book for</b></div><div class="value">${this.esc(item.proxyStudentName || '-')}</div>

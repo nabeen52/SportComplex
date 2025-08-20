@@ -249,10 +249,11 @@ pruneOldNotifications() {
     },
     async addEquipment() {
       const { value: formValues } = await Swal.fire({
+        customClass: { popup: 'swal-equip' },
         title: 'เพิ่มอุปกรณ์',
         html: `
-  <input type="text" id="name" class="swal2-input" placeholder="ชื่ออุปกรณ์">
-  <input type="number" id="quantity" class="swal2-input" placeholder="จำนวน" min="0">
+<input type="text" id="name" class="swal2-input center-swal-input" placeholder="ชื่ออุปกรณ์">
+<input type="number" id="quantity" class="swal2-input center-swal-input" placeholder="จำนวน" min="0">
   <div style="display:flex; flex-direction:column; align-items:center; width:100%;">
   <label for="image" style=" margin-bottom:1px; margin-top:4px;">เลือกรูปภาพอุปกรณ์</label>
   <input 
@@ -332,10 +333,11 @@ pruneOldNotifications() {
     async editEquipment(index) {
       const equipment = this.equipments[index];
       const result = await Swal.fire({
+        customClass: { popup: 'swal-equip' },
         title: 'แก้ไขอุปกรณ์',
         html: `
-  <input type="text" id="name" class="swal2-input" placeholder="ชื่ออุปกรณ์" value="${equipment.name}">
-  <input type="number" id="quantity" class="swal2-input" placeholder="จำนวน" min="0" value="${equipment.quantity}">
+  <input type="text" id="name" class="swal2-input center-swal-input" placeholder="ชื่ออุปกรณ์" value="${equipment.name}">
+  <input type="number" id="quantity" class="swal2-input center-swal-input" placeholder="จำนวน" min="0" value="${equipment.quantity}">
   <div style="display:flex; flex-direction:column; align-items:center; width:100%;">
   <label for="image" style=" margin-bottom:1px; margin-top:4px;">เลือกรูปภาพใหม่ (ถ้าต้องการเปลี่ยน)</label>
   <input 
@@ -681,10 +683,37 @@ input:checked+.slider:before {
   background: rgba(0,0,0,0.25);
   z-index: 1999; /* ต้องน้อยกว่า sidebar */
 }
-
+/* จัด input ของ SweetAlert ให้อยู่กลาง */
+.swal2-popup .center-swal-input{
+  width: 360px;        /* ปรับได้ตามต้องการ */
+  max-width: 90%;
+  margin: .25rem auto; /* ทำให้กึ่งกลาง */
+  display: block;
+}
 
 </style>
 
+<style>
+
+/* จัด input ใน SweetAlert ให้กึ่งกลางเฉพาะโมดัลอุปกรณ์ */
+.swal-equip .swal2-html-container{
+  display: flex !important;
+  flex-direction: column;
+  align-items: center;     /* ทำให้ลูกทุกตัวอยู่กลาง */
+}
+
+.swal-equip .swal2-input{
+  width: 360px;            /* ปรับตามใจ */
+  max-width: 90%;
+  display: block;
+  margin: .25rem auto;     /* กึ่งกลาง */
+}
+
+@media (max-width: 600px){
+  .swal-equip .swal2-input{ width: 85vw; }
+}
+.notification-dropdown { position: absolute; right: 0; top: 38px; background: #fff; border-radius: 18px 0 18px 18px; box-shadow: 0 8px 24px 0 rgba(27, 50, 98, 0.14), 0 2px 4px 0 rgba(33, 125, 215, 0.06); min-width: 330px; max-width: 370px; max-height: 420px; overflow-y: auto; z-index: 1002; padding: 0; border: none; animation: fadeDown 0.22s; }
+</style>
 <style>
 @import '../css/style.css';
 </style>

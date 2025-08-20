@@ -131,18 +131,15 @@
 
                     <!-- ชื่อรายการ -->
                     <td class="col-center" style="max-width: 360px;">
-                    <template v-if="group.type === 'field'">
-                      <div style="text-align:center; width:100%;">{{ group.items[0].name || '-' }}</div>
-                    </template>
-
-                    <!-- equipment: แสดงชื่อแบบไม่ซ้ำภายในกลุ่ม (booking_id เดียวกัน) -->
-                    <template v-else>
-                      <div style="text-align:center;">
-                        {{ uniqueListByName(group.items).join(', ') || '-' }}
-                      </div>
-                    </template>
-                  </td>
-
+                      <template v-if="group.type === 'field'">
+                        <div style="text-align:center; width:100%;">{{ group.items[0].name || '-' }}</div>
+                      </template>
+                      <template v-else>
+                        <div style="text-align:center;">
+                          {{ uniqueListByName(group.items).join(', ') || '-' }}
+                        </div>
+                      </template>
+                    </td>
 
                     <!-- เวลา/จำนวน -->
                     <td style="text-align:center;">
@@ -152,37 +149,43 @@
                       <template v-else>
                         {{ quantitiesForGroup(group) }}
                       </template>
-
                     </td>
 
                     <!-- สถานะ -->
                     <td style="text-align:center;">
-  {{ groupStatus(group) }}
-</td>
+                      {{ groupStatus(group) }}
+                    </td>
 
                     <!-- ไฟล์แนบ / PDF -->
                     <td style="text-align:center;">
+
                       <button class="toggle-btn" @click="toggleExpand(group.items[0].id)">
                         <i class="pi pi-paperclip"></i>
                       </button>
+
                       <button
                         class="pdfmake-btn small-btn"
-                        @click="downloadBookingPdf(group.items[0])"
+                        @click="openPdfLikeApprove(group)"
                         style="margin-left:8px;"
-                        title="ดาวน์โหลด PDF"
+                        title="ดูไฟล์ PDF"
                       >
                         <i class="pi pi-file-pdf"></i>
                       </button>
                     </td>
 
+                    
+
+
                     <!-- การกระทำ -->
                     <td style="text-align:center;">
                       <button class="remark-btn" @click="showDetailGroup(group)">Detail</button>
+
+
                       <button
                         v-if="group.type === 'field' && group.items[0].status && group.items[0].status.toLowerCase() === 'approved'"
                         class="cancel-btn"
                         @click="cancelFieldBooking(group.items[0])"
-                        style="margin-left: 8px;"
+                        style="margin-left: 8px; margin-top: 10px;"
                       >
                         Cancel
                       </button>
@@ -211,12 +214,12 @@
                                   <td>{{ idx + 1 }}</td>
                                   <td>{{ fname }}</td>
                                   <td>
-                                    <a
-                                      :href="`${API_BASE}/api/history/file/${group.items[0].id}?fileIdx=${idx}`"
-                                      target="_blank"
+                                    <button
                                       class="download-link"
-                                      download
-                                    >ดาวน์โหลด</a>
+                                      @click="downloadAttachedFile(group.items[0], idx, fname)"
+                                    >
+                                      ดูไฟล์แนบ
+                                    </button>
                                   </td>
                                 </tr>
                               </tbody>
@@ -228,10 +231,6 @@
                         <!-- EQUIPMENT: ไล่ทีละรายการ -->
                         <template v-else>
                           <div v-for="item in group.items" :key="item.id + '-files'">
-                            <!-- <div style="font-weight:600; margin:6px 0 4px 0;">
-                              {{ item.name || '-' }} (จำนวน {{ item.quantity ?? '-' }})
-                            </div> -->
-
                             <div v-if="Array.isArray(item.fileName) && item.fileName.length">
                               <table class="attached-files-table" style="margin-bottom:10px;">
                                 <thead>
@@ -246,12 +245,12 @@
                                     <td>{{ idx + 1 }}</td>
                                     <td>{{ fname }}</td>
                                     <td>
-                                      <a
-                                        :href="`${API_BASE}/api/history/file/${item.id}?fileIdx=${idx}`"
-                                        target="_blank"
+                                      <button
                                         class="download-link"
-                                        download
-                                      >ดาวน์โหลด</a>
+                                        @click="downloadAttachedFile(item, idx, fname)"
+                                      >
+                                        ดาวน์โหลด
+                                      </button>
                                     </td>
                                   </tr>
                                 </tbody>
@@ -293,6 +292,7 @@
     </div>
   </div>
 </template>
+
 
 
 
@@ -382,6 +382,8 @@ export default {
     }
   },
   computed: {
+
+
     fieldGroups() {
     return this.filteredHistory
       .filter(h => h.type === 'field')
@@ -450,6 +452,243 @@ export default {
     },
   },
   methods: {
+
+     openInNewTabSilent(u) {
+    const url = this.normalizePdfUrl(u);
+    if (!url) return false;
+    try {
+      const a = document.createElement('a');
+      a.href = url;
+      a.target = '_blank';
+      a.rel = 'noopener';
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      return true;
+    } catch (e) {
+      // ทางหนีสุดท้าย: เปิดในแท็บเดิม (ไม่แจ้งเตือน)
+      try { window.location.href = url; } catch {}
+      return false;
+    }
+  },
+
+    _forceHttps(u) {
+  try {
+    const url = new URL(u, window.location.origin);
+    if (location.protocol === 'https:') url.protocol = 'https:'; // อัปเกรดเป็น https เสมอเมื่อหน้าเป็น https
+    return url.toString();
+  } catch { return u; }
+},
+
+    _findAttachmentIndexByName(item, fname) {
+  const atts = Array.isArray(item.attachment) ? item.attachment : [];
+  if (!fname || !atts.length) return null;
+  const clean = (s) => decodeURIComponent(String(s).split('?')[0]).split('/').pop();
+  const target = clean(fname);
+  const idx = atts.findIndex(a => clean(a) === target || String(a).includes(target));
+  return idx >= 0 ? idx : null;
+},
+
+async downloadAttachedFile(item, idx = 0, fname = '') {
+    try {
+      const atts = Array.isArray(item?.attachment) ? item.attachment : [];
+
+      // A) มี URL ใน attachment[] → เปิดแท็บใหม่แบบเงียบ
+      if (atts.length) {
+        const matchIdx = this._findAttachmentIndexByName(item, fname);
+        const useIdx = matchIdx !== null ? matchIdx : Math.min(idx, atts.length - 1);
+        const href = this.normalizePdfUrl(atts[useIdx]);
+        this.openInNewTabSilent(href);
+        return;
+      }
+
+      // B) ไม่มี URL → เปิดผ่าน endpoint ของระบบเป็นแท็บใหม่ (inline)
+      const histId = item.id || item._id;
+      if (!histId) {
+        Swal.fire('ผิดพลาด','ไม่พบรหัสรายการสำหรับไฟล์แนบ','error');
+        return;
+      }
+      const apiBase = this._forceHttps(this.API_BASE || window.location.origin).replace(/\/+$/,'');
+      const previewUrl = `${apiBase}/api/history/file/${histId}?fileIdx=${idx}`;
+      this.openInNewTabSilent(previewUrl);
+    } catch (e) {
+      console.error(e);
+      Swal.fire('ผิดพลาด','ไม่สามารถเปิดไฟล์แนบได้','error');
+    }
+  },
+
+
+   normalizePdfUrl(raw) {
+  if (!raw) return null;
+
+  // ทำให้ path ที่ขึ้นต้นด้วย '/' เป็น absolute ที่สอดคล้อง origin ปัจจุบัน
+  let u = raw.startsWith('/') ? new URL(raw, window.location.origin).href : raw;
+
+  // บังคับ https ชั้นนอกก่อน
+  u = this._forceHttps(u);
+
+  // ถ้าเป็น /file/preview?url=… ให้ “อัปเกรดค่าข้างใน” ด้วย
+  try {
+    const outer = new URL(u);
+    if (outer.pathname.startsWith('/file/preview')) {
+      const inner = outer.searchParams.get('url');
+      if (inner) {
+        outer.searchParams.set('url', this._forceHttps(inner));
+        u = outer.toString();
+      }
+    }
+  } catch {}
+  return u;
+},
+
+pickPdfUrl(list) {
+  if (!Array.isArray(list) || list.length === 0) return null;
+  // ถ้า BE เก็บ url ไว้ตรง ๆ
+  const direct = list.find(h => h?.bookingPdfUrl || h?.booking_pdf_url);
+  if (direct) return direct.bookingPdfUrl || direct.booking_pdf_url;
+  // ถ้าเก็บใน attachment เป็น array
+  const attach = list.find(h => Array.isArray(h?.attachment) && h.attachment[0]);
+  return attach ? attach.attachment[0] : null;
+},
+
+getFileNameFromUrl(u, fallback = 'booking.pdf') {
+  try {
+    const { pathname } = new URL(u);
+    const name = decodeURIComponent(pathname.split('/').pop() || '');
+    return name || fallback;
+  } catch { return fallback; }
+},
+
+
+ async openPdfFromHistoryGroup(group) {
+    try {
+      const first = group?.items?.[0] || {};
+      let bookingId =
+        group?.booking_id ||
+        first.booking_id ||
+        first.booking_field_id ||
+        first.booking_equipment_id || '';
+
+      if (/^[a-f0-9]{24}$/i.test(String(bookingId))) bookingId = '';
+
+      let fileUrl = null;
+
+      if (bookingId) {
+        const resHist = await axios.get(`${this.API_BASE}/api/history`, { params: { booking_id: bookingId } });
+        let list = Array.isArray(resHist.data) ? resHist.data : [];
+        list = list
+          .filter(h => String(h?.booking_id || '') === String(bookingId))
+          .sort((a,b) =>
+            new Date(b.updatedAt || b.createdAt || b.date || 0) -
+            new Date(a.updatedAt || a.createdAt || a.date || 0)
+          );
+        fileUrl = this.pickPdfUrl(list);
+      }
+
+      if (!fileUrl) {
+        const histId = first.id || first._id;
+        if (!histId) {
+          Swal.fire('ผิดพลาด','ไม่พบไฟล์ PDF สำหรับรายการนี้','error');
+          return;
+        }
+        const apiBase = this._forceHttps(this.API_BASE || window.location.origin).replace(/\/+$/,'');
+        this.openInNewTabSilent(`${apiBase}/api/history/file/${histId}?fileIdx=0`);
+        return;
+      }
+
+      this.openInNewTabSilent(fileUrl);
+    } catch (err) {
+      console.error('openPdfFromHistoryGroup error:', err);
+      Swal.fire('ผิดพลาด','ไม่สามารถเปิดไฟล์ PDF ได้','error');
+    }
+  },
+
+ async downloadBookingPdf(target) {
+    const bookingId  = typeof target === 'string' ? target : (target?.booking_id || '');
+    const typeFilter = typeof target === 'object' ? (target?.type || '') : '';
+
+    if (!bookingId) {
+      Swal.fire('ผิดพลาด','ไม่พบ booking_id สำหรับไฟล์ PDF','error');
+      return;
+    }
+
+    try {
+      const resHist = await axios.get(`${this.API_BASE}/api/history`, { params: { booking_id: bookingId } });
+      let list = Array.isArray(resHist.data) ? resHist.data : [];
+
+      list = list.filter(h => String(h?.booking_id || '') === String(bookingId));
+      if (typeFilter) list = list.filter(h => (h?.type || '').toLowerCase() === typeFilter.toLowerCase());
+      list.sort((a,b) =>
+        new Date(b.updatedAt || b.createdAt || b.date || 0) -
+        new Date(a.updatedAt || a.createdAt || a.date || 0)
+      );
+
+      const picked = this.pickPdfUrl(list);
+      const rawUrl = this.normalizePdfUrl(picked);
+
+      if (!rawUrl) {
+        Swal.fire('ผิดพลาด','ไม่พบ URL ของไฟล์ PDF สำหรับรายการนี้','error');
+        return;
+      }
+
+      // ✅ เปิดแบบเงียบ ไม่เด้งแจ้งเตือนเมื่อเบราว์เซอร์บล็อก
+      this.openInNewTabSilent(rawUrl);
+    } catch (err) {
+      console.error('downloadBookingPdf error:', err);
+      Swal.fire('ผิดพลาด','ไม่สามารถเปิดไฟล์ PDF ได้','error');
+    }
+  },
+
+  async openPdfLikeApprove(group) {
+    const first = group?.items?.[0] || {};
+
+    // เปิดแบบเงียบ (คืน true ถ้ามี url ให้เปิด)
+    const tryOpen = (u) => {
+      if (!u) return false;
+      this.openInNewTabSilent(u);
+      return true;
+    };
+
+    // เปิดจาก bookingPdfUrl ในแถวก่อน
+    if (tryOpen(first.bookingPdfUrl)) return;
+    if (tryOpen(first.booking_pdf_url)) return;
+
+    // หา bookingPdfUrl ล่าสุดจาก history ของ booking เดียวกัน
+    const bookingId =
+      first.booking_id ||
+      first.booking_field_id ||
+      first.booking_equipment_id ||
+      group?.booking_id ||
+      '';
+
+    if (bookingId) {
+      try {
+        const resHist = await axios.get(`${this.API_BASE}/api/history`, {
+          params: { booking_id: bookingId }
+        });
+        const rows = (Array.isArray(resHist.data) ? resHist.data : [])
+          .filter(h => String(h?.booking_id || '') === String(bookingId))
+          .sort((a, b) =>
+            new Date(b.updatedAt || b.createdAt || b.date || 0) -
+            new Date(a.updatedAt || a.createdAt || a.date || 0)
+          );
+
+        const found = rows.find(h => h.bookingPdfUrl || h.booking_pdf_url);
+        if (found && tryOpen(found.bookingPdfUrl || found.booking_pdf_url)) return;
+
+        Swal.fire('ไม่พบไฟล์ PDF', 'รายการนี้ไม่มี bookingPdfUrl', 'warning');
+        return;
+      } catch (e) {
+        console.error('openPdfLikeApprove lookup error:', e);
+        Swal.fire('ผิดพลาด', 'ไม่สามารถค้นหาไฟล์ PDF ได้', 'error');
+        return;
+      }
+    }
+
+    Swal.fire('ไม่พบไฟล์ PDF', 'ไม่พบ bookingPdfUrl สำหรับรายการนี้', 'warning');
+  },
+
     onDateFilterChange() {
     this.currentPage = 1 // ถ้าใช้ pagination
     // filter จะถูกทำงานอัตโนมัติผ่าน computed
@@ -513,38 +752,7 @@ quantitiesForGroup(group) {
 },
 
 
-  
-  async downloadBookingPdf(item) {
-    try {
-      const bookingId = item.booking_id || item.booking_field_id || item.booking_equipment_id;
-      if (!bookingId) {
-        Swal.fire('ผิดพลาด', 'ไม่พบ booking_id สำหรับรายการนี้', 'error');
-        return;
-      }
 
-      // ขอไฟล์ PDF จาก backend เป็น blob
-      const response = await axios.get(`${API_BASE}/api/history/pdf/${bookingId}`, {
-        responseType: 'blob'
-      });
-
-      // สร้าง URL สำหรับดาวน์โหลดไฟล์
-      const blob = new Blob([response.data], { type: 'application/pdf' });
-      const url = window.URL.createObjectURL(blob);
-
-      // สร้างลิงก์ดาวน์โหลดชั่วคราวและคลิก
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `booking-${bookingId}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(url);
-
-    } catch (error) {
-      console.error(error);
-      Swal.fire('ผิดพลาด', 'ไม่สามารถดาวน์โหลดไฟล์ PDF ได้', 'error');
-    }
-  },
     toggleSidebar() {
       this.isSidebarClosed = !this.isSidebarClosed
     },
@@ -599,7 +807,7 @@ clearDateFilter() {
     html = `
       <div style="text-align:left;">
         ${row('ชื่อสนาม:', item.name || '-')}
-        ${row('ชื่อผู้ขอใช้:', item.requester || item.userName || '-')}
+        ${row('ชื่อผู้ขอใช้:', item.username_form || item.requester || item.userName || '-')}
         ${row('จองให้ผู้ใช้:', item.proxyStudentName || '-')}
         ${row('วันที่:', fmt(item.date))}
         ${row('เวลา:', item.time || '-' )}
@@ -628,7 +836,7 @@ clearDateFilter() {
           <div style="padding-bottom:10px;margin-bottom:10px;border-bottom:1px dashed #c7c7c7;">
             ${row('อุปกรณ์ที่ ' + (i + 1) + ':', item.name || '-')}
             ${row('จำนวน:', item.quantity ?? '-')}
-            ${row('ชื่อผู้ขอใช้:', item.requester || item.userName || '-')}
+            ${row('ชื่อผู้ขอใช้:', item.username_form || item.requester || item.userName || '-')}
             ${row('วันที่ขอยืม:', borrowDate)}
             ${row('สถานะ:', item.status || '-')}
             ${row('วันที่คืน:', item.returnedAt ? fmt(item.returnedAt) : '-')}
@@ -1246,6 +1454,7 @@ doc.text(`โทร ${data.tel || '-'}`, 430, 100);
             date: h.date,
             canceledBy: h.canceledBy,
             canceledById: h.canceledById,
+            username_form: h.username_form || '-', 
           }))
         const getSortDate = (item) => (
           item.canceledAt ||
@@ -1310,6 +1519,7 @@ doc.text(`โทร ${data.tel || '-'}`, 430, 100);
           canceledBy: h.canceledBy || userIdToName[h.canceledById] || h.canceledById || '-',
           canceledById: h.canceledById,
           canceledAt: h.canceledAt,
+          username_form: h.username_form || '-',
         }))
     } catch (err) {
       console.error('โหลดข้อมูลไม่สำเร็จ:', err)
@@ -1774,7 +1984,7 @@ doc.text(`โทร ${data.tel || '-'}`, 430, 100);
   }
 }
 
-
+.notification-dropdown { position: absolute; right: 0; top: 38px; background: #fff; border-radius: 18px 0 18px 18px; box-shadow: 0 8px 24px 0 rgba(27, 50, 98, 0.14), 0 2px 4px 0 rgba(33, 125, 215, 0.06); min-width: 330px; max-width: 370px; max-height: 420px; overflow-y: auto; z-index: 1002; padding: 0; border: none; animation: fadeDown 0.22s; }
 
 </style>
 

@@ -103,7 +103,7 @@
           >
             ดาวน์โหลด PDF ฟอร์ม
           </button>
-      <p>6666</p>
+      
         
         <br /><br />
 
@@ -280,19 +280,27 @@ async function loadBookingInfo() {
     pdfUrl.value = normalizePdfUrl(picked)
 
     // ===== Popup เดิม =====
-    let userName = historyList[0].requester || '-'
-    if ((!userName || userName === '-') && historyList[0].user_id) {
+    // ===== Popup ใหม่: ใช้ username_form เป็นหลัก =====
+    const prefer = v => (v && String(v).trim() !== '' ? String(v).trim() : null)
+    let userName =
+      prefer(historyList[0].username_form) ||                 // 1) จาก history ของ booking นี้
+      prefer(localStorage.getItem('username_form')) ||        // 2) เผื่อเก็บไว้ใน localStorage
+      prefer(historyList[0].requester) ||                     // 3) fallback: requester เดิม
+      null
+    if (!userName && historyList[0].user_id) {                // 4) สุดท้ายดึงจากข้อมูลผู้ใช้
       try {
         const userRes = await axios.get(`${API_BASE}/api/user/${historyList[0].user_id}`)
-        userName = userRes.data?.name || historyList[0].user_id
-      } catch { userName = historyList[0].user_id }
+        userName = prefer(userRes.data?.name) || historyList[0].user_id
+      } catch {
+        userName = historyList[0].user_id
+      }
     }
     const itemList = historyList.map(h => (h.quantity ? `${h.name} (${h.quantity})` : h.name)).join(', ')
     await Swal.fire({
       title: 'ส่งคำขอสำเร็จ',
       html: `
         <div class="swal-booking">
-          <div class="label"><b>ชื่อผู้ใช้:</b></div><div class="value">${esc(userName)}</div>
+          <div class="label"><b>ชื่อผู้ขอใช้:</b></div><div class="value">${esc(userName || '-')}</div>
           <div class="label"><b>วันที่ขอยืม:</b></div><div class="value">${esc(formatDateOnly(historyList[0].since))}</div>
           <div class="label"><b>วันที่คืน:</b></div><div class="value">${esc(formatDateOnly(historyList[0].uptodate))}</div>
           <div class="label"><b>รายการอุปกรณ์:</b></div><div class="value">${esc(itemList || '-')}</div>

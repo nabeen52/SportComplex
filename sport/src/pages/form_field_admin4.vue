@@ -57,30 +57,45 @@
         </div>
       </header>
 
-      <!-- Stepper -->
+     <!-- Stepper -->
       <div class="headStepper">
         <div class="stepper">
           <div v-for="(step, index) in steps" :key="index" class="step">
             <div
               class="circle"
               :class="{ active: index === currentStep, completed: index < currentStep }"
+              style="cursor:not-allowed"
+              @click.stop
             ></div>
             <div class="label">{{ step }}</div>
-            <div v-if="index < steps.length - 1" class="line" :class="{ filled: index < currentStep }"></div>
+            <div
+              v-if="index < steps.length - 1"
+              class="line"
+              :class="{ filled: index < currentStep }"
+            ></div>
           </div>
         </div>
       </div>
 
-      <!-- Content -->
+      <!-- Success card -->
       <div class="form-container">
-        <h1 style="display: flex; justify-content: center;">ส่งคำขอสำเร็จ ✅</h1>
-        <button class="pdfmake-btn" @click="() => { exportPdf(info) }">ดาวน์โหลด PDF ฟอร์ม</button>
-        <br><br>
+        <h1 style="display:flex;justify-content:center;">ส่งคำขอสำเร็จ ✅</h1>
+
+        <!-- ใช้ logic เดียวกับ form_equipment4 -->
+        <button
+          class="pdfmake-btn"
+          :disabled="!finalPdfUrl"
+          @click="downloadPdf"
+        >
+          ดาวน์โหลด PDF ฟอร์ม
+        </button>
+
+        <br /><br />
         <button id="btnNext" @click="handleNext">กลับหน้าแรก</button>
       </div>
-    </div>
 
-    <footer class="foot">
+      <!-- Footer -->
+      <footer class="foot">
         <div class="footer-left">
           <p>
             Sport Complex – Mae Fah Luang University |
@@ -93,118 +108,116 @@
           <p>© 2025 Center for Information Technology Services, Mae Fah Luang University. All rights reserved.</p>
         </div>
       </footer>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, watch, onBeforeUnmount } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
+import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import Swal from 'sweetalert2'
 import axios from 'axios'
 
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
+import jsPDF from 'jspdf'
+import autoTable from 'jspdf-autotable'
 
 import '@/assets/fonts/Sarabun-Regular-normal.js'
 import '@/assets/fonts/Sarabun-Bold-normal.js'
 
 const API_BASE = import.meta.env.VITE_API_BASE
-const ADMIN_FORM_LAST_SEEN_KEY = 'form_field_admin_lastSeen'
+const ADMIN_LAST_SEEN_KEY = 'admin_lastSeenTimestamp'
+
+// ======= Notification state =======
 const showNotifications = ref(false)
 const notifications = ref([])
+const products = ref([])
 const unreadCount = ref(0)
 const userId = localStorage.getItem('user_id') || ''
 const lastCheckedIds = new Set()
-const lastSeenTimestamp = ref(0)
-let notiPolling = null
+const lastSeenTimestamp = ref(parseInt(localStorage.getItem(ADMIN_LAST_SEEN_KEY) || '0'))
+let polling = null
 
-const route = useRoute()
-watch(() => route.fullPath, () => {
-  if (isMobile.value) isSidebarClosed.value = true
-})
-const isMobile = ref(window.innerWidth <= 600)
-window.addEventListener('resize', () => {
-  isMobile.value = window.innerWidth <= 600
-})
-
-function pruneOldNotifications() {
-  const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000
+function pruneOldNotifications () {
+  const cutoff = Date.now() - (7 * 24 * 60 * 60 * 1000) // 7 วัน
   notifications.value = notifications.value.filter(n => (n?.timestamp ?? 0) >= cutoff)
 }
 
-function toggleNotifications() {
+function toggleNotifications () {
   showNotifications.value = !showNotifications.value
   if (showNotifications.value) {
     lastSeenTimestamp.value = Date.now()
-    localStorage.setItem(ADMIN_FORM_LAST_SEEN_KEY, String(lastSeenTimestamp.value))
-    unreadCount.value = 0
+    localStorage.setItem(ADMIN_LAST_SEEN_KEY, String(lastSeenTimestamp.value))
+    unreadCount.value = 0 // เคลียร์ badge ทันที
   }
 }
 
-function closeNotifications() { showNotifications.value = false }
+function closeNotifications () { showNotifications.value = false }
 
-function handleClickOutside(e) {
-  const dd = document.querySelector('.notification-dropdown')
+function handleClickOutside (event) {
+  const dropdown = document.querySelector('.notification-dropdown')
   const btn = document.querySelector('.notification-btn')
-  if (dd && !dd.contains(e.target) && btn && !btn.contains(e.target)) closeNotifications()
+  if (dropdown && !dropdown.contains(event.target) && btn && !btn.contains(event.target)) {
+    closeNotifications()
+  }
 }
 
-async function fetchNotifications() {
-  const uid = localStorage.getItem('user_id') || ''
-  if (!uid) return
+async function fetchNotifications () {
   try {
     pruneOldNotifications()
 
-    const res = await axios.get(`${API_BASE}/api/history?user_id=${uid}`)
+    // เหมือน form_field_admin: ดึงรายการรออนุมัติ (field/equipment)
+    const res = await axios.get(`${API_BASE}/api/history/approve_field`)
     const data = Array.isArray(res.data) ? res.data : []
 
-    const list = data
-      .filter(it => ['approved','disapproved','cancel','canceled','returned'].includes((it.status||'').toLowerCase()))
-      .map(it => {
+    const pendings = data.filter(item =>
+      item?.status === 'pending' && (item?.type === 'field' || item?.type === 'equipment')
+    )
+
+    if (pendings.length) {
+      const newMessages = pendings.map(item => {
+        const id = item._id?.$oid || item._id
         const ts =
-          (it.returnedAt && new Date(it.returnedAt).getTime()) ??
-          (it.updatedAt && new Date(it.updatedAt).getTime()) ??
-          (it.approvedAt && new Date(it.approvedAt).getTime()) ??
-          (it.date && new Date(it.date).getTime()) ??
+          (item.updatedAt && new Date(item.updatedAt).getTime()) ??
+          (item.createdAt && new Date(item.createdAt).getTime()) ??
+          (item.date && new Date(item.date).getTime()) ??
           Date.now()
+
         return {
-          id: it._id,
-          type: (it.status||'').toLowerCase(),
+          id,
+          type: 'pending',
           timestamp: ts,
-          message:
-            `รายการ '${it.name}' ของคุณ${
-              (it.status||'').toLowerCase()==='approved' ? ' ได้รับการอนุมัติ' :
-              (it.status||'').toLowerCase()==='disapproved' ? ' ไม่ได้รับการอนุมัติ' :
-              (it.status||'').toLowerCase()==='canceled' || (it.status||'').toLowerCase()==='cancel' ? ' ถูกยกเลิก' :
-              (it.status||'').toLowerCase()==='returned' ? ' คืนของสำเร็จแล้ว' : ''
-            }`
+          message: item.type === 'field'
+            ? `สนาม '${item.name}' กำลังรอการอนุมัติ`
+            : `อุปกรณ์ '${item.name}' กำลังรอการอนุมัติ`
         }
       })
 
-    notifications.value = [...list, ...notifications.value]
-      .filter((v, i, arr) => arr.findIndex(x => (x.id||i) === (v.id||i)) === i)
-      .sort((a,b) => b.timestamp - a.timestamp)
+      notifications.value = [...notifications.value, ...newMessages]
+        // unique ตาม id
+        .filter((v, i, arr) => arr.findIndex(x => (x.id || i) === (v.id || i)) === i)
+        // ใหม่→เก่า
+        .sort((a, b) => b.timestamp - a.timestamp)
 
-    pruneOldNotifications()
+      pruneOldNotifications()
+    }
+
+    // badge: นับที่ timestamp > lastSeenTimestamp
     unreadCount.value = notifications.value.filter(n => n.timestamp > lastSeenTimestamp.value).length
-  } catch {}
+  } catch {/* เงียบไว้ */}
 }
 
-onMounted(async () => {
-  // ...ของเดิมคุณ (เช่น loadBookingInfo)
-  lastSeenTimestamp.value = parseInt(localStorage.getItem(ADMIN_FORM_LAST_SEEN_KEY) || '0')
+async function loadCart () {
+  const userId = localStorage.getItem('user_id') || ''
+  if (!userId) return
+  try {
+    const res = await axios.get(`${API_BASE}/api/cart?user_id=${userId}`)
+    products.value = res.data
+  } catch {
+    products.value = []
+  }
+}
 
-  document.addEventListener('mousedown', handleClickOutside)
-  await fetchNotifications()
-  notiPolling = setInterval(fetchNotifications, 30000)
-})
-
-onBeforeUnmount(() => {
-  if (notiPolling) clearInterval(notiPolling)
-  document.removeEventListener('mousedown', handleClickOutside)
-})
-
-
+// ======= Page state =======
 const router = useRouter()
 const info = ref({})
 const steps = ['กรอกข้อมูล', 'ยืนยันข้อมูล', 'สำเร็จ']
@@ -212,116 +225,220 @@ const currentStep = ref(3)
 const isSidebarClosed = ref(false)
 const stepRoutes = ['/form_field_admin', '/form_field_admin3', '/form_field_admin4']
 
-function toggleSidebar() { isSidebarClosed.value = !isSidebarClosed.value }
-function canStepTo(idx) { return idx <= currentStep.value }
-function goStep(idx) {
+function toggleSidebar () { isSidebarClosed.value = !isSidebarClosed.value }
+function canStepTo (idx) { return idx <= currentStep.value }
+function goStep (idx) {
   if (!canStepTo(idx) || idx === currentStep.value) return
   router.push(stepRoutes[idx])
 }
-function formatDateOnly(dateTime) {
+
+// === Utility for BE date ===
+function formatDateOnly (dateTime) {
   if (!dateTime) return '-'
   let dateObj
   if (typeof dateTime === 'string') {
     const parts = dateTime.split('T')[0].split('-')
-    if (parts.length === 3) {
-      dateObj = new Date(parts[0], parts[1] - 1, parts[2])
-    } else {
-      dateObj = new Date(dateTime)
-    }
+    dateObj = parts.length === 3 ? new Date(parts[0], parts[1] - 1, parts[2]) : new Date(dateTime)
   } else {
     dateObj = new Date(dateTime)
   }
   if (isNaN(dateObj)) return '-'
   const day = String(dateObj.getDate()).padStart(2, '0')
   const month = String(dateObj.getMonth() + 1).padStart(2, '0')
-  const year = dateObj.getFullYear() + 543 // ✅ แปลงเป็น พ.ศ.
+  const year = dateObj.getFullYear() + 543
   return `${day}/${month}/${year}`
 }
 
+function esc (s) {
+  return String(s ?? '-')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+    .replace(/\n/g, '<br>')
+}
 
-async function loadBookingInfo() {
+// ====== PDF logic (เหมือน form_equipment4) ======
+const pdfUrl = ref(null)
+const finalPdfUrl = computed(() => pdfUrl.value)
+
+function normalizePdfUrl (raw) {
+  if (!raw) return null
+  let u = String(raw).trim()
+  if (u.startsWith('/')) u = new URL(u, window.location.origin).href
+  if (location.protocol === 'https:' && u.startsWith('http://')) {
+    u = 'https://' + u.slice('http://'.length)
+  }
+  return u
+}
+
+function pickPdfUrl (list) {
+  if (!Array.isArray(list)) return null
+  const haveDirect = list.find(h => h?.bookingPdfUrl || h?.booking_pdf_url) || null
+  if (haveDirect) return haveDirect.bookingPdfUrl || haveDirect.booking_pdf_url || null
+  const haveAttach = list.find(h => Array.isArray(h?.attachment) && h.attachment[0])
+  return haveAttach ? haveAttach.attachment[0] : null
+}
+
+function getFileNameFromUrl (u, fallback = 'booking.pdf') {
+  try {
+    const { pathname } = new URL(u)
+    const name = decodeURIComponent(pathname.split('/').pop() || '')
+    return name || fallback
+  } catch {
+    return fallback
+  }
+}
+
+async function downloadPdf () {
+  try {
+    const url = finalPdfUrl.value
+    if (!url) {
+      await Swal.fire('ผิดพลาด', 'ไม่พบ URL ของไฟล์ PDF', 'error')
+      return
+    }
+    const resp = await fetch(url, { credentials: 'include' })
+    if (!resp.ok) throw new Error('download failed')
+
+    const blob = await resp.blob()
+    const blobUrl = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = blobUrl
+    const fallbackName = `booking_${info.value?.booking_id || localStorage.getItem('bookingId') || Date.now()}.pdf`
+    a.download = getFileNameFromUrl(url, fallbackName)
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(blobUrl)
+  } catch (e) {
+    await Swal.fire('ผิดพลาด', 'ไม่สามารถดาวน์โหลดไฟล์ได้', 'error')
+  }
+}
+
+// (เผื่อเรียกด้วย item เฉพาะจุด)
+async function exportPdf (item) {
+  try {
+    let urlFromItem =
+      item?.bookingPdfUrl ||
+      item?.booking_pdf_url ||
+      (Array.isArray(item?.attachment) ? item.attachment[0] : null) ||
+      item?.pdfUrl ||
+      item?.pdf_url ||
+      null
+
+    const chosen = normalizePdfUrl(urlFromItem || pdfUrl.value)
+    if (chosen) {
+      const w = window.open(chosen, '_blank', 'noopener,noreferrer')
+      if (!w) location.href = chosen
+      return
+    }
+    await Swal.fire('ผิดพลาด', 'ไม่พบ URL ของไฟล์ PDF ในรายการนี้', 'error')
+  } catch {
+    await Swal.fire('ผิดพลาด', 'ไม่พบไฟล์ PDF หรือพาธไม่ถูกต้อง', 'error')
+  }
+}
+
+// ====== Load data ======
+async function loadBookingInfo () {
   const bookingId = localStorage.getItem('bookingId')
   if (!bookingId) {
     Swal.fire('ไม่พบข้อมูลการจอง')
     return
   }
   try {
+    // ดึงรายละเอียดการจอง
     const res = await axios.get(`${API_BASE}/api/booking_field/${bookingId}`)
-    info.value = res.data
+    info.value = res.data || {}
     info.value.type = 'field'
-    if (info.value.user_id) {
+
+    // ดึง URL PDF จาก history
+    try {
+      const resHist = await axios.get(`${API_BASE}/api/history`, { params: { booking_id: bookingId } })
+      const list = (resHist.data || []).filter(
+        h => (h.type === 'field') && String(h.booking_id) === String(bookingId)
+      )
+      const picked = pickPdfUrl(list)
+      pdfUrl.value = normalizePdfUrl(picked)
+    } catch { /* ไม่มี URL ก็ปล่อยไว้ให้ปุ่ม disable */ }
+
+    // ===== ตั้งค่า "ชื่อผู้ขอ" โดยให้ username_form มาก่อน =====
+    const prefer = v => (v && String(v).trim() !== '' ? String(v).trim() : null)
+
+    // 1) จากข้อมูลการจองโดยตรง
+    let requester = prefer(info.value.username_form)
+
+    // 2) ถัดมาจาก localStorage เผื่อกรอกไว้ก่อนหน้า
+    if (!requester) requester = prefer(localStorage.getItem('username_form'))
+
+    // 3) ถ้ายังไม่มี ค่อย fallback เป็นชื่อจาก /api/user/:id
+    if (!requester && info.value.user_id) {
       try {
         const userRes = await axios.get(`${API_BASE}/api/user/${info.value.user_id}`)
-        info.value.requester = userRes.data.name || '-'
-      } catch {
-        info.value.requester = '-'
-      }
-    } else {
-      info.value.requester = '-'
+        requester = prefer(userRes.data?.name)
+      } catch { /* เงียบไว้ */ }
     }
+    info.value.requester = requester || '-'
 
+    // Popup สรุป
     await Swal.fire({
-      title: 'ส่งคำขอสำเร็จ!',
+      title: 'ส่งคำขอสำเร็จ',
       html: `
-        <p><b>ชื่อกิจกรรม:</b> ${info.value.name_activity || '-'}</p>
-        <p><b>ชื่อสนาม:</b> ${info.value.building || '-'}</p>
-        <p><b>ชื่อผู้ขอ:</b> ${info.value.requester || '-'}</p>
-        <p><b>วันที่:</b> ${formatDateOnly(info.value.since)} - ${formatDateOnly(info.value.uptodate)}</p>
-        <p><b>เวลา:</b> ${info.value.since_time || '-'} - ${info.value.until_thetime || '-'}</p>
+        <div class="swal-booking">
+          <div class="label"><b>ชื่อกิจกรรม:</b></div>
+          <div class="value">${esc(info.value.name_activity || '-')}</div>
+          <div class="label"><b>ชื่อสนาม:</b></div>
+          <div class="value">${esc(info.value.building || '-')}</div>
+          <div class="label"><b>ชื่อผู้ขอ:</b></div>
+          <div class="value">${esc(info.value.requester || '-')}</div>
+          <div class="label"><b>วันที่:</b></div>
+          <div class="value">${esc(formatDateOnly(info.value.since))} - ${esc(formatDateOnly(info.value.uptodate))}</div>
+          <div class="label"><b>เวลา:</b></div>
+          <div class="value">${esc(info.value.since_time || '-')} น. - ${esc(info.value.until_thetime || '-')} น.</div>
+        </div>
       `,
       icon: 'success',
       confirmButtonText: 'ตกลง',
       allowOutsideClick: false,
-      allowEscapeKey: false,
+      allowEscapeKey: false
     })
-  } catch (err) {
+  } catch {
     Swal.fire('ดึงข้อมูลไม่สำเร็จ')
   }
 }
-onMounted(loadBookingInfo)
 
-function handleNext() {
+
+onMounted(() => {
+  lastSeenTimestamp.value = parseInt(localStorage.getItem(ADMIN_LAST_SEEN_KEY) || '0')
+  window.addEventListener('click', handleClickOutside)   // ใช้งานตัวดักคลิกนอก dropdown
+
+  loadBookingInfo()
+  fetchNotifications()
+  polling = setInterval(fetchNotifications, 30000)
+  loadCart()
+})
+
+
+onBeforeUnmount(() => {
+  if (polling) clearInterval(polling)
+  window.removeEventListener('click', handleClickOutside)
+})
+
+
+function handleNext () {
   localStorage.removeItem('bookingId')
   localStorage.removeItem('fieldName')
   localStorage.removeItem('equipment_upload_file')
   sessionStorage.clear()
-
   if (window._tempSelectedFiles) window._tempSelectedFiles = []
   sessionStorage.removeItem('form_field_save')
-
   setTimeout(() => {
     const fileInput = document.getElementById('fileUploadInput')
     if (fileInput) fileInput.value = ''
   }, 100)
-
   router.push('/home_admin')
 }
-
-// ------------------ PDF MULTI-PAGE -------------------
-async function exportPdf(item) {
-  const bookingId = item.booking_field_id || item.booking_equipment_id || item.booking_id;
-  if (!bookingId) {
-    Swal.fire('ผิดพลาด', 'ไม่พบ booking_id สำหรับรายการนี้', 'error');
-    return;
-  }
-  try {
-    const res = await axios.get(`${API_BASE}/api/history/pdf/${bookingId}`, {
-      responseType: 'blob'
-    });
-    const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', `booking_${bookingId}.pdf`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(url);
-  } catch (err) {
-    Swal.fire('ผิดพลาด', 'ไม่พบไฟล์ PDF', 'error');
-  }
-}
 </script>
-
 
 <style scoped>
 .headStepper{
@@ -333,57 +450,15 @@ async function exportPdf(item) {
   border-radius: 20px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
 }
-.stepper {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-  border-radius: 20px;
-}
-.step {
-  display: flex;
-  align-items: center;
-  position: relative;
-}
-.circle {
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  background-color: #ccc;
-  z-index: 1;
-  transition: background 0.3s;
-  /* เพิ่มให้ดูจางเมื่อ disable */
-  opacity: 0.6;
-  pointer-events: none;
-}
-.circle.active {
-  background-color: #ff4d4f;
-}
-.circle.completed {
-  background-color: #ff4d4f;
-  opacity: 0.4;
-}
-.label {
-  margin-top: 15px;
-  text-align: center;
-  font-size: 12px;
-  position: absolute;
-  top: 40px;
-  left: 16px;
-  transform: translateX(-50%);
-  white-space: nowrap;
-}
-.line {
-  height: 4px;
-  width: 80px;
-  background-color: #ccc;
-  margin: 0 5px;
-  z-index: 0;
-  transition: background 0.3s;
-}
-.line.filled {
-  background-color: #ff4d4f;
-}
+.stepper { display: flex; align-items: center; justify-content: center; padding: 20px; border-radius: 20px; }
+.step { display: flex; align-items: center; position: relative; }
+.circle { width: 30px; height: 30px; border-radius: 50%; background-color: #ccc; z-index: 1; transition: background 0.3s; opacity: 0.6; pointer-events: none; }
+.circle.active { background-color: #ff4d4f; }
+.circle.completed { background-color: #ff4d4f; opacity: 0.4; }
+.label { margin-top: 15px; text-align: center; font-size: 12px; position: absolute; top: 40px; left: 16px; transform: translateX(-50%); white-space: nowrap; }
+.line { height: 4px; width: 80px; background-color: #ccc; margin: 0 5px; z-index: 0; transition: background 0.3s; }
+.line.filled { background-color: #ff4d4f; }
+
 .form-container {
   background-color: white;
   margin: 30px auto;
@@ -401,59 +476,16 @@ async function exportPdf(item) {
   border: none;
   border-radius: 6px;
   cursor: pointer;
-  text-decoration: none; 
+  text-decoration: none;
   display: inline-block;
 }
 
-/* ==== Notification styles ==== */
-.notification-dropdown {
-  position: absolute;
-  right: 0;
-  top: 36px;
-  background: white;
-  box-shadow: 0 4px 24px rgba(70, 70, 70, 0.14);
-  border-radius: 10px;
-  width: 320px;
-  max-width: 90vw;
-  z-index: 1500;
-  padding: 10px 0;
-  font-size: 1rem;
-}
-.notification-dropdown ul {
-  padding: 0 18px;
-  margin: 0;
-}
-.notification-dropdown li {
-  list-style: none;
-  padding: 10px 0;
-  border-bottom: 1px solid #eaeaea;
-  word-break: break-word;
-}
-.notification-dropdown li:last-child {
-  border-bottom: none;
-}
-.notification-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: 1.4rem;
-  position: relative;
-  margin-right: 8px;
-}
-.badge {
-  position: absolute;
-  top: 1px;
-  right: 3px;
-  background: #e11d48;
-  color: white;
-  border-radius: 8px;
-  padding: 1px 8px;
-  font-size: 0.83rem;
-  font-weight: bold;
-  min-width: 20px;
-  text-align: center;
-  z-index: 10;
-}
+/* ===== CSS แจ้งเตือนแบบ history ===== */
+.notification-dropdown { position: absolute; right: 0; top: 38px; background: #fff; border-radius: 18px 0 18px 18px; box-shadow: 0 8px 24px 0 rgba(27, 50, 98, 0.14), 0 2px 4px 0 rgba(33, 125, 215, 0.06); min-width: 330px; max-width: 370px; max-height: 420px; overflow-y: auto; z-index: 1002; padding: 0; border: none; animation: fadeDown 0.22s; }
+@keyframes fadeDown { 0% { opacity: 0; transform: translateY(-24px);} 100% { opacity: 1; transform: translateY(0);} }
+
+.notification-backdrop { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: transparent; z-index: 1001; }
+
 /* ปุ่ม PDF */
 .pdfmake-btn {
   background-color: #ff0000;
@@ -466,44 +498,36 @@ async function exportPdf(item) {
   transition: background 0.2s;
   font-weight: 500;
 }
-.pdfmake-btn:hover {
-  background-color: #7e0f0fdf;
-}
-.sidebar-overlay {
-  position: fixed;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0,0,0,0.18);
-  z-index: 1100;
-}
-.sidebar {
-  z-index: 1200;
-}
-@media (max-width: 600px) {
-  .main {
-    overflow-x: auto !important;
-    min-width: 400px;
-    width: 100vw;
-    box-sizing: border-box;
-    padding-right: 12px;
-  }
-  .form-container {
-    min-width: 400px;
-    width: 100vw;
-    box-sizing: border-box;
-    padding-right: 12px;
-    overflow-x: auto;
-  }
-}
+.pdfmake-btn:hover { background-color: #7e0f0fdf; }
+</style>
 
-.notification-backdrop{
-  position: fixed;
-  inset: 0;
-  background: transparent;
-  z-index: 1001;
+<!-- Global SweetAlert2 styles -->
+<style>
+.swal2-popup { width: auto; max-width: min(720px, 92vw); padding: 24px 26px 22px; font-family: inherit; }
+@supports (width: fit-content) { .swal2-popup { width: fit-content; } }
+.swal2-title { margin-bottom: 10px !important; }
+.swal2-popup .swal-booking {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 12px; row-gap: 8px; text-align: left;
+  margin-inline: auto; max-width: min(680px, 86vw);
 }
+.swal2-popup .swal-booking .label { justify-self: end; white-space: nowrap; font-weight: 700; }
+.swal2-popup .swal-booking .value {
+  justify-self: start; white-space: pre-wrap; word-break: break-word; line-height: 1.6;
+  max-width: clamp(260px, 56vw, 560px);
+}
+.layout{ min-height: 100vh; display: flex; }
+.main{ flex: 1 1 auto; display: flex; flex-direction: column; min-width: 0; }
+.foot{ margin-top: auto; flex-shrink: 0; width: 100%; border-radius: 0; }
+.form-container{ margin-bottom: 12px; }
+
 
 </style>
 
+<style>
+  html, body, #app { height: 100%; margin: 0; }
+</style>
 
 <style>
 @import '../css/style.css';

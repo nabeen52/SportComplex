@@ -748,6 +748,9 @@ async function handleNext() {
       proxyStudentName: bookingData.proxyStudentName || '',
       proxyStudentId: bookingData.proxyStudentId || '',
       bookingPdfUrl: pdfUrl,     // ✅ ใช้ URL แทน base64
+      username_form: bookingData.username_form || localStorage.getItem('username_form') || '',
+      id_form:       bookingData.id_form       || localStorage.getItem('id_form')       || '',
+
     }
 
     await axios.post(`${API_BASE}/api/history`, payload)

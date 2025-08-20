@@ -355,6 +355,7 @@ async downloadBookingPdf(target) {
         date: h.date || "-",
         startTime: h.startTime || "",
         endTime: h.endTime || "",
+        username_form: h.username_form || "-",
       }));
 
       // 3) group ข้อมูล
@@ -396,7 +397,11 @@ async downloadBookingPdf(target) {
     confirmButtonText: 'อนุมัติ',
     cancelButtonText: 'ยกเลิก',
     confirmButtonColor: '#0cad00',
-    cancelButtonColor: '#999'
+    cancelButtonColor: '#999',
+    customClass: {
+    htmlContainer: 'swal-center-text',
+    title: 'swal-center-title'
+  }
   });
   if (!result.isConfirmed) return;
 
@@ -434,15 +439,19 @@ async downloadBookingPdf(target) {
 
 async cancelGroup(group) {
   const result = await Swal.fire({
-    title: 'Cancel รายการนี้ทั้งหมด?',
-    text: 'ยืนยันการไม่อนุมัติสำหรับรายการนี้',
-    icon: 'warning',
-    showCancelButton: true,
-    confirmButtonText: 'ยืนยันไม่อนุมัติ',
-    cancelButtonText: 'กลับ',
-    confirmButtonColor: '#ff4d4f',
-    cancelButtonColor: '#999'
-  });
+  title: 'Cancel รายการนี้ทั้งหมด?',
+  text: 'ยืนยันการไม่อนุมัติสำหรับรายการนี้',
+  icon: 'warning',
+  showCancelButton: true,
+  confirmButtonText: 'ยืนยันไม่อนุมัติ',
+  cancelButtonText: 'กลับ',
+  confirmButtonColor: '#ff4d4f',
+  cancelButtonColor: '#999',
+  customClass: {
+    htmlContainer: 'swal-center-text',
+    title: 'swal-center-title'
+  }
+});
   if (!result.isConfirmed) return;
 
   const adminId = localStorage.getItem('user_id');
@@ -557,74 +566,111 @@ pruneOldNotifications() {
     // ไม่ต้องแจ้ง error
   }
 },
-//     async approveGroup(group) {
-//   const result = await Swal.fire({
-//     title: 'Are you sure?',
-//     text: 'Approve รายการนี้ทั้งหมด?',
-//     icon: 'question',
-//     showCancelButton: true,
-//     confirmButtonText: 'Yes, approve it!',
-//     cancelButtonText: 'Cancel',
-//     confirmButtonColor: '#0cad00',
-//     cancelButtonColor: '#d90004'
-//   });
 
-//   if (result.isConfirmed) {
-//     // ===== จุดนี้ต้องใช้ user_id ที่เป็น string =====
-//     // ดึงจาก localStorage หรือ state manager
-//     const adminUserId = localStorage.getItem('user_id');
-// const approveDate = new Date().toISOString();
-
-// await Promise.all(
-//   group.items.map(item => {
-//     let url, data;
-//     if (item.type === 'field') {
-//       url = `${API_BASE}/api/history/${item.id}/approve_field`;
-//       data = { admin_id: adminUserId, approvedAt: approveDate };
-//     } else {
-//       url = `${API_BASE}/api/history/${item.id}/approve_equipment`;
-//       data = { staff_id: adminUserId, approvedAt: approveDate };
-//     }
-//     return axios.patch(url, data);
-//   })
-// );
-
-//     // เอากลุ่มที่อนุมัติแล้วออกจาก list
-//     this.grouped = this.grouped.filter(g => g !== group);
-//     Swal.fire('Approved', 'The booking has been approved.', 'success');
-//   }
-// },
 handleResize() {
     this.isMobile = window.innerWidth <= 800;
     if (!this.isMobile) this.isSidebarClosed = false;
   },
-    // async cancelGroup(group) {
-    //   const result = await Swal.fire({
-    //     title: 'Are you sure?',
-    //     text: 'Cancel รายการนี้ทั้งหมด?',
-    //     icon: 'warning',
-    //     showCancelButton: true,
-    //     confirmButtonText: 'Yes, cancel it!',
-    //     cancelButtonText: 'Back',
-    //     confirmButtonColor: '#ff4d4f',
-    //     cancelButtonColor: '#999'
-    //   })
-    //   if (result.isConfirmed) {
-    //     const adminId = localStorage.getItem('user_id');
-    //     await Promise.all(
-    //       group.items.map(item =>
-    //         axios.patch(
-    //           item.type === 'field'
-    //             ? `${API_BASE}/api/history/${item.id}/disapprove_field`
-    //             : `${API_BASE}/api/history/${item.id}/disapprove_equipment`,
-    //           { admin_id: adminId }
-    //         )
-    //       )
-    //     );
-    //     this.grouped = this.grouped.filter(g => g !== group)
-    //     Swal.fire('Cancelled', 'The booking has been cancelled.', 'error')
-    //   }
-    // },
+
+  async viewAttachment(group) {
+  try {
+    const bookingId = group.booking_id;
+    if (!bookingId) {
+      Swal.fire('ผิดพลาด','ไม่พบ booking_id สำหรับดูไฟล์แนบ','error');
+      return;
+    }
+
+    // 1) ดึง history ทั้งหมดของ booking_id นี้
+    const resHist = await axios.get(`${API_BASE}/api/history`, { params: { booking_id: bookingId } });
+    let list = Array.isArray(resHist.data) ? resHist.data : [];
+    list = list.filter(h => String(h?.booking_id || '') === String(bookingId));
+
+    // 2) รวมไฟล์แนบจากทุกแถว + map กับ fileName ตาม index
+    const files = [];
+    const seen = new Set(); // กันซ้ำโดย URL
+    const safeName = (name, url) => {
+      if (name && typeof name === 'string') return name;
+      try {
+        const { pathname } = new URL(url);
+        const n = decodeURIComponent(pathname.split('/').pop() || '');
+        return n || 'attachment';
+      } catch {
+        return 'attachment';
+      }
+    };
+
+    list.forEach(h => {
+      const atts = Array.isArray(h?.attachment) ? h.attachment : [];
+      const names = Array.isArray(h?.fileName) ? h.fileName : [];
+      atts.forEach((u, i) => {
+        const url = this.normalizePdfUrl(u);
+        if (!url) return;
+        if (seen.has(url)) return;
+        seen.add(url);
+        files.push({
+          url,
+          name: safeName(names[i], url)
+        });
+      });
+    });
+
+    if (files.length === 0) {
+      Swal.fire('ไม่มีไฟล์แนบ', 'ไม่พบไฟล์แนบสำหรับรายการนี้', 'warning');
+      return;
+    }
+
+    // ถ้ามีไฟล์เดียว เปิดทันที
+    if (files.length === 1) {
+      window.open(files[0].url, '_blank', 'noopener');
+      return;
+    }
+
+    // 3) แสดงรายการให้เลือกเปิด
+    const itemHtml = files.map((f, idx) => `
+      <li style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px dashed #e5e7eb;">
+        <div style="flex:1;word-break:break-word;text-align:left;">
+          ${idx + 1}. ${f.name}
+        </div>
+        <div>
+          <button class="open-attach" data-idx="${idx}"
+            style="background:#3a7ca5;color:#fff;padding:6px 12px;border-radius:8px;border:none;cursor:pointer;">
+            เปิด
+          </button>
+        </div>
+      </li>
+    `).join('');
+
+    Swal.fire({
+      title: 'ไฟล์แนบทั้งหมด',
+      html: `
+        <div style="text-align:left;max-height:60vh;overflow:auto;padding:4px 2px;">
+          <ul style="list-style:none;margin:0;padding:0;">
+            ${itemHtml}
+          </ul>
+        </div>
+      `,
+      showConfirmButton: true,
+      confirmButtonText: 'ปิด',
+      confirmButtonColor: '#3085d6',
+      didOpen: () => {
+        // bind ปุ่ม "เปิด" แต่ละรายการ
+        document.querySelectorAll('.open-attach').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const i = Number(btn.getAttribute('data-idx'));
+            const f = files[i];
+            if (f?.url) window.open(f.url, '_blank', 'noopener');
+          });
+        });
+      }
+    });
+  } catch (err) {
+    console.error('viewAttachment error:', err);
+    Swal.fire('ผิดพลาด','ไม่สามารถดึงไฟล์แนบได้','error');
+  }
+},
+
+
+    
    detailGroup(group) {
   // helper: สร้าง 1 แถว (label/value) ให้ชิดซ้ายเท่ากันหมด
   const row = (label, value) => `
@@ -638,16 +684,22 @@ handleResize() {
     </div>
   `;
 
-  // helper: ครอบ container + ปุ่ม PDF
-  const wrap = (title, rowsHtml, showPdf, bookingId) => `
+  // helper: ครอบ container + ปุ่ม PDF + ปุ่มแนบไฟล์
+  const wrap = (rowsHtml, showPdf, showAttach) => `
     <div style="text-align:left; padding-top:2px;">
       ${rowsHtml}
-      ${showPdf ? `
-        <div style="text-align:center; margin-top:14px;">
-          <button id="pdf-btn" style="background:#213555;color:#fff;padding:8px 18px;border-radius:8px;border:none;cursor:pointer;">
+      <div style="text-align:center; margin-top:14px;">
+        ${showPdf ? `
+          <button id="pdf-btn"
+                  style="background:#213555;color:#fff;padding:8px 18px;border-radius:8px;border:none;cursor:pointer;margin-right:10px;">
             ดูไฟล์ PDF
-          </button>
-        </div>` : ``}
+          </button>` : ``}
+        ${showAttach ? `
+          <button id="attach-btn"
+                  style="background:#3a7ca5;color:#fff;padding:8px 18px;border-radius:8px;border:none;cursor:pointer;">
+            ดูไฟล์แนบ
+          </button>` : ``}
+      </div>
     </div>
   `;
 
@@ -655,54 +707,67 @@ handleResize() {
     const it = group.items[0] || {};
     const zone = (it.zone && it.zone !== '-' && it.zone !== '') ? it.zone : '-';
     const requester = this.userMap[it.user_id] || it.requester || it.user_id || '-';
+
     const rowsHtml =
       row('ชื่อสนาม:', it.name || '-') +
       row('โซน:', zone) +
-      row('ชื่อผู้ขอใช้:', requester) +
+      row('ชื่อผู้ขอใช้:',  it.username_form || requester) +
       row('วันที่ขอใช้:', it.date ? this.formatDate(it.date) : '-') +
-      row('ช่วงเวลาที่ใช้:', `${it.since ? this.formatDate(it.since) : '-'} - ${it.uptodate ? this.formatDate(it.uptodate) : '-'}`);
+      row('ช่วงเวลาที่ใช้:',
+          `${it.since ? this.formatDate(it.since) : '-'} - ${it.uptodate ? this.formatDate(it.uptodate) : '-'}`) +
+      row('ช่วงเวลา (ชั่วโมง):',
+          (it.startTime && it.endTime) ? `${it.startTime} - ${it.endTime}` : '-');
 
     Swal.fire({
       title: 'รายละเอียดสนาม',
-      html: wrap('รายละเอียดสนาม', rowsHtml, true, group.booking_id),
+      html: wrap(rowsHtml, true, true),
       confirmButtonText: 'ปิด',
       confirmButtonColor: '#3085d6',
       didOpen: () => {
-        const btn = document.getElementById('pdf-btn');
-        if (btn) btn.addEventListener('click', () => this.downloadBookingPdf(group));
+        const btnPdf = document.getElementById('pdf-btn');
+        if (btnPdf) btnPdf.addEventListener('click', () => this.downloadBookingPdf(group));
+
+        const btnAttach = document.getElementById('attach-btn');
+        if (btnAttach) btnAttach.addEventListener('click', () => this.viewAttachment(group));
       }
     });
+
   } else {
-    // equipment (โชว์หลายชิ้นได้)
+    // equipment (หลายชิ้น)
     let rowsHtml = '';
     group.items.forEach((item, idx) => {
       const requester = this.userMap[item.user_id] || item.requester || item.user_id || '-';
       rowsHtml += `
         <div style="padding:8px 0; border-bottom:1px dashed #c7c7c7;">
-          ${row(`อุปกรณ์ที่ ${idx + 1}:`, item.name || '-')}
+          ${row('อุปกรณ์ที่ ' + (idx + 1) + ':', item.name || '-')}
           ${row('จำนวน:', item.quantity || '-')}
-          ${row('ชื่อผู้ขอใช้:', requester)}
+          ${row('ชื่อผู้ขอใช้:', item.username_form || requester )}
           ${row('วันที่ขอยืม:', item.date ? this.formatDate(item.date) : '-')}
-          ${row('ช่วงเวลาที่ใช้:', `${item.since ? this.formatDate(item.since) : '-'} - ${item.uptodate ? this.formatDate(item.uptodate) : '-'}`)}
+          ${row('ช่วงเวลาที่ใช้:',
+                (item.since ? this.formatDate(item.since) : '-') + ' - ' + (item.uptodate ? this.formatDate(item.uptodate) : '-') )}
         </div>
       `;
     });
 
     Swal.fire({
       title: 'รายละเอียดอุปกรณ์',
-      html: wrap('รายละเอียดอุปกรณ์', rowsHtml, true, group.booking_id),
+      html: wrap(rowsHtml, true, true),
       confirmButtonText: 'ปิด',
       confirmButtonColor: '#3085d6',
       didOpen: () => {
-            const btn = document.getElementById('pdf-btn');
-            if (btn) btn.addEventListener('click', () => this.downloadBookingPdf(group));
-          }
+        const btnPdf = document.getElementById('pdf-btn');
+        if (btnPdf) btnPdf.addEventListener('click', () => this.downloadBookingPdf(group));
+
+        const btnAttach = document.getElementById('attach-btn');
+        if (btnAttach) btnAttach.addEventListener('click', () => this.viewAttachment(group));
+      }
     });
   }
 },
 
 
-   // ==== PDF DOWNLOAD BUTTON ====
+
+     // ==== PDF DOWNLOAD BUTTON ====
   async  exportPdf(item) {
   // --------- ฟังก์ชันย่อยสำหรับ field ---------
   function formatDate(date) {
@@ -1465,8 +1530,14 @@ doc.text(`โทร ${data.tel || '-'}`, 430, 100);
   z-index: 1001; /* ต้องต่ำกว่า .notification-dropdown */
 }
 
+.notification-dropdown { position: absolute; right: 0; top: 38px; background: #fff; border-radius: 18px 0 18px 18px; box-shadow: 0 8px 24px 0 rgba(27, 50, 98, 0.14), 0 2px 4px 0 rgba(33, 125, 215, 0.06); min-width: 330px; max-width: 370px; max-height: 420px; overflow-y: auto; z-index: 1002; padding: 0; border: none; animation: fadeDown 0.22s; }
+
 
 </style>
 <style>
 @import '../css/style.css';
+
+.swal-center-text { text-align: center !important; }
+.swal-center-title { text-align: center !important; }
+
 </style>

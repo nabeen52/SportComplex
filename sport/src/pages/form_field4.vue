@@ -97,8 +97,6 @@
           ดาวน์โหลด PDF ฟอร์ม
         </button>
 
-        <p>555</p>
-
         <br /><br />
         <button id="btnNext" @click="handleNext">กลับหน้าแรก</button>
       </div>
@@ -351,35 +349,47 @@ async function loadBookingInfo () {
     Swal.fire('ไม่พบข้อมูลการจอง')
     return
   }
+
   try {
-    // ข้อมูลรายละเอียดจองสนาม
+    // 1) ดึงรายละเอียดการจองสนาม
     const res = await axios.get(`${API_BASE}/api/booking_field/${bookingId}`)
-    info.value = res.data
+    info.value = res.data || {}
     info.value.type = 'field'
 
-    // ดึง URL PDF จาก history ที่ booking_id ตรงกัน (เหมือน equipment4)
+    // 2) หาลิงก์ PDF จาก history ที่ booking_id ตรงกัน
     try {
       const resHist = await axios.get(`${API_BASE}/api/history`, { params: { booking_id: bookingId } })
       const list = (resHist.data || []).filter(
         h => (h.type === 'field') && String(h.booking_id) === String(bookingId)
       )
-      const picked = pickPdfUrl(list)
-      pdfUrl.value = normalizePdfUrl(picked)
-    } catch { /* เงียบไว้ (ไม่มี URL ก็ให้ปุ่ม disable) */ }
-
-    // ดึงชื่อผู้ขอ (เหมือนเดิม)
-    if (info.value.user_id) {
-      try {
-        const userRes = await axios.get(`${API_BASE}/api/user/${info.value.user_id}`)
-        info.value.requester = userRes.data.name || '-'
-      } catch {
-        info.value.requester = '-'
-      }
-    } else {
-      info.value.requester = '-'
+      const picked = pickPdfUrl(list)            // มีฟังก์ชันนี้อยู่แล้วในไฟล์
+      pdfUrl.value = normalizePdfUrl(picked)     // มีฟังก์ชันนี้อยู่แล้วในไฟล์
+    } catch {
+      // ไม่มี URL ก็ปล่อยให้ปุ่มดาวน์โหลด disable ไป
     }
 
-    // Popup สรุป
+    // 3) ตั้งค่า "ชื่อผู้ขอ" — ใช้ username_form เป็นหลัก
+    const prefer = v => (v && String(v).trim() !== '' ? String(v).trim() : null)
+
+    // 3.1 จากข้อมูลจองโดยตรง
+    let requester = prefer(info.value.username_form)
+
+    // 3.2 เผื่อมีเก็บไว้ใน localStorage จากขั้นตอนก่อนหน้า
+    if (!requester) requester = prefer(localStorage.getItem('username_form'))
+
+    // 3.3 ถ้ายังไม่มี ค่อย fallback ไปชื่อผู้ใช้จาก /api/user/:id
+    if (!requester && info.value.user_id) {
+      try {
+        const userRes = await axios.get(`${API_BASE}/api/user/${info.value.user_id}`)
+        requester = prefer(userRes.data?.name)
+      } catch {
+        // เงียบไว้
+      }
+    }
+
+    info.value.requester = requester || '-'
+
+    // 4) แสดงสรุป
     await Swal.fire({
       title: 'ส่งคำขอสำเร็จ',
       html: `
@@ -390,14 +400,14 @@ async function loadBookingInfo () {
           <div class="label"><b>ชื่อสนาม:</b></div>
           <div class="value">${esc(info.value.building || '-')}</div>
 
-          <div class="label"><b>ชื่อผู้ขอ:</b></div>
-          <div class="value">${esc(info.value.requester || '-')}</div>
+          <div class="label"><b>ชื่อผู้ขอใช้:</b></div>
+          <div class="value">${esc(info.value.username_form || info.value.requester || '-')}</div>
 
           <div class="label"><b>วันที่:</b></div>
           <div class="value">${esc(formatDateOnly(info.value.since))} - ${esc(formatDateOnly(info.value.uptodate))}</div>
 
           <div class="label"><b>เวลา:</b></div>
-          <div class="value">${esc(info.value.since_time || '-')} น. - ${esc(info.value.until_thetime || '-')} น. </div>
+          <div class="value">${esc(info.value.since_time || '-')} น. - ${esc(info.value.until_thetime || '-')} น.</div>
         </div>
       `,
       icon: 'success',
@@ -409,6 +419,7 @@ async function loadBookingInfo () {
     Swal.fire('ดึงข้อมูลไม่สำเร็จ')
   }
 }
+
 
 onMounted(() => {
   lastSeenTimestamp.value = parseInt(localStorage.getItem('lastSeenTimestamp') || '0')

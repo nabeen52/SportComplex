@@ -166,9 +166,9 @@ export default {
       quantity: this.selectedQuantity,
       image: this.currentImage
     });
-    Swal.fire({
+  Swal.fire({
   title: 'Added to cart',
-  text: `Added ${this.selectedQuantity} Success`,
+  html: `<p style="text-align:center; margin:0">Added ${this.selectedQuantity} Success</p>`,
   icon: 'success',
   timer: 1200,
   showConfirmButton: false

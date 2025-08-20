@@ -4,20 +4,18 @@
     <aside class="sidebar" :class="{ closed: isSidebarClosed }">
       <div class="sidebar-header">
         <img src="/img/logo.png" alt="logo" class="logo" />
-        <p class="sidebar-title">Sport Complex MFU</p>
+        <p class="sidebar-title">ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง</p>
       </div>
       <nav class="nav-links">
-        <router-link to="/dashboard" exact-active-class="active"><i class="pi pi-chart-pie"></i> Dashboard</router-link>
-        <router-link to="/home_admin" exact-active-class="active"><i class="pi pi-megaphone"></i> Edit News</router-link>
-        <router-link to="/edit_field" active-class="active"><i class="pi pi-map-marker"></i> Edit Field</router-link>
-        <router-link to="/edit_equipment" active-class="active"><i class="pi pi-clipboard"></i> Edit Equipment</router-link>
-        <router-link to="/booking_field_admin" active-class="active"><i class="pi pi-map-marker"></i> Book Field</router-link>
-        <router-link to="/approve_field" active-class="active"><i class="pi pi-verified"></i> Approve</router-link>
-        <router-link to="/return_admin" active-class="active">
-          <i class="pi pi-box"></i> Return
-        </router-link>
-        <router-link to="/members" active-class="active"><i class="pi pi-user-edit"></i> Member</router-link>
-        <router-link to="/history_admin" active-class="active"><i class="pi pi-history"></i> History System</router-link>
+        <router-link to="/dashboard" exact-active-class="active"><i class="pi pi-chart-pie"></i> แดชบอร์ด</router-link>
+        <router-link to="/home_admin" exact-active-class="active"><i class="pi pi-megaphone"></i> แก้ไขข่าว</router-link>
+        <router-link to="/edit_field" active-class="active"><i class="pi pi-map-marker"></i> แก้ไขสนาม</router-link>
+        <router-link to="/edit_equipment" active-class="active"><i class="pi pi-clipboard"></i> แก้ไขอุปกรณ์ </router-link>
+        <router-link to="/booking_field_admin" active-class="active"><i class="pi pi-map-marker"></i> จองสนาม</router-link>
+        <router-link to="/approve_field" active-class="active"><i class="pi pi-verified"></i> อนุมัติ</router-link>
+        <router-link to="/return_admin" active-class="active"><i class="pi pi-box"></i> รับคืนอุปกรณ์ </router-link>
+        <router-link to="/members" active-class="active"><i class="pi pi-user-edit"></i> พนักงาน/ผู้ดูแล </router-link>
+        <router-link to="/history_admin" active-class="active"><i class="pi pi-history"></i> ระบบประวัติการทำรายการ</router-link>
       </nav>
     </aside>
 <div
@@ -535,6 +533,7 @@ window.removeEventListener('resize', checkMobile)
   justify-content: center;
   min-height: 600px;
 }
+.notification-dropdown { position: absolute; right: 0; top: 38px; background: #fff; border-radius: 18px 0 18px 18px; box-shadow: 0 8px 24px 0 rgba(27, 50, 98, 0.14), 0 2px 4px 0 rgba(33, 125, 215, 0.06); min-width: 330px; max-width: 370px; max-height: 420px; overflow-y: auto; z-index: 1002; padding: 0; border: none; animation: fadeDown 0.22s; }
 </style>
 <style>
 @import '../css/style.css';
