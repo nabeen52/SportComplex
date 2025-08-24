@@ -546,7 +546,6 @@ onUnmounted(() => {
 
 /* เพิ่ม gap ระหว่าง input กับปุ่ม */
 
-
 .editable-row {
   display: flex;
   align-items: center;
@@ -558,9 +557,6 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 
-
-
-
 /* ทำให้แสดงบรรทัดเดียวเฉพาะ desktop */
 @media screen and (min-width: 601px) {
   .info-line {
@@ -570,6 +566,20 @@ onUnmounted(() => {
   .info-line .label,
   .info-line .value {
     white-space: nowrap;
+  }
+}
+
+@media (max-width: 600px) {
+  /* ขอบซ้าย-ขวาของการ์ด */
+  .profile-scroll-container {
+    padding: 0 15px;   /* ปรับได้ตามต้องการ เช่น 16/20px */
+  }
+
+  /* ให้ปุ่มชิดขวาเท่าขอบการ์ด */
+  .logout-container {
+    display: flex;
+    justify-content: flex-end;
+    margin: 10px 15px 20px 0; /* ขวา = 15px เท่ากับ .profile-scroll-container */
   }
 }
 

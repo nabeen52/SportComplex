@@ -77,7 +77,7 @@
       <div class="form-container">
         <div class="form-header">
           <h3>แบบฟอร์มการยืมอุปกรณ์/วัสดุ/ครุภัณฑ์</h3>
-          <p> โทร: 0-5391-7820 เเละ 0-5391-7821 E-mail: sport-complex@mfu.ac.th</p>
+          <p><b>โทร: 0-5391-7820 และ 0-5391-7821 | E-mail: sport-complex@mfu.ac.th</b></p>
         </div>
         <div class="form-grid">
           <!-- Name -->
@@ -230,7 +230,7 @@
         v-model="dpStart"
         :format="formatBE"
         :enable-time-picker="false"
-        :min-date="new Date()"
+        :min-date="minStartDate"
         :disabled="isFormLocked"
         placeholder="วัน/เดือน/ปี"
         locale="th"
@@ -246,7 +246,7 @@
         v-model="dpEnd"
         :format="formatBE"
         :enable-time-picker="false"
-        :min-date="dpStart || new Date()"
+        :min-date="endMinDate"
         :disabled="isFormLocked"
         placeholder="วัน/เดือน/ปี"
         locale="th"
@@ -272,7 +272,7 @@
         v-model="dpReceive"
         :format="formatBE"
         :enable-time-picker="false"
-        :min-date="dpStart || new Date()"
+        :min-date="receiveMinDate"
         :max-date="dpEnd || null"
         :disabled="!form.start_date || !form.end_date || isFormLocked"
         placeholder="วัน/เดือน/ปี"
@@ -642,6 +642,23 @@ function syncDateRange(type) {
   }
 }
 
+
+/* ===== บังคับจองล่วงหน้าอย่างน้อย 5 วัน ===== */
+const MIN_LEAD_DAYS = 5
+const minStartDate = ref(new Date())
+minStartDate.value.setHours(0,0,0,0)
+minStartDate.value.setDate(minStartDate.value.getDate() + MIN_LEAD_DAYS)
+
+/* END ต้องเป็นอย่างน้อย dpStart หรือไม่ก็น้อยสุดคือ minStartDate */
+const endMinDate = computed(() => {
+  return (dpStart.value && !isNaN(dpStart.value)) ? dpStart.value : minStartDate.value
+})
+
+/* วันที่รับของอย่างน้อยคือวันเริ่ม (ถ้าเลือกแล้ว) มิฉะนั้นคือ minStartDate */
+const receiveMinDate = computed(() => {
+  return (dpStart.value && !isNaN(dpStart.value)) ? dpStart.value : minStartDate.value
+})
+/* ============================================= */
 
 function validateFields() {
   const fields = {}
@@ -1170,10 +1187,8 @@ watch(dpEnd, (d) => {
 watch(dpReceive, (d) => {
   form.receive_date = (!d || isNaN(d)) ? '' : toISO(d)
 })
-
-
-
 </script>
+
 <style scoped>
 .headStepper {
   position: sticky;

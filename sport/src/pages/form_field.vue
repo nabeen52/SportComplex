@@ -183,7 +183,6 @@
   />
 </div>
 
-
               <div class="form-row">
                 <label>
                   ชื่อกิจกรรม/โครงการ
@@ -194,8 +193,11 @@
                   v-model="formData.name_activity"
                   rows="4"
                   placeholder="กรอกชื่อกิจกรรม/โครงการ"
+                  maxlength="100"
                 ></textarea>
+                <small class="note-text">{{ formData.name_activity.length }}/100 ตัวอักษร</small>
               </div>
+
               <div class="form-row">
                 <label>
                   เหตุผลในการขอใช้
@@ -206,60 +208,64 @@
                   v-model="formData.reasons"
                   rows="4"
                   placeholder="กรอกเหตุผลในการขอใช้"
+                  maxlength="100"
                 ></textarea>
+                <small class="note-text">{{ formData.reasons.length }}/100 ตัวอักษร</small>
               </div>
+
+
               <div class="form-row date-range-row">
-  <label>
-    ช่วงวันที่
-    <span v-if="showValidate && (missingFields.since || missingFields.uptodate)" class="required-star">*</span>
-  </label>
-  <div class="date-range-group" style="gap:8px; width:100%">
-    <VueDatePicker
-      v-model="dpStart"
-      :format="formatBE"
-      :enable-time-picker="false"
-      :min-date="minBookingDateObj"
-      :state="!(showValidate && missingFields.since)"
-      placeholder="วัน/เดือน/ปี"
-      locale="th"
-      :hide-input-icon="true"
-      style="width:48%"
-    />
-    <span>-</span>
-    <VueDatePicker
-      v-model="dpEnd"
-      :format="formatBE"
-      :enable-time-picker="false"
-      :min-date="dpStart || minBookingDateObj"
-      :state="!(showValidate && missingFields.uptodate)"
-      placeholder="วัน/เดือน/ปี"
-      locale="th"
-      :hide-input-icon="true"
-      style="width:48%"
-    />
-  </div>
-  <small class="note-text">* กรุณาจองก่อนใช้งานจริง 5 วัน</small>
-</div>
-              <div class="form-row time-range-row">
-  <label>
-    ช่วงเวลา
-    <span v-if="showValidate && (missingFields.since_time || missingFields.until_thetime)" class="required-star">*</span>
-  </label>
-  <div class="time-range-group">
-    <input
-      type="time"
-      :class="inputClass('since_time')"
-      v-model="formData.since_time"
-    />
-    <span>-</span>
-    <input
-      type="time"
-      :class="inputClass('until_thetime')"
-      v-model="formData.until_thetime"
-      :min="minUntilTime"
-    />
-  </div>
-</div>
+                <label>
+                  ช่วงวันที่
+                  <span v-if="showValidate && (missingFields.since || missingFields.uptodate)" class="required-star">*</span>
+                </label>
+                <div class="date-range-group" style="gap:8px; width:100%">
+                  <VueDatePicker
+                    v-model="dpStart"
+                    :format="formatBE"
+                    :enable-time-picker="false"
+                    :min-date="minBookingDateObj"
+                    :state="!(showValidate && missingFields.since)"
+                    placeholder="วัน/เดือน/ปี"
+                    locale="th"
+                    :hide-input-icon="true"
+                    style="width:48%"
+                  />
+                  <span>-</span>
+                  <VueDatePicker
+                    v-model="dpEnd"
+                    :format="formatBE"
+                    :enable-time-picker="false"
+                    :min-date="dpStart || minBookingDateObj"
+                    :state="!(showValidate && missingFields.uptodate)"
+                    placeholder="วัน/เดือน/ปี"
+                    locale="th"
+                    :hide-input-icon="true"
+                    style="width:48%"
+                  />
+                </div>
+                <small class="note-text">* กรุณาจองก่อนใช้งานจริง 5 วัน</small>
+              </div>
+                            <div class="form-row time-range-row">
+                <label>
+                  ช่วงเวลา
+                  <span v-if="showValidate && (missingFields.since_time || missingFields.until_thetime)" class="required-star">*</span>
+                </label>
+                <div class="time-range-group">
+                  <input
+                    type="time"
+                    :class="inputClass('since_time')"
+                    v-model="formData.since_time"
+                  />
+                  <span>-</span>
+                  <input
+                    type="time"
+                    :class="inputClass('until_thetime')"
+                    v-model="formData.until_thetime"
+                    :min="minUntilTime"
+                  />
+                </div>
+              </div>
 
             
               <!-- เพิ่มใน <form> ตำแหน่งใกล้ๆ requester/proxyUserId -->

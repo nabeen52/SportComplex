@@ -572,6 +572,13 @@ onBeforeUnmount(() => {
   transition: background 0.3s, border-color 0.3s, color 0.3s;
 }
 
+.notification-backdrop {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: transparent;
+  z-index: 1001; /* ต้องน้อยกว่า .notification-dropdown (1002) */
+}
+
 .zone-overlay-label {
   position: absolute;
   top: 32px;

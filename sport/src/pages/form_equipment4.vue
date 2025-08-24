@@ -262,32 +262,35 @@ async function loadBookingInfo() {
     await Swal.fire('ไม่พบข้อมูลการจอง')
     return
   }
+
   try {
+    // 1) ดึงประวัติทั้งหมดของ booking นี้ (type=equipment)
     const res = await axios.get(`${API_BASE}/api/history`, { params: { booking_id: bookingId } })
     const historyList = (res.data || []).filter(
       h => (h.type === 'equipment') && String(h.booking_id) === String(bookingId)
     )
+
     if (!historyList.length) {
       await Swal.fire('ไม่พบข้อมูลในประวัติ')
       return
     }
 
-    // เซ็ตข้อมูลหลัก
+    // เก็บตัวแรกไว้เป็นตัวแทนหลัก
     bookingInfo.value = historyList[0]
 
-    // >>> จุดสำคัญ: ดึง URL จากทุก record ของ booking เดียวกัน แล้ว normalize <<<
+    // 2) หา URL ของ PDF แล้ว normalize เพื่อใช้กับปุ่มดาวน์โหลด
     const picked = pickPdfUrl(historyList)
     pdfUrl.value = normalizePdfUrl(picked)
 
-    // ===== Popup เดิม =====
-    // ===== Popup ใหม่: ใช้ username_form เป็นหลัก =====
+    // 3) ตั้งค่า "ชื่อผู้ขอ" — ใช้ username_form เป็นหลัก, แล้ว fallback ตามลำดับ
     const prefer = v => (v && String(v).trim() !== '' ? String(v).trim() : null)
     let userName =
-      prefer(historyList[0].username_form) ||                 // 1) จาก history ของ booking นี้
-      prefer(localStorage.getItem('username_form')) ||        // 2) เผื่อเก็บไว้ใน localStorage
-      prefer(historyList[0].requester) ||                     // 3) fallback: requester เดิม
+      prefer(historyList[0].username_form) ||          // จาก history
+      prefer(localStorage.getItem('username_form')) ||  // จาก localStorage (ถ้ามี)
+      prefer(historyList[0].requester) ||               // fallback: requester เดิม
       null
-    if (!userName && historyList[0].user_id) {                // 4) สุดท้ายดึงจากข้อมูลผู้ใช้
+
+    if (!userName && historyList[0].user_id) {
       try {
         const userRes = await axios.get(`${API_BASE}/api/user/${historyList[0].user_id}`)
         userName = prefer(userRes.data?.name) || historyList[0].user_id
@@ -295,26 +298,75 @@ async function loadBookingInfo() {
         userName = historyList[0].user_id
       }
     }
-    const itemList = historyList.map(h => (h.quantity ? `${h.name} (${h.quantity})` : h.name)).join(', ')
+
+    // 4) เตรียม HTML ตาราง: มีคอลัมน์หมายเหตุเฉพาะเมื่อมี remark อย่างน้อย 1 รายการ
+    const hasRemark = historyList.some(h => (h.remark && String(h.remark).trim() !== ''))
+
+    const itemsTable = `
+      <table class="swal-inner-table">
+        <thead>
+          <tr>
+            <th>รายการ</th>
+            <th>จำนวน</th>
+            ${hasRemark ? '<th>หมายเหตุ</th>' : ''}
+          </tr>
+        </thead>
+        <tbody>
+          ${historyList.map(h => `
+            <tr>
+              <td>${esc(h.name || '-')}</td>
+              <td style="text-align:center">${esc(h.quantity ?? '-')}</td>
+              ${hasRemark ? `<td>${esc(h.remark || '-')}</td>` : ''}
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `
+
+    // 5) แสดง SweetAlert เป็น "ตารางสรุป + ตารางย่อยรายการอุปกรณ์"
     await Swal.fire({
       title: 'ส่งคำขอสำเร็จ',
       html: `
-        <div class="swal-booking">
-          <div class="label"><b>ชื่อผู้ขอใช้:</b></div><div class="value">${esc(userName || '-')}</div>
-          <div class="label"><b>วันที่ขอยืม:</b></div><div class="value">${esc(formatDateOnly(historyList[0].since))}</div>
-          <div class="label"><b>วันที่คืน:</b></div><div class="value">${esc(formatDateOnly(historyList[0].uptodate))}</div>
-          <div class="label"><b>รายการอุปกรณ์:</b></div><div class="value">${esc(itemList || '-')}</div>
+        <div class="swal-wrapper">
+          <table class="swal-booking-table">
+            <tbody>
+              <tr>
+                <th>ชื่อผู้ขอใช้</th>
+                <td>${esc(userName || '-')}</td>
+              </tr>
+              <tr>
+                <th>วันที่ขอยืม</th>
+                <td>${esc(formatDateOnly(historyList[0].since))}</td>
+              </tr>
+              <tr>
+                <th>วันที่คืน</th>
+                <td>${esc(formatDateOnly(historyList[0].uptodate))}</td>
+              </tr>
+              <tr>
+                <th>รายการอุปกรณ์</th>
+                <td>
+                  <div class="swal-items-wrap">
+                    ${itemsTable}
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       `,
       icon: 'success',
       confirmButtonText: 'ตกลง',
       allowOutsideClick: false,
       allowEscapeKey: false,
+      customClass: {
+    popup: 'swal-wide-form-equipment4'   // ✅ กำหนด class เฉพาะหน้านี้
+  }
     })
   } catch (err) {
     await Swal.fire('ดึงข้อมูลการจองล้มเหลว', err?.message || '', 'error')
   }
 }
+
 
 
 onMounted(() => {
@@ -668,8 +720,271 @@ async function exportPdf(item) {
 </style>
 
 <style>
+
+/* จัดกลางหัวคอลัมน์ตารางรายการอุปกรณ์ใน SweetAlert ของหน้า form_equipment4 */
+.swal2-popup.swal-wide-form-equipment4 .swal-inner-table thead th{
+  text-align: center !important;
+  vertical-align: middle !important;
+}
+
+/* มือถือก็ให้กึ่งกลางเหมือนกัน */
+@media (max-width: 520px){
+  .swal2-popup.swal-wide-form-equipment4 .swal-inner-table thead th{
+    text-align: center !important;
+  }
+}
+.swal2-popup.swal-wide-form-equipment4{
+  width: min(600px, 96vw) !important;  /* กว้างสุด */
+  max-width: none !important;
+  padding: 24px 26px 22px !important;
+  font-family: inherit !important;
+}
+
   /* ให้โครงสร้างสูงเต็มหน้าจอ และตัด margin เริ่มต้นของ body */
   html, body, #app { height: 100%; margin: 0; }
+
+  /* ตารางสรุปใน SweetAlert */
+.swal2-popup .swal-booking-table{
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+  margin: 6px 0 2px;
+}
+.swal2-popup .swal-booking-table th{
+  background: #f3f4f6;
+  text-align: left !important;   /* จาก right -> left */
+  white-space: nowrap;
+  padding: 8px 12px;
+  border: 1px solid #e5e7eb;
+  vertical-align: top;
+  font-weight: 700;
+}
+.swal2-popup .swal-booking-table td{
+  text-align: left;
+  padding: 8px 12px;
+  border: 1px solid #e5e7eb;
+  max-width: min(56vw, 560px);
+  word-break: break-word;
+  line-height: 1.6;
+}
+
+/* ตารางย่อย: รายการอุปกรณ์ */
+.swal2-popup .swal-items-wrap{
+  max-height: 260px;           /* เลื่อนดูได้ถ้ารายการยาว */
+  overflow: auto;
+  margin-top: 2px;
+}
+.swal2-popup .swal-inner-table{
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+}
+.swal2-popup .swal-inner-table th{
+  background: #f9fafb;
+  text-align: center;
+  padding: 6px 10px;
+  border: 1px solid #e5e7eb;
+  font-weight: 700;
+}
+.swal2-popup .swal-inner-table td{
+  padding: 6px 10px;
+  border: 1px solid #e5e7eb;
+}
+
+/* มือถือ: แปลงตารางสรุปเป็นการ์ดแถว-ต่อ-แถว อ่านง่าย */
+@media (max-width: 520px){
+  .swal2-popup .swal-booking-table,
+  .swal2-popup .swal-booking-table tbody,
+  .swal2-popup .swal-booking-table tr,
+  .swal2-popup .swal-booking-table td,
+  .swal2-popup .swal-booking-table th{
+    display: block;
+    width: 100%;
+  }
+  .swal2-popup .swal-booking-table tr{
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 6px 0;
+    margin-bottom: 10px;
+    background: #fff;
+  }
+  .swal2-popup .swal-booking-table th{
+    text-align: left;
+    background: #f9fafb;
+    border: none;
+    padding: 8px 12px 2px;
+  }
+  .swal2-popup .swal-booking-table td{
+    border: none;
+    padding: 2px 12px 10px;
+  }
+
+  /* ==== SweetAlert2 เฉพาะหน้า form_equipment4.vue ==== */
+
+.swal2-popup.swal-wide-form-equipment4 .swal2-html-container{
+  width: 100% !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+.swal2-popup.swal-wide-form-equipment4 .swal-booking-table{
+  width: 100% !important;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+  margin: 6px 0 2px;
+}
+
+.swal2-popup.swal-wide-form-equipment4 .swal-booking-table th{
+  background: #f3f4f6;
+ text-align: left !important;               /* ✅ ชิดขวา */
+  white-space: nowrap;
+  padding: 8px 12px;
+  border: 1px solid #e5e7eb;
+  vertical-align: top;
+  font-weight: 700;
+}
+
+.swal2-popup.swal-wide-form-equipment4 .swal-booking-table td{
+  text-align: left;
+  padding: 8px 12px;
+  border: 1px solid #e5e7eb;
+  max-width: none !important;
+  word-break: break-word;
+  line-height: 1.6;
+}
+
+/* สัดส่วนคอลัมน์ */
+.swal2-popup.swal-wide-form-equipment4 .swal-booking-table tr > th { width: 32%; }
+.swal2-popup.swal-wide-form-equipment4 .swal-booking-table tr > td { width: 68%; }
+/* ===== กันล้น/เพี้ยนเมื่อเป็นไซส์มือถือ ===== */
+.swal2-popup.swal-wide-form-equipment4 .swal-items-wrap{
+  max-height: 260px;
+  overflow-y: auto;
+  overflow-x: hidden;  /* กันเลื่อนแนวนอน */
+}
+.swal2-popup.swal-wide-form-equipment4{
+  width: min(550px, 92vw) !important;  /* กว้างสุด */
+  max-width: none !important;
+  padding: 24px 26px 22px !important;
+  font-family: inherit !important;
+}
+/* มือถือ: card layout */
+/* ===== ปรับสเกลสำหรับมือถือ ===== */
+@media (max-width: 520px){
+  /* ย่อขนาดป็อปอัป + เก็บขอบ */
+  .swal2-popup.swal-wide-form-equipment4{
+    width: 94vw !important;
+    padding: 16px 14px 18px !important;
+  }
+  /* ย่อไอคอนติ๊กเขียวและหัวข้อ */
+  .swal2-popup.swal-wide-form-equipment4 .swal2-icon{
+    transform: scale(0.72);
+    margin: 8px auto 4px;
+  }
+  .swal2-popup.swal-wide-form-equipment4 .swal2-title{
+    font-size: 1.05rem;
+    margin: 4px 0 8px;
+  }
+
+  /* ตารางสรุปหลักเป็นแบบการ์ดอ่านง่าย (ตามเดิม) */
+  .swal2-popup.swal-wide-form-equipment4 .swal-booking-table,
+  .swal2-popup.swal-wide-form-equipment4 .swal-booking-table tbody,
+  .swal2-popup.swal-wide-form-equipment4 .swal-booking-table tr,
+  .swal2-popup.swal-wide-form-equipment4 .swal-booking-table td,
+  .swal2-popup.swal-wide-form-equipment4 .swal-booking-table th{
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  .swal2-popup.swal-wide-form-equipment4 .swal-booking-table th{
+    text-align: left !important;
+    background: #f9fafb;
+    border: none;
+    padding: 8px 12px 2px;
+  }
+  .swal2-popup.swal-wide-form-equipment4 .swal-booking-table td{
+    border: none;
+    padding: 2px 12px 10px;
+  }
+
+  /* ===== “ล็อก” ตารางรายการอุปกรณ์ด้านในให้เป็น table จริง ไม่แตกเป็นบล็อก ===== */
+  .swal2-popup.swal-wide-form-equipment4 .swal-inner-table{
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: collapse;
+  }
+  .swal2-popup.swal-wide-form-equipment4 .swal-inner-table thead{ display: table-header-group !important; }
+  .swal2-popup.swal-wide-form-equipment4 .swal-inner-table tbody{ display: table-row-group !important; }
+  .swal2-popup.swal-wide-form-equipment4 .swal-inner-table tr{ display: table-row !important; }
+  .swal2-popup.swal-wide-form-equipment4 .swal-inner-table th,
+  .swal2-popup.swal-wide-form-equipment4 .swal-inner-table td{
+    display: table-cell !important;
+    word-break: break-word;
+    padding: 6px 10px;
+    border: 1px solid #e5e7eb;
+  }
+
+  /* ลดความสูงกรอบเลื่อนรายการในมือถือ */
+  .swal2-popup.swal-wide-form-equipment4 .swal-items-wrap{
+    max-height: 200px;
+  }
+}
+
+}
+
+/* ==== มือถือ: ให้หัวข้อซ้าย / เนื้อหาขวา + ลดช่องว่าง (เฉพาะ form_equipment4) ==== */
+@media (max-width: 520px){
+  /* บังคับกลับเป็นตาราง 2 คอลัมน์ ไม่ให้แปลงเป็น block */
+  .swal2-popup.swal-wide-form-equipment4 .swal-booking-table{ 
+    display: table !important; width:100% !important; border-collapse: collapse;
+  }
+  .swal2-popup.swal-wide-form-equipment4 .swal-booking-table tbody{
+    display: table-row-group !important;
+  }
+  .swal2-popup.swal-wide-form-equipment4 .swal-booking-table tr{
+    display: table-row !important;
+  }
+  .swal2-popup.swal-wide-form-equipment4 .swal-booking-table th,
+  .swal2-popup.swal-wide-form-equipment4 .swal-booking-table td{
+    display: table-cell !important;
+    padding: 6px 10px !important;      /* ลด padding */
+    border: 1px solid #e5e7eb !important;
+    vertical-align: middle !important;
+  }
+  .swal2-popup.swal-wide-form-equipment4 .swal-booking-table tr > th{
+    width: 38% !important;              /* สัดส่วนซ้าย */
+    text-align: left !important;
+    white-space: nowrap;
+  }
+  .swal2-popup.swal-wide-form-equipment4 .swal-booking-table tr > td{
+    width: 62% !important;              /* สัดส่วนขวา */
+    text-align: left !important;
+  }
+
+  /* ย่อป็อปอัปและหัวข้อให้กระชับ */
+  .swal2-popup.swal-wide-form-equipment4{
+    width: 92vw !important;
+    padding: 14px 14px 16px !important;
+  }
+  .swal2-popup.swal-wide-form-equipment4 .swal2-title{
+    font-size: 1rem !important;
+    margin: 2px 0 6px !important;
+  }
+  .swal2-popup.swal-wide-form-equipment4 .swal-items-wrap{
+    max-height: 180px !important;       /* ลดความสูงพื้นที่รายการ */
+  }
+   .swal2-popup.swal-wide-form-equipment4 .swal-inner-table th:nth-child(2),
+  .swal2-popup.swal-wide-form-equipment4 .swal-inner-table td:nth-child(2){
+    text-align: center !important;
+  }
+}
+
+/* หัวตาราง "รายการ / จำนวน" จัดกลาง */
+.swal2-popup.swal-wide-form-equipment4 .swal-inner-table thead th{
+  text-align: center !important;
+  vertical-align: middle !important;
+}
+
 </style>
 
 <style>

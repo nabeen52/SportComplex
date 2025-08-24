@@ -1,5 +1,5 @@
 <template>
-  <div class="layout">
+  <div class="layout booking-equipment-page">
     <!-- Sidebar ทางซ้าย -->
     <aside class="sidebar" :class="{ closed: isSidebarClosed }">
       <div class="sidebar-header">
@@ -537,6 +537,36 @@ onBeforeUnmount(() => {
 .notification-item {
   transition: background 0.3s, border-color 0.3s, color 0.3s;
 }
+
+.notification-backdrop {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: transparent;
+  z-index: 1001; /* ต้องน้อยกว่า .notification-dropdown (1002) */
+}
+
+/* ทำให้ layout ของ booking_equipment เป็นคอลัมน์ */
+.booking-equipment-page .main {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+/* ให้ content ขยายพื้นที่แทน scroll ภายใน */
+.booking-equipment-page .content {
+  flex: 1;
+  overflow: visible !important;
+}
+
+/* reset footer ไม่ให้ลอย */
+.booking-equipment-page .foot {
+  position: static !important;
+  inset: auto !important;
+  width: 100%;
+  margin-top: 16px;
+  z-index: auto !important;
+}
+
 
 
 </style>

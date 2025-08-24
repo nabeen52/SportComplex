@@ -229,33 +229,33 @@
         </div>
 
         <div
-          v-if="cameraImage"
-          style="position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; background: black; display: flex; align-items: center; justify-content: center;"
-        >
-          <img
-            :src="cameraImage"
-            alt="Photo"
-            style="width: 100vw; height: 100vh; object-fit: contain; background: black;"
-          />
-          <div
-            style="position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%); display: flex; gap: 24px;"
-          >
-            <button
-              @click="submitReturnPhoto"
-              :disabled="isSubmittingReturnPhoto"
-              style="background: #22c55e; color: white; border: none; padding: 14px 48px; border-radius: 30px; font-weight: 700; font-size: 1.2rem; cursor: pointer;"
-            >
-              <span v-if="isSubmittingReturnPhoto">กำลังส่ง...</span>
-              <span v-else>ส่งรูปคืน</span>
-            </button>
-            <button
-              @click="retakePhoto"
-              style="background: #888; color: white; border: none; padding: 14px 48px; border-radius: 30px; font-weight: 700; font-size: 1.2rem; cursor: pointer;"
-            >
-              ถ่ายใหม่
-            </button>
-          </div>
-        </div>
+  v-if="cameraPreviewUrl"
+  style="position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; background: black; display: flex; align-items: center; justify-content: center;"
+>
+  <img
+    :src="cameraPreviewUrl"
+    alt="Photo"
+    style="width: 100vw; height: 100vh; object-fit: contain; background: black;"
+  />
+  <div
+    style="position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%); display: flex; gap: 24px;"
+  >
+    <button
+      @click="submitReturnPhoto"
+      :disabled="isSubmittingReturnPhoto"
+      style="background: #22c55e; color: white; border: none; padding: 14px 48px; border-radius: 30px; font-weight: 700; font-size: 1.2rem; cursor: pointer;"
+    >
+      <span v-if="isSubmittingReturnPhoto">กำลังส่ง...</span>
+      <span v-else>ส่งรูปคืน</span>
+    </button>
+    <button
+      @click="retakePhoto"
+      style="background: #888; color: white; border: none; padding: 14px 48px; border-radius: 30px; font-weight: 700; font-size: 1.2rem; cursor: pointer;"
+    >
+      ถ่ายใหม่
+    </button>
+  </div>
+</div>
       </div>
       <!-- END MODAL กล้อง fullscreen -->
 
@@ -312,7 +312,8 @@ export default {
       products: [],
       showCamera: false,
       cameraStream: null,
-      cameraImage: null,
+      cameraPreviewUrl: null,   // ใช้โชว์รูปตัวอย่างบนจอ
+      cameraBlob: null, 
       returnGroupBookingId: null, // booking_id ของกลุ่มที่จะ return
       filterType: 'all', // 'all', 'field', 'equipment'
       isSubmittingReturnPhoto: false, // <<== ตัวแปรป้องกันการส่งซ้ำ
@@ -423,6 +424,34 @@ paginatedHistory() {
 
 
   methods: {
+
+    setStatusWidthToReturnPending() {
+  this.$nextTick(() => {
+    // หา Return-pending บนหน้าปัจจุบัน
+    const root = this.$el || document;
+    const rp = root.querySelector('.history-table .return-pending-status');
+
+    let targetWidth = 0;
+
+    if (rp) {
+      targetWidth = rp.offsetWidth; // ใช้ความกว้างของ Return-pending
+    } else {
+      // ถ้าไม่มี ให้ใช้ตัวที่กว้างที่สุดในหน้าปัจจุบัน
+      const all = Array.from(
+        root.querySelectorAll('.history-table .status-cell span')
+      );
+      targetWidth = all.reduce((mx, el) => Math.max(mx, el.offsetWidth), 0);
+    }
+
+    if (targetWidth > 0) {
+      // เผื่อ padding/anti jitter เพิ่มอีกนิด
+      document.documentElement.style.setProperty(
+        '--status-w',
+        `${Math.ceil(targetWidth)}px`
+      );
+    }
+  });
+},
 
      // --- helpers เดิมคงไว้ ---
   normalizePdfUrl(raw) {
@@ -665,10 +694,15 @@ async downloadPdfFromGroup(group) {
     } catch (e) {
       this.histories = [];
     }
+
+    await this.$nextTick();
+    this.setStatusWidthToReturnPending();
   },
 
   async reloadHistories() {
   await this.fetchAndRenderHistories();
+  await this.$nextTick();
+  this.setStatusWidthToReturnPending();
 },
 
 
@@ -878,116 +912,202 @@ async reloadHistories() {
 },
 
     detailGroup(group) {
-  const formatTime = (timeStr) => {
-  if (!timeStr) return '-'
-  // ตัด "น." เดิมออกถ้ามี แล้วค่อยใส่ใหม่
-  const raw = String(timeStr).trim().replace(/\s*น\.?$/,'')
-  if (/^\d{1,2}:\d{2}$/.test(raw)) return `${raw} น.`
-  const d = new Date(`1970-01-01T${raw}`)
-  if (!isNaN(d)) {
-    const hhmm = d.toLocaleTimeString('th-TH', { hour:'2-digit', minute:'2-digit', hour12:false })
-    return `${hhmm} น.`
-  }
-  return `${raw} น.`
-}
+  const esc = this.esc;
+  const fmtDate = (d) => this.formatDateOnly(d);
+  const fmtTime = (t) => {
+    if (!t) return '-';
+    const raw = String(t).trim().replace(/\s*น\.?$/, '');
+    if (/^\d{1,2}:\d{2}$/.test(raw)) return `${raw} น.`;
+    const dt = new Date(`1970-01-01T${raw}`);
+    if (!isNaN(dt)) {
+      const hhmm = dt.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', hour12: false });
+      return `${hhmm} น.`;
+    }
+    return `${raw} น.`;
+  };
+  const fmtTimeRange = (a,b)=>{
+    const A = fmtTime(a), B = fmtTime(b);
+    if (A==='-' && B==='-') return '-';
+    if (A!=='-' && B!=='-') return `${A} - ${B}`;
+    return A!=='-' ? A : B;
+  };
 
-const formatTimeRange = (start, end) => {
-  const a = formatTime(start), b = formatTime(end)
-  if (a === '-' && b === '-') return '-'
-  if (a !== '-' && b !== '-') return `${a} - ${b}`
-  return a !== '-' ? a : b
-}
+  let html = '';
 
+ // ภายใน detailGroup()
+if (group.type === 'field') {
+  const it = group.items[0] || {};
+  const startTime = it.startTime || it.since_time || '';
+  const endTime   = it.endTime   || it.until_thetime || '';
+  const timeRange = fmtTimeRange(startTime, endTime);
 
-  let html = ''
-
-  if (group.type === 'field') {
-    const item = group.items[0]
-    const startTime = item.startTime || item.since_time || ''
-    const endTime   = item.endTime   || item.until_thetime || ''
-    const timeRange = formatTimeRange(startTime, endTime)
-
-    html = `
-      <div class="swal-booking">
-        <div class="label"><b>Field Name</b></div><div class="value">${this.esc(item.name)}</div>
-        <div class="label"><b>Name</b></div><div class="value">${this.esc(item.username_form || '-')}</div>
-        <div class="label"><b>Date</b></div><div class="value">${this.esc(this.formatDateOnly(item.date))}</div>
-        <div class="label"><b>Time</b></div><div class="value">${this.esc(timeRange)}</div>
-        <div class="label"><b>Book for</b></div><div class="value">${this.esc(item.proxyStudentName || '-')}</div>
-        <div class="label"><b>Status</b></div><div class="value">${this.esc(item.status)}</div>
-        <div style="grid-column:1/-1;margin-top:10px;">
-          <button id="pdf-btn" class="pdfmake-btn">Download PDF form</button>
-        </div>
-      </div>
-    `
-  } else {
+  html = `
+    <div class="swal-table-wrap">
+      <table class="swal-table">
+        <colgroup>
+          <col style="width:18%">
+          <col style="width:22%">
+          <col style="width:20%">
+          <col style="width:20%">
+          <col style="width:20%">
+        </colgroup>
+        <thead>
+          <tr>
+            <th>Field</th>
+            <th>Name</th>
+            <th>Date</th>
+            <th>Time</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>${esc(it.name)}</td>
+            <td>
+              <div><b>Name:</b> ${esc(it.username_form || '-')}</div>
+              <div><b>Book for:</b> ${esc(it.proxyStudentName || '-')}</div>
+            </td>
+            <td class="td-center">${esc(fmtDate(it.date))}</td>
+            <td class="td-center">${esc(timeRange)}</td>
+            <td class="td-center">${esc(it.status)}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="swal-actions">
+      <button id="pdf-btn" class="pdfmake-btn">Download PDF form</button>
+    </div>
+  `;
+}else {
     // ===== equipment =====
-    const firstItem = group.items[0]
-    const isOneDayBorrow = (!firstItem.since && !firstItem.uptodate)
-    const showPdfButton  = !isOneDayBorrow
+let statusToShow = '';
+if (group.items.every(i => i.status === 'Return-pending')) statusToShow = 'Return-pending';
+else if (group.items.every(i => i.status === 'Returned'))   statusToShow = 'Returned';
+else if (group.items.every(i => i.status === 'Approved'))   statusToShow = 'Approved';
+else if (group.items.every(i => i.status === 'Pending'))    statusToShow = 'Pending';
+else if (group.items.every(i => i.status === 'Disapproved'))statusToShow = 'Disapproved';
+else statusToShow = (group.items[0]?.status || '');
 
-    let statusToShow = ''
-    if (group.items.every(i => i.status === 'Return-pending')) statusToShow = 'Return-pending'
-    else if (group.items.every(i => i.status === 'Returned'))   statusToShow = 'Returned'
-    else if (group.items.every(i => i.status === 'Approved'))   statusToShow = 'Approved'
-    else if (group.items.every(i => i.status === 'Pending'))    statusToShow = 'Pending'
-    else if (group.items.every(i => i.status === 'Disapproved'))statusToShow = 'Disapproved'
-    else statusToShow = (group.items[0]?.status || '')
+const shown = group.items.filter(i => i.status === statusToShow);
+const first = group.items[0] || {};
+const isOneDayBorrow = (!first.since && !first.uptodate);
+const showPdfButton  = !isOneDayBorrow;
 
-    const shown = group.items.filter(i => i.status === statusToShow)
-    const rows = shown.map((item, idx) => `
-      <div class="label"><b>Equipment ${idx+1}</b></div><div class="value">${this.esc(item.name)}</div>
-      <div class="label"><b>Amount</b></div><div class="value">${this.esc(item.quantity)}</div>
-      <div class="label"><b>Name</b></div><div class="value">${this.esc(item.requester)}</div>
-      
-      <div class="label"><b>Date</b></div><div class="value">${this.esc(this.formatDateOnly(item.date))}</div>
-      <div class="label"><b>Status</b></div><div class="value">${this.esc(item.status)}</div>
-      <div class="label"><b>Return date</b></div><div class="value">${this.esc(item.returnedAt ? this.formatDateOnly(item.returnedAt) : '-')}</div>
-      ${
-        (item.status === "Returned" || item.status === "Return-pending") && item.attachment
-        ? `<div style="grid-column:1/-1;margin-top:6px;">
-             <img src="${item.attachment}" style="max-width:220px;max-height:150px;object-fit:contain;border-radius:10px;border:1.5px solid #bbb;cursor:pointer"
-                  onclick="window.__showFullReturnPhoto && window.__showFullReturnPhoto('${item.attachment}')">
-             <div style="font-size:0.9em;color:#888;margin-top:0.3em;">(Click image to view full.)</div>
-           </div>`
-        : ''
-      }
-      <div style="grid-column:1/-1;border-bottom:1px dashed #bbb;margin:6px 0;"></div>
-    `).join('')
+const rows = shown.map((it, idx) => {
+  const retDate = it.returnedAt ? fmtDate(it.returnedAt) : '-';
 
-    html = `
-      <div class="swal-booking">
-        ${rows || `<div style="grid-column:1/-1">ไม่มีรายการ</div>`}
-        ${showPdfButton ? `<div style="grid-column:1/-1;margin-top:10px;"><button id="pdf-btn" class="pdfmake-btn">Download PDF form</button></div>` : '' }
-      </div>
-    `
+  // ใช้ชื่อผู้ใช้จาก username_form (มีที่ item หรือเอาจากแถวแรกของกลุ่ม)
+  const borrowerName =
+    it.username_form ||
+    (group.items?.[0]?.username_form) ||
+    it.requester || '-';
+
+  // รองรับทั้ง string และ array
+  const attArr = Array.isArray(it.attachment)
+    ? it.attachment
+    : (it.attachment ? [it.attachment] : []);
+
+  const firstUrl = attArr[0] || null;
+
+  const retPhotoCell =
+    (['Returned','Return-pending'].includes(it.status) && firstUrl)
+      ? `
+        <img
+          src="${firstUrl}"
+          alt="return-photo"
+          class="swal-thumb"
+          onclick="window.__showFullReturnPhoto && window.__showFullReturnPhoto('${firstUrl}')"
+        />
+        <div class="swal-thumb-hint">(คลิกเพื่อดูรูปเต็ม)</div>
+      `
+      : '-';
+
+  return `
+    <tr>
+      <td class="td-center">${esc(idx+1)}</td>
+      <td>${esc(it.name)}</td>
+      <td class="td-center">${esc(it.quantity ?? '-')}</td>
+      <td>${esc(borrowerName)}</td>     <!-- << เปลี่ยนมาใช้ username_form -->
+      <td class="td-center">${esc(fmtDate(it.date))}</td>
+      <td class="td-center">${esc(it.status)}</td>
+      <td class="td-center">${retDate}</td>
+      <td class="td-center">${retPhotoCell}</td>
+    </tr>
+  `;
+}).join('');
+
+html = `
+  <div class="swal-table-wrap">
+    <table class="swal-table">
+      <colgroup>
+        <col style="width:6%">   <!-- No -->
+        <col style="width:22%">  <!-- Equipment -->
+        <col style="width:10%">  <!-- Amount -->
+        <col style="width:20%">  <!-- Requester -->
+        <col style="width:12%">  <!-- Date -->
+        <col style="width:12%">  <!-- Status -->
+        <col style="width:12%">  <!-- Return date -->
+        <col style="width:10%">  <!-- Photo -->
+      </colgroup>
+      <thead>
+        <tr>
+          <th>No</th>
+          <th>Equipment</th>
+          <th>Amount</th>
+          <th>Name</th>
+          <th>Date</th>
+          <th>Status</th>
+          <th>Return date</th>
+          <th>Photo</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows || `<tr><td colspan="8" class="td-center">ไม่มีรายการ</td></tr>`}
+      </tbody>
+    </table>
+  </div>
+  ${showPdfButton ? `<div class="swal-actions"><button id="pdf-btn" class="pdfmake-btn">Download PDF form</button></div>` : ``}
+`;
+
   }
 
   Swal.fire({
-    title: 'Detail list',
-    html,
-    confirmButtonText: 'Close',
-    confirmButtonColor: '#3085d6',
-    didOpen: () => {
-      const pdfBtn = document.getElementById('pdf-btn');
-      if (pdfBtn) {
-        pdfBtn.addEventListener('click', () => this.downloadPdfFromGroup(group));
-      }
+  title: 'Detail list',
+  html,
+  confirmButtonText: 'Close',
+  confirmButtonColor: '#3085d6',
+  customClass: {
+    popup: 'hist-swal',
+    title: 'hist-swal-title',
+    htmlContainer: 'hist-swal-html'
+  },
+  didOpen: () => {
+    const pdfBtn = document.getElementById('pdf-btn');
+    if (pdfBtn) pdfBtn.addEventListener('click', () => this.downloadPdfFromGroup(group));
 
-      // viewer รูปเต็ม
-      window.__showFullReturnPhoto = (img) => {
-        const w = window.open("", "_blank")
-        w.document.write(`
-          <html><head><title>รูปคืนอุปกรณ์</title>
-          <style>body{background:#111;margin:0;display:flex;align-items:center;justify-content:center;height:100vh}
-                 img{max-width:100vw;max-height:100vh;object-fit:contain;border-radius:16px;box-shadow:0 8px 30px #0008}</style>
-          </head><body onclick="window.close()"><img src="${img}"></body></html>
-        `)
-      }
-    },
-    willClose: () => { window.__showFullReturnPhoto = undefined }
-  })
+    // ===== เพิ่มตัวแสดงรูปเต็ม =====
+    window.__showFullReturnPhoto = (src) => {
+      if (!src) return;
+      Swal.fire({
+        html: `
+          <div class="img-viewer-wrap">
+            <img src="${src}" alt="photo" class="img-viewer"/>
+            <div class="img-viewer-actions">
+              <a href="${src}" target="_blank" rel="noopener">เปิดในแท็บใหม่</a>
+            </div>
+          </div>
+        `,
+        showConfirmButton: false,
+        showCloseButton: true,
+        background: '#000',
+        customClass: { popup: 'img-swal' }
+      });
+    };
+  },
+  willClose: () => { window.__showFullReturnPhoto = undefined; }
+});
 },
+
 
     async returnItemGroup(group) {
       this.showCamera = true;
@@ -996,10 +1116,18 @@ const formatTimeRange = (start, end) => {
       this.openCamera();
     },
 
-    retakePhoto() {
-      this.cameraImage = null;
-      this.openCamera();
-    },
+   retakePhoto() {
+  // ล้างของเก่า
+  if (this.cameraPreviewUrl) {
+    URL.revokeObjectURL(this.cameraPreviewUrl);
+    this.cameraPreviewUrl = null;
+  }
+  this.cameraBlob = null;
+
+  // เปิดกล้องใหม่
+  this.openCamera();
+},
+
     openCamera() {
       const video = this.$refs.cameraVideo;
       if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
@@ -1009,85 +1137,119 @@ const formatTimeRange = (start, end) => {
         });
       }
     },
-    takePhoto() {
-      const video = this.$refs.cameraVideo;
-      const canvas = this.$refs.cameraCanvas;
-      const ctx = canvas.getContext('2d');
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      this.cameraImage = canvas.toDataURL('image/png');
-      if (this.cameraStream) {
-        this.cameraStream.getTracks().forEach(track => track.stop());
-        this.cameraStream = null;
-      }
-    },
+    async takePhoto() {
+  const video = this.$refs.cameraVideo;
+  const canvas = this.$refs.cameraCanvas;
+  const ctx = canvas.getContext('2d');
+
+  // ตั้งขนาดภาพตามวิดีโอ
+  canvas.width = video.videoWidth || 1280;
+  canvas.height = video.videoHeight || 720;
+
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+  // helper: canvas -> Blob (รองรับ fallback กรณีเบราว์เซอร์ไม่มี toBlob)
+  const canvasToBlob = () => new Promise((resolve) => {
+    if (canvas.toBlob) {
+      canvas.toBlob((blob) => resolve(blob), 'image/jpeg', 0.92);
+    } else {
+      // fallback ด้วย dataURL -> Blob
+      const dataURL = canvas.toDataURL('image/jpeg', 0.92);
+      const byteString = atob(dataURL.split(',')[1]);
+      const ab = new ArrayBuffer(byteString.length);
+      const ia = new Uint8Array(ab);
+      for (let i = 0; i < byteString.length; i++) ia[i] = byteString.charCodeAt(i);
+      resolve(new Blob([ab], { type: 'image/jpeg' }));
+    }
+  });
+
+  // ได้ Blob จริงสำหรับอัปโหลด
+  this.cameraBlob = await canvasToBlob();
+
+  // สร้าง URL สำหรับพรีวิว (เลิกใช้ base64)
+  if (this.cameraPreviewUrl) URL.revokeObjectURL(this.cameraPreviewUrl);
+  this.cameraPreviewUrl = URL.createObjectURL(this.cameraBlob);
+
+  // ปิดสตรีมกล้อง (หยุดหลังถ่าย)
+  if (this.cameraStream) {
+    try { this.cameraStream.getTracks().forEach(track => track.stop()); } catch {}
+    this.cameraStream = null;
+  }
+},
+
     cancelCamera() {
-      if (this.cameraStream) {
-        this.cameraStream.getTracks().forEach(track => track.stop());
-        this.cameraStream = null;
-      }
-      this.showCamera = false;
-      this.cameraImage = null;
-      this.returnGroupBookingId = null;
-    },
+  try {
+    if (this.cameraStream) {
+      this.cameraStream.getTracks().forEach(track => track.stop());
+      this.cameraStream = null;
+    }
+  } catch {}
+  if (this.cameraPreviewUrl) {
+    URL.revokeObjectURL(this.cameraPreviewUrl);
+    this.cameraPreviewUrl = null;
+  }
+  this.cameraBlob = null;
+  this.showCamera = false;
+  this.returnGroupBookingId = null;
+},
+
     
     async submitReturnPhoto() {
-  // กันการกดซ้ำ
   if (this.isSubmittingReturnPhoto) return;
   this.isSubmittingReturnPhoto = true;
 
   try {
-    // ตรวจว่ามีรูปและมี booking_id กลุ่มที่จะคืน
-    if (!this.cameraImage || !this.returnGroupBookingId) {
-      this.$swal('ผิดพลาด', 'ไม่พบรูปหรือหมายเลขรายการที่ต้องการคืน', 'error');
+    if (!this.cameraBlob || !this.returnGroupBookingId) {
+      await Swal.fire('ผิดพลาด', 'ไม่พบรูปหรือหมายเลขรายการที่ต้องการคืน', 'error');
       return;
     }
 
-    // หา id ทั้งหมดที่อยู่ใน booking_id เดียวกัน
+    // รวม id ทั้งหมดของ booking เดียวกัน
     const ids = this.histories
       .filter(h => h.booking_id === this.returnGroupBookingId)
       .map(h => h.id);
 
     if (ids.length === 0) {
-      this.$swal('ผิดพลาด', 'ไม่พบบันทึกในกลุ่มนี้', 'error');
+      await Swal.fire('ผิดพลาด', 'ไม่พบบันทึกในกลุ่มนี้', 'error');
       return;
     }
 
-    // ส่งคำขอคืนให้ทุกรายการในกลุ่ม
-    await Promise.all(
-      ids.map(id =>
-        axios.patch(`${API_BASE}/api/history/${id}/request-return`, {
-          attachment: this.cameraImage,
-          fileName: 'return_photo.png',
-          fileType: 'image/png',
-        })
-      )
-    );
+    // ส่งไฟล์จริงด้วย multipart/form-data
+    const ts = Date.now();
+    await Promise.all(ids.map(id => {
+  const form = new FormData();
+  form.append('attachment', this.cameraBlob, `return_photo_${id}_${ts}.jpg`);
+  // form.append('fileType', 'image/jpeg'); // ถ้าหลังบ้านอยากได้ค่านี้เพิ่มค่อยเปิด
 
-    // ปิดกล้อง/ล้างสถานะ modal
+  return axios.patch(`${API_BASE}/api/history/${id}/request-return`, form);
+}));
+
+
+    // ปิด/ล้างสถานะ modal + ล้าง URL พรีวิว
     if (this.cameraStream) {
-      try {
-        this.cameraStream.getTracks().forEach(t => t.stop());
-      } catch {}
+      try { this.cameraStream.getTracks().forEach(t => t.stop()); } catch {}
       this.cameraStream = null;
     }
+    if (this.cameraPreviewUrl) {
+      URL.revokeObjectURL(this.cameraPreviewUrl);
+      this.cameraPreviewUrl = null;
+    }
+    this.cameraBlob = null;
     this.showCamera = false;
-    this.cameraImage = null;
     this.returnGroupBookingId = null;
 
-    // 🔄 รีเฟรชตารางทันทีหลังส่งคืนสำเร็จ (ไม่ต้องรีเฟรชหน้า)
+    // รีเฟรชข้อมูลหน้าตาราง
     await this.fetchAndRenderHistories();
 
-    this.$swal('ส่งสำเร็จ!', 'ขอคืนอุปกรณ์เรียบร้อย', 'success');
+    await Swal.fire('ส่งสำเร็จ!', 'ขอคืนอุปกรณ์เรียบร้อย', 'success');
   } catch (err) {
     console.error(err);
-    this.$swal('ผิดพลาด', 'ส่งข้อมูลไม่สำเร็จ', 'error');
+    await Swal.fire('ผิดพลาด', 'ส่งข้อมูลไม่สำเร็จ', 'error');
   } finally {
-    // ปลดล็อกปุ่ม
     this.isSubmittingReturnPhoto = false;
   }
 },
+
 
     async fetchNotifications() {
   if (!this.userId) return;
@@ -1224,6 +1386,10 @@ closeNotifications() {
 watch: {
   filterType() {
     this.currentPage = 1;
+    this.$nextTick(this.setStatusWidthToReturnPending);
+  },
+  paginatedHistory() {
+    this.$nextTick(this.setStatusWidthToReturnPending);
   }
 },
   beforeUnmount() {
@@ -1598,17 +1764,24 @@ watch: {
   background-color: #4268a3;
 }
 
+:root { --status-w: auto; }
+
 .canceled-status,
 .approved-status,
 .disapproved-status,
 .returned-status,
 .pending-status,
 .return-pending-status {
-  display: inline-block;
-  padding: 4px 10px;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  width: var(--status-w, auto);
+  padding: 6px 12px;
   border-radius: 10px;
   font-weight: bold;
-  font-size: 0.9rem;
+  font-size: 0.95rem;
+  white-space: nowrap;
+  box-sizing: border-box;
 }
 
 
@@ -1640,7 +1813,7 @@ watch: {
     overflow-x: auto;
   }
   .history-table {
-    min-width: 700px;
+    min-width: 1200px;
     white-space: nowrap;
   }
 }
@@ -1755,7 +1928,7 @@ watch: {
 
 /* คงข้อมูลในช่อง Status ให้ชิดซ้ายตามเดิม */
 .history-table td.status-cell{
-  text-align: left !important;
+  text-align: center !important;
   padding-left: 16px !important;
 }
 
@@ -1763,11 +1936,171 @@ watch: {
 .history-table td.action-cell {
   padding-left:90px !important;  
 }
-
-
-
 </style>
 
 <style>
 @import '../css/style.css';
+
+/* === SweetAlert content ให้ชิดซ้าย */
+.swal2-html-container{
+  text-align: left !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+/* === Wrapper ให้ตารางเลื่อนใน modal ได้ */
+.swal-table-wrap{
+  max-width: 92vw;
+  max-height: 70vh;
+  overflow-x: auto;
+  overflow-y: auto;
+  padding: 6px 2px 0;
+}
+
+/* === ตารางสไตล์ modal */
+.swal-table{
+  width: 100%;
+  min-width: 780px;          /* กันแคบเกินไปในมือถือ */
+  border-collapse: collapse;
+  table-layout: fixed;       /* colgroup มีผลจริง */
+  background: #fff;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.swal-table thead th{
+  background: #1e3a8a;       /* น้ำเงินเข้ม ให้ match ตารางหลัก */
+  color: #fff;
+  padding: 10px 8px;
+  font-weight: 700;
+  font-size: 0.95rem;
+  text-align: center;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.swal-table tbody td{
+  border-bottom: 1px solid #e6e9f3;
+  padding: 8px 10px;
+  font-size: 0.95rem;
+  vertical-align: top;
+  word-break: break-word;
+}
+
+.swal-table tbody tr:hover{
+  background: #f7f9ff;
+}
+
+.td-center{ text-align: center; }
+
+/* รูปตัวอย่างใบคืน */
+.swal-thumb{
+  max-width: 120px;
+  max-height: 85px;
+  object-fit: contain;
+  border: 1px solid #cfd5e6;
+  border-radius: 8px;
+  cursor: pointer;
+  display: inline-block;
+}
+.swal-thumb-hint{
+  font-size: 0.8rem;
+  color: #8a8fa3;
+  margin-top: 4px;
+}
+
+/* ปุ่มด้านล่าง */
+.swal-actions{
+  margin-top: 10px;
+  display: flex;
+  justify-content: flex-end;
+}
+.pdfmake-btn{
+  background: #213555;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 14px;
+  cursor: pointer;
+  font-weight: 600;
+}
+.pdfmake-btn:hover{ background:#4268a3; }
+
+/* ===== SweetAlert เฉพาะหน้า History ===== */
+.hist-swal.swal2-popup{
+  /* กว้างขึ้นแต่ยัง responsive */
+  width: clamp(860px, 82vw, 1200px);
+  max-width: 96vw;
+  padding: 22px 24px 18px;
+}
+
+/* ระยะห่างหัวเรื่องเล็กน้อย */
+.hist-swal .swal2-title{
+  margin-bottom: 12px !important;
+}
+
+/* ตัวห่อ table กว้างสุดเท่ากับตัว popup */
+.hist-swal .swal-table-wrap{
+  max-width: 100%;
+  max-height: 72vh;     /* กันสูงเกินจอ */
+  overflow: auto;       /* ถ้าแคบมากจริงๆ ค่อยเลื่อน */
+  padding: 6px 0 0;
+}
+
+/* ปรับตารางให้ไม่บังคับ min-width -> หายสกรอลล์แนวนอนบนเดสก์ท็อป */
+.hist-swal .swal-table{
+  width: 100%;
+  min-width: unset;     /* override ของเดิมที่ 780px */
+  table-layout: auto;   /* ให้คอลัมน์ปรับเองตามเนื้อหา */
+}
+
+/* ให้ข้อความห่อบรรทัดได้ ลดโอกาสล้นแนวนอน */
+.hist-swal .swal-table th,
+.hist-swal .swal-table td{
+  white-space: normal;
+  word-break: break-word;
+}
+
+/* เฉพาะคอลัมน์ตัวเลข/สั้น ๆ ให้อยู่กลางสวย ๆ */
+.hist-swal .td-center{ text-align: center; }
+
+/* ปุ่มด้านล่างชิดขวาตามเดิม */
+.hist-swal .swal-actions{
+  margin-top: 10px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* ==== Full image viewer for Detail === */
+.img-swal.swal2-popup{
+  width: auto;
+  max-width: 96vw;
+  padding: 8px;
+  background: #000;
+}
+.img-swal .swal2-close{
+  color: #fff !important;
+  top: 6px;
+  right: 10px;
+}
+.img-viewer-wrap{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:8px;
+}
+.img-viewer{
+  max-width: 92vw;
+  max-height: 82vh;
+  object-fit: contain;
+  background: #000;
+  display:block;
+}
+.img-viewer-actions a{
+  color:#cfe3ff;
+  text-decoration: underline;
+  font-size: 0.95rem;
+}
+
 </style>

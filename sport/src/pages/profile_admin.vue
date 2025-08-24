@@ -198,8 +198,9 @@ const itemsPerPage = 5
 const currentPage = ref(1)
 const totalPages = computed(() => Math.ceil(history.value.length / itemsPerPage) || 1)
 const paginatedHistory = computed(() => {
+  const sorted = [...history.value].sort((a, b) => (b.sortAt || 0) - (a.sortAt || 0))
   const start = (currentPage.value - 1) * itemsPerPage
-  return history.value.slice(start, start + itemsPerPage)
+  return sorted.slice(start, start + itemsPerPage)
 })
 
 // ==== กระดิ่งแจ้งเตือน ====
@@ -286,59 +287,168 @@ async function cancelItem(id) {
   }
 }
 function detailGroup(items) {
-  // สร้าง 1 แถว (label/value) ให้จัดคอลัมน์สวย ๆ
-  const row = (label, value) => `
-    <div style="display:flex; align-items:flex-start; margin-bottom:8px;">
-      <div style="width:160px; font-weight:700; text-align:left;">
-        ${label}
-      </div>
-      <div style="flex:1; text-align:left; padding-left:14px; word-break:break-word;">
-        ${value}
-      </div>
+  // กันอักขระพิเศษใน HTML
+  const esc = (s) =>
+    String(s ?? '-')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+
+  // ครอบตารางให้เลื่อนได้
+  const tableWrap = (innerHtml) => `
+    <div class="swal-detail-wrap">
+      ${innerHtml}
     </div>
   `;
 
-  let html = '<div style="text-align:left;">';
-
-  items.forEach((item, i) => {
-    if (item.type === 'field') {
-      html += `
-        <div style="margin-bottom:10px; padding-bottom:10px; border-bottom:1px dashed #c7c7c7;">
-          ${row('ชื่อ:', item.name || '-')}
-          ${row('ชื่อผู้ขอใช้:', item.requester || '-')}
-          ${row('วันที่ขอ:', item.date ? new Date(item.date).toLocaleDateString('th-TH') : '-')}
-          ${row('สถานะ:', item.status || '-')}
-        </div>
-      `;
-    } else {
-      html += `
-        <div style="margin-bottom:10px; padding-bottom:10px; border-bottom:1px dashed #c7c7c7;">
-          ${row('ชื่อ:', item.name || '-')}
-          ${row('จำนวน:', item.quantity || '-')}
-          ${row('ชื่อผู้ขอใช้:', item.requester || '-')}
-          ${row('วันที่ขอยืม:', item.date ? new Date(item.date).toLocaleDateString('th-TH') : '-')}
-          ${row('สถานะ:', item.status || '-')}
-          ${row('วันที่คืน:', item.returnedAt ? formatDate(item.returnedAt) : '-')}
-        </div>
-      `;
+  // ===== helper ภายในเฉพาะฟังก์ชันนี้ =====
+  const parseToDate = (d) => {
+    if (!d) return null;
+    const s = String(d).trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+      const [y, m, dd] = s.split('-').map(Number);
+      return new Date(y, m - 1, dd);
     }
-  });
+    const dt = new Date(s);
+    return isNaN(dt) ? null : dt;
+  };
+  const isSameDay = (a, b) => {
+    const A = parseToDate(a),
+      B = parseToDate(b);
+    if (!A || !B) return true;
+    return (
+      A.getFullYear() === B.getFullYear() &&
+      A.getMonth() === B.getMonth() &&
+      A.getDate() === B.getDate()
+    );
+  };
+  const isMultiDayEquipment = (it) => {
+    if (String(it?.type || '').toLowerCase() !== 'equipment') return false;
+    return !!it.since && !!it.uptodate && !isSameDay(it.since, it.uptodate);
+  };
+  // =======================================
 
-  html += '</div>';
+  const type = (items?.[0]?.type || '').toLowerCase();
 
-  Swal.fire({
-    title: 'รายละเอียดรายการ',
-    html,
-    confirmButtonText: 'ปิด',
-    confirmButtonColor: '#3085d6'
-  });
+  if (type === 'field') {
+    // ===== ตาราง FIELD =====
+    const rows = items
+      .map(
+        (it, idx) => `
+      <tr>
+        <td class="c">${idx + 1}</td>
+        <td>${esc(it.name)}</td>
+        <td>${esc(it.requester || '-')}</td>
+        <td class="c">${esc(it.date ? formatDate(it.date) : '-')}</td>
+        <td class="c">${esc(it.time || '-')}</td>
+        <td class="c">${esc(it.status || '-')}</td>
+      </tr>
+    `
+      )
+      .join('');
+
+    const table = `
+      <table class="swal-detail-table items">
+        <thead>
+          <tr>
+            <th style="width:72px">ลำดับ</th>
+            <th>ชื่อสนาม</th>
+            <th>ผู้ขอใช้</th>
+            <th style="width:120px">วันที่ขอใช้</th>
+            <th style="width:120px">เวลา</th>
+            <th style="width:120px">สถานะ</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    `;
+
+    Swal.fire({
+      title: 'รายละเอียดสนาม',
+      html: tableWrap(table),
+      confirmButtonText: 'ปิด',
+      confirmButtonColor: '#3085d6',
+      customClass: { popup: 'swal-wide' }
+    });
+  } else {
+    // ===== ตาราง EQUIPMENT =====
+    // เงื่อนไขชื่อผู้ขอใช้:
+    //  - หลายวัน => ใช้ username_form
+    //  - วันเดียว => ใช้ค่าเดิม (requester / user_id)
+    const rows = items
+      .map((it, idx) => {
+        const displayName = isMultiDayEquipment(it)
+          ? it.username_form || it.requester || it.user_id || '-'
+          : it.requester || it.user_id || '-';
+
+        return `
+          <tr>
+            <td class="c">${idx + 1}</td>
+            <td>${esc(it.name)}</td>
+            <td class="c">${esc(it.quantity || '-')}</td>
+            <td>${esc(displayName)}</td>
+            <td class="c">${esc(it.date ? formatDate(it.date) : '-')}</td>
+            <td class="c">${esc(it.status || '-')}</td>
+          </tr>
+        `;
+      })
+      .join('');
+
+    const table = `
+      <table class="swal-detail-table items">
+        <thead>
+          <tr>
+            <th style="width:72px">ลำดับ</th>
+            <th>รายการ</th>
+            <th style="width:90px">จำนวน</th>
+            <th>ผู้ขอใช้</th>
+            <th style="width:120px">วันที่ขอยืม</th>
+            <th style="width:120px">สถานะ</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    `;
+
+    Swal.fire({
+      title: 'รายละเอียดอุปกรณ์',
+      html: tableWrap(table),
+      confirmButtonText: 'ปิด',
+      confirmButtonColor: '#3085d6',
+      customClass: { popup: 'swal-wide' }
+    });
+  }
 }
-
 
 function formatDate(date) {
   if (!date) return '-'
   const d = new Date(date)
   return !isNaN(d) ? d.toLocaleDateString('th-TH') : '-'
+}
+
+function parseToDate(d) {
+  if (!d) return null;
+  const s = String(d).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+    const [y,m,dd] = s.split('-').map(Number);
+    return new Date(y, m-1, dd);
+  }
+  const dt = new Date(s);
+  return isNaN(dt) ? null : dt;
+}
+function isSameDay(a, b) {
+  const A = parseToDate(a), B = parseToDate(b);
+  if (!A || !B) return true;
+  return A.getFullYear() === B.getFullYear()
+      && A.getMonth() === B.getMonth()
+      && A.getDate() === B.getDate();
+}
+function isMultiDayEquipment(item) {
+  // ใช้เฉพาะ type 'equipment'
+  if ((item?.type || '').toLowerCase() !== 'equipment') return false;
+  return !!item.since && !!item.uptodate && !isSameDay(item.since, item.uptodate);
 }
 
 async function fetchNotifications() {
@@ -372,6 +482,27 @@ async function fetchNotifications() {
 }
 
 // ===============================
+
+// คืนค่า ms ของวันที่ ถ้าไม่มี/พาร์สไม่ได้ = 0
+const toMs = (v) => {
+  if (!v) return 0;
+  const t = new Date(v).getTime();
+  return Number.isFinite(t) ? t : 0;
+};
+// เวลาที่ใช้จัดเรียง (หยิบค่าที่ “ล่าสุด” จากหลาย ๆ ช่อง)
+const sortTimeOf = (h) =>
+  Math.max(
+    toMs(h.updatedAt),
+    toMs(h.approvedAt),
+    toMs(h.disapprovedAt),
+    toMs(h.canceledAt),
+    toMs(h.returnedAt),
+    toMs(h.createdAt),
+    toMs(h.date),
+    toMs(h.since),
+    toMs(h.uptodate)
+  );
+
 
 onMounted(async () => {
    window.addEventListener('resize', handleResize)
@@ -432,24 +563,36 @@ onMounted(async () => {
 
     // map ข้อมูลสำหรับแสดงผล
     let mapped = unique.map((h, idx) => ({
-      id: h._id?.$oid || h._id || idx + 1,
-      type: h.type,
-      name: h.name,
-      time: h.type === "field" ? `${h.startTime || "-"} - ${h.endTime || "-"}` : "",
-      quantity: h.type === "equipment" ? h.quantity : "",
-      status: statusLabel(h.status),
-      approvedBy: h.approvedBy,
-      approvedById: h.approvedById,
-      disapprovedBy: h.disapprovedBy,
-      disapprovedById: h.disapprovedById,
-      canceledBy: h.canceledBy,
-      canceledById: h.canceledById,
-      approvedAt: h.approvedAt,
-      disapprovedAt: h.disapprovedAt,
-      canceledAt: h.canceledAt,
-      date: h.date,
-      requester: userMap.value[h.user_id] || h.user_id || "-"
-    }))
+  id: h._id?.$oid || h._id || idx + 1,
+  type: h.type,
+  name: h.name,
+  time: h.type === "field" ? `${h.startTime || "-"} - ${h.endTime || "-"}` : "",
+  quantity: h.type === "equipment" ? h.quantity : "",
+  status: statusLabel(h.status),
+
+  since: h.since,
+  uptodate: h.uptodate,
+  username_form: h.username_form,
+  user_id: h.user_id,
+
+  approvedBy: h.approvedBy,
+  approvedById: h.approvedById,
+  disapprovedBy: h.disapprovedBy,
+  disapprovedById: h.disapprovedById,
+  canceledBy: h.canceledBy,
+  canceledById: h.canceledById,
+  approvedAt: h.approvedAt,
+  disapprovedAt: h.disapprovedAt,
+  canceledAt: h.canceledAt,
+  date: h.date,
+
+  requester: userMap.value[h.user_id] || h.user_id || "-",
+
+  // ใช้จัดเรียงล่าสุดเสมอ
+  sortAt: sortTimeOf(h),
+}));
+
+
 
     // เรียงจากล่าสุด
     mapped = mapped.sort((a, b) => new Date(b.approvedAt || b.disapprovedAt || b.canceledAt || b.date || 0) - new Date(a.approvedAt || a.disapprovedAt || a.canceledAt || a.date || 0))
@@ -808,4 +951,54 @@ function handleResize() {
 </style>
 <style>
 @import '../css/style.css';
+
+/* ==== SweetAlert (โปรไฟล์) ให้กว้างขึ้นและรองรับตาราง ==== */
+.swal2-popup.swal-wide{
+  width: auto !important;
+  max-width: min(1000px, 96vw) !important;
+  padding: 26px 24px !important;
+}
+@supports (width: fit-content) {
+  .swal2-popup.swal-wide{ width: fit-content !important; }
+}
+
+.swal2-popup .swal-detail-wrap{
+  overflow-x: auto; /* ถ้าตารางกว้างกว่าหน้าจอ ให้เลื่อนแนวนอนได้ */
+}
+
+/* สไตล์ตาราง */
+.swal2-popup .swal-detail-table{
+  width: min(900px, 92vw);
+  border-collapse: collapse;
+  margin: 0 auto;
+  font-size: 0.98rem;
+}
+.swal2-popup .swal-detail-table thead th{
+  background:#213555;
+  color:#fff;
+  padding:8px 10px;
+  border:1px solid #e6e9f2;
+  text-align:center;
+  font-weight:700;
+}
+.swal2-popup .swal-detail-table tbody td{
+  border:1px solid #e6e9f2;
+  padding:8px 10px;
+  color:#1f2a44;
+}
+.swal2-popup .swal-detail-table tbody td.c{
+  text-align:center;
+}
+
+/* กันชื่อผู้ขอใช้/ชื่อรายการยาว ตัดด้วยเลื่อนแนวนอนแทน */
+.swal2-popup .swal-detail-table.items thead th:nth-child(2),
+.swal2-popup .swal-detail-table.items tbody td:nth-child(2),
+.swal2-popup .swal-detail-table.items thead th:nth-child(4),
+.swal2-popup .swal-detail-table.items tbody td:nth-child(4){
+  white-space: nowrap;
+  word-break: normal;
+}
+
+/* เผื่อคอลัมน์ชื่อผู้ขอใช้ยาว */
+.swal2-popup .swal-detail-table.items thead th:nth-child(4){ min-width: 220px; }
 </style>

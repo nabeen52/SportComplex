@@ -1231,6 +1231,19 @@ background: #39b844;
 }
 
 .notification-dropdown { position: absolute; right: 0; top: 38px; background: #fff; border-radius: 18px 0 18px 18px; box-shadow: 0 8px 24px 0 rgba(27, 50, 98, 0.14), 0 2px 4px 0 rgba(33, 125, 215, 0.06); min-width: 330px; max-width: 370px; max-height: 420px; overflow-y: auto; z-index: 1002; padding: 0; border: none; animation: fadeDown 0.22s; }
+
+
+/* ตัวเลือก: บังคับลูกทุกตัวใน .filter-options ให้จัดกึ่งกลางแนวตั้งและมี margin เท่ากัน */
+.filter-options > * {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 5px;
+}
+@media (max-width: 600px) {
+  .filter-options > * { margin-bottom: 0; }
+}
+
 </style>
 
 <style>

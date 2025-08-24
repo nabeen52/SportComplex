@@ -72,7 +72,7 @@
         <div id="pdf-section"> 
         <div class="form-header">
           <h3>แบบฟอร์มการยืมอุปกรณ์/วัสดุ/ครุภัณฑ์ ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง</h3>
-          <p><b>โทร: 0-5391-7820 เเละ 0-5391-7821 E-mail: sport-complex@mfu.ac.th </b></p>
+          <p><b>โทร: 0-5391-7820 และ 0-5391-7821 | E-mail: sport-complex@mfu.ac.th</b></p>
         </div>
 
         <!-- กลุ่มขวา: วันที่มารับของและเวลามารับของ -->
@@ -112,7 +112,7 @@
            <b>วันที่ </b> {{ booking && booking.start_date ? (new Date(booking.start_date)).toLocaleDateString('th-TH') : (new Date()).toLocaleDateString('th-TH') }}
           </span>
           <span style="font-weight: bold; margin-top: 8px;">
-            ส่วนที่1 สำหรับผู้ใช้
+            ส่วนที่1 สำหรับผู้ขอใช้บริการ
           </span>
         </div>
 
@@ -1188,6 +1188,39 @@ async function handleNext() {
   --gap: 12px;
 }
 
+/* === Tighten only the red-marked gaps === */
+
+/* 1) ระยะก่อน/หลังตารางรายการอุปกรณ์ */
+.equipment-table{
+  margin-top: 6px !important;      /* เดิม 20px */
+  margin-bottom: 10px !important;  /* เดิม 30px */
+}
+
+/* 2) ระยะก่อนตารางความเห็น/ผลการปฏิบัติงาน */
+.approval-table{
+  margin-top: 10px !important;     /* เดิม 24px */
+}
+
+/* 3) ภายในช่องความคิดเห็น/ผลการปฏิบัติงาน ให้เส้นกับลายเซ็นชิดกันขึ้น */
+.approval-cell{ padding: 0 !important; }
+
+.approval-content{
+  /* ไม่ดันเว้นที่ว่างด้านในมากเกินไป */
+  min-height: 150px !important;    /* เดิม 210px – ลดให้กระชับ */
+  justify-content: flex-start !important; /* ไม่ดันลายเซ็นไปชิดก้นกล่อง */
+  gap: 6px !important;             /* คุมระยะระหว่างบล็อก */
+  padding: 10px 10px 12px !important;
+}
+
+.approval-lines{
+  line-height: 1.6 !important;     /* เดิม 1.9 */
+  margin-bottom: 4px !important;   /* เดิม 8px */
+}
+
+.approval-sign{
+  line-height: 1.4 !important;     /* เดิม 1.8 */
+  margin-top: 4px !important;      /* เดิม 12px */
+}
 
 
 /* หน้าจอเล็ก ลดความยาวเส้นลง */
@@ -1195,10 +1228,42 @@ async function handleNext() {
   .sig-dots, .sig-name{ width: 20ch; }
 }
 
+</style>
+<!-- วางบล็อกนี้ท้ายไฟล์ SFC เลย -->
+<style>
+/* โหลดฟอนต์ TH Sarabun New */
+@font-face{
+  font-family: 'THSarabunNew';
+  src: url('/fonts/THSarabunNew.woff2') format('woff2'),
+       url('/fonts/THSarabunNew.woff') format('woff');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face{
+  font-family: 'THSarabunNew';
+  src: url('/fonts/THSarabunNew-Bold.woff2') format('woff2'),
+       url('/fonts/THSarabunNew-Bold.woff') format('woff');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
 
+/* ใช้ฟอนต์เฉพาะในเอกสาร PDF ตั้งแต่หัวข้อฟอร์มถึงชื่อในวงเล็บท้าย */
+#pdf-section, #pdf-section *{
+  font-family: 'THSarabunNew', 'Sarabun', Tahoma, sans-serif !important;
+}
 
-
-
+/* ทำตัวหนาให้ส่วนหัว/หัวตาราง/ตัวหนาในเอกสารดูถูกน้ำหนักฟอนต์ */
+#pdf-section h1,
+#pdf-section h2,
+#pdf-section h3,
+#pdf-section b,
+#pdf-section th,
+#pdf-section .form-row-title,
+#pdf-section .form-header h3{
+  font-weight: 700;
+}
 </style>
 
 <style>

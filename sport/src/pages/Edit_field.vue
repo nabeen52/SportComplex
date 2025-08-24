@@ -1,5 +1,6 @@
 <template>
-  <div class="layout" :class="{ 'sidebar-closed': isSidebarClosed }">
+  <div class="layout edit-field-page" :class="{ 'sidebar-closed': isSidebarClosed }">
+
     <aside class="sidebar" :class="{ closed: isSidebarClosed }">
       <div class="sidebar-header">
         <img src="/img/logo.png" alt="logo" class="logo" />
@@ -1245,6 +1246,29 @@ input:checked+.toggle-slider:before {
   background: transparent;
   z-index: 1001;
 }
+
+/* ทำให้หน้า Edit_field วางโครงเป็นคอลัมน์ และ footer อยู่ใน flow ปกติ */
+.edit-field-page .main {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+/* ให้เนื้อหาเป็นตัวขยายพื้นที่ แทนการทำ scroll แยกใน .content */
+.edit-field-page .content {
+  flex: 1;
+  overflow: visible !important; /* ตัด overflow ภายในที่ทำให้ footer ลอย */
+}
+
+/* รีเซ็ต footer ไม่ให้ fixed/sticky ที่มาจาก global */
+.edit-field-page .foot {
+  position: static !important;
+  inset: auto !important;   /* รีเซ็ต top/right/bottom/left ถ้ามี */
+  width: 100%;
+  margin-top: 16px;
+  z-index: auto !important;
+}
+
 .notification-dropdown { position: absolute; right: 0; top: 38px; background: #fff; border-radius: 18px 0 18px 18px; box-shadow: 0 8px 24px 0 rgba(27, 50, 98, 0.14), 0 2px 4px 0 rgba(33, 125, 215, 0.06); min-width: 330px; max-width: 370px; max-height: 420px; overflow-y: auto; z-index: 1002; padding: 0; border: none; animation: fadeDown 0.22s; }
 </style>
 

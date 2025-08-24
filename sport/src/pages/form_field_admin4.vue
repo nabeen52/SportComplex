@@ -7,7 +7,7 @@
         <p class="sidebar-title">ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง</p>
       </div>
       <nav class="nav-links">
-         <router-link to="/dashboard" exact-active-class="active"><i class="pi pi-chart-pie"></i> แดชบอร์ด</router-link>
+        <router-link to="/dashboard" exact-active-class="active"><i class="pi pi-chart-pie"></i> แดชบอร์ด</router-link>
         <router-link to="/home_admin" exact-active-class="active"><i class="pi pi-megaphone"></i> แก้ไขข่าว</router-link>
         <router-link to="/edit_field" active-class="active"><i class="pi pi-map-marker"></i> แก้ไขสนาม</router-link>
         <router-link to="/edit_equipment" active-class="active"><i class="pi pi-clipboard"></i> แก้ไขอุปกรณ์ </router-link>
@@ -18,46 +18,44 @@
         <router-link to="/history_admin" active-class="active"><i class="pi pi-history"></i> ระบบประวัติการทำรายการ</router-link>
       </nav>
     </aside>
-<div
-  v-if="isMobile && !isSidebarClosed"
-  class="sidebar-overlay"
-  @click="toggleSidebar"
-></div>
+
+    <div v-if="!isSidebarClosed" class="sidebar-overlay" @click="toggleSidebar"></div>
+
     <div class="main">
       <!-- Header with Notification Bell -->
       <header class="topbar">
         <button class="menu-toggle" @click="toggleSidebar">☰</button>
         <div class="topbar-actions">
-           <div style="position: relative; display: inline-block;">
-      <div
-        v-if="showNotifications"
-        class="notification-backdrop"
-        @click="closeNotifications"
-      ></div>
+          <div style="position: relative; display: inline-block;">
+            <div
+              v-if="showNotifications"
+              class="notification-backdrop"
+              @click="closeNotifications"
+            ></div>
 
-      <button class="notification-btn" @click="toggleNotifications">
-        <i class="pi pi-bell"></i>
-        <span v-if="unreadCount > 0" class="badge">{{ unreadCount }}</span>
-      </button>
+            <button class="notification-btn" @click="toggleNotifications">
+              <i class="pi pi-bell"></i>
+              <span v-if="unreadCount > 0" class="badge">{{ unreadCount }}</span>
+            </button>
 
-      <div v-if="showNotifications" class="notification-dropdown">
-        <ul>
-          <li
-            v-for="(noti, idx) in notifications.slice(0, 10)"
-            :key="noti.id || idx"
-            :class="['notification-item', noti.type || '', { unread: noti.timestamp > lastSeenTimestamp }]"
-          >
-            {{ noti.message }}
-          </li>
-          <li v-if="notifications.length === 0" class="no-noti">ไม่มีแจ้งเตือน</li>
-        </ul>
-      </div>
-    </div>
+            <div v-if="showNotifications" class="notification-dropdown">
+              <ul>
+                <li
+                  v-for="(noti, idx) in notifications.slice(0, 10)"
+                  :key="noti.id || idx"
+                  :class="['notification-item', noti.type || '', { unread: noti.timestamp > lastSeenTimestamp }]"
+                >
+                  {{ noti.message }}
+                </li>
+                <li v-if="notifications.length === 0" class="no-noti">ไม่มีแจ้งเตือน</li>
+              </ul>
+            </div>
+          </div>
           <router-link to="/profile_admin"><i class="pi pi-user"></i></router-link>
         </div>
       </header>
 
-     <!-- Stepper -->
+      <!-- Stepper -->
       <div class="headStepper">
         <div class="stepper">
           <div v-for="(step, index) in steps" :key="index" class="step">
@@ -81,7 +79,6 @@
       <div class="form-container">
         <h1 style="display:flex;justify-content:center;">ส่งคำขอสำเร็จ ✅</h1>
 
-        <!-- ใช้ logic เดียวกับ form_equipment4 -->
         <button
           class="pdfmake-btn"
           :disabled="!finalPdfUrl"
@@ -147,7 +144,7 @@ function toggleNotifications () {
   if (showNotifications.value) {
     lastSeenTimestamp.value = Date.now()
     localStorage.setItem(ADMIN_LAST_SEEN_KEY, String(lastSeenTimestamp.value))
-    unreadCount.value = 0 // เคลียร์ badge ทันที
+    unreadCount.value = 0
   }
 }
 
@@ -165,7 +162,7 @@ async function fetchNotifications () {
   try {
     pruneOldNotifications()
 
-    // เหมือน form_field_admin: ดึงรายการรออนุมัติ (field/equipment)
+    // รายการรออนุมัติ (field/equipment)
     const res = await axios.get(`${API_BASE}/api/history/approve_field`)
     const data = Array.isArray(res.data) ? res.data : []
 
@@ -193,15 +190,12 @@ async function fetchNotifications () {
       })
 
       notifications.value = [...notifications.value, ...newMessages]
-        // unique ตาม id
         .filter((v, i, arr) => arr.findIndex(x => (x.id || i) === (v.id || i)) === i)
-        // ใหม่→เก่า
         .sort((a, b) => b.timestamp - a.timestamp)
 
       pruneOldNotifications()
     }
 
-    // badge: นับที่ timestamp > lastSeenTimestamp
     unreadCount.value = notifications.value.filter(n => n.timestamp > lastSeenTimestamp.value).length
   } catch {/* เงียบไว้ */}
 }
@@ -259,7 +253,7 @@ function esc (s) {
     .replace(/\n/g, '<br>')
 }
 
-// ====== PDF logic (เหมือน form_equipment4) ======
+// ====== PDF logic ======
 const pdfUrl = ref(null)
 const finalPdfUrl = computed(() => pdfUrl.value)
 
@@ -316,7 +310,6 @@ async function downloadPdf () {
   }
 }
 
-// (เผื่อเรียกด้วย item เฉพาะจุด)
 async function exportPdf (item) {
   try {
     let urlFromItem =
@@ -347,12 +340,12 @@ async function loadBookingInfo () {
     return
   }
   try {
-    // ดึงรายละเอียดการจอง
+    // รายละเอียดการจอง
     const res = await axios.get(`${API_BASE}/api/booking_field/${bookingId}`)
     info.value = res.data || {}
     info.value.type = 'field'
 
-    // ดึง URL PDF จาก history
+    // URL PDF จาก history
     try {
       const resHist = await axios.get(`${API_BASE}/api/history`, { params: { booking_id: bookingId } })
       const list = (resHist.data || []).filter(
@@ -360,57 +353,92 @@ async function loadBookingInfo () {
       )
       const picked = pickPdfUrl(list)
       pdfUrl.value = normalizePdfUrl(picked)
-    } catch { /* ไม่มี URL ก็ปล่อยไว้ให้ปุ่ม disable */ }
+    } catch { /* ไม่มี URL ก็ปล่อย */ }
 
-    // ===== ตั้งค่า "ชื่อผู้ขอ" โดยให้ username_form มาก่อน =====
+    // ตั้งค่า "ชื่อผู้ขอ"
     const prefer = v => (v && String(v).trim() !== '' ? String(v).trim() : null)
-
-    // 1) จากข้อมูลการจองโดยตรง
     let requester = prefer(info.value.username_form)
-
-    // 2) ถัดมาจาก localStorage เผื่อกรอกไว้ก่อนหน้า
     if (!requester) requester = prefer(localStorage.getItem('username_form'))
-
-    // 3) ถ้ายังไม่มี ค่อย fallback เป็นชื่อจาก /api/user/:id
     if (!requester && info.value.user_id) {
       try {
         const userRes = await axios.get(`${API_BASE}/api/user/${info.value.user_id}`)
         requester = prefer(userRes.data?.name)
-      } catch { /* เงียบไว้ */ }
+      } catch {}
     }
     info.value.requester = requester || '-'
 
-    // Popup สรุป
+    const proxyName =
+      (info.value.proxyStudentName && String(info.value.proxyStudentName).trim()) ||
+      (localStorage.getItem('proxyStudentName') && String(localStorage.getItem('proxyStudentName')).trim()) ||
+      null
+    info.value.proxyStudentName = proxyName || '-'
+
+    // === SweetAlert รูปแบบเดียวกับ form_field4 ===
     await Swal.fire({
       title: 'ส่งคำขอสำเร็จ',
       html: `
-        <div class="swal-booking">
-          <div class="label"><b>ชื่อกิจกรรม:</b></div>
-          <div class="value">${esc(info.value.name_activity || '-')}</div>
-          <div class="label"><b>ชื่อสนาม:</b></div>
-          <div class="value">${esc(info.value.building || '-')}</div>
-          <div class="label"><b>ชื่อผู้ขอ:</b></div>
-          <div class="value">${esc(info.value.requester || '-')}</div>
-          <div class="label"><b>วันที่:</b></div>
-          <div class="value">${esc(formatDateOnly(info.value.since))} - ${esc(formatDateOnly(info.value.uptodate))}</div>
-          <div class="label"><b>เวลา:</b></div>
-          <div class="value">${esc(info.value.since_time || '-')} น. - ${esc(info.value.until_thetime || '-')} น.</div>
+        <div class="swal-wrapper">
+          <table class="swal-booking-table">
+            <tbody>
+              <tr>
+                <th>ชื่อกิจกรรม</th>
+                <td>${esc(info.value.name_activity || '-')}</td>
+              </tr>
+              <tr>
+                <th>อาคาร/สนาม</th>
+                <td>${esc(info.value.building || '-')}</td>
+              </tr>
+              <tr>
+                <th>โซน</th>
+                <td>${esc(info.value.zone || '-')}</td>
+              </tr>
+
+              <tr>
+                <th>ผู้ขอใช้</th>
+                <td>${esc(info.value.username_form || info.value.requester || '-')}</td>
+              </tr>
+
+              <tr>
+                <th>จองแทนผู้ใช้</th>
+                <td>${esc(info.value.proxyStudentName || '-')}</td>
+              </tr>
+
+              <tr>
+                <th>วันที่</th>
+                <td>${esc(formatDateOnly(info.value.since))} - ${esc(formatDateOnly(info.value.uptodate))}</td>
+              </tr>
+              <tr>
+                <th>เวลา</th>
+                <td>${esc(info.value.since_time || '-')} น. - ${esc(info.value.until_thetime || '-')} น.</td>
+              </tr>
+              <tr>
+                <th>จำนวนผู้เข้าร่วม</th>
+                <td>${esc(info.value.participants || '-')}</td>
+              </tr>
+              <tr>
+                <th>เหตุผล</th>
+                <td>${esc(info.value.reasons || info.value.reason || '-')}</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       `,
       icon: 'success',
       confirmButtonText: 'ตกลง',
       allowOutsideClick: false,
-      allowEscapeKey: false
+      allowEscapeKey: false,
+      customClass: {
+        popup: 'swal-wide-form-field4'   // ✅ ใช้คลาสเดียวกับ form_field4
+      }
     })
   } catch {
     Swal.fire('ดึงข้อมูลไม่สำเร็จ')
   }
 }
 
-
 onMounted(() => {
   lastSeenTimestamp.value = parseInt(localStorage.getItem(ADMIN_LAST_SEEN_KEY) || '0')
-  window.addEventListener('click', handleClickOutside)   // ใช้งานตัวดักคลิกนอก dropdown
+  window.addEventListener('click', handleClickOutside)
 
   loadBookingInfo()
   fetchNotifications()
@@ -418,12 +446,10 @@ onMounted(() => {
   loadCart()
 })
 
-
 onBeforeUnmount(() => {
   if (polling) clearInterval(polling)
   window.removeEventListener('click', handleClickOutside)
 })
-
 
 function handleNext () {
   localStorage.removeItem('bookingId')
@@ -501,34 +527,67 @@ function handleNext () {
 .pdfmake-btn:hover { background-color: #7e0f0fdf; }
 </style>
 
-<!-- Global SweetAlert2 styles -->
+<!-- SweetAlert2: ใช้ชุดเดียวกับ form_field4 -->
 <style>
-.swal2-popup { width: auto; max-width: min(720px, 92vw); padding: 24px 26px 22px; font-family: inherit; }
-@supports (width: fit-content) { .swal2-popup { width: fit-content; } }
-.swal2-title { margin-bottom: 10px !important; }
-.swal2-popup .swal-booking {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  column-gap: 12px; row-gap: 8px; text-align: left;
-  margin-inline: auto; max-width: min(680px, 86vw);
-}
-.swal2-popup .swal-booking .label { justify-self: end; white-space: nowrap; font-weight: 700; }
-.swal2-popup .swal-booking .value {
-  justify-self: start; white-space: pre-wrap; word-break: break-word; line-height: 1.6;
-  max-width: clamp(260px, 56vw, 560px);
-}
-.layout{ min-height: 100vh; display: flex; }
-.main{ flex: 1 1 auto; display: flex; flex-direction: column; min-width: 0; }
-.foot{ margin-top: auto; flex-shrink: 0; width: 100%; border-radius: 0; }
-.form-container{ margin-bottom: 12px; }
+@import '../css/style.css';
 
+/* ใช้คลาสเฉพาะนี้เท่านั้น เพื่อให้เหมือน form_field4 */
+.swal2-popup.swal-wide-form-field4{
+  width: min(550px, 92vw) !important;
+  max-width: none !important;
+  padding: 24px 26px 22px !important;
+  font-family: inherit !important;
+}
+.swal2-popup.swal-wide-form-field4 .swal2-html-container{
+  width: 100% !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+.swal2-popup.swal-wide-form-field4 .swal-booking{ max-width: none !important; }
+.swal2-popup.swal-wide-form-field4 .swal-booking-table{ width: 100% !important; }
+.swal2-popup.swal-wide-form-field4 .swal-booking-table td{ max-width: none !important; }
 
+/* มือถือ: card layout */
+@media (max-width: 520px){
+  .swal2-popup.swal-wide-form-field4 .swal-booking-table,
+  .swal2-popup.swal-wide-form-field4 .swal-booking-table thead,
+  .swal2-popup.swal-wide-form-field4 .swal-booking-table tbody,
+  .swal2-popup.swal-wide-form-field4 .swal-booking-table tr,
+  .swal2-popup.swal-wide-form-field4 .swal-booking-table td,
+  .swal2-popup.swal-wide-form-field4 .swal-booking-table th{
+    display: block;
+    width: 100%;
+  }
+  .swal2-popup.swal-wide-form-field4 .swal-booking-table tr{
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 6px 0;
+    margin-bottom: 10px;
+    background: #fff;
+  }
+  .swal2-popup.swal-wide-form-field4 .swal-booking-table th{
+    text-align: left;
+    background: #f9fafb;
+    border: none;
+    padding: 8px 12px 2px;
+  }
+  .swal2-popup.swal-wide-form-field4 .swal-booking-table td{
+    border: none;
+    padding: 2px 12px 10px;
+  }
+}
+.swal2-popup.swal-wide-form-field4 .swal-booking-table th,
+.swal2-popup.swal-wide-form-field4 .swal-booking-table td{
+  text-align: left !important;
+  padding-left: 12px !important;
+  padding-right: 12px !important;
+}
+.swal2-popup.swal-wide-form-field4 .swal-booking-table tr > th { width: 34%; }
+.swal2-popup.swal-wide-form-field4 .swal-booking-table tr > td { width: 66%; }
+
+/* จบชุด SweetAlert */
 </style>
 
 <style>
   html, body, #app { height: 100%; margin: 0; }
-</style>
-
-<style>
-@import '../css/style.css';
 </style>

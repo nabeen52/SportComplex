@@ -82,7 +82,7 @@
 
       <div class="hero-row">
         <div>
-          <p>*อัตราส่วนภาพควรเป็น 9:5 </p>
+          <p style="font-size: 15px;">*อัตราส่วนภาพควรเป็น 9:5 </p>
         </div>
         <div class="hero-wrapper">
           <img

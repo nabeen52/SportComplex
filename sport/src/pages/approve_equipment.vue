@@ -467,29 +467,115 @@ export default {
       }
     },
     detailGroup(group) {
-  let html = '<div style="text-align:left;">';
-  group.items.forEach((item, i) => {
-    html += `
-      <div style="margin-bottom:12px; padding-bottom:12px; border-bottom:1px dashed #bbb;">
-        <div style="display:grid; grid-template-columns: 150px auto; gap: 10px;">
-          <div><b>อุปกรณ์ที่ ${i + 1}:</b></div> <div>${item.name || '-'}</div>
-          <div><b>จำนวน:</b></div> <div>${item.quantity || '-'}</div>
-          <div><b>ชื่อผู้ขอใช้:</b></div> <div>${this.usersMap[item.user_id] || item.requester || item.user_id || "-"}</div>
-          <div><b>วันที่ขอยืม:</b></div> <div>${item.date ? new Date(item.date).toLocaleDateString() : '-'}</div>
-        </div>
-      </div>
+  const esc = (s) =>
+    String(s ?? '-')
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+
+  const fmtDate = (d) => {
+    if (!d) return '-';
+    const x = new Date(d);
+    return isNaN(x) ? '-' : x.toLocaleDateString('th-TH', {year:'numeric',month:'2-digit',day:'2-digit'});
+  };
+
+  // ✅ แปลงสถานะเป็นภาษาไทย
+  const statusTitle = (s='') => {
+    const m = s.toLowerCase();
+    if (m==='approved') return 'ถูกอนุมัติ';
+    if (m==='disapproved') return 'ไม่ถูกอนุมัติ';
+    if (m==='returned') return 'รับคืนอุปกรณ์แล้ว';
+    if (m==='pending') return 'รอดำเนินการ';
+    if (m==='return-pending') return 'รอรับคืน';
+    return s || '-';
+  };
+
+  const hasPeriod = group.items.some(it => it.since || it.uptodate);
+
+  const rows = group.items.map((it, idx) => {
+    const requester = this.usersMap[it.user_id] || it.requester || it.user_id || '-';
+    const photoSrc = it.attachment || it.returnPhoto || it.fileData || '';
+    const photoCell = photoSrc
+      ? `<img src="${photoSrc}" class="equip-thumb" alt="photo"
+               onclick="window.__equipShowPhoto && window.__equipShowPhoto('${photoSrc}')"/>
+         <div class="equip-thumb-hint">(คลิกเพื่อดูรูปเต็ม)</div>`
+      : '-';
+
+    return `
+      <tr>
+        <td class="td-center">${idx + 1}</td>
+        <td>${esc(it.name)}</td>
+        <td class="td-center">${esc(it.quantity ?? '-')}</td>
+        <td>${esc(requester)}</td>
+        <td class="td-center">${esc(it.user_id ?? '-')}</td>
+        ${
+          hasPeriod
+            ? `<td class="td-center">${esc(fmtDate(it.since))}</td>
+               <td class="td-center">${esc(fmtDate(it.uptodate))}</td>`
+            : `<td class="td-center">${esc(fmtDate(it.date))}</td>`
+        }
+        <!-- ✅ ใช้ statusTitle แทน -->
+        <td class="td-center">${esc(statusTitle(it.status))}</td>
+        <td class="td-center">${photoCell}</td>
+      </tr>
     `;
-  });
-  html += '</div>';
+  }).join('');
+
+  const cols = hasPeriod
+    // #, Equipment, Amount, Requester, UserID, Since, Until, Status, Photo
+    ? `<col style="width:5%"><col style="width:20%"><col style="width:8%">
+       <col style="width:15%"><col style="width:12%"><col style="width:12%">
+       <col style="width:10%"><col style="width:8%"><col style="width:10%">`
+    // #, Equipment, Amount, Requester, UserID, Date, Status, Photo
+    : `<col style="width:5%"><col style="width:22%"><col style="width:8%">
+       <col style="width:18%"><col style="width:15%"><col style="width:12%">
+       <col style="width:10%"><col style="width:10%">`;
+
+  const head = hasPeriod
+    ? `<tr>
+         <th>ลำดับ</th><th>อุปกรณ์</th><th>จำนวน</th><th>ผู้ขอใช้</th>
+         <th>รหัสนักศึกษา/พนักงาน</th><th>ตั้งแต่</th><th>ถึง</th>
+         <th>สถานะ</th><th>รูป</th>
+       </tr>`
+    : `<tr>
+         <th>ลำดับ</th><th>อุปกรณ์</th><th>จำนวน</th><th>ผู้ขอใช้</th>
+         <th>รหัสนักศึกษา/พนักงาน</th><th>วันที่ยืม</th>
+         <th>สถานะ</th><th>รูป</th>
+       </tr>`;
+
+  const html = `
+    <div class="equip-table-wrap">
+      <table class="equip-table">
+        <colgroup>${cols}</colgroup>
+        <thead>${head}</thead>
+        <tbody>${rows || `<tr><td colspan="${hasPeriod?9:8}" class="td-center">ไม่มีรายการ</td></tr>`}</tbody>
+      </table>
+    </div>
+  `;
 
   Swal.fire({
     title: 'รายละเอียดรายการยืมอุปกรณ์',
     html,
     confirmButtonText: 'ปิด',
     confirmButtonColor: '#3085d6',
-    width: 600   // ✅ กำหนดความกว้าง popup ให้อ่านง่าย
+    customClass: { popup: 'equip-swal' },
+    didOpen: () => {
+      window.__equipShowPhoto = (src) => {
+        const w = window.open('', '_blank');
+        w.document.write(`
+          <html><head><title>รูปอุปกรณ์</title>
+          <style>
+            body{background:#111;margin:0;display:flex;align-items:center;justify-content:center;height:100vh}
+            img{max-width:100vw;max-height:100vh;object-fit:contain;border-radius:16px;box-shadow:0 8px 30px #0008}
+          </style></head>
+          <body onclick="window.close()"><img src="${src}"></body></html>
+        `);
+      };
+    },
+    willClose: () => { window.__equipShowPhoto = undefined; }
   });
 },
+
+
 
     async returnGroup(group) {
   const staffId = localStorage.getItem('user_id');
@@ -1116,4 +1202,82 @@ export default {
 
 <style>
 @import '../css/style.css';
+
+/* ===== SweetAlert เฉพาะหน้า approve_equipment ===== */
+.equip-swal.swal2-popup{
+  width: clamp(860px, 84vw, 1285px);
+  max-width: 96vw;
+  padding: 22px 24px 18px;
+}
+.equip-swal .swal2-html-container{
+  text-align: left !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+/* ตารางใน SweetAlert */
+.equip-swal .equip-table-wrap{
+  max-width: 100%;
+  max-height: 72vh;
+  overflow: auto;
+  padding-top: 6px;
+}
+.equip-swal .equip-table{
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: auto;   /* ให้คอลัมน์ยืดหยุ่น */
+  background: #fff;
+  border-radius: 10px;
+  overflow: hidden;
+}
+.equip-swal .equip-table thead th{
+  background: #1e3a8a;
+  color: #fff;
+  font-weight: 700;
+  padding: 10px 8px;
+  text-align: center;
+  position: sticky; top: 0; z-index: 1;
+}
+.equip-swal .equip-table td{
+  padding: 8px 10px;
+  border-bottom: 1px solid #e6e9f3;
+  vertical-align: top;
+  font-size: 0.95rem;
+  white-space: normal;
+  word-break: break-word;
+}
+.equip-swal .equip-table tbody tr:hover{
+  background: #f7f9ff;
+}
+.equip-swal .td-center{ text-align: center; }
+
+/* รูป thumbnail */
+.equip-swal .equip-thumb{
+  max-width: 120px;
+  max-height: 85px;
+  object-fit: contain;
+  border: 1px solid #cfd5e6;
+  border-radius: 8px;
+  cursor: pointer;
+  display: inline-block;
+}
+.equip-swal .equip-thumb-hint{
+  font-size: 0.8rem;
+  color: #8a8fa3;
+  margin-top: 4px;
+}
+
+/* กัน "ลำดับ" ตกบรรทัด + กำหนดความกว้างขั้นต่ำของคอลัมน์แรก */
+.equip-swal .equip-table thead th:first-child,
+.equip-swal .equip-table tbody td:first-child {
+  white-space: nowrap;     /* ไม่ตัดบรรทัด */
+  min-width: 64px;         /* กันบีบจนต้องตัด */
+}
+
+/* ถ้าตารางยังบีบมาก ให้ลด padding เฉพาะหัวคอลัมน์แรกนิดหน่อย */
+.equip-swal .equip-table thead th:first-child {
+  padding-left: 6px;
+  padding-right: 6px;
+}
+
 </style>

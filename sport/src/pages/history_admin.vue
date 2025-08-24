@@ -75,31 +75,27 @@
           </div>
 
           <!-- Date filter -->
-          <div class="date-filter-row">
-            <label>From</label>
-            <input
-              type="date"
-              v-model="dateFilterStart"
-              @change="onDateFilterChange"
-              :max="dateFilterEnd"
-            >
-            <label>to</label>
-            <input
-              type="date"
-              v-model="dateFilterEnd"
-              @change="onDateFilterChange"
-              :min="dateFilterStart"
-            >
-          </div>
+         <!-- แค่ครอบ container นี้ก็พอ -->
+<div class="content-wrap">
+  <div class="date-filter-row">
+    <label>From</label>
+    <input ref="startPicker" class="date-input" />
+    <label>to</label>
+    <input ref="endPicker" class="date-input" />
+    <!-- (ทางเลือก) ปุ่มล้าง -->
+<button class="clear-btn" @click="clearDateFilter()">clear</button>
+
+  </div>
+
 
           <!-- History list (TABLE VERSION) -->
           <div class="table-x-scroll">
-            <table class="history-table" style="width: 92%; margin: 0 auto; border-collapse: collapse;">
+    <table class="history-table">
               <thead>
                 <tr>
                   <th>Date</th>
                   <th>Type</th>
-                  <th>Name</th>
+                  <th class="name-col">Name</th>
                   <th>Time / Amount</th>
                   <th>Status</th>
                   <th>Files/PDF</th>
@@ -120,7 +116,14 @@
                         {{ formatDate(group.items[0].approvedAt || group.items[0].date) }}
                       </template>
                       <template v-else>
-                        {{ formatDate(group.items[0].returnedAt || group.items[0].approvedAt || group.items[0].date) }}
+                        <!-- ใหม่: เอาจาก createdAt ก่อน แล้วค่อย fallback -->
+{{ formatDate(
+  group.items[0].createdAt ||
+  group.items[0].returnedAt ||
+  group.items[0].approvedAt ||
+  group.items[0].date
+) }}
+
                       </template>
                     </td>
 
@@ -130,21 +133,22 @@
                     </td>
 
                     <!-- ชื่อรายการ -->
-                    <td class="col-center" style="max-width: 360px;">
-                      <template v-if="group.type === 'field'">
-                        <div style="text-align:center; width:100%;">{{ group.items[0].name || '-' }}</div>
-                      </template>
-                      <template v-else>
-                        <div style="text-align:center;">
-                          {{ uniqueListByName(group.items).join(', ') || '-' }}
-                        </div>
-                      </template>
-                    </td>
+                    <td class="col-center name-col">
+  <div class="name-text" :title="group.type==='field' ? (group.items[0].name || '-') : uniqueListByName(group.items).join(', ')">
+    <template v-if="group.type === 'field'">
+      {{ group.items[0].name || '-' }}
+    </template>
+    <template v-else>
+      {{ uniqueListByName(group.items).join(', ') || '-' }}
+    </template>
+  </div>
+</td>
+
 
                     <!-- เวลา/จำนวน -->
                     <td style="text-align:center;">
                       <template v-if="group.type === 'field'">
-                        {{ group.items[0].time || '-' }}
+                        {{ addThaiMinuteSuffix(group.items[0].time) }}
                       </template>
                       <template v-else>
                         {{ quantitiesForGroup(group) }}
@@ -199,66 +203,104 @@
                         <div class="hist-file-header"><b>ไฟล์แนบ</b></div>
 
                         <!-- FIELD: ใช้ไฟล์ของ item แรก -->
-                        <template v-if="group.type === 'field'">
-                          <div v-if="Array.isArray(group.items[0].fileName) && group.items[0].fileName.length">
-                            <table class="attached-files-table">
-                              <thead>
-                                <tr>
-                                  <th>#</th>
-                                  <th>ชื่อไฟล์</th>
-                                  <th>ดาวน์โหลด</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                <tr v-for="(fname, idx) in group.items[0].fileName" :key="idx">
-                                  <td>{{ idx + 1 }}</td>
-                                  <td>{{ fname }}</td>
-                                  <td>
-                                    <button
-                                      class="download-link"
-                                      @click="downloadAttachedFile(group.items[0], idx, fname)"
-                                    >
-                                      ดูไฟล์แนบ
-                                    </button>
-                                  </td>
-                                </tr>
-                              </tbody>
-                            </table>
-                          </div>
-                          <div v-else class="no-attachment">- ไม่มีไฟล์แนบ -</div>
-                        </template>
+<template v-if="group.type === 'field'">
+  <div v-if="Array.isArray(group.items[0].fileName) && group.items[0].fileName.length">
+    <table class="attached-files-table">
+      <thead>
+        <tr>
+          <th>ลำดับ</th>
+          <th>ชื่อไฟล์</th>
+          <th>ดูไฟล์แนบ</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr
+          v-for="(fname, idx) in uniqueFieldFiles(group.items[0])"
+          :key="idx"
+        >
+          <!-- ✅ คอลัมน์ที่ 1 = ลำดับ -->
+          <td>{{ idx + 1 }}</td>
 
-                        <!-- EQUIPMENT: ไล่ทีละรายการ -->
-                        <template v-else>
-                          <div v-for="item in group.items" :key="item.id + '-files'">
-                            <div v-if="Array.isArray(item.fileName) && item.fileName.length">
-                              <table class="attached-files-table" style="margin-bottom:10px;">
-                                <thead>
-                                  <tr>
-                                    <th>#</th>
-                                    <th>ชื่อไฟล์</th>
-                                    <th>ดูไฟล์แนบ</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  <tr v-for="(fname, idx) in item.fileName" :key="idx">
-                                    <td>{{ idx + 1 }}</td>
-                                    <td>{{ fname }}</td>
-                                    <td>
-                                      <button
-                                        class="download-link"
-                                        @click="downloadAttachedFile(item, idx, fname)"
-                                      >
-                                        ดูไฟล์แนบ
-                                      </button>
-                                    </td>
-                                  </tr>
-                                </tbody>
-                              </table>
-                            </div>
-                            <div v-else class="no-attachment" style="margin-bottom:10px;">- ไม่มีไฟล์แนบ -</div>
-                          </div>
-                        </template>
+          <!-- ✅ คอลัมน์ที่ 2 = ชื่อไฟล์ -->
+          <td class="left">{{ fname }}</td>
+
+          <!-- ✅ คอลัมน์ที่ 3 = ปุ่ม -->
+          <td>
+            <button
+              class="download-link"
+              @click="downloadAttachedFile(group.items[0], idx, fname)"
+            >
+              ดูไฟล์แนบ
+            </button>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div v-else class="no-attachment">- ไม่มีไฟล์แนบ -</div>
+</template>
+
+
+                       <!-- EQUIPMENT: แยก “รูปการรับคืน” และ “ไฟล์แนบอื่น ๆ” -->
+<template v-else>
+  <div v-if="attachmentsSplit(group).images.length || attachmentsSplit(group).files.length">
+    <!-- B) ไฟล์แนบอื่น ๆ (เช่น PDF / DOCX ฯลฯ) -->
+    <div v-if="attachmentsSplit(group).files.length" class="section-block">
+      <table class="attached-files-table" style="margin-bottom:10px;">
+        <thead>
+          <tr>
+            <th>ลำดับ</th>
+            <th>ชื่อไฟล์</th>
+            <th>ดูไฟล์แนบ</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="(att, i) in attachmentsSplit(group).files" :key="att.key">
+            <td>{{ i + 1 }}</td>
+            <td class="left">{{ att.fileName }}</td>
+            <td>
+              <button class="download-link"
+                @click="downloadAttachedFile(att.item, att.fileIdx, att.fileName)">
+                ดูไฟล์แนบ
+              </button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <!-- A) รูปการรับคืน (นามสกุลรูปภาพ) -->
+    <div v-if="attachmentsSplit(group).images.length" class="section-block">
+      <div class="hist-file-header"><b>รูปการรับคืน</b></div>
+      <table class="attached-files-table" style="margin-bottom:10px;">
+        <thead>
+          <tr>
+            <th>ลำดับ</th>
+            <th>อุปกรณ์</th>
+            <th>ชื่อไฟล์</th>
+            <th>ดูรูป</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="(att, i) in attachmentsSplit(group).images" :key="att.key">
+            <td>{{ i + 1 }}</td>
+            <td class="left">{{ att.itemName }}</td>
+            <td class="left">{{ att.fileName }}</td>
+            <td>
+              <button class="download-link"
+                @click="downloadAttachedFile(att.item, att.fileIdx, att.fileName)">
+                ดูรูป
+              </button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div v-else class="no-attachment" style="margin-bottom:10px;">- ไม่มีไฟล์แนบ -</div>
+</template>
+
+
                       </div>
                     </td>
                   </tr>
@@ -291,6 +333,7 @@
       </footer>
     </div>
   </div>
+  </div>
 </template>
 
 
@@ -303,7 +346,9 @@
 <script>
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-
+import flatpickr from 'flatpickr'
+import 'flatpickr/dist/flatpickr.css'
+import { Thai } from 'flatpickr/dist/l10n/th.js'
 import axios from 'axios'
 import Swal from 'sweetalert2'
 
@@ -372,12 +417,14 @@ export default {
       polling: null,
       isMobile: window.innerWidth <= 600,
       API_BASE: API_BASE,
-      dateFilterStart: '',
-      dateFilterEnd: '',
+     dateFilterStart: '',
+    dateFilterEnd: '',
+    fpStart: null,
+    fpEnd: null,
       dateFilterApplied: false,
-      dateFilterStart: '',
-      dateFilterEnd: '',
       lastSeenTimestamp: 0,
+       dateFilterStartUI: '', // เก็บข้อความที่ผู้ใช้พิมพ์: dd/mm/yyyy (โชว์)
+    dateFilterEndUI:   '',
 
     }
   },
@@ -412,13 +459,6 @@ export default {
     ]
     return all.sort((a, b) => b.sortDate - a.sortDate)
   },
-  paginatedGroups() {
-    const start = (this.currentPage - 1) * this.itemsPerPage
-    return this.allGroupsSorted.slice(start, start + this.itemsPerPage)
-  },
-  totalPages() {
-    return Math.ceil(this.allGroupsSorted.length / this.itemsPerPage) || 1
-  },
     filteredHistory() {
     let arr = this.historyFilter === 'all'
       ? this.historys
@@ -452,7 +492,152 @@ export default {
     },
   },
   methods: {
+uniqueFieldFiles(item) {
+  const clean = (s) => {
+    try {
+      const x = String(s || '');
+      return decodeURIComponent(x.split('?')[0]).split('/').pop().toLowerCase().trim();
+    } catch { return String(s || '').toLowerCase().trim(); }
+  };
+  let names = Array.isArray(item?.fileName) ? item.fileName.slice() : [];
+  if ((!names || names.length === 0) && Array.isArray(item?.attachment)) {
+    names = item.attachment;
+  }
+  const seen = new Set();
+  return names.filter(n => {
+    const k = clean(n);
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+},
 
+     addThaiMinuteSuffix(t) {
+  const s = (t || '').toString().trim();
+  if (!s) return '-';
+
+  // ถ้ามีช่วงเวลา เช่น "18:51 - 19:51"
+  if (s.includes('-')) {
+    const [startRaw, endRaw] = s.split('-').map(p => p.trim());
+    const fmt = (x) => /(น\.)$/.test(x) ? x : `${x} น.`;
+
+    if (startRaw && endRaw) return `${fmt(startRaw)} - ${fmt(endRaw)}`;
+    if (startRaw) return fmt(startRaw);
+    if (endRaw) return fmt(endRaw);
+    return '-';
+  }
+
+  // เวลาเดียว
+  if (/(น\.)$/.test(s)) return s;
+  return `${s} น.`;
+},
+
+attachmentsSplit(group) {
+  const images = [];
+  const files  = [];
+
+  const cleanNameFromUrl = (u) => {
+    try {
+      const s = String(u || '');
+      const noQuery = s.split('?')[0];
+      return decodeURIComponent(noQuery.split('/').pop() || 'file');
+    } catch { return 'file'; }
+  };
+  const isImage = (name) => /\.(jpe?g|png|gif|webp|bmp|svg)$/i.test(String(name || ''));
+
+  // ✅ ดึง "อย่างละ 1" ต่อ 1 อุปกรณ์ (item)
+  (group?.items || []).forEach(item => {
+    let names = Array.isArray(item.fileName) ? item.fileName.slice() : [];
+    if ((!names || names.length === 0) && Array.isArray(item.attachment)) {
+      names = item.attachment.map(cleanNameFromUrl);
+    }
+
+    let pushedImg = false;
+    let pushedFile = false;
+
+    names.forEach((fname, idx) => {
+      if (pushedImg && pushedFile) return; // ได้ครบ 2 ประเภทแล้ว ข้าม
+      const fileName = fname || cleanNameFromUrl(fname);
+      const rec = {
+        key: `${item.id || item._id || Math.random()}-${idx}`,
+        itemName: item.name || '-',
+        fileName,
+        fileIdx: idx,
+        item
+      };
+
+      if (!pushedImg && isImage(fileName)) {
+        images.push(rec);
+        pushedImg = true;
+        return;
+      }
+      if (!pushedFile && !isImage(fileName)) {
+        files.push(rec);
+        pushedFile = true;
+      }
+    });
+  });
+
+  return { images, files };
+},
+
+
+
+    mergedAttachments(group) {
+  const out = [];
+  const cleanNameFromUrl = (u) => {
+    try {
+      const s = String(u);
+      const noQuery = s.split('?')[0];
+      return decodeURIComponent(noQuery.split('/').pop() || 'file');
+    } catch { return 'file'; }
+  };
+
+  (group?.items || []).forEach(item => {
+    // ชื่อไฟล์จาก fileName[] หรือดึงชื่อจาก attachment[] ถ้าไม่มี
+    let names = Array.isArray(item.fileName) ? item.fileName.slice() : [];
+    if ((!names || names.length === 0) && Array.isArray(item.attachment)) {
+      names = item.attachment.map(cleanNameFromUrl);
+    }
+
+    names.forEach((fname, idx) => {
+      out.push({
+        key: `${item.id || item._id || Math.random()}-${idx}`,
+        itemName: item.name || '-',
+        fileName: fname || cleanNameFromUrl(fname),
+        fileIdx: idx,
+        item
+      });
+    });
+  });
+
+  return out;
+},
+
+
+ // แปลง "dd/mm/yyyy" -> "yyyy-mm-dd" (ถ้าไม่ถูกต้อง คืน '')
+ onDateFilterChange() {
+    this.currentPage = 1
+  },
+ clearDateFilter() {
+  this.dateFilterStart = '';
+  this.dateFilterEnd = '';
+  this.dateFilterApplied = false;
+  this.currentPage = 1;
+
+  if (this.fpStart) {
+    this.fpStart.clear();                 // เคลียร์ค่าของ flatpickr
+    this.fpStart.set('maxDate', null);
+    if (this.fpStart.altInput) this.fpStart.altInput.value = ''; // เผื่อบาง browser
+    if (this.fpStart.input)    this.fpStart.input.value = '';
+  }
+  if (this.fpEnd) {
+    this.fpEnd.clear();
+    this.fpEnd.set('minDate', null);
+    if (this.fpEnd.altInput) this.fpEnd.altInput.value = '';
+    if (this.fpEnd.input)    this.fpEnd.input.value = '';
+  }
+},
      openInNewTabSilent(u) {
     const url = this.normalizePdfUrl(u);
     if (!url) return false;
@@ -677,7 +862,7 @@ getFileNameFromUrl(u, fallback = 'booking.pdf') {
         const found = rows.find(h => h.bookingPdfUrl || h.booking_pdf_url);
         if (found && tryOpen(found.bookingPdfUrl || found.booking_pdf_url)) return;
 
-        Swal.fire('ไม่พบไฟล์ PDF', 'รายการนี้ไม่มี bookingPdfUrl', 'warning');
+        Swal.fire('ไม่พบไฟล์ PDF', 'รายการนี้ไม่มี PDF Form ', 'warning');
         return;
       } catch (e) {
         console.error('openPdfLikeApprove lookup error:', e);
@@ -697,33 +882,36 @@ getFileNameFromUrl(u, fallback = 'booking.pdf') {
   const items = group?.items || [];
   const has = (s) => items.some(it => (it.status || '').toLowerCase() === s);
 
-  // ความสำคัญ: returned > return-pending > approved > อื่นๆ
-  if (has('returned'))       return items.filter(it => (it.status || '').toLowerCase() === 'returned');
-  if (has('return-pending')) return items.filter(it => (it.status || '').toLowerCase() === 'return-pending');
-  if (has('approved'))       return items.filter(it => (it.status || '').toLowerCase() === 'approved');
+  // ✅ ตัด return-pending ออกจากลอจิกการเลือก
+  if (has('returned')) return items.filter(it => (it.status || '').toLowerCase() === 'returned');
+  if (has('approved')) return items.filter(it => (it.status || '').toLowerCase() === 'approved');
 
-  return items;
+  return items.filter(it => {
+    const s = (it.status || '').toLowerCase();
+    return s !== 'return-pending'; // กันหลุด
+  });
 },
+
  groupStatus(group) {
-    if (!group || !group.items || !group.items.length) return '-';
-    if (group.type === 'field') {
-      // field มีรายการเดียว ใช้สถานะแถวเดียวได้เลย
-      return (group.items[0].status || '-').toString()
-        .charAt(0).toUpperCase() + (group.items[0].status || '-').toString().slice(1).toLowerCase();
-    }
+  if (!group || !group.items || !group.items.length) return '-';
 
-    // ----- equipment: จัดลำดับความสำคัญสถานะ -----
-    const items = group.items;
-    const has = (s) => items.some(it => (it.status || '').toLowerCase() === s);
-
-    if (has('returned'))        return 'Returned';
-    if (has('return-pending'))  return 'Return-pending';
-    if (has('approved'))        return 'Approved';
-
-    // เผื่อกรณีอื่นๆ
-    const s = (items[0].status || '-').toString();
+  if (group.type === 'field') {
+    const s = (group.items[0].status || '-').toString();
     return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
-  },
+  }
+
+  const items = group.items;
+  const has = (s) => items.some(it => (it.status || '').toLowerCase() === s);
+
+  // ✅ ไม่พิจารณา return-pending
+  if (has('returned'))     return 'Returned';
+  if (has('approved'))     return 'Approved';
+  if (has('disapproved'))  return 'Disapproved';
+
+  // ทั้งกลุ่มเป็นสถานะอื่น/ถูกกรอง
+  return '-';
+},
+
 
   uniqueListByName(items) {
   // ตัดซ้ำแบบ case-insensitive และเก็บรูปเดิมของชื่อแรกที่พบ
@@ -743,13 +931,15 @@ getFileNameFromUrl(u, fallback = 'booking.pdf') {
 
 quantitiesForGroup(group) {
   if (!group || group.type !== 'equipment') return '-';
-  // เลือกรายการที่ returned ก่อน (ถ้ามี)
-  const returned = group.items.filter(
-    it => (it.status || '').toLowerCase() === 'returned'
-  );
-  const useList = returned.length ? returned : group.items;
-  return useList.map(it => (it.quantity ?? '-')).join(', ');
+  const norm = (it) => (it.status || '').toLowerCase();
+
+  const returned = group.items.filter(it => norm(it) === 'returned');
+  const fallback = group.items.filter(it => norm(it) !== 'return-pending'); // ✅ ตัดทิ้ง
+
+  const useList = returned.length ? returned : fallback;
+  return useList.length ? useList.map(it => (it.quantity ?? '-')).join(', ') : '-';
 },
+
 
 
 
@@ -763,12 +953,6 @@ quantitiesForGroup(group) {
     applyDateFilter() {
   this.currentPage = 1;
   this.dateFilterApplied = true;
-},
-clearDateFilter() {
-  this.dateFilterStart = '';
-  this.dateFilterEnd = '';
-  this.dateFilterApplied = false;
-  this.currentPage = 1;
 },
 
     nextPage() {
@@ -789,77 +973,167 @@ clearDateFilter() {
     (d.getMonth() + 1).toString().padStart(2, '0')
   }/${d.getFullYear()}`
 },
-   showDetailGroup(group) {
-  // 1 แถว (label/value)
-  const row = (label, value) => `
-    <div style="display:flex;align-items:flex-start;margin-bottom:8px;">
-      <div style="width:160px;font-weight:700;text-align:left;">${label}</div>
-      <div style="flex:1;text-align:left;padding-left:14px;word-break:break-word;">${value}</div>
-    </div>
-  `;
-  const fmt = (d) => d ? new Date(d).toLocaleDateString('th-TH') : '-';
 
-  let html = '';
-
- if (group.type === 'field') {
-    // สนาม: แสดงเหมือนเดิม
-    const item = group.items[0] || {};
-    html = `
-      <div style="text-align:left;">
-        ${row('ชื่อสนาม:', item.name || '-')}
-        ${row('ชื่อผู้ขอใช้:', item.username_form || item.requester || item.userName || '-')}
-        ${row('จองให้ผู้ใช้:', item.proxyStudentName || '-')}
-        ${row('วันที่:', fmt(item.date))}
-        ${row('เวลา:', item.time || '-' )}
-        ${row('สถานะ:', item.status || '-')}
-        ${row('ผู้อนุมัติ:', item.approvedBy || '-')}
-        ${row('ผู้ไม่อนุมัติ:', item.disapprovedBy || '-')}
-        ${row('ผู้รับคืน:', item.returnedBy || '-')}
-        ${row('ผู้ยกเลิก:', item.canceledBy || '-')}
-      </div>
-    `;
-  } else if (group.type === 'equipment') {
-    // อุปกรณ์: เลือกรายการตามกฎ (returned > return-pending > approved)
-    const itemsToShow = this.selectItemsForDetail(group);
-
-    html = '<div style="text-align:left;">';
-    if (!itemsToShow.length) {
-      html += `<div>ไม่มีรายการ</div>`;
-    } else {
-      itemsToShow.forEach((item, i) => {
-        const borrowDate =
-          (item.since && item.uptodate)
-            ? `${fmt(item.since)} - ${fmt(item.uptodate)}`
-            : fmt(item.date);
-
-        html += `
-          <div style="padding-bottom:10px;margin-bottom:10px;border-bottom:1px dashed #c7c7c7;">
-            ${row('อุปกรณ์ที่ ' + (i + 1) + ':', item.name || '-')}
-            ${row('จำนวน:', item.quantity ?? '-')}
-            ${row('ชื่อผู้ขอใช้:', item.username_form || item.requester || item.userName || '-')}
-            ${row('วันที่ขอยืม:', borrowDate)}
-            ${row('สถานะ:', item.status || '-')}
-            ${row('วันที่คืน:', item.returnedAt ? fmt(item.returnedAt) : '-')}
-            ${row('ผู้อนุมัติ:', item.approvedBy || '-')}
-            ${row('ผู้ไม่อนุมัติ:', item.disapprovedBy || '-')}
-            ${row('ผู้คืน:', item.returnedBy || '-')}
-            ${row('ผู้ยกเลิก:', item.canceledBy || '-')}
-          </div>
-        `;
-      });
+pickNonEmpty(...vals) {
+  for (const v of vals) {
+    const s = (v ?? '').toString().trim();
+    if (s && s !== '-' && s.toLowerCase() !== 'null' && s.toLowerCase() !== 'undefined') {
+      return s;
     }
-    html += '</div>';
   }
-
-   Swal.fire({
-    title: 'รายละเอียดรายการ',
-    html,
-    confirmButtonText: 'ปิด',
-    confirmButtonColor: '#3085d6'
-  });
+  return '-';
 },
 
-    
+
+
+   showDetailGroup(group) {
+  const esc = (s) => String(s ?? '-')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/\n/g,'<br>');
+
+  const fmt = (d) => {
+    if (!d) return '-';
+    const dt = new Date(d);
+    return isNaN(dt) ? '-' : dt.toLocaleDateString('th-TH', { year:'numeric', month:'2-digit', day:'2-digit' });
+  };
+
+  // ✅ helper ที่หายไป
+  const pick = (...vals) => {
+    for (const v of vals) {
+      const s = (v ?? '').toString().trim();
+      if (s && s !== '-' && s.toLowerCase() !== 'null' && s.toLowerCase() !== 'undefined') return s;
+    }
+    return '-';
+  };
+
+  // แทนที่ฟังก์ชัน reviewerName เดิม
+const reviewerName = (row) => {
+  const s = (row.status || '').toLowerCase();
+
+  // กรณีอนุมัติ/ไม่อนุมัติตามปกติ
+  if (s === 'approved')    return esc(row.approvedBy || '-');
+  if (s === 'disapproved') return esc(row.disapprovedBy || '-');
+
+  // ✅ กรณี Returned: แสดงชื่อผู้อนุมัติ (หรือผู้ไม่อนุมัติถ้าไม่มี approvedBy)
+  if (s === 'returned') {
+    // ถ้าแถวนี้ไม่มีชื่อ ให้ลองหาจากรายการอื่นในกลุ่มเดียวกัน
+    const fallback = (group.items || []).find(x => x.approvedBy || x.disapprovedBy);
+    return esc(
+      row.approvedBy ||
+      row.disapprovedBy ||
+      fallback?.approvedBy ||
+      fallback?.disapprovedBy ||
+      '-'
+    );
+  }
+
+  return '-';
+};
+
+  const it = group.items?.[0] || {};
+  let html = '';
+
+  if (group.type === 'field') {
+  const requesterCell = it.username_form || it.requester || it.userName || it.user_name || it.user ||  '-';
+
+  html = `
+    <div class="swal-table-wrap">
+      <table class="swal-table-2col">
+        <tbody>
+         
+          
+
+          <tr><th>สนาม</th><td>${esc(it.name)}</td></tr>
+          <tr><th>ผู้ขอใช้</th><td>${esc(requesterCell)}</td></tr>
+          <tr><th>รหัสนักศึกษา/พนักงาน</th><td>${esc(it.id_form || it.user_id || '-')}</td></tr>
+          <tr><th>จองให้ผู้ใช้</th><td>${esc(it.proxyStudentName || '-')}</td></tr>
+          <tr><th>รหัสนักศึกษา/พนักงาน (ของผู้ที่ถูกจองแทน)</th><td>${esc(it.proxyStudentId || '-')}</td></tr>
+          <tr><th>วันที่</th><td>${fmt(it.date)}</td></tr>
+          <tr><th>เวลา</th><td>${esc(this.addThaiMinuteSuffix(it.time))}</td></tr>
+          <tr><th>สถานะ</th><td>${esc(it.status || '-')}</td></tr>
+          <tr><th>ผู้อนุมัติ/ผู้ไม่อนุมัติ</th><td>${esc(it.approvedBy || it.disapprovedBy || '-')}</td></tr>
+          
+          <tr><th>ผู้ยกเลิก</th><td>${esc(it.canceledBy || '-')}</td></tr>
+        </tbody>
+      </table>
+    </div>
+  `;
+} else {
+    // equipment
+    const itemsToShow = this.selectItemsForDetail(group);
+    const groupRequester = pick(
+      ...(group.items || []).flatMap(x => [
+        x.username_form, x.requester, x.userName, x.user_name, x.user
+      ])
+    );
+
+    const list = (itemsToShow.length ? itemsToShow : group.items);
+    const rows = list.map((row, idx) => {
+  const requesterCell = pick(row.username_form, row.requester, row.userName, row.user_name, row.user, groupRequester);
+  return `
+    <tr>
+      <td>${idx + 1}</td>
+      <td class="left">${esc(row.name)}</td>
+      <td>${esc(row.quantity ?? '-')}</td>
+      <td class="left req">${esc(requesterCell)}</td>
+      <td class="left">${esc(row.user_id || '-')}</td>
+      <td>${row.since && row.uptodate ? `${fmt(row.since)} - ${fmt(row.uptodate)}` : fmt(row.date)}</td>
+      <td>${esc(row.status || '-')}</td>
+      <td>${row.returnedAt ? fmt(row.returnedAt) : '-'}</td>
+      <td class="left">${esc(row.remark || '-')}</td>
+      <td class="left">${reviewerName(row)}</td>
+      <td class="left">${esc(row.returnedBy || '-')}</td>
+    </tr>
+  `;
+}).join('');
+
+   html = `
+  <div class="swal-table-wrap">
+    <table class="swal-table">
+      <thead>
+        <tr>
+          <th>ลำดับ</th>
+          <th>อุปกรณ์</th>
+          <th>จำนวน</th>
+          <th class="req">ผู้ขอใช้</th>
+          <th>รหัสนักศึกษา/พนักงาน</th>
+          <th>วันที่ขอยืม</th>
+          <th>สถานะ</th>
+          <th>วันที่คืน</th>
+          <th>หมายเหตุ</th>
+          <th>ผู้อนุมัติ/ผู้ไม่อนุมัติ</th>
+          <th>ผู้รับคืน</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows || `<tr><td colspan="11" style="text-align:center">ไม่มีรายการ</td></tr>`}
+      </tbody>
+    </table>
+  </div>
+`;
+  }
+
+  const isField = group.type === 'field';
+
+Swal.fire({
+  title: 'รายละเอียดรายการ',
+  html,
+  confirmButtonText: 'ปิด',
+  confirmButtonColor: '#3085d6',
+  // แคบลงเฉพาะ field
+  width: isField
+    ? Math.min(window.innerWidth * 0.85, 720) + 'px'
+    : Math.min(window.innerWidth * 0.96, 900) + 'px',
+  customClass: {
+    popup: isField ? 'mfu-swal mfu-swal--field' : 'mfu-swal',
+    htmlContainer: 'mfu-swal-body'
+  }
+});
+},
+
+
+
+
     // ==== PDF DOWNLOAD BUTTON ====
   async  exportPdf(item) {
   // --------- ฟังก์ชันย่อยสำหรับ field ---------
@@ -910,7 +1184,7 @@ clearDateFilter() {
 
   try {
     if (item.type === 'field') {
-      // ------------------ FIELD (แบบใหม่) --------------------
+     // ------------------ FIELD (แบบใหม่) --------------------
       const res = await axios.get(`${API_BASE}/api/booking_field?id=${mainBookingId}`);
       let data;
       if (Array.isArray(res.data)) {
@@ -1054,7 +1328,7 @@ doc.text(`โทร ${data.tel || '-'}`, 430, 100);
 
       y = signY + 65; // กล่องกรอบล่าง
 
-      // ----------------- กรอบล่าง ---------------------
+// ----------------- กรอบล่าง ---------------------
       const signBoxHeight = 190;
       if (y + signBoxHeight > doc.internal.pageSize.getHeight()) {
         doc.addPage();
@@ -1425,68 +1699,123 @@ doc.text(`โทร ${data.tel || '-'}`, 430, 100);
   },
 
     async reloadHistory() {
-      try {
-        const userId = localStorage.getItem('user_id') || ''
-        if (!userId) throw new Error('User not logged in')
-        const resHistory = await axios.get(`${API_BASE}/api/history`)
-        let histories = resHistory.data
-          .filter(h =>
-            h.approvedById === userId ||
-            h.disapprovedById === userId ||
-            h.canceledById === userId
-          )
-          .map((h, idx) => ({
-            id: h._id?.$oid || h._id || idx + 1,
-            type: h.type,
-            name: h.name,
-            time: h.type === "field" ? `${h.startTime} - ${h.endTime}` : "",
-            quantity: h.type === "equipment" ? h.quantity : "",
-            status: statusLabel(h.status),
-            approvedBy: h.approvedBy,
-            approvedById: h.approvedById,
-            disapprovedBy: h.disapprovedBy,
-            disapprovedById: h.disapprovedById,
-            canceledBy: h.canceledBy,
-            canceledById: h.canceledById,
-            approvedAt: h.approvedAt,
-            disapprovedAt: h.disapprovedAt,
-            canceledAt: h.canceledAt,
-            date: h.date,
-            canceledBy: h.canceledBy,
-            canceledById: h.canceledById,
-            username_form: h.username_form || '-', 
-          }))
-        const getSortDate = (item) => (
-          item.canceledAt ||
-          item.disapprovedAt ||
-          item.approvedAt ||
-          item.date || 0
-        )
-        histories = histories.sort((a, b) => new Date(getSortDate(b)) - new Date(getSortDate(a)))
-        this.historys = histories
-      } catch (err) {
-        this.historys = []
-        console.error('โหลดข้อมูลประวัติไม่สำเร็จ:', err)
-      }
-    },
+  try {
+    const userId = localStorage.getItem('user_id') || ''
+    if (!userId) throw new Error('User not logged in')
+
+    const resHistory = await axios.get(`${API_BASE}/api/history`)
+    let histories = resHistory.data
+      .filter(h =>
+        h.approvedById === userId ||
+        h.disapprovedById === userId ||
+        h.canceledById === userId
+      )
+      // ✅ ตัด return-pending ออก
+      .filter(h => String(h.status || '').toLowerCase() !== 'return-pending')
+      .map((h, idx) => ({
+        id: h._id?.$oid || h._id || idx + 1,
+        type: h.type,
+        name: h.name,
+        time: h.type === "field" ? `${h.startTime} - ${h.endTime}` : "",
+        quantity: h.type === "equipment" ? h.quantity : "",
+        status: ((h.status || '')).charAt(0).toUpperCase() + ((h.status || '')).slice(1).toLowerCase(),
+        approvedBy: h.approvedBy,
+        approvedById: h.approvedById,
+        disapprovedBy: h.disapprovedBy,
+        disapprovedById: h.disapprovedById,
+        canceledBy: h.canceledBy,
+        canceledById: h.canceledById,
+        approvedAt: h.approvedAt,
+        disapprovedAt: h.disapprovedAt,
+        canceledAt: h.canceledAt,
+        createdAt: h.createdAt,
+        date: h.date,
+        username_form: h.username_form || '-',
+        id_form: h.id_form || '',
+        proxyStudentId: h.proxyStudentId || '',
+        proxyStudentName: h.proxyStudentName || h.proxy_name || h.proxyStudent || h.proxy_user_name || '-',
+        proxyStudentId:   h.proxyStudentId   || h.proxy_user_id || h.proxy_id     || '',
+      }))
+
+    const getSortDate = (item) =>
+      item.canceledAt || item.disapprovedAt || item.approvedAt || item.date || 0
+
+    histories = histories.sort((a, b) => new Date(getSortDate(b)) - new Date(getSortDate(a)))
+    this.historys = histories
+  } catch (err) {
+    this.historys = []
+    console.error('โหลดข้อมูลประวัติไม่สำเร็จ:', err)
+  }
+},
+
   },
   async mounted() {
+ flatpickr.localize(Thai)
 
+  this.fpStart = flatpickr(this.$refs.startPicker, {
+    dateFormat: 'Y-m-d',
+    altInput: true,
+    altFormat: 'd/m/Y',
+    altInputClass: 'mfu-alt-input', 
+    allowInput: true,
+    disableMobile: true,
+    defaultDate: this.dateFilterStart || null,
+    onChange: (_, dateStr) => {
+      this.dateFilterStart = dateStr
+      if (this.fpEnd) this.fpEnd.set('minDate', dateStr || null)
+      this.onDateFilterChange()
+    },
+    // ✅ รองรับพิมพ์เองแล้วคลิกนอกช่อง
+    onClose: (selectedDates, dateStr, instance) => {
+      if (!dateStr && instance.altInput?.value) {
+        const parsed = instance.parseDate(instance.altInput.value, 'd/m/Y')
+        this.dateFilterStart = parsed ? instance.formatDate(parsed, 'Y-m-d') : ''
+        if (this.fpEnd) this.fpEnd.set('minDate', this.dateFilterStart || null)
+        this.onDateFilterChange()
+      }
+    }
+  })
+
+  this.fpEnd = flatpickr(this.$refs.endPicker, {
+    dateFormat: 'Y-m-d',
+    altInput: true,
+    altFormat: 'd/m/Y',
+    altInputClass: 'mfu-alt-input', 
+    allowInput: true,
+    disableMobile: true,
+    defaultDate: this.dateFilterEnd || null,
+    onChange: (_, dateStr) => {
+      this.dateFilterEnd = dateStr
+      if (this.fpStart) this.fpStart.set('maxDate', dateStr || null)
+      this.onDateFilterChange()
+    },
+    onClose: (selectedDates, dateStr, instance) => {
+      if (!dateStr && instance.altInput?.value) {
+        const parsed = instance.parseDate(instance.altInput.value, 'd/m/Y')
+        this.dateFilterEnd = parsed ? instance.formatDate(parsed, 'Y-m-d') : ''
+        if (this.fpStart) this.fpStart.set('maxDate', this.dateFilterEnd || null)
+        this.onDateFilterChange()
+      }
+    }
+
+    })
     window.addEventListener('resize', this.handleResize);
     this.handleResize();
     document.addEventListener('mousedown', this.handleClickOutside)
     this.lastSeenTimestamp = parseInt(localStorage.getItem(ADMIN_LAST_SEEN_KEY) || '0');
-
     try {
       const usersRes = await axios.get(`${API_BASE}/api/users`)
       const allUsers = Array.isArray(usersRes.data) ? usersRes.data : []
       const userIdToName = Object.fromEntries(allUsers.map(u => [u.user_id, u.name]))
       const historyRes = await axios.get(`${API_BASE}/api/history`)
       let historyArr = historyRes.data
-      // filter out pending
-      historyArr = historyArr.filter(
-        h => String(h.status).toLowerCase() !== 'pending'
-      )
+
+      // ✅ กรองทิ้งทั้ง pending และ return-pending
+      historyArr = historyArr.filter(h => {
+        const s = String(h.status || '').toLowerCase()
+        return s !== 'pending' && s !== 'return-pending'
+      })
+
       this.historys = historyArr
         .sort((a, b) => new Date(b.date) - new Date(a.date))
         .map((h, idx) => ({
@@ -1510,6 +1839,7 @@ doc.text(`โทร ${data.tel || '-'}`, 430, 100);
           remark: h.remark,
           approvedAt: h.approvedAt,
           disapprovedAt: h.disapprovedAt || null,
+          createdAt: h.createdAt,
           booking_id: h.booking_id,
           fileName: Array.isArray(h.fileName) ? h.fileName : (h.fileName ? [h.fileName] : []),
           attachment: Array.isArray(h.attachment) ? h.attachment : (h.attachment ? [h.attachment] : []),
@@ -1520,6 +1850,10 @@ doc.text(`โทร ${data.tel || '-'}`, 430, 100);
           canceledById: h.canceledById,
           canceledAt: h.canceledAt,
           username_form: h.username_form || '-',
+          id_form: h.id_form || '',               
+          proxyStudentId: h.proxyStudentId || '',
+          proxyStudentName: h.proxyStudentName || h.proxy_name || h.proxyStudent || h.proxy_user_name || '-',
+          proxyStudentId:   h.proxyStudentId   || h.proxy_user_id || h.proxy_id     || '',
         }))
     } catch (err) {
       console.error('โหลดข้อมูลไม่สำเร็จ:', err)
@@ -1531,8 +1865,10 @@ doc.text(`โทร ${data.tel || '-'}`, 430, 100);
     clearInterval(this.polling)
     document.removeEventListener('mousedown', this.handleClickOutside)
     window.removeEventListener('resize', this.handleResize);
-
+ if (this.fpStart) { this.fpStart.destroy(); this.fpStart = null }
+  if (this.fpEnd)   { this.fpEnd.destroy();   this.fpEnd = null }
   }
+  
 }
 </script>
 
@@ -1803,13 +2139,19 @@ doc.text(`โทร ${data.tel || '-'}`, 430, 100);
   text-align: left;
   font-size: 1em;
 }
-.date-filter-row {
+/* คอนเทนเนอร์กลางหน้า จำกัดความกว้างรวมทั้งฟิลเตอร์และตาราง */
+.content-wrap{
+  max-width: 1290px;        /* ปรับตามต้องการให้ไม่เกินขีดแดง */
+  margin: 0 auto;
+  padding: 0 12px;          /* เผื่อช่องว่างซ้ายขวาเล็กน้อย */
+  box-sizing: border-box;
+}
+.date-filter-row{
   display: flex;
-  justify-content: flex-end;
   align-items: center;
-  gap: 7px;
-  margin-bottom: 12px;
-  margin-right: 18px;
+  justify-content: flex-end;
+  gap: 8px;
+  margin: 12px 0;           /* เอา margin-right:18px เดิมออก */
 }
 .date-filter-row label { font-weight: 500; }
 .date-filter-row input[type="date"] {
@@ -1948,11 +2290,14 @@ doc.text(`โทร ${data.tel || '-'}`, 430, 100);
   -webkit-overflow-scrolling: touch;
 }
 
-.history-table {
+
+.history-table{
+  width: 100%;              /* แทน 92% inline */
   background-color: #fff;
-  border-radius: 12px;
+  table-layout: fixed;
   overflow: hidden;
   box-shadow: 0 4px 10px rgb(0 0 0 / 0.1);
+  box-sizing: border-box;
 }
 
 .history-table th,
@@ -1979,16 +2324,228 @@ doc.text(`โทร ${data.tel || '-'}`, 430, 100);
 
 @media (max-width: 540px) {
   .history-table {
-    min-width: 760px; /* บังคับให้เลื่อนแนวนอนได้บนจอเล็ก */
+    min-width: 1500px; /* บังคับให้เลื่อนแนวนอนได้บนจอเล็ก */
     white-space: nowrap;
   }
 }
 
 .notification-dropdown { position: absolute; right: 0; top: 38px; background: #fff; border-radius: 18px 0 18px 18px; box-shadow: 0 8px 24px 0 rgba(27, 50, 98, 0.14), 0 2px 4px 0 rgba(33, 125, 215, 0.06); min-width: 330px; max-width: 370px; max-height: 420px; overflow-y: auto; z-index: 1002; padding: 0; border: none; animation: fadeDown 0.22s; }
 
+
+/* ==== SweetAlert ตาราง (global) ==== */
+
+/* -- เดิมมี .date-filter-row button {...} ให้แก้เป็นไม่กินปุ่ม clear -- */
+.date-filter-row button:not(.clear-btn) {
+  border-radius: 6px;
+  border: none;
+  padding: 5px 13px;
+  background: #1d4ed8;
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.16s;
+}
+.date-filter-row button:not(.clear-btn):hover { background: #25396f; }
+
+/* -- ขนาดช่องวันที่ (flatpickr ใช้ alt input) --
+   ใส่ไว้ใน <style scoped> และใช้ :deep() ให้เจาะถึง input ที่ flatpickr สร้างขึ้น */
+.date-filter-row :deep(.flatpickr-alt-input),
+.date-filter-row :deep(.flatpickr-input){
+  box-sizing: border-box;
+  width: 120px;
+  min-width: 120px;
+  max-width: 120px;
+  height: 32px;
+  padding: 6px 10px;
+  border: 1px solid #a5b4fc;
+  border-radius: 7px;
+  background: #fff;
+  font-size: 1em;
+  line-height: 1.2;
+}
+/* กล่องแสดงวันที่ของ flatpickr (alt input) */
+.date-filter-row :deep(.mfu-alt-input){
+  box-sizing: border-box;
+  width: 120px !important;
+  min-width: 120px !important;
+  max-width: 120px !important;
+  height: 32px;
+  padding: 6px 10px;
+  border: 1px solid #a5b4fc;
+  border-radius: 7px;
+  background: #fff;
+  font-size: 1em;
+  line-height: 1.2;
+}
+
+/* -- สีปุ่ม clear ให้เหมือนสีกรอบ -- */
+.date-filter-row .clear-btn{
+  height: 32px;
+  padding: 0 12px;
+  background: #a5b4fc !important;   /* โทนม่วงเดิม */
+  border: 1px solid #a5b4fc !important;
+  color: #fff;
+  font-weight: 600;
+  border-radius: 7px;
+  cursor: pointer;
+}
+.date-filter-row .clear-btn:hover{
+  background: #93a2fb !important;
+  border-color: #93a2fb !important;
+}
+
+/* กฎนี้ (input[type="date"]) ไม่ได้มีผลกับ flatpickr แล้ว จะลบทิ้งก็ได้ */
+.history-table th.name-col,
+.history-table td.name-col {
+  width: 20%;              /* ปรับเปอร์เซ็นต์ได้ตามต้องการ */
+}
+
+.history-table td.name-col {
+  text-align: start;             /* ปรับเปอร์เซ็นต์ได้ตามต้องการ */
+}
+
+/* กันข้อความยาวชนคอลัมน์ข้าง ๆ */
+.history-table th,
+.history-table td {
+  overflow-wrap: anywhere; /* ตัดคำไทย/อังกฤษยาว ๆ ได้ */
+  word-break: break-word;
+}
+
+/* กล่องข้อความในคอลัมน์ Name: ให้ตัดเกินเป็น … และไม่ล้นกรอบ */
+.history-table .name-col .name-text {
+  display: block;
+  max-width: 100%;
+  white-space: nowrap;      /* ถ้าอยากให้ขึ้นบรรทัดเดียว */
+  overflow: hidden;
+  text-overflow: ellipsis;  /* โชว์ … เมื่อเกินกรอบ */
+}
+
+.hist-file-subtitle{
+  margin: 6px 0 8px 0;
+  color: #25396f;
+  font-size: 1.05rem;
+}
+
+.equip-names{
+  margin: 2px 0 8px 0;
+  color: #526683;
+  font-size: 0.95rem;
+}
+.section-block + .section-block{
+  margin-top: 14px;
+}
+/* ให้ section ย่อยจัดวางเป็นคอลัมน์และเว้นช่องว่างเท่ากับกล่องหลัก */
+.section-block{
+  display: flex;
+  flex-direction: column;
+  gap: 0.7em;   /* << เท่ากับ .hist-file-detail-box */
+}
+
+/* ตัด margin ล่างของหัวข้อ ไม่ให้บวกเพิ่มกับ gap */
+.hist-file-detail-box > .hist-file-header,
+.section-block .hist-file-header{
+  margin-bottom: 0;
+}
 </style>
 
 
 <style>
 @import '../css/style.css';
+
+.swal2-container{
+  z-index: 2000 !important;
+}
+
+/* ขนาด popup ตามเดิม แต่กันชิดขอบเกินไป */
+.mfu-swal.swal2-popup{
+  width: min(1360px, 96vw) !important;
+}
+
+/* ให้ภายในเลื่อนแนวนอนได้ถ้าตารางกว้าง */
+.mfu-swal .swal-table-wrap{
+  max-width: calc(96vw - 40px);  /* เผื่อ padding เล็กน้อย */
+  max-height: 70vh;              /* เลื่อนแนวตั้งได้อยู่แล้ว */
+  overflow-x: auto;              /* ✅ ป้องกันล้นแนวนอน */
+  overflow-y: auto;
+}
+
+/* บังคับตารางไม่ดัน popup ล้น */
+.mfu-swal .swal-table{
+  width: 100%;
+  min-width: 760px;              /* เอาอ่านง่ายไว้ก่อน */
+  table-layout: fixed;           /* แจกจ่ายความกว้างคอลัมน์เท่าๆกัน */
+}
+
+/* อนุญาตให้ตัดคำ/ขึ้นบรรทัดใหม่ ไม่บีบจนยาวล้น */
+.mfu-swal .swal-table th,
+.mfu-swal .swal-table td{
+  white-space: normal;           /* เดิมคุณตั้ง nowrap → ทำให้ล้น */
+  word-break: break-word;
+  font-size: 0.95rem;
+}
+
+/* (ทางเลือก) บีบคอลัมน์ที่มักยาวให้พอดีสายตา */
+.mfu-swal .swal-table th:nth-child(7),
+.mfu-swal .swal-table td:nth-child(7) {
+  text-align: center !important;
+}
+.mfu-swal .swal-table th:nth-child(8),
+.mfu-swal .swal-table td:nth-child(8){ /* หมายเหตุ (equipment) */
+  width: 24ch;
+}
+
+/* ตาราง 2 คอลัมน์ของ type=field */
+.mfu-swal .swal-table-2col {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+.mfu-swal .swal-table-2col th {
+  text-align: left;
+  width: 35%;
+  padding: 8px 12px;
+  background: #f0f4ff;
+  color: #213555;
+  font-weight: 600;
+  border-bottom: 1px solid #ddd;
+  vertical-align: top;
+}
+.mfu-swal .swal-table-2col td {
+  text-align: left;
+  padding: 8px 12px;
+  border-bottom: 1px solid #ddd;
+}
+
+/* จัดกึ่งกลางเฉพาะคอลัมน์: ลำดับ(1), จำนวน(3), วันที่ขอยืม(6), วันที่คืน(8) */
+.mfu-swal .swal-table th:nth-child(1),
+.mfu-swal .swal-table td:nth-child(1),
+.mfu-swal .swal-table th:nth-child(3),
+.mfu-swal .swal-table td:nth-child(3),
+.mfu-swal .swal-table th:nth-child(6),
+.mfu-swal .swal-table td:nth-child(6),
+.mfu-swal .swal-table th:nth-child(8),
+.mfu-swal .swal-table td:nth-child(8) {
+  text-align: center;
+ 
+}
+
+
+
+/* เดิม: ใช้กับทุกป๊อปอัป */
+.mfu-swal.swal2-popup{
+  width: min(1360px, 96vw) !important;
+}
+
+/* ใหม่: แคบเฉพาะป๊อปอัปรายละเอียด type=field */
+.swal2-container .mfu-swal--field.swal2-popup{
+  width: min(84vw, 720px) !important;  /* ปรับ 720 → 680/760 ได้ตามต้องการ */
+  padding: 18px 22px !important;       /* (ทางเลือก) ให้ดูคอมแพคขึ้น */
+}
+
+@media (max-width: 540px){
+  .swal2-container .mfu-swal--field.swal2-popup{
+    width: 95vw !important;            /* มือถือยังเต็มตา */
+  }
+}
+
 </style>

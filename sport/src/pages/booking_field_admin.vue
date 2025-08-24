@@ -1,5 +1,5 @@
 <template>
-  <div class="layout">
+  <div class="layout booking-equipment-page">
     <!-- Sidebar -->
     <aside class="sidebar" :class="{ closed: isSidebarClosed }">
       <div class="sidebar-header">
@@ -551,6 +551,28 @@ window.removeEventListener('resize', checkMobile)
 }
 
 .notification-dropdown { position: absolute; right: 0; top: 38px; background: #fff; border-radius: 18px 0 18px 18px; box-shadow: 0 8px 24px 0 rgba(27, 50, 98, 0.14), 0 2px 4px 0 rgba(33, 125, 215, 0.06); min-width: 330px; max-width: 370px; max-height: 420px; overflow-y: auto; z-index: 1002; padding: 0; border: none; animation: fadeDown 0.22s; }
+
+/* ทำให้ layout ของ booking_equipment เป็นคอลัมน์ */
+.booking-equipment-page .main {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+/* ให้ content ขยายพื้นที่แทน scroll ภายใน */
+.booking-equipment-page .content {
+  flex: 1;
+  overflow: visible !important;
+}
+
+/* reset footer ไม่ให้ลอย */
+.booking-equipment-page .foot {
+  position: static !important;
+  inset: auto !important;
+  width: 100%;
+  margin-top: 16px;
+  z-index: auto !important;
+}
 
 </style>
 

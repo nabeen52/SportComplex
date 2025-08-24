@@ -123,15 +123,12 @@
                     class="status-label status-disapproved"
                   >ไม่ถูกอนุมัติ</span>
                   <span
-                    v-else-if="group[0].status === 'return-pending'"
-                    class="status-label status-return-pending"
-                  >กำลังรอรับคืนอุปกรณ์</span>
-                  <span
                     v-else-if="group[0].status === 'returned'"
                     class="status-label status-returned"
                   >รับคืนอุปกรณ์แล้ว</span>
                   <span v-else>{{ group[0].status }}</span>
                 </td>
+
 
                 <td>
                   <button class="remark-btn" @click="detailGroup(group)">รายละเอียด</button>
@@ -195,45 +192,53 @@ export default {
   },
   computed: {
   groupedEquipmentHistories() {
-    const groups = {}
-    // สร้าง Set เก็บ booking_id ที่มี returned
-    const returnedBookingIds = new Set()
+  const groups = {}
+  const returnedBookingIds = new Set()
 
-    this.histories.forEach(item => {
-      if (item.type !== 'equipment') return
-      // เก็บ booking_id ที่มี returned
-      if ((item.status || '').toLowerCase() === 'returned') {
-        returnedBookingIds.add(item.booking_id || 'no_booking')
-      }
-      const key = item.booking_id || 'no_booking'
-      if (!groups[key]) groups[key] = []
-      groups[key].push(item)
-    })
+  this.histories.forEach(item => {
+    if (item.type !== 'equipment') return
 
-    // สร้าง array ใหม่
-    let arr = Object.values(groups).sort((a, b) => {
+    // 🔴 ข้ามรายการที่เป็น return-pending ไปเลย
+    const st = (item.status || '').toLowerCase()
+    if (st === 'return-pending') return
+
+    if (st === 'returned') {
+      returnedBookingIds.add(item.booking_id || 'no_booking')
+    }
+    const key = item.booking_id || 'no_booking'
+    if (!groups[key]) groups[key] = []
+    groups[key].push(item)
+  })
+
+  // ลบ group ที่ว่าง (กรณีมีแต่ return-pending จนถูกกรองหมด)
+  let arr = Object.values(groups)
+    .filter(g => g.length > 0)
+    .sort((a, b) => {
       const da = new Date(a[0].returnedAt || a[0].date)
       const db = new Date(b[0].returnedAt || b[0].date)
       return db - da
     })
 
-    // filter ตามสถานะ
-    if (this.filterStatus) {
-      arr = arr.filter(group => {
-        const status = (group[0].status || '').toLowerCase()
-        // ถ้า filter 'approved' และ booking_id มีใน returnedBookingIds → ไม่แสดง
-        if (
-          this.filterStatus === 'approved' &&
-          returnedBookingIds.has(group[0].booking_id || 'no_booking')
-        ) {
-          return false
-        }
-        return status === this.filterStatus
-      })
-    }
+  // filter ตามปุ่มสถานะ (ให้เหลือเฉพาะที่อนุญาต)
+  if (this.filterStatus) {
+    arr = arr.filter(group => {
+      const status = (group[0].status || '').toLowerCase()
+      // ถ้า filter 'approved' และ booking นี้มี 'returned' แล้ว → ไม่แสดง
+      if (this.filterStatus === 'approved' &&
+          returnedBookingIds.has(group[0].booking_id || 'no_booking')) {
+        return false
+      }
+      return status === this.filterStatus
+    })
+  }
 
-    return arr
-  },
+  // 👉 กันพลาด: คัดทิ้ง group ที่หัวไม่ใช่ approved/disapproved/returned
+  const allow = new Set(['approved','disapproved','returned'])
+  arr = arr.filter(group => allow.has((group[0].status || '').toLowerCase()))
+
+  return arr
+},
+
 
   // จำนวนหน้าทั้งหมด
   totalPages() {
@@ -271,9 +276,11 @@ export default {
   },
 
 getDisplayItems(group) {
-  const returnedOnly = group.filter(it => (it.status || '').toLowerCase() === 'returned');
-  return returnedOnly.length ? returnedOnly : group;
+  const cleaned = group.filter(it => (it.status || '').toLowerCase() !== 'return-pending')
+  const returnedOnly = cleaned.filter(it => (it.status || '').toLowerCase() === 'returned')
+  return returnedOnly.length ? returnedOnly : cleaned
 },
+
 
 
 pruneOldNotifications() {
@@ -347,71 +354,135 @@ pruneOldNotifications() {
   } catch (err) {}
 },
 
+
+
+
     detailGroup(group) {
+  // ---------- helpers ----------
   const esc = (s) => String(s ?? '-')
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
     .replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/\n/g,'<br>');
 
   const fmtDate = (d) => {
     const dt = new Date(d);
-    return isNaN(dt) ? '-' : dt.toLocaleDateString('th-TH', { year:'numeric', month:'2-digit', day:'2-digit' });
+    return isNaN(dt) ? '-' : dt.toLocaleDateString('th-TH', {year:'numeric',month:'2-digit',day:'2-digit'});
   };
 
-  const statusTitle = (s = '') => {
-    const m = (s || '').toLowerCase();
-    if (m === 'approved') return 'ถูกอนุมัติ';
-    if (m === 'pending') return 'รอดำเนินการ';
-    if (m === 'returned') return 'รับคืนอุปกรณ์แล้ว';
-    if (m === 'return-pending') return 'กำลังรอรับคืนอุปกรณ์';
-    if (m === 'disapproved') return 'ไม่ถูกอนุมัติ';
-    if (m === 'canceled' || m === 'cancel') return 'ยกเลิกแล้ว';
+  const statusTitle = (s='') => {
+    const m = s.toLowerCase();
+    if (m==='approved') return 'ถูกอนุมัติ';
+    if (m==='returned') return 'รับคืนอุปกรณ์แล้ว';
+    if (m==='disapproved') return 'ไม่ถูกอนุมัติ';
+    if (m==='pending') return 'รอดำเนินการ';
+    if (m==='canceled' || m==='cancel') return 'ยกเลิกแล้ว';
     return s || '-';
   };
 
-  // ถ้าใน group มี 'returned' อย่างน้อย 1 รายการ → แสดงเฉพาะ returned
-  const returnedOnly = group.filter(it => (it.status || '').toLowerCase() === 'returned');
-  const itemsToShow = returnedOnly.length ? returnedOnly : group;
+  // แปลง path เป็น URL ที่เปิดได้
+  const toUrl = (val) => {
+    if (!val) return null;
+    const s = String(val);
+    if (/^(https?:)?\/\//i.test(s) || s.startsWith('data:')) return s;
+    if (s.startsWith('/')) return s;
+    try {
+      const base = (import.meta.env?.VITE_API_BASE || '').replace(/\/+$/,'');
+      return base ? `${base}/${s.replace(/^\/+/, '')}` : s;
+    } catch { return s; }
+  };
 
-  const rows = itemsToShow.map((item, idx) => `
-    <div class="label"><b>อุปกรณ์ที่ ${idx + 1}:</b></div><div class="value">${esc(item.name)}</div>
-    <div class="label"><b>จำนวน:</b></div><div class="value">${esc(item.quantity)}</div>
-    <div class="label"><b>ชื่อผู้ขอใช้:</b></div><div class="value">${esc(item.requester || '-')}</div>
-    <div class="label"><b>วันที่ขอยืม:</b></div><div class="value">${esc(fmtDate(item.date))}</div>
-    <div class="label"><b>สถานะ:</b></div><div class="value">${esc(statusTitle(item.status))}</div>
-    <div class="label"><b>วันที่คืน:</b></div><div class="value">${esc(item.returnedAt ? fmtDate(item.returnedAt) : '-')}</div>
-    <div class="label"><b>หมายเหตุ:</b></div><div class="value">${esc(item.remark || '-')}</div>
-    <div style="grid-column:1/-1;border-bottom:1px dashed #bbb;margin:8px 0;"></div>
-  `).join('');
+  // ---------- เตรียมรายการแสดง ----------
+  const cleaned = group.filter(it => (it.status || '').toLowerCase() !== 'return-pending');
+  const returnedOnly = cleaned.filter(it => (it.status || '').toLowerCase() === 'returned');
+  const itemsToShow = returnedOnly.length ? returnedOnly : cleaned;
+
+  const rows = itemsToShow.map((item, idx) => {
+    const imgUrl = toUrl(
+      item.attachment ||
+      item.returnAttachment ||
+      item.return_photo ||
+      item.returnImage ||
+      (Array.isArray(item.attachments) ? item.attachments[0] : null) ||
+      (Array.isArray(item.images) ? item.images[0] : null) ||
+      item.image || item.photo || null
+    );
+
+    const photoCell = imgUrl
+      ? `<img src="${imgUrl}" class="swal-thumb" alt="แนบรูป"
+              onclick="window.__showFullReturnPhoto && window.__showFullReturnPhoto('${imgUrl}')">
+         <div class="swal-thumb-hint">(คลิกรูปเพื่อดูเต็ม)</div>`
+      : '-';
+
+    return `
+      <tr>
+        <td style="text-align:center">${idx + 1}</td>
+        <td class="nowrap">${esc(item.name)}</td>
+        <td style="text-align:center">${esc(item.quantity)}</td>
+        <td>${esc(item.requester || '-')}</td>
+        <td>${esc(item.user_id || '-')}</td>     <!-- ✅ เพิ่ม user_id -->
+        <td>${esc(fmtDate(item.date))}</td>
+        <td>${esc(statusTitle(item.status))}</td>
+        <td>${esc(item.returnedAt ? fmtDate(item.returnedAt) : '-')}</td>
+        <td style="text-align:center">${photoCell}</td>
+        <td>${esc(item.remark || '-')}</td>
+      </tr>`;
+  }).join('');
 
   const html = `
-    <style>
-      /* กริด 2 คอลัมน์: หัวข้อซ้าย (กว้างตามเนื้อ) + ค่าข้อมูลขวา (ยืด) */
-      .swal-detail-grid{
-        display:grid;
-        grid-template-columns: max-content 1fr;
-        column-gap: 16px;
-        row-gap: 8px;
-        align-items:start;
-        font-size: 1rem;
-        line-height: 1.6;
-      }
-      .swal-detail-grid .label{ text-align:left; }
-      .swal-detail-grid .value{ text-align:left; }  /* ✅ ค่าข้อมูลชิดซ้าย */
-      @media (max-width: 560px){
-        .swal-detail-grid{ column-gap: 12px; }
-      }
-    </style>
-    <div class="swal-detail-grid">${rows || `<div style="grid-column:1/-1">ไม่มีรายการ</div>`}</div>
+    <div class="swal-table-wrap">
+      <table class="swal-table">
+        <thead>
+          <tr>
+            <th style="width:56px;text-align:center">ลำดับ</th>
+            <th>อุปกรณ์</th>
+            <th style="width:90px;text-align:center">จำนวน</th>
+            <th style="width:160px">ผู้ขอใช้</th>
+            <th style="width:160px">รหัสนักศึกษา/พนักงาน</th> <!-- ✅ หัวข้อใหม่ -->
+            <th style="width:120px">วันที่ขอยืม</th>
+            <th style="width:150px">สถานะ</th>
+            <th style="width:130px">วันที่คืน</th>
+            <th style="width:150px;text-align:center">รูป</th>
+            <th style="width:160px">หมายเหตุ</th>
+          </tr>
+        </thead>
+        <tbody>${rows || `<tr><td colspan="10" style="text-align:center">ไม่มีรายการ</td></tr>`}</tbody>
+      </table>
+    </div>
   `;
+
+  // ---------- SweetAlert ----------
+  const GAP  = 24;
+  const MAXW = 1400;
+  const popupW = Math.min(Math.max(window.innerWidth - GAP*2, 360), MAXW);
 
   Swal.fire({
     title: 'รายละเอียดรายการ',
     html,
     confirmButtonText: 'ปิด',
     confirmButtonColor: '#3085d6',
-    width: 600
+    width: popupW + 'px',
+    customClass: {
+      container: 'mfu-swal-center',
+      popup: 'mfu-swal',
+      htmlContainer: 'mfu-swal-body'
+    },
+    didOpen: () => {
+      window.__showFullReturnPhoto = (img) => {
+        const w = window.open("", "_blank");
+        w.document.write(`
+          <html><head><title>รูปแนบ</title>
+            <style>
+              *{box-sizing:border-box}
+              body{background:#111;margin:0;display:flex;align-items:center;justify-content:center;height:100vh}
+              img{max-width:100vw;max-height:100vh;object-fit:contain;border-radius:16px;box-shadow:0 8px 30px #0008}
+            </style>
+          </head><body onclick="window.close()"><img src="${img}"></body></html>
+        `);
+      };
+    },
+    willClose: () => { window.__showFullReturnPhoto = undefined; }
   });
 }
+
 
 
 
@@ -433,24 +504,38 @@ pruneOldNotifications() {
         )
         .sort((a, b) => new Date(b.date) - new Date(a.date))
         .map((h, idx) => ({
-          id: h._id?.$oid || h._id || idx + 1,
-          name: h.name,
-          quantity: h.quantity,
-          status: h.status,
-          approvedBy: h.approvedBy,
-          approvedAt: h.approvedAt,
-          disapprovedBy: h.disapprovedBy,
-          disapprovedById: h.disapprovedById,
-          returnedBy: h.returnedBy,
-          returnedAt: h.returnedAt,
-          returnedById: h.returnedById,
-          type: h.type,
-          remark: h.remark,
-          requester: h.requester,
-          date: h.date,
-          booking_id: h.booking_id || null,
-          disapprovedAt: h.disapprovedAt || null,
-        }))
+        id: h._id?.$oid || h._id || idx + 1,
+        name: h.name,
+        quantity: h.quantity,
+        status: h.status,
+        approvedBy: h.approvedBy,
+        approvedAt: h.approvedAt,
+        disapprovedBy: h.disapprovedBy,
+        disapprovedById: h.disapprovedById,
+        returnedBy: h.returnedBy,
+        returnedAt: h.returnedAt,
+        returnedById: h.returnedById,
+        type: h.type,
+        remark: h.remark,
+        requester: h.requester,
+        date: h.date,
+        booking_id: h.booking_id || null,
+        disapprovedAt: h.disapprovedAt || null,
+        user_id: h.user_id || '-',
+
+        // ✅ เก็บ path/URL รูปให้ครอบคลุมหลายชื่อฟิลด์ที่อาจมาจาก backend
+        attachment:
+          h.attachment ||
+          h.returnAttachment ||
+          h.return_photo ||
+          h.returnImage ||
+          (Array.isArray(h.attachments) ? h.attachments[0] : null) ||
+          (Array.isArray(h.images) ? h.images[0] : null) ||
+          h.image ||
+          h.photo ||
+          null,
+      }))
+
     } catch (err) {
       this.histories = []
       console.error('โหลดข้อมูล history staff ไม่สำเร็จ:', err)
@@ -708,51 +793,32 @@ pruneOldNotifications() {
 .history-table tr:last-child td {
   border-bottom: none;
 }
+:root { --status-pill-width: 180px; }  /* ปรับได้ 170–190px ตามสายตา */
 
-.status-approved,
-.status-returned,
-.status-disapproved,
-.status-pending,
-.status-return-pending {
-  display: inline-flex;           /* กรอบจะยาวตามข้อความ */
+.status-label{
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 3px 18px;
-  border-radius: 20px;
-  font-weight: bold;
+  width: 180px;          /* กำหนดความกว้างคงที่ */
+  min-width: 180px;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-weight: 700;
   font-size: 1rem;
-  text-align: center;
-  white-space: nowrap;            /* ไม่ตัดบรรทัด */
+  white-space: nowrap;
   box-sizing: border-box;
   border-width: 1.5px;
   border-style: solid;
+  text-align: center;
+  flex: 0 0 180px;       /* กันการหดตัวใน flex/inline-flex */
 }
 
-.status-approved {
-  background: #d0f8ce !important;
-  color: #259b24 !important;
-  border-color: #90caf9;
-}
-.status-returned {
-  background: #e3f2fd !important;
-  color: #1565c0 !important;
-  border-color: #64b5f6;
-}
-.status-disapproved {
-  background: #fff3cd !important;
-  color: #e84e40 !important;
-  border-color: #ffe082;
-}
-.status-pending {
-  background: #e3f2fd !important;
-  color: #1976d2 !important;
-  border-color: #90caf9;
-}
-.status-return-pending {
-  background: #f6d365 !important;
-  color: #444 !important;
-  border-color: #ffe082;
-}
+.status-approved   { background:#d0f8ce !important; color:#259b24 !important; border-color:#90caf9; }
+.status-returned   { background:#e3f2fd !important; color:#1565c0 !important; border-color:#64b5f6; }
+.status-disapproved{ background:#fff3cd !important; color:#e84e40 !important; border-color:#ffe082; }
+.status-pending    { background:#e3f2fd !important; color:#1976d2 !important; border-color:#90caf9; }
+.status-return-pending { background:#f6d365 !important; color:#444 !important; border-color:#ffe082; }
 
 .filter-btn {
   padding: 6px 14px;
@@ -796,10 +862,108 @@ pruneOldNotifications() {
   cursor: not-allowed;
 }
 
+@media (max-width: 420px){
+  .status-label{ width:auto; min-width:140px; flex:0 0 auto; }
+}
+
+@media (max-width: 640px){
+  /* 1) ให้คอนเทนเนอร์กว้างขึ้นบนมือถือ และเลื่อนได้ */
+  .histbody{ padding: 12px 0; }
+  .history-table-container{
+    margin: 8px 8px 14px;         /* เดิม 70px ทำให้แคบเกินไป */
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* 2) บังคับให้ตารางมีความกว้างขั้นต่ำ แล้วค่อยเลื่อนแนวนอน */
+  .history-table{
+    min-width: 760px;             /* ปรับได้ 720–900 ตามถนัด */
+    table-layout: fixed;          /* ให้คอลัมน์คุมพื้นที่ดีขึ้น */
+  }
+
+  /* 3) จูนขนาดฟอนต์/ระยะห่างเล็กน้อย */
+  .history-table th,
+  .history-table td{
+    padding: 8px 10px;
+    font-size: .92rem;
+  }
+
+  /* 4) กำหนดสัดส่วนคอลัมน์ให้พอดีสายตา */
+  .history-table th:nth-child(1),
+  .history-table td:nth-child(1){ min-width: 110px; }   /* วันที่ */
+  .history-table th:nth-child(2),
+  .history-table td:nth-child(2){
+    min-width: 240px; text-align: left;  /* รายการอุปกรณ์ */
+    white-space: normal; word-break: break-word;
+  }
+  .history-table th:nth-child(3),
+  .history-table td:nth-child(3){ min-width: 80px;  }   /* จำนวน */
+  .history-table th:nth-child(4),
+  .history-table td:nth-child(4){ min-width: 170px; }   /* สถานะ */
+  .history-table th:nth-child(5),
+  .history-table td:nth-child(5){ min-width: 110px; }   /* รายละเอียด */
+
+  /* 5) ป้ายสถานะให้สั้นลงหน่อยบนจอแคบ */
+  .status-label{
+    width: 150px; min-width: 150px;
+    height: 28px; font-size: .9rem; flex: 0 0 150px;
+  }
+
+  /* (ทางเลือก) เอา padding ซ้ายของหัวข้อที่ใส่ inline style ออก */
+  .histbody h1{ padding-left: 0 !important; font-size: 1.1rem; }
+}
+
 
 
 
 </style>
 <style>
 @import '../css/style.css';
+
+/* === SweetAlert (global) === */
+.mfu-swal{                      /* ตัว popup */
+  max-width: none !important;   /* เอาขีดจำกัด 1000px เดิมออก */
+  width: 100% !important;       /* กว้างเท่าค่าที่ตั้งจาก JS */
+  font-size: 1rem;
+}
+.mfu-swal-body{ text-align: left; }
+
+.swal2-container.mfu-swal-center{
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 0 !important;         /* ตัด padding ของ container ที่อาจชดเชย scrollbar */
+}
+
+.swal2-container.mfu-swal-center .swal2-popup{
+  margin: 0 !important;
+}
+
+/* ตารางด้านใน: ให้พอดีกรอบ ไม่ต้องเลื่อน */
+.mfu-swal .swal-table-wrap{
+  max-height: 70vh;
+  overflow: auto;              /* เผื่อรายการแถวเยอะให้เลื่อนแนวตั้งได้ */
+}
+.mfu-swal .swal-table{
+  width: 100%;
+  min-width: 0;                /* 🔥 สำคัญ: เอา min-width 1250px ออก */
+  table-layout: auto;
+}
+
+/* คอลัมน์ชื่ออุปกรณ์ให้อยู่บรรทัดเดียวตามต้องการ */
+.mfu-swal .swal-table th:nth-child(2),
+.mfu-swal .swal-table td:nth-child(2),
+.mfu-swal .swal-table .nowrap{
+  white-space: nowrap;
+  word-break: keep-all;
+}
+
+/* จอแคบมากๆ ลด padding ตัวอักษรลงนิดเพื่อไม่ล้น */
+@media (max-width: 1280px){
+  .mfu-swal .swal-table th,
+  .mfu-swal .swal-table td{ padding: 8px 10px; }
+}
+
+
+
 </style>

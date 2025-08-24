@@ -19,11 +19,7 @@
       </nav>
     </aside>
 
-    <div
-      v-if="isMobile && !isSidebarClosed"
-      class="sidebar-overlay"
-      @click="toggleSidebar"
-    ></div>
+    <div v-if="!isSidebarClosed" class="sidebar-overlay" @click="toggleSidebar"></div>
     
     <div class="main">
       <!-- Header -->
@@ -197,7 +193,6 @@
   />
 </div>
 
-
               <div class="form-row">
                 <label>
                   ชื่อกิจกรรม/โครงการ
@@ -208,8 +203,11 @@
                   v-model="formData.name_activity"
                   rows="4"
                   placeholder="กรอกชื่อกิจกรรม/โครงการ"
+                  maxlength="100"
                 ></textarea>
+                <small class="note-text">{{ formData.name_activity.length }}/100 ตัวอักษร</small>
               </div>
+
               <div class="form-row">
                 <label>
                   เหตุผลในการขอใช้
@@ -220,60 +218,64 @@
                   v-model="formData.reasons"
                   rows="4"
                   placeholder="กรอกเหตุผลในการขอใช้"
+                  maxlength="100"
                 ></textarea>
+                <small class="note-text">{{ formData.reasons.length }}/100 ตัวอักษร</small>
               </div>
+
+
               <div class="form-row date-range-row">
-  <label>
-    ช่วงวันที่
-    <span v-if="showValidate && (missingFields.since || missingFields.uptodate)" class="required-star">*</span>
-  </label>
-  <div class="date-range-group" style="gap:8px; width:100%">
-    <VueDatePicker
-      v-model="dpStart"
-      :format="formatBE"
-      :enable-time-picker="false"
-      :min-date="minBookingDateObj"
-      :state="!(showValidate && missingFields.since)"
-      placeholder="วัน/เดือน/ปี"
-      locale="th"
-      :hide-input-icon="true"
-      style="width:48%"
-    />
-    <span>-</span>
-    <VueDatePicker
-      v-model="dpEnd"
-      :format="formatBE"
-      :enable-time-picker="false"
-      :min-date="dpStart || minBookingDateObj"
-      :state="!(showValidate && missingFields.uptodate)"
-      placeholder="วัน/เดือน/ปี"
-      locale="th"
-      :hide-input-icon="true"
-      style="width:48%"
-    />
-  </div>
-  <small class="note-text">* กรุณาจองก่อนใช้งานจริง 5 วัน</small>
-</div>
-              <div class="form-row time-range-row">
-  <label>
-    ช่วงเวลา
-    <span v-if="showValidate && (missingFields.since_time || missingFields.until_thetime)" class="required-star">*</span>
-  </label>
-  <div class="time-range-group">
-    <input
-      type="time"
-      :class="inputClass('since_time')"
-      v-model="formData.since_time"
-    />
-    <span>-</span>
-    <input
-      type="time"
-      :class="inputClass('until_thetime')"
-      v-model="formData.until_thetime"
-      :min="minUntilTime"
-    />
-  </div>
-</div>
+                <label>
+                  ช่วงวันที่
+                  <span v-if="showValidate && (missingFields.since || missingFields.uptodate)" class="required-star">*</span>
+                </label>
+                <div class="date-range-group" style="gap:8px; width:100%">
+                  <VueDatePicker
+                    v-model="dpStart"
+                    :format="formatBE"
+                    :enable-time-picker="false"
+                    
+                    :state="!(showValidate && missingFields.since)"
+                    placeholder="วัน/เดือน/ปี"
+                    locale="th"
+                    :hide-input-icon="true"
+                    style="width:48%"
+                  />
+                  <span>-</span>
+                  <VueDatePicker
+                    v-model="dpEnd"
+                    :format="formatBE"
+                    :enable-time-picker="false"
+                    
+                    :state="!(showValidate && missingFields.uptodate)"
+                    placeholder="วัน/เดือน/ปี"
+                    locale="th"
+                    :hide-input-icon="true"
+                    style="width:48%"
+                  />
+                </div>
+                <small class="note-text">* กรุณาจองก่อนใช้งานจริง 5 วัน</small>
+              </div>
+                            <div class="form-row time-range-row">
+                <label>
+                  ช่วงเวลา
+                  <span v-if="showValidate && (missingFields.since_time || missingFields.until_thetime)" class="required-star">*</span>
+                </label>
+                <div class="time-range-group">
+                  <input
+                    type="time"
+                    :class="inputClass('since_time')"
+                    v-model="formData.since_time"
+                  />
+                  <span>-</span>
+                  <input
+                    type="time"
+                    :class="inputClass('until_thetime')"
+                    v-model="formData.until_thetime"
+                    :min="minUntilTime"
+                  />
+                </div>
+              </div>
 
             
               <!-- เพิ่มใน <form> ตำแหน่งใกล้ๆ requester/proxyUserId -->
@@ -566,7 +568,6 @@ import '@vuepic/vue-datepicker/dist/main.css'
 import dayjs from 'dayjs'
 
 const API_BASE = import.meta.env.VITE_API_BASE
-const ADMIN_LAST_SEEN_KEY = 'admin_lastSeenTimestamp'
 
 // Router
 const router = useRouter()
@@ -577,7 +578,6 @@ const showNotifications = ref(false)
 const notifications = ref([])
 const unreadCount = ref(0)
 const products = ref([])
-
 
 const userIdRef = ref(localStorage.getItem('user_id') || '')
 const studentId = ref(localStorage.getItem('student_id') || '')
@@ -594,7 +594,7 @@ const id_form = ref(localStorage.getItem('id_form') || '')
 const MAX_FILE_SIZE = 100 * 1024 * 1024;   // 100MB ต่อไฟล์
 const MAX_TOTAL_SIZE = 100 * 1024 * 1024;  // รวมสูงสุด 100MB
 
-const lastSeenTimestamp = ref(parseInt(localStorage.getItem(ADMIN_LAST_SEEN_KEY) || '0'))
+const lastSeenTimestamp = ref(parseInt(localStorage.getItem('admin_lastSeenTimestamp') || '0'))
 let polling = null
 
 
@@ -622,7 +622,7 @@ const filteredAgencyOptions = computed(() => {
 })
 
 function pruneOldNotifications() {
-  const cutoff = Date.now() - (7 * 24 * 60 * 60 * 1000) // 7 วัน
+  const cutoff = Date.now() - (7 * 24 * 60 * 60 * 1000) // เก็บแค่ 7 วัน
   notifications.value = notifications.value.filter(n => (n?.timestamp ?? 0) >= cutoff)
 }
 
@@ -731,9 +731,10 @@ const telError = ref(false)
 function toggleNotifications() {
   showNotifications.value = !showNotifications.value
   if (showNotifications.value) {
+    // เปิด dropdown → เคลียร์ badge
     lastSeenTimestamp.value = Date.now()
-    localStorage.setItem(ADMIN_LAST_SEEN_KEY, String(lastSeenTimestamp.value))
-    unreadCount.value = 0 // เคลียร์ทันที (badge จะอาศัย timestamp คำนวณใหม่ทุกครั้ง)
+    localStorage.setItem('admin_lastSeenTimestamp', String(lastSeenTimestamp.value))
+    unreadCount.value = 0
   }
 }
 
@@ -741,23 +742,12 @@ function closeNotifications() {
   showNotifications.value = false
 }
 
-function handleClickOutside(event) {
-  const dropdown = document.querySelector('.notification-dropdown')
-  const btn = document.querySelector('.notification-btn')
-  if (dropdown && !dropdown.contains(event.target) && btn && !btn.contains(event.target)) {
-    closeNotifications()
-  }
-}
-
-
 async function fetchNotifications() {
   try {
     pruneOldNotifications()
-
     const res = await axios.get(`${API_BASE}/api/history/approve_field`)
     const data = Array.isArray(res.data) ? res.data : []
 
-    // เอาเฉพาะ pending ของ field|equipment
     const pendings = data.filter(item =>
       item?.status === 'pending' &&
       (item?.type === 'field' || item?.type === 'equipment')
@@ -782,7 +772,6 @@ async function fetchNotifications() {
         }
       })
 
-      // รวม, unique ตาม id, เรียงใหม่ล่าสุดก่อน
       notifications.value = [...notifications.value, ...newMessages]
         .filter((v, i, arr) => arr.findIndex(x => (x.id || i) === (v.id || i)) === i)
         .sort((a, b) => b.timestamp - a.timestamp)
@@ -790,10 +779,10 @@ async function fetchNotifications() {
       pruneOldNotifications()
     }
 
-    // นับ unread จาก timestamp > lastSeenTimestamp
+    // อัปเดตจำนวน unread
     unreadCount.value = notifications.value.filter(n => n.timestamp > lastSeenTimestamp.value).length
-  } catch (_) {
-    // เงียบไว้ ไม่ต้องเด้ง error
+  } catch {
+    /* error → เงียบไว้ */
   }
 }
 
@@ -1888,6 +1877,11 @@ onBeforeUnmount(() => {
 @keyframes fadeDown { 0% { opacity: 0; transform: translateY(-24px);} 100% { opacity: 1; transform: translateY(0);} }
 
 .notification-backdrop { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: transparent; z-index: 1001; }
+
+.is-invalid {
+  border-color: #ef4444 !important;
+  background: #ffeaea !important;
+}
 
 .agency-dropdown {
   position: absolute;

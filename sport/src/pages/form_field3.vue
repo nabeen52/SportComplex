@@ -90,6 +90,7 @@
         <div class="form-container">
           <h1 class="title">ยืนยันข้อมูล</h1>
           <div id="pdf-section">
+            <section id="uniform-lines">
             <div class="form-header">
               <h3>แบบฟอร์มขออนุมัติใช้สถานที่ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง</h3>
               <p><b>โทร: 0-5391-7820 และ 0-5391-7821 | E-mail: sport-complex@mfu.ac.th</b></p>
@@ -107,7 +108,7 @@
 
             <!-- Detail Content -->
             <div class="form-row mt-15" style="margin-left: 0;">
-              <span class="bold">เรื่อง</span><span>เรื่อง ขออนุมัติใช้สถานที่</span>
+              <span class="bold">เรื่อง</span><span>ขออนุมัติใช้สถานที่</span>
             </div>
             <div class="form-row mt-15" style="margin-left: 0px;">
               <span class="bold">เรียน</span><span>อธิการบดี</span>
@@ -123,101 +124,105 @@
               และเพื่อให้การดำเนินงานเป็นไปด้วยความเรียบร้อย จึงเรียนมาเพื่อขออนุมัติ ดังนี้
             </div>
 
-            <!-- ข้อ 1 -->
-        
-        <!-- ข้อ 1 -->
-        <div class="form-row mt-30 bold" style="margin-left: 0; margin-top: 8px; margin-bottom: 6px;">
-          <span>1. ขออนุมัติใช้สถานที่</span>
-        </div>
-        <div class="form-row block-row" style="margin-left: 80px; margin-bottom: 0px;">
-          <span>อาคาร :</span>
-          <span class="line-field block-text">{{ info.building }}</span>
-        </div>
-        <!-- แก้ margin-bottom 22px → 8px -->
-        <div class="form-row block-row" style="margin-left: 80px; margin-bottom: 8px;">
-          <span>ตำแหน่งพื้นที่/ห้องที่ต้องการใช้ :</span>
-          <span class="line-field block-text">
-            {{ info.zone && info.zone.trim() !== '' ? info.zone : '-' }}
-          </span>
-        </div>
+         <!-- === Uniform spacing start (ข้อ 1 → หมายเหตุการแนบเอกสาร) === -->
 
-        <!-- ข้อ 2 -->
-        <!-- แก้ mt-30 → margin-top:8px -->
-        <div class="form-row bold" style="margin-left: 0; margin-top: 8px; margin-bottom: 8px;">
-          <span>2. ขออนุมัติใช้ระบบสาธารณูปโภค</span>
-          <input type="radio" value="yes" :checked="isUtilityYes(info.utilityRequest)" disabled/>
-          <label style="margin-right: 18px;">เลือก</label>
-          <input type="radio" value="no" :checked="isUtilityNo(info.utilityRequest)" disabled/>
-          <label>ไม่เลือก</label>
-        </div>
 
-        <!-- ตารางสาธารณูปโภค -->
-        <div v-if="isUtilityYes(info.utilityRequest)" style="margin-left:80px;">
-          <table class="util-table">
-            <colgroup>
-              <col class="c-label" />
-              <col class="c-time" />
-              <col class="c-sep" />
-              <col class="c-time" />
-            </colgroup>
-            <tr>
-              <td class="util-label">2.1 เปิดเครื่องปรับอากาศตั้งแต่ :</td>
-              <td class="time">{{ formatTimeTH(info.turnon_air) }}</td>
-              <td class="sep">ถึง</td>
-              <td class="time">{{ formatTimeTH(info.turnoff_air) }}</td>
-            </tr>
-            <tr>
-              <td class="util-label">2.2 ไฟฟ้าส่องสว่างตั้งแต่ :</td>
-              <td class="time">{{ formatTimeTH(info.turnon_lights) }}</td>
-              <td class="sep">ถึง</td>
-              <td class="time">{{ formatTimeTH(info.turnoff_lights) }}</td>
-            </tr>
-            <tr>
-              <td class="util-label">2.3 อื่นๆ :</td>
-              <td class="other-value" colspan="3">
-                {{ info.other && info.other.trim() !== '' ? info.other : '-' }}
-              </td>
-            </tr>
-          </table>
-        </div>
+  <!-- ข้อ 1 -->
+  <div class="form-row bold" style="margin-left: 0;">
+    <span>1. ขออนุมัติใช้สถานที่</span>
+  </div>
 
-        <div style="margin-top:0px;">
-          <span style="font-weight:bold; font-size: 15px;">
-            *ต้องได้รับการอนุมัติจากรองอธิการบดีผู้กำกับดูแล และสำเนาเอกสารถึงฝ่ายอนุรักษ์พลังงาน
-          </span>
-        </div>
+  <div class="form-row block-row" style="margin-left: 80px;">
+    <span>อาคาร :</span>
+    <span class="line-field block-text">{{ info.building }}</span>
+  </div>
 
-        <!-- ข้อ 3 -->
-        <!-- แก้ mt-30 → margin-top:8px -->
-        <div class="form-row bold" style="margin-left: 0; margin-top: 8px; margin-bottom: 8px;">
-          <span>3. ขออนุมัติรายการประกอบอาคาร</span>
-          <input type="radio" value="yes" :checked="isFacilityYes(info.facilityRequest)" disabled/>
-          <label style="margin-right: 18px;">เลือก</label>
-          <input type="radio" value="no" :checked="isFacilityNo(info.facilityRequest)" disabled/>
-          <label>ไม่เลือก</label>
-        </div>
+  <div class="form-row block-row" style="margin-left: 80px;">
+    <span>ตำแหน่งพื้นที่/ห้องที่ต้องการใช้ :</span>
+    <span class="line-field block-text">
+      {{ info.zone && info.zone.trim() !== '' ? info.zone : '-' }}
+    </span>
+  </div>
 
-        <div v-if="isFacilityYes(info.facilityRequest)">
-          <div class="form-row block-row" style="margin-left: 80px; margin-bottom: 5px;">
-            <span style="white-space: nowrap;">3.1 ดึงอัฒจันทร์ภายในอาคารเฉลิมพระเกียรติฯ :</span>
-            <span class="line-field block-text force-inline">{{ info.amphitheater && info.amphitheater.trim() !== '' ? info.amphitheater : '-' }}</span>
-          </div>
-          <div class="form-row block-row" style="margin-left: 80px; margin-bottom: 22px;">
-            <span style="white-space: nowrap;">3.2 อุปกรณ์กีฬา (โปรดระบุรายการและจำนวน) :</span>
-            <span class="line-field block-text force-inline">{{ info.need_equipment && info.need_equipment.trim() !== '' ? info.need_equipment : '-' }}</span>
-          </div>
-        </div>
+  <!-- ข้อ 2 -->
+  <div class="form-row bold" style="margin-left: 0;">
+    <span>2. ขออนุมัติใช้ระบบสาธารณูปโภค</span>
+    <input type="radio" value="yes" :checked="isUtilityYes(info.utilityRequest)" disabled/>
+    <label style="margin-right: 18px;">เลือก</label>
+    <input type="radio" value="no" :checked="isUtilityNo(info.utilityRequest)" disabled/>
+    <label>ไม่เลือก</label>
+  </div>
 
-            <div style="margin-top:5px;">
-              <span style="font-weight:bold; font-size: 15px;">
-                ทั้งนี้ต้องแนบเอกสารโครงการหรือกิจกรรมที่ได้รับการอนุมัติแล้วพร้อมกำหนดการจัดกิจกรรม
-              </span>
-            </div>
-            <div style="margin-top:0px;">
-              <span style="font-weight:bold; font-size: 15px;">
-                หากเป็นการเรียนกรสอน ต้องแนบตารางการเรียนการสอน (Class schedule) พร้อมทั้งรายชื่อนักศึกษา
-              </span>
-            </div>
+  <!-- ตารางสาธารณูปโภค -->
+  <div v-if="isUtilityYes(info.utilityRequest)" class="util-wrap" style="margin-left:80px;">
+    <table class="util-table">
+      <colgroup>
+        <col class="c-label" />
+        <col class="c-time" />
+        <col class="c-sep" />
+        <col class="c-time" />
+      </colgroup>
+      <tr>
+        <td class="util-label">2.1 เปิดเครื่องปรับอากาศตั้งแต่ :</td>
+        <td class="time">{{ formatTimeTH(info.turnon_air) }}</td>
+        <td class="sep">ถึง</td>
+        <td class="time">{{ formatTimeTH(info.turnoff_air) }}</td>
+      </tr>
+      <tr>
+        <td class="util-label">2.2 ไฟฟ้าส่องสว่างตั้งแต่ :</td>
+        <td class="time">{{ formatTimeTH(info.turnon_lights) }}</td>
+        <td class="sep">ถึง</td>
+        <td class="time">{{ formatTimeTH(info.turnoff_lights) }}</td>
+      </tr>
+      <tr>
+        <td class="util-label">2.3 อื่นๆ :</td>
+        <td class="other-value" colspan="3">
+          {{ info.other && info.other.trim() !== '' ? info.other : '-' }}
+        </td>
+      </tr>
+    </table>
+  </div>
+
+  <div class="note-line">
+    <span style="font-weight:bold; font-size: 15px;">
+      *ต้องได้รับการอนุมัติจากรองอธิการบดีผู้กำกับดูแล และสำเนาเอกสารถึงฝ่ายอนุรักษ์พลังงาน
+    </span>
+  </div>
+
+  <!-- ข้อ 3 -->
+  <div class="form-row bold" style="margin-left: 0;">
+    <span>3. ขออนุมัติรายการประกอบอาคาร</span>
+    <input type="radio" value="yes" :checked="isFacilityYes(info.facilityRequest)" disabled/>
+    <label style="margin-right: 18px;">เลือก</label>
+    <input type="radio" value="no" :checked="isFacilityNo(info.facilityRequest)" disabled/>
+    <label>ไม่เลือก</label>
+  </div>
+
+  <div v-if="isFacilityYes(info.facilityRequest)">
+    <div class="form-row block-row" style="margin-left: 80px;">
+      <span style="white-space: nowrap;">3.1 ดึงอัฒจันทร์ภายในอาคารเฉลิมพระเกียรติฯ :</span>
+      <span class="line-field block-text force-inline">{{ info.amphitheater && info.amphitheater.trim() !== '' ? info.amphitheater : '-' }}</span>
+    </div>
+    <div class="form-row block-row" style="margin-left: 80px;">
+      <span style="white-space: nowrap;">3.2 อุปกรณ์กีฬา (โปรดระบุรายการและจำนวน) :</span>
+      <span class="line-field block-text force-inline">{{ info.need_equipment && info.need_equipment.trim() !== '' ? info.need_equipment : '-' }}</span>
+    </div>
+  </div>
+
+  <div class="note-line">
+    <span style="font-weight:bold; font-size: 15px;">
+      ทั้งนี้ต้องแนบเอกสารโครงการหรือกิจกรรมที่ได้รับการอนุมัติแล้วพร้อมกำหนดการจัดกิจกรรม
+    </span>
+  </div>
+  <div class="note-line">
+    <span style="font-weight:bold; font-size: 15px;">
+      หากเป็นการเรียนการสอน ต้องแนบตารางการเรียนการสอน (Class schedule) พร้อมทั้งรายชื่อนักศึกษา
+    </span>
+  </div>
+
+</section>
+<!-- === Uniform spacing end === -->
+
 
             <!-- ตารางเซ็นชื่อ 3 ช่อง (ด้านบน) -->
             <table class="sign-header-table">
@@ -226,8 +231,7 @@
                   <td>
                     ลงชื่อ...........................................<br><br>
                     <span style=" white-space: nowrap;">
-                      <div style="margin:8px 0 6px;"></div>
-                      ( {{ info.username_form || '-' }} )
+                                  ( {{ info.proxyStudentName || info.username_form || '-' }} )
                     </span>
                     <br><br>
                     นักศึกษา/ผู้รับผิดชอบ<br><br>
@@ -235,14 +239,12 @@
                   </td>
                   <td>
                     ลงชื่อ...........................................<br><br>
-                    <div style="margin:10px 0 6px;"></div>
                     (.................................................)<br><br>
                     อาจารย์/ที่ปรึกษาโครงการ<br><br>
                     วันที่............/............/............
                   </td>
                   <td>
                     ลงชื่อ...........................................<br><br>
-                    <div style="margin:10px 0 6px;"></div>
                     (.................................................)<br><br>
                     คณบดี/หัวหน้าหน่วยงาน<br><br>
                     วันที่............/............/............
@@ -263,93 +265,76 @@
                     </tr>
                   </thead>
                   <tbody>
-                    <tr>
-                      <!-- ช่อง 1 -->
-                      <td>
-                        <div class="td-inner">
-                          <div class="checkbox-line">
-                            <input type="checkbox" id="chk1-1" disabled>
-                            <label for="chk1-1">เรียน หัวหน้าศูนย์กีฬาฯ</label>
-                          </div>
-                          <div class="checkbox-line">
-                            <input type="checkbox" id="chk1-2" disabled>
-                            <label for="chk1-2">เพื่อโปรดพิจารณา</label>
-                          </div>
-                          <div class="checkbox-line">
-                            <input type="checkbox" id="chk1-3" disabled>
-                            <label for="chk1-3">อื่นๆ</label>
-                            <span class="dot-line dot-line-custom"></span>
-                          </div>
-                          <div class="dot-line"></div>
-                          <div style="margin:30px 0 6px;">
-                            (<span class="dot-line short"></span>)
-                          </div>
-                           <div style="margin:4px 0 8px;">
-      <span class="dot-line short"></span>
-    </div>
-                          <div style="margin-bottom: 6px;">
-                            วันที่ <span class="dot-line date"></span>
-                          </div>
-                        </div>
-                      </td>
-                      <!-- ช่อง 2 -->
-                      <td>
-                        <div class="td-inner">
-                          <div class="checkbox-line">
-                            <input type="checkbox" id="chk2-1" disabled>
-                            <label for="chk2-1">เรียนรองอธิการบดี</label>
-                          </div>
-                          <div class="checkbox-line">
-                            <input type="checkbox" id="chk2-2" disabled>
-                            <label for="chk2-2">เพื่อโปรดพิจารณา</label>
-                          </div>
-                          <div class="checkbox-line">
-                            <input type="checkbox" id="chk2-3" disabled>
-                            <label for="chk2-3">อื่นๆ</label>
-                            <span class="dot-line dot-line-custom"></span>
-                          </div>
-                          <div class="dot-line"></div>
-                          <div style="margin:30px 0 6px;">
-                            (<span class="dot-line short"></span>)
-                          </div>
-                                          <div style="margin:4px 0 8px;">
-      <span class="dot-line short"></span>
-    </div>
-                          <div style="margin-bottom: 6px;">
-                            วันที่ <span class="dot-line date"></span>
-                          </div>
-                        </div>
-                      </td>
-                      <!-- ช่อง 3 -->
-                      <td>
-                        <div class="td-inner">
-                          <div class="checkbox-line">
-                            <input type="checkbox" id="chk3-1" disabled>
-                            <label for="chk3-1">อนุมัติข้อ</label>
-                          </div>
-                          <div class="checkbox-line">
-                            <input type="checkbox" id="chk3-2" disabled>
-                            <label for="chk3-2">อื่นๆ</label>
-                            <span class="dot-line dot-line-custom"></span>
-                          </div>
-                          <!-- เส้นจุดบรรทัดที่ 2 แบบเว้นบรรทัด -->
-                          <div style="margin-bottom: 3px;"></div>
-                          <div class="dot-line"></div>
-                          <div style="margin-bottom: 7px;"></div>
-                          <div class="dot-line"></div>
-                          <div style="margin:30px 0 6px;">
-                            (<span class="dot-line short"></span>)
-                          </div>
-                                          <div style="margin:4px 0 8px;">
-      <span class="dot-line short"></span>
-    </div>
-                          <div style="margin-bottom: 6px;">
-                            วันที่ <span class="dot-line date"></span>
-                          </div>
-                        </div>
-                      </td>
-                    </tr>
-                  </tbody>
+  <tr>
+    <!-- ช่อง 1 -->
+    <td>
+      <div class="td-inner">
+        <div class="checkbox-line">
+          <input type="checkbox" id="chk1-1" disabled>
+          <label for="chk1-1">เรียน หัวหน้าศูนย์กีฬาฯ</label>
+        </div>
+        <div class="checkbox-line">
+          <input type="checkbox" id="chk1-2" disabled>
+          <label for="chk1-2">เพื่อโปรดพิจารณา</label>
+        </div>
+        <div class="checkbox-line">
+          <input type="checkbox" id="chk1-3" disabled>
+          <label for="chk1-3">อื่นๆ</label>
+          <span class="dot-line dot-line-custom"></span>
+        </div>
+
+        <div class="line-row">(<span class="dot-line short"></span>)</div>
+        <div class="line-row"><span class="dot-line short"></span></div>
+        <div class="date-row">วันที่ ............/............/............</div>
+      </div>
+    </td>
+
+    <!-- ช่อง 2 -->
+    <td>
+      <div class="td-inner">
+        <div class="checkbox-line">
+          <input type="checkbox" id="chk2-1" disabled>
+          <label for="chk2-1">เรียน รองอธิการบดี</label>
+        </div>
+        <div class="checkbox-line">
+          <input type="checkbox" id="chk2-2" disabled>
+          <label for="chk2-2">เพื่อโปรดพิจารณา</label>
+        </div>
+        <div class="checkbox-line">
+          <input type="checkbox" id="chk2-3" disabled>
+          <label for="chk2-3">อื่นๆ</label>
+          <span class="dot-line dot-line-custom"></span>
+        </div>
+
+        <div class="line-row">(<span class="dot-line short"></span>)</div>
+        <div class="line-row"><span class="dot-line short"></span></div>
+        <div class="date-row">วันที่ ............/............/............</div>
+      </div>
+    </td>
+
+    <!-- ช่อง 3 -->
+    <td>
+      <div class="td-inner">
+        <div class="checkbox-line">
+          <input type="checkbox" id="chk3-1" disabled>
+          <label for="chk3-1">อนุมัติข้อ</label>
+        </div>
+        <div class="checkbox-line">
+          <input type="checkbox" id="chk3-2" disabled>
+          <label for="chk3-2">อื่นๆ</label>
+          <span class="dot-line dot-line-custom"></span>
+        </div>
+        <!-- เติมช่องว่างให้ครบ 3 บรรทัดเหมือนคอลัมน์อื่น -->
+        <div class="checkbox-line placeholder"></div>
+
+        <div class="line-row">(<span class="dot-line short"></span>)</div>
+        <div class="line-row"><span class="dot-line short"></span></div>
+        <div class="date-row">วันที่ ............/............/............</div>
+      </div>
+    </td>
+  </tr>
+</tbody>
+
                 </table>
               </div>
             </div>
@@ -411,7 +396,7 @@
 
 
 <script setup>
-import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { ref, onMounted, onBeforeUnmount, nextTick  } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 import Swal from 'sweetalert2'
@@ -449,41 +434,122 @@ function closeNotifications() {
 
 const pdfFilename = 'แบบฟอร์มขออนุมัติใช้สถานที่ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง.pdf'
 
-function exportToPDF() {
-  const element = document.getElementById('pdf-section')
+// ขนาด A4 ในหน่วย CSS px (อิง 96dpi)
+const A4_W = Math.round(210 * (96 / 25.4)); // ≈ 794px
+const A4_H = Math.round(297 * (96 / 25.4)); // ≈ 1123px
+
+// ระยะขอบมาตรฐาน (ปรับได้ตามต้องการ)
+const PAD_X = 12; // ซ้าย/ขวา px (~3 มม.)
+const PAD_Y = 12; // บน/ล่าง px
+
+
+async function makeA4OnePageBlob(element) {
+  if (document.fonts && document.fonts.ready) {
+    try { await document.fonts.ready } catch (_) {}
+  }
+
+  const orig = {
+    width: element.style.width,
+    height: element.style.height,
+    margin: element.style.margin,
+    padding: element.style.padding,
+    transform: element.style.transform,
+    transformOrigin: element.style.transformOrigin,
+    display: element.style.display,
+  };
+
+  // กรอบ A4
+  const wrapper = document.createElement('div');
+  Object.assign(wrapper.style, {
+    width: A4_W + 'px',
+    height: A4_H + 'px',
+    background: '#fff',
+    padding: '0',
+    margin: '0',
+    position: 'relative',
+    overflow: 'hidden',
+  });
+
+  // พื้นที่ใช้งานจริงหลังหักขอบ
+  const innerW = A4_W - (2 * PAD_X);
+  const innerH = A4_H - (2 * PAD_Y);
+
+  element.classList.add('pdf-export', 'pdf-onepage');
+  element.style.display = 'block';
+  element.style.margin = '0 auto';
+  element.style.padding = `${PAD_Y}px ${PAD_X}px`; // ให้ตรงกับตัวแปรบน
+  element.style.width = innerW + 'px';             // เริ่มวัดด้วยความกว้างตาม innerW
+  element.style.transformOrigin = 'top center';
+  element.style.transform = 'scale(1)';
+
+  const parent = element.parentNode;
+  const next = element.nextSibling;
+  parent.insertBefore(wrapper, element);
+  wrapper.appendChild(element);
+
+  await nextTick(); // ถ้าใช้ Vue
+  await new Promise(r => requestAnimationFrame(r));
+
+  // ย่อให้พอดีความสูง A4
+  let contentHeight = element.scrollHeight;
+  let scale = Math.min(1, innerH / contentHeight);
+
+  // ชดเชยความกว้าง: ขยายก่อน แล้วค่อยย่อ => หลังย่อจะกว้างพอดีกับ innerW
+  if (scale < 1) {
+    element.style.width = (innerW / scale) + 'px';
+    await new Promise(r => requestAnimationFrame(r));
+    contentHeight = element.scrollHeight;                // ความสูงใหม่หลังขยาย
+    scale = Math.min(1, innerH / contentHeight);        // คำนวณสเกลอีกครั้ง
+  }
+
+  element.style.transform = `scale(${scale})`;
+  await new Promise(r => requestAnimationFrame(r));
+
   const opt = {
-    margin: [0.5, 0.5, 0.5, 0.5],
+    margin: 0,
     filename: pdfFilename,
     image: { type: 'jpeg', quality: 0.98 },
-    html2canvas: { scale: 2, useCORS: true },
-    jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' },
-    pagebreak: { mode: ['css'] }
-  }
-  // inject style ก่อน export
-  element.classList.add('pdf-export')
-  html2pdf().from(element).set(opt).save().then(() => {
-    element.classList.remove('pdf-export')
-  })
+    html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
+    jsPDF: { unit: 'px', format: [A4_W, A4_H], orientation: 'portrait' },
+    pagebreak: { mode: [] }
+  };
+
+  const pdfBlob = await html2pdf().from(wrapper).set(opt).outputPdf('blob');
+
+  // คืน DOM
+  if (next) parent.insertBefore(element, next); else parent.appendChild(element);
+  wrapper.remove();
+  element.classList.remove('pdf-export', 'pdf-onepage');
+  element.style.width = orig.width;
+  element.style.height = orig.height;
+  element.style.margin = orig.margin;
+  element.style.padding = orig.padding;
+  element.style.transform = orig.transform;
+  element.style.transformOrigin = orig.transformOrigin;
+  element.style.display = orig.display;
+
+  return pdfBlob;
 }
 
-function htmlToPdfBlob(elementId) {
-  return new Promise((resolve, reject) => {
-    const element = document.getElementById(elementId)
-    const opt = {
-      margin: [0.5, 0.5, 0.5, 0.5],
-      filename: pdfFilename,
-      image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2, useCORS: true },
-      jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
-    }
-    html2pdf()
-      .from(element)
-      .set(opt)
-      .outputPdf('blob')
-      .then(resolve)
-      .catch(reject)
-  })
+async function exportToPDF() {
+  const element = document.getElementById('pdf-section');
+  const pdfBlob = await makeA4OnePageBlob(element);
+
+  // ให้ผู้ใช้ดาวน์โหลดไฟล์
+  const url = URL.createObjectURL(pdfBlob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = pdfFilename;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 80);
 }
+
+async function htmlToPdfBlob(elementId) {
+  const element = document.getElementById(elementId);
+  return await makeA4OnePageBlob(element);
+}
+
 
 async function uploadPdfBlob(pdfBlob) {
   const fd = new FormData()
@@ -1030,7 +1096,10 @@ function formatTimeTH(timeStr) {
 .utility-other-center { font-size: 15px; text-align: center; }
 .dot-line-custom { flex: 1 1 0; border-bottom: 1.5px dotted #222; min-width: 80px; margin-left: 8px; margin-right: 6px; height: 16px; display: inline-block; }
 
-.pdf-export { padding: 18px !important; }
+.pdf-export {
+  /* padding: 18px !important;  <-- ลบ */
+  font-size: 16px !important;
+}
 .pdf-export {
   font-size: 16px !important;
 }
@@ -1039,7 +1108,173 @@ function formatTimeTH(timeStr) {
 .pdf-export h3 {
   font-size: 18px !important;
 }
+/* ใช้ TH Sarabun New กับทุกข้อความภายในบล็อกฟอร์ม pdf-section */
+#pdf-section, #pdf-section * {
+  font-family: 'THSarabunNew', 'Sarabun', 'Noto Sans Thai', Tahoma, sans-serif !important;
+  letter-spacing: 0; /* ให้ระยะอักษรถูกต้องในภาษาไทย */
+}
+
+/* เลือกน้ำหนักตัวหนาให้คมสวย */
+#pdf-section .bold,
+#pdf-section b,
+#pdf-section strong,
+#pdf-section th {
+  font-weight: 700;
+}
+/* ทำให้ 3 เส้นล่าง “เรียงแถว” ตรงกันทั้งสามช่อง */
+.approval-sign-table td { padding: 0; }              /* คุมช่องให้เหมือนกัน */
+.td-inner{
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  height: 230px;                                     /* เท่าเดิมของคุณ */
+  padding: 12px;
+  box-sizing: border-box;
+}
+
+/* บรรทัด checkbox – ให้สูงคงที่และไม่ตัดบรรทัด */
+.checkbox-line{
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 26px;          /* ความสูงเท่ากัน */
+  margin: 0 0 8px 0;         /* ระยะห่างด้านล่างเท่ากัน */
+  white-space: nowrap;       /* กันข้อความขึ้นบรรทัดใหม่ */
+}
+.checkbox-line.placeholder{ visibility: hidden; }     /* กินที่แต่ไม่เห็น */
+
+.checkbox-line input[type="checkbox"]{
+  width: 17px; height: 17px; margin: 0 4px 0 0; accent-color:#444;
+}
+.checkbox-line label{ font-size: 15px; }
+
+/* แถวเส้นบรรทัดทั้งสอง (ตรงที่คุณขีดเส้นแดงแถวที่ 1 และ 2) */
+.line-row{
+  display: flex;
+  align-items: center;
+  height: 22px;              /* ความสูงคงที่ */
+  margin: 6px 0;             /* ระยะบน-ล่างเท่ากัน */
+}
+
+/* แถว “วันที่ …/…/…” (เส้นแดงแถวล่างสุด) */
+.date-row{
+  display: flex;
+  align-items: center;
+  height: 22px;
+  margin-top: 6px;
+}
+
+/* เส้นจุดเดิมของคุณ */
+.dot-line{ display:inline-block; width:98%; border-bottom:1px dotted #222; height:15px; min-width:60px; vertical-align:middle; }
+.dot-line.short{ width:90%; min-width:70px; }
+.dot-line-custom{ flex:1 1 0; border-bottom:1.5px dotted #222; min-width:80px; margin-left:8px; margin-right:6px; height:16px; display:inline-block; }
+/* ขณะ export: บังคับกรอบให้เท่ากับหน้า A4 และเผื่อระยะหายใจ */
+.pdf-onepage {
+  /* padding: 20px !important;  <-- ลบหรือคอมเมนต์ทิ้ง */
+  background: #fff !important;
+  box-sizing: border-box;
+}
+
+/* กรอบจับภาพ A4 (สร้างตอน export เท่านั้น) */
+.a4-capture-wrapper {
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+/* กันข้อความทับกันระหว่างสเกล (โดยเฉพาะฟอนต์ไทย) */
+#pdf-section, #pdf-section * {
+  line-height: 1.35;            /* ค่าเนียน ๆ สำหรับ TH Sarabun */
+}
+
+/* ย่อหน้า “ด้วย …” ให้หายเสี่ยงเกยเวลา scale ลง */
+#pdf-section .form-row[style*="text-indent"] {
+  line-height: 1.6 !important;  /* เดิม 2.0 ก็ได้ แต่ 1.6 พอดีพื้นที่กว่า */
+}
+
 </style>
+
+<style>
+@font-face{
+  font-family: 'THSarabunNew';
+  src: url('/fonts/THSarabunNew.woff2') format('woff2'),
+       url('/fonts/THSarabunNew.woff') format('woff');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face{
+  font-family: 'THSarabunNew';
+  src: url('/fonts/THSarabunNew-Italic.woff2') format('woff2'),
+       url('/fonts/THSarabunNew-Italic.woff') format('woff');
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face{
+  font-family: 'THSarabunNew';
+  src: url('/fonts/THSarabunNew-Bold.woff2') format('woff2'),
+       url('/fonts/THSarabunNew-Bold.woff') format('woff');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face{
+  font-family: 'THSarabunNew';
+  src: url('/fonts/THSarabunNew-BoldItalic.woff2') format('woff2'),
+       url('/fonts/THSarabunNew-BoldItalic.woff') format('woff');
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+}
+
+/* === Uniform line spacing for Section 1 → Notes === */
+#uniform-lines {
+  /* ปรับระยะห่างระหว่างบรรทัดที่นี่ (8–12px แล้วแต่ชอบ) */
+  --line-gap: 10px;
+  line-height: 1.35; /* ให้เข้ากับ TH Sarabun ที่ตั้งไว้ */
+}
+
+/* ให้ทุกบรรทัดหลักในช่วงนี้มีช่องไฟเท่ากัน */
+#uniform-lines .form-row,
+#uniform-lines .block-row,
+#uniform-lines .util-wrap,
+#uniform-lines .note-line {
+  margin-top: var(--line-gap) !important;
+  margin-bottom: 0 !important;
+}
+
+/* บรรทัดแรกของช่วง ไม่ต้องมีช่องไฟบน */
+#uniform-lines .form-row.bold:first-of-type {
+  margin-top: 0 !important;
+}
+
+/* รักษาระยะร่นซ้ายเดิมของบล็อกย่อย */
+#uniform-lines .block-row[style*="margin-left: 80px"] {
+  margin-left: 80px !important;
+}
+
+/* ตารางยูทิลิตีให้สูงคงที่ทุกแถว เหมือน “บรรทัด” หนึ่งบรรทัด */
+#uniform-lines .util-table {
+  margin-top: var(--line-gap) !important;
+}
+#uniform-lines .util-table td {
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  height: 26px !important;
+  vertical-align: middle;
+}
+
+/* กันช่องไฟหนาไปจากคลาสเก่า (เช่น mt-30/mt-15) */
+#uniform-lines .mt-30,
+#uniform-lines .mt-15 {
+  margin-top: var(--line-gap) !important;
+}
+
+/* หัวข้อหนาให้ความสูงบรรทัดเท่ากัน */
+#uniform-lines .bold { line-height: 1.35; }
+
+</style>
+
 
 <style>
 @import '../css/style.css';

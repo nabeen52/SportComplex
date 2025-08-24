@@ -544,6 +544,26 @@ onUnmounted(() => clearInterval(polling))
   white-space: nowrap;
 }
 
+/* สำหรับจอมือถือ */
+@media (max-width: 768px) {
+  .profile-container {
+    padding: 1rem 15px;  /* ลดระยะห่างด้านข้าง */
+  }
+
+  .proinfo {
+    width: 100%;         /* ให้กว้างเต็ม container */
+    max-width: 100%;     /* เอาขีดจำกัดออก */
+    padding: 20px;       /* padding ด้านในพอดี */
+  }
+
+  .logout-container {
+    margin: 10px 15px 20px 0; /* ระยะขอบขวา = 15px เหมือน .profile-container */
+    display: flex;
+    justify-content: flex-end; /* ชิดขวา */
+  }
+}
+
+
 
 </style>
 

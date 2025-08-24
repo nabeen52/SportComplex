@@ -71,6 +71,13 @@ const transporter = nodemailer.createTransport({
     }
 });
 
+const returnsDir = path.join(__dirname, 'uploads', 'returns');
+fs.mkdirSync(returnsDir, { recursive: true });
+
+const uploadReturn = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 10 * 1024 * 1024 } // 10MB
+});
 
 const uploadDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadDir)) {
@@ -1557,11 +1564,35 @@ app.patch('/api/history/:id/return', async (req, res) => {
 
 
 
-app.patch('/api/history/:id/request-return', async (req, res) => {
+app.patch('/api/history/:id/request-return', uploadReturn.single('attachment'), async (req, res) => {
     try {
         const oldRecord = await History.findById(req.params.id);
-        if (!oldRecord) return res.status(404).send({ message: 'Not found' });
+        if (!oldRecord) return res.status(404).json({ message: 'Not found' });
 
+        // ---- ดึงไฟล์จาก multipart หรือ base64 เดิม ----
+        let buffer, ext = 'jpg', mimeType = 'image/jpeg';
+
+        if (req.file) {
+            buffer = req.file.buffer;
+            mimeType = req.file.mimetype || 'image/jpeg';
+            ext = mime.extension(mimeType) || 'jpg';
+        } else if (req.body && req.body.attachment &&
+            /^data:image\/(png|jpe?g);base64,/i.test(req.body.attachment)) {
+            const m = req.body.attachment.match(/^data:image\/(png|jpe?g);base64,/i);
+            ext = (m && m[1] === 'jpeg') ? 'jpg' : (m && m[1]) || 'jpg';
+            mimeType = `image/${ext === 'jpg' ? 'jpeg' : ext}`;
+            buffer = Buffer.from(req.body.attachment.split(',')[1], 'base64');
+        } else {
+            return res.status(400).json({ error: 'No attachment provided' });
+        }
+
+        // ---- บันทึกไฟล์ลง /uploads/returns ----
+        const fname = `return_${oldRecord.booking_id || oldRecord._id}_${Date.now()}.${ext}`;
+        const fpath = path.join(returnsDir, fname);
+        await fs.promises.writeFile(fpath, buffer);
+        const fileUrl = `${req.protocol}://${req.get('host')}/uploads/returns/${fname}`;
+
+        // ---- สร้างรายการ return-pending (เหมือน logic เดิม แต่แนบเป็น URL) ----
         const returnRequest = new History({
             user_id: oldRecord.user_id,
             name: oldRecord.name,
@@ -1569,45 +1600,42 @@ app.patch('/api/history/:id/request-return', async (req, res) => {
             quantity: oldRecord.quantity,
             date: new Date(),
             status: 'return-pending',
-            attachment: req.body.attachment || null,
-            fileName: req.body.fileName || null,
-            fileType: req.body.fileType || null,
-            booking_id: req.body.booking_id || oldRecord.booking_id || null,
-            returnPhoto: req.body.attachment || null,
+            attachment: fileUrl,                // ถ้า schema เป็น array ให้เปลี่ยนเป็น [fileUrl]
+            fileName: fname,
+            fileType: mimeType,
+            booking_id: oldRecord.booking_id || null,
+            returnPhoto: fileUrl,
             since: oldRecord.since || '',
             uptodate: oldRecord.uptodate || '',
-            // ✅ เก็บผู้อนุมัติเดิมไว้ด้วย
             approvedBy: oldRecord.approvedBy || '',
             approvedById: oldRecord.approvedById || ''
         });
         await returnRequest.save();
 
-        // ==== แจ้งเตือนคน approve (เพิ่มชื่อผู้อนุมัติในอีเมล) ====
+        // ---- แจ้งคนอนุมัติเดิมเหมือนเดิม ----
         try {
             const approverId = oldRecord.approvedById;
-            let borrowerName = "";
             const borrower = await User.findOne({ user_id: oldRecord.user_id });
-            if (borrower) borrowerName = borrower.name || borrower.email || borrower.user_id;
-
             if (approverId) {
                 await notifyApproverReturnPending({
-                    approverId: approverId,
-                    approverName: oldRecord.approvedBy || '', // ✅ ส่งชื่อผู้อนุมัติ
-                    userName: borrowerName,
+                    approverId,
+                    userName: borrower?.name || borrower?.email || borrower?.user_id || '',
                     equipment: oldRecord.name,
                     quantity: oldRecord.quantity,
-                    booking_id: oldRecord.booking_id || ""
+                    booking_id: oldRecord.booking_id || ''
                 });
             }
         } catch (mailErr) {
             console.error('[Send return-pending notify mail error]', mailErr.message);
         }
 
-        res.send(returnRequest);
+        return res.json({ success: true, id: returnRequest._id, attachment: fileUrl });
     } catch (err) {
-        res.status(500).send({ message: err.message });
+        console.error('request-return error:', err);
+        res.status(500).json({ error: 'Server error' });
     }
 });
+
 
 
 

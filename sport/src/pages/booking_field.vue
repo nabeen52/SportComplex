@@ -1,5 +1,5 @@
 <template>
-  <div class="layout">
+  <div class="layout booking-field-page">
     <!-- Sidebar ทางซ้าย -->
     <aside class="sidebar" :class="{ closed: isSidebarClosed }">
       <div class="sidebar-header">
@@ -22,18 +22,12 @@
       </nav>
     </aside>
 
-
-<!-- <div v-if="isSidebarOpen" class="sidebar-mask" @click="isSidebarOpen = false"></div> -->
-
-<div
-  v-if="!isSidebarClosed"
-  class="sidebar-overlay"
-  @click="toggleSidebar"
-></div>
-
-
-
-
+    <!-- Overlay ปิด sidebar บนมือถือ -->
+    <div
+      v-if="!isSidebarClosed"
+      class="sidebar-overlay"
+      @click="toggleSidebar"
+    ></div>
 
     <!-- Content ทางขวา -->
     <div class="main">
@@ -42,39 +36,45 @@
         <div class="topbar-actions">
           <div>
             <div
-      v-if="showNotifications"
-      class="notification-backdrop"
-      @click="closeNotifications"
-    ></div>
+              v-if="showNotifications"
+              class="notification-backdrop"
+              @click="closeNotifications"
+            ></div>
+
             <button class="notification-btn" @click="toggleNotifications">
               <i class="pi pi-bell"></i>
               <span v-if="unreadCount > 0" class="badge">{{ unreadCount }}</span>
             </button>
-            <div v-if="showNotifications" class="notification-dropdown">
-  <ul>
-    <li
-      v-for="(noti, idx) in notifications.slice(0, 10)"  
-      :key="noti.id || idx"
-      :class="['notification-item', noti.type || '', { unread: idx === 0 }]"
-    >
-      {{ noti.message }}
-    </li>
-    <li v-if="notifications.length === 0" class="no-noti">ไม่มีแจ้งเตือน</li>
-  </ul>
-</div>
 
+            <div v-if="showNotifications" class="notification-dropdown">
+              <ul>
+                <li
+                  v-for="(noti, idx) in notifications.slice(0, 10)"
+                  :key="noti.id || idx"
+                  :class="['notification-item', noti.type || '', { unread: idx === 0 }]"
+                >
+                  {{ noti.message }}
+                </li>
+                <li v-if="notifications.length === 0" class="no-noti">ไม่มีแจ้งเตือน</li>
+              </ul>
+            </div>
           </div>
+
           <router-link to="/cart" class="cart-link">
             <i class="pi pi-shopping-cart"></i>
             <span v-if="products.length > 0" class="badge">{{ products.length }}</span>
           </router-link>
-          <router-link to="/profile"><i class="pi pi-user"></i></router-link>
+
+          <router-link to="/profile">
+            <i class="pi pi-user"></i>
+          </router-link>
         </div>
       </header>
 
       <section class="content">
-        <!-- แถบประกาศ แบบเลื่อนลง -->
-        <!-- <transition name="slide-down">
+        <!-- แถบประกาศ (คอมเมนต์ไว้, เปิดใช้ได้ตามต้องการ) -->
+        <!--
+        <transition name="slide-down">
           <div class="announcement-bar" v-if="showAnnouncementBar">
             <i class="pi pi-megaphone announcement-icon"></i>
             <div class="announcement-bar-text">{{ announcement }}</div>
@@ -82,7 +82,8 @@
               <i class="pi pi-times" style="color: red;"></i>
             </button>
           </div>
-        </transition> -->
+        </transition>
+        -->
 
         <p style="padding-top: 5px;"></p>
 
@@ -91,16 +92,19 @@
           <div class="grid">
             <!-- แสดงรายการสนาม -->
             <div class="card" v-for="field in fields" :key="field._id">
-  <img :src="field.image" :alt="field.name" class="field-image" />
-  <div class="card-content">
-    <h4>{{ field.name }}</h4>
-  </div>
-  <button class="book-btn" :class="{ disabled: !field.visible }" :disabled="!field.visible"
-    @click="goToBooking(field)">
-    Book
-  </button>
-</div>
-
+              <img :src="field.image" :alt="field.name" class="field-image" />
+              <div class="card-content">
+                <h4>{{ field.name }}</h4>
+              </div>
+              <button
+                class="book-btn"
+                :class="{ disabled: !field.visible }"
+                :disabled="!field.visible"
+                @click="goToBooking(field)"
+              >
+                Book
+              </button>
+            </div>
           </div>
         </div>
       </section>
@@ -121,6 +125,7 @@
     </div>
   </div>
 </template>
+
 
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
@@ -599,6 +604,29 @@ function goToBooking(field) {
   z-index: 2999;
   background: rgba(0,0,0,0.2);
 }
+
+/* ทำให้หน้าเป็นคอลัมน์ แล้ว footer อยู่ใน flow ปกติ */
+.booking-field-page .main {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh; /* ให้คอนเทนต์ดันเต็มหน้าจอ */
+}
+
+/* ให้คอนเทนต์เป็นตัวขยายพื้นที่ แทนที่จะเป็นตัว scroll แยก */
+.booking-field-page .content {
+  flex: 1;
+  overflow: visible !important; /* ตัด overflow-y:auto ที่ทำให้มี scroll ภายใน */
+}
+
+/* ยกเลิกการลอย/ติดขอบที่อาจมากับ global CSS */
+.booking-field-page .foot {
+  position: static !important; /* ยกเลิก fixed/sticky */
+  inset: auto !important;      /* รีเซ็ต top/right/bottom/left ถ้ามี */
+  width: 100%;
+  margin-top: 16px;            /* เว้นให้หายใจนิดนึง */
+  z-index: auto !important;
+}
+
 
 
 </style>

@@ -91,7 +91,8 @@
                   <td>
                     <!-- แสดงเวลา ถ้ามีข้อมูล -->
                     <template v-if="group.items[0].startTime && group.items[0].endTime">
-                    {{ group.items[0].startTime }} - {{ group.items[0].endTime }}
+                    {{ formatTimeRangeTH(group.items[0].startTime, group.items[0].endTime) }}
+
                   </template>
                     <template v-else>
                       -
@@ -190,6 +191,53 @@ export default {
     }
   },
   methods: {
+
+    // แปลง string เป็น Date แบบปลอดภัย (กัน timezone เพี้ยนกรณี 'YYYY-MM-DD')
+parseToDate(d) {
+  if (!d) return null;
+  const s = String(d).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+    const [y, m, dd] = s.split('-').map(Number);
+    return new Date(y, m - 1, dd);
+  }
+  const dt = new Date(s);
+  return isNaN(dt) ? null : dt;
+},
+
+
+// เวลาแบบไทยต่อท้าย "น."
+formatTimeTH(t) {
+  if (!t) return '-';
+  const s = String(t).trim().replace(/\s*น\.?$/i, ''); // ตัด "น." ที่อาจติดมาด้วย
+  // รูปแบบ H:mm, HH:mm, หรือมีวินาที
+  const m = s.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+  if (m) {
+    const hh = m[1].padStart(2, '0'), mm = m[2];
+    return `${hh}:${mm} น.`;
+  }
+  // ลอง parse เป็น Date เวลา
+  const dt = new Date(`1970-01-01T${s}`);
+  if (!isNaN(dt)) {
+    const hhmm = dt.toLocaleTimeString('th-TH', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    });
+    return `${hhmm} น.`;
+  }
+  return `${s} น.`; // กรณี string แปลก ๆ
+},
+
+// ช่วงเวลาแบบไทย
+formatTimeRangeTH(a, b) {
+  const A = this.formatTimeTH(a), B = this.formatTimeTH(b);
+  if (A === '-' && B === '-') return '-';
+  if (A !== '-' && B !== '-') return `${A} - ${B}`;
+  return A !== '-' ? A : B;
+},
+
+
+
 
     normalizePdfUrl(raw) {
   if (!raw) return null;
@@ -356,6 +404,9 @@ async downloadBookingPdf(target) {
         startTime: h.startTime || "",
         endTime: h.endTime || "",
         username_form: h.username_form || "-",
+        proxyStudentName: h.proxyStudentName || h.proxy_name || "",
+        proxyStudentId:   h.proxyStudentId   || h.proxy_id   || "",
+        id_form: h.id_form || "-",
       }));
 
       // 3) group ข้อมูล
@@ -388,76 +439,120 @@ async downloadBookingPdf(target) {
     }
   },
 
-  async approveGroup(group) {
+async approveGroup(group) {
+  const groupType = (group.type || group.items?.[0]?.type || '').toLowerCase();
+  const isEquipment = groupType === 'equipment';
+
   const result = await Swal.fire({
-    title: 'Approve รายการนี้ทั้งหมด?',
-    text: 'ยืนยันการอนุมัติสำหรับรายการนี้',
+    title: isEquipment ? 'อนุมัติอุปกรณ์ทั้งหมด?' : 'Approve รายการนี้ทั้งหมด?',
+    text: isEquipment ? 'ยืนยันการอนุมัติอุปกรณ์สำหรับรายการนี้' : 'ยืนยันการอนุมัติสำหรับรายการนี้',
     icon: 'question',
     showCancelButton: true,
-    confirmButtonText: 'อนุมัติ',
+    confirmButtonText: isEquipment ? 'อนุมัติอุปกรณ์' : 'อนุมัติ',
     cancelButtonText: 'ยกเลิก',
     confirmButtonColor: '#0cad00',
     cancelButtonColor: '#999',
-    customClass: {
-    htmlContainer: 'swal-center-text',
-    title: 'swal-center-title'
-  }
+    customClass: { htmlContainer: 'swal-center-text', title: 'swal-center-title' }
   });
   if (!result.isConfirmed) return;
 
-  const adminUserId = localStorage.getItem('user_id');
+  const adminUserId = localStorage.getItem('user_id') || '';
   const approveDate = new Date().toISOString();
 
-  // แสดงโหลด
   Swal.fire({ title: 'กำลังดำเนินการ...', didOpen: () => Swal.showLoading(), allowOutsideClick: false, allowEscapeKey: false });
 
   try {
-    // ยิง patch ทีละรายการใน group ให้ตรง endpoint
-    await Promise.all(
-      group.items.map(item => {
-        const isField = (item.type || group.type) === 'field';
-        const url = isField
-          ? `${API_BASE}/api/history/${item.id}/approve_field`
-          : `${API_BASE}/api/history/${item.id}/approve_equipment`;
-        const data = isField
-          ? { admin_id: adminUserId, approvedAt: approveDate }
-          : { staff_id: adminUserId, approvedAt: approveDate };
-        return axios.patch(url, data);
-      })
-    );
+    const calls = group.items.map(item => {
+  const isField = (item.type || group.type) === 'field';
+  const url = isField
+    ? `${API_BASE}/api/history/${item.id}/approve_field`
+    : `${API_BASE}/api/history/${item.id}/approve_equipment`;
 
-    // โหลดข้อมูลใหม่จากเซิร์ฟเวอร์ให้ตรงกับ DB เสมอ
-    await this.fetchAndGroup();
+  // 👇 ส่ง key ให้ถูกประเภท
+  const payload = isField
+    ? { admin_id: adminUserId, approvedAt: approveDate }
+    : { staff_id: adminUserId, approvedAt: approveDate };
 
-    Swal.fire('สำเร็จ', 'อนุมัติเรียบร้อยแล้ว', 'success');
-  } catch (err) {
-    console.error('approveGroup error:', err);
-    Swal.fire('ผิดพลาด', 'ไม่สามารถอนุมัติได้', 'error');
+  return axios.patch(url, payload)
+    .then(res => ({ ok: true, res, item }))
+    .catch(err => {
+      const code = err?.response?.status;
+      const msg  = (err?.response?.data?.message || '').toString();
+      if (code === 409 || /already|อนุมัติแล้ว|processed|not pending/i.test(msg)) {
+        return { ok: true, res: { data: 'skipped' }, item };
+      }
+      return { ok: false, err, item };
+    });
+});
+
+
+    const results = await Promise.all(calls);
+const ok   = results.filter(r => r.ok);
+const fail = results.filter(r => !r.ok);
+
+try { await this.fetchAndGroup(); } catch(e){}
+
+// ✅ ถ้ามีสำเร็จอย่างน้อย 1 รายการ ให้ถือว่าสำเร็จเลย
+if (ok.length > 0) {
+  Swal.fire('สำเร็จ', isEquipment ? 'อนุมัติอุปกรณ์เรียบร้อยแล้ว' : 'อนุมัติเรียบร้อยแล้ว', 'success');
+  // (ถ้าต้องการเก็บรายละเอียดรายการที่ล้มเหลวไว้ดูใน console)
+  if (fail.length) {
+    console.warn('บางรายการอนุมัติไม่สำเร็จ:', fail.map(f => ({
+      id: f.item?.id, name: f.item?.name,
+      status: f.err?.response?.status,
+      msg: f.err?.response?.data?.message || f.err?.message
+    })));
   }
-},
+} else {
+  const e = fail[0]?.err;
+  const status = e?.response?.status;
+  const msg = e?.response?.data?.message || e?.message || (isEquipment ? 'ไม่สามารถอนุมัติอุปกรณ์ได้' : 'ไม่สามารถอนุมัติได้');
+  Swal.fire('ผิดพลาด', `${msg}${status ? ` (รหัส ${status})` : ''}`, 'error');
+}
+  } catch (err) {
+    const status = err?.response?.status;
+    const msg = err?.response?.data?.message || err?.message || (isEquipment ? 'ไม่สามารถอนุมัติอุปกรณ์ได้' : 'ไม่สามารถอนุมัติได้');
+    console.error('approveGroup unexpected error:', err);
+    Swal.fire('ผิดพลาด', `${msg}${status ? ` (รหัส ${status})` : ''}`, 'error');
+  }
+}
+
+
+,
 
 
 async cancelGroup(group) {
   const result = await Swal.fire({
-  title: 'Cancel รายการนี้ทั้งหมด?',
-  text: 'ยืนยันการไม่อนุมัติสำหรับรายการนี้',
-  icon: 'warning',
-  showCancelButton: true,
-  confirmButtonText: 'ยืนยันไม่อนุมัติ',
-  cancelButtonText: 'กลับ',
-  confirmButtonColor: '#ff4d4f',
-  cancelButtonColor: '#999',
-  customClass: {
-    htmlContainer: 'swal-center-text',
-    title: 'swal-center-title'
-  }
-});
+    title: 'Cancel รายการนี้ทั้งหมด?',
+    text: 'ยืนยันการไม่อนุมัติสำหรับรายการนี้',
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonText: 'ยืนยันไม่อนุมัติ',
+    cancelButtonText: 'กลับ',
+    confirmButtonColor: '#ff4d4f',
+    cancelButtonColor: '#999',
+    customClass: {
+      htmlContainer: 'swal-center-text',
+      title: 'swal-center-title'
+    }
+  });
   if (!result.isConfirmed) return;
 
-  const adminId = localStorage.getItem('user_id');
+  // ✅ ดึงข้อมูลผู้ปฏิเสธ (ผู้ดูแลที่ล็อกอิน)
+  const adminId = localStorage.getItem('user_id') || '';
+  const adminName =
+    (localStorage.getItem('firstname') && localStorage.getItem('lastname'))
+      ? `${localStorage.getItem('firstname')} ${localStorage.getItem('lastname')}`
+      : (localStorage.getItem('name') || this.userMap?.[adminId] || adminId);
 
-  // แสดงโหลด
-  Swal.fire({ title: 'กำลังดำเนินการ...', didOpen: () => Swal.showLoading(), allowOutsideClick: false, allowEscapeKey: false });
+  const disapprovedAt = new Date().toISOString();
+
+  Swal.fire({
+    title: 'กำลังดำเนินการ...',
+    didOpen: () => Swal.showLoading(),
+    allowOutsideClick: false,
+    allowEscapeKey: false
+  });
 
   try {
     await Promise.all(
@@ -466,29 +561,49 @@ async cancelGroup(group) {
         const url = isField
           ? `${API_BASE}/api/history/${item.id}/disapprove_field`
           : `${API_BASE}/api/history/${item.id}/disapprove_equipment`;
-        return axios.patch(url, { admin_id: adminId });
+
+        // ⬇️ โหลด payload ให้ตรงตามประเภท
+        // - field: เดิมใช้ admin_id (ถ้าต้องการบันทึกชื่อด้วยก็ใส่เพิ่มได้ ไม่กระทบหลังบ้าน)
+        // - equipment: ตามที่ขอ → ส่ง disapprovedBy + disapprovedById (และใส่ staff_id เหมือนตอนอนุมัติ)
+        const payload = isField
+          ? {
+              admin_id: adminId,
+              disapprovedBy: adminName,      // (ไม่บังคับ ถ้าไม่ต้องการเก็บสำหรับ field สามารถลบสองบรรทัดนี้ได้)
+              disapprovedById: adminId,
+              disapprovedAt
+            }
+          : {
+              staff_id: adminId,
+              disapprovedBy: adminName,      // ✅ ต้องมีสำหรับ equipment
+              disapprovedById: adminId,      // ✅ ต้องมีสำหรับ equipment
+              disapprovedAt
+            };
+
+        return axios.patch(url, payload);
       })
     );
 
-    // โหลดข้อมูลใหม่จากเซิร์ฟเวอร์
     await this.fetchAndGroup();
-
-    Swal.fire('Cancelled', 'ยกเลิกรายการเรียบร้อยแล้ว', 'success');
+    Swal.fire('Cancelled', 'ยกเลิกรายการเรียบร้อยแล้ว', 'error');
   } catch (err) {
     console.error('cancelGroup error:', err);
     Swal.fire('ผิดพลาด', 'ไม่สามารถยกเลิกได้', 'error');
   }
 },
 
-    formatDate(dateInput) {
-      if (!dateInput || dateInput === "-") return '-';
-      const date = new Date(dateInput);
-      if (isNaN(date)) return '-';
-      const day = String(date.getDate()).padStart(2, '0');
-      const month = String(date.getMonth() + 1).padStart(2, '0');
-      const year = date.getFullYear();
-      return `${day}/${month}/${year}`;
-    },
+
+  // วันที่แบบไทย: วัน/เดือน/ปี พ.ศ. และใช้เลขอารบิก
+formatDate(dateInput) {
+  const d = this.parseToDate(dateInput);
+  if (!d) return '-';
+  return d.toLocaleDateString('th-TH-u-nu-latn', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  }); // เช่น 23/08/2568
+},
+
+
     toggleSidebar() {
       this.isSidebarClosed = !this.isSidebarClosed
     },
@@ -669,122 +784,292 @@ handleResize() {
   }
 },
 
+isSameDay(a, b) {
+  const A = this.parseToDate(a), B = this.parseToDate(b);
+  if (!A || !B) return true; // ถ้าไม่มีวันครบ ถือว่าไม่หลายวัน
+  return A.getFullYear() === B.getFullYear() &&
+         A.getMonth() === B.getMonth() &&
+         A.getDate() === B.getDate();
+},
+isMultiDayEquipment(item) {
+  if (!item || (item.type || '').toLowerCase() !== 'equipment') return false;
+  const A = this.parseToDate(item.since);
+  const B = this.parseToDate(item.uptodate);
+  if (!A || !B) return false;       // ต้องมีทั้ง since/uptodate ถึงนับหลายวัน
+  return !this.isSameDay(A, B);     // ต่างวัน => หลายวัน
+},
+
+
 
     
-   detailGroup(group) {
-  // helper: สร้าง 1 แถว (label/value) ให้ชิดซ้ายเท่ากันหมด
-  const row = (label, value) => `
-    <div style="display:flex; align-items:flex-start; margin-bottom:8px;">
-      <div style="width:160px; font-weight:700; text-align:left;">
-        ${label}
-      </div>
-      <div style="flex:1; text-align:left; padding-left:12px; word-break:break-word;">
-        ${value}
+ async detailGroup(group) {
+  const esc = (s) => String(s ?? '-')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;')
+    .replace(/'/g,'&#39;');
+
+  const tableWrap = (innerHtml, showPdf, showAttach) => `
+    <div class="swal-detail-wrap">
+      ${innerHtml}
+      <div class="swal-detail-actions">
+        ${showPdf ? `<button id="pdf-btn" type="button">ดูไฟล์ PDF</button>` : ``}
+        ${showAttach ? `<button id="attach-btn" type="button">ดูไฟล์แนบ</button>` : ``}
       </div>
     </div>
   `;
 
-  // helper: ครอบ container + ปุ่ม PDF + ปุ่มแนบไฟล์
-  const wrap = (rowsHtml, showPdf, showAttach) => `
-    <div style="text-align:left; padding-top:2px;">
-      ${rowsHtml}
-      <div style="text-align:center; margin-top:14px;">
-        ${showPdf ? `
-          <button id="pdf-btn"
-                  style="background:#213555;color:#fff;padding:8px 18px;border-radius:8px;border:none;cursor:pointer;margin-right:10px;">
-            ดูไฟล์ PDF
-          </button>` : ``}
-        ${showAttach ? `
-          <button id="attach-btn"
-                  style="background:#3a7ca5;color:#fff;padding:8px 18px;border-radius:8px;border:none;cursor:pointer;">
-            ดูไฟล์แนบ
-          </button>` : ``}
-      </div>
-    </div>
-  `;
+  const isSameDay = (a, b) => {
+    const A = this.parseToDate(a), B = this.parseToDate(b);
+    if (!A || !B) return true;
+    return A.getFullYear() === B.getFullYear() &&
+           A.getMonth() === B.getMonth() &&
+           A.getDate() === B.getDate();
+  };
+  const isMultiDayEquipment = (it) => {
+    if (String(it.type || group.type).toLowerCase() !== 'equipment') return false;
+    return !!it.since && !!it.uptodate && !isSameDay(it.since, it.uptodate);
+  };
 
   if (group.type === 'field') {
     const it = group.items[0] || {};
     const zone = (it.zone && it.zone !== '-' && it.zone !== '') ? it.zone : '-';
-    const requester = this.userMap[it.user_id] || it.requester || it.user_id || '-';
+    const requesterBase = this.userMap[it.user_id] || it.requester || it.user_id || '-';
+    const requester = it.username_form || requesterBase;
 
-    const rowsHtml =
-      row('ชื่อสนาม:', it.name || '-') +
-      row('โซน:', zone) +
-      row('ชื่อผู้ขอใช้:',  it.username_form || requester) +
-      row('วันที่ขอใช้:', it.date ? this.formatDate(it.date) : '-') +
-      row('ช่วงเวลาที่ใช้:',
-          `${it.since ? this.formatDate(it.since) : '-'} - ${it.uptodate ? this.formatDate(it.uptodate) : '-'}`) +
-      row('ช่วงเวลา (ชั่วโมง):',
-          (it.startTime && it.endTime) ? `${it.startTime} - ${it.endTime}` : '-');
+    const table = `
+      <table class="swal-detail-table">
+        <tbody>
+          <tr><th>ชื่อสนาม</th><td>${esc(it.name || '-')}</td></tr>
+          <tr><th>โซน</th><td>${esc(zone)}</td></tr>
+          <tr><th>ชื่อผู้ขอใช้</th><td>${esc(requester)}</td></tr>
+          <tr><th>รหัสนักศึกษา/พนักงาน</th><td>${esc(it.id_form || '-')}</td></tr>
+          <!-- แถวใหม่ -->
+          <tr><th>จองแทนผู้ใช้</th><td>${esc(it.proxyStudentName || '-')}</td></tr>
+          <tr><th>รหัสนักศึกษา/พนักงาน (ของผู้ที่ถูกจองแทน)</th><td>${esc(it.proxyStudentId || '-')}</td></tr>
+          <!-- /แถวใหม่ -->
+          <tr><th>วันที่ขอใช้</th>
+  <td><span class="nowrap">${it.date ? esc(this.formatDate(it.date)) : '-'}</span></td>
+</tr>
+<tr>
+  <th>ช่วงวันที่ใช้งาน</th>
+  <td>
+    <span class="nowrap">
+      ${esc(it.since ? this.formatDate(it.since) : '-')} - ${esc(it.uptodate ? this.formatDate(it.uptodate) : '-')}
+    </span>
+  </td>
+</tr>
+<tr><th>ช่วงเวลา</th>
+  <td><span class="nowrap">${esc(this.formatTimeRangeTH(it.startTime, it.endTime))}</span></td>
+</tr>
+
+        </tbody>
+      </table>
+    `;
 
     Swal.fire({
       title: 'รายละเอียดสนาม',
-      html: wrap(rowsHtml, true, true),
+      html: tableWrap(table, true, true),
       confirmButtonText: 'ปิด',
       confirmButtonColor: '#3085d6',
+      customClass: { popup: 'swal-wide' },
       didOpen: () => {
         const btnPdf = document.getElementById('pdf-btn');
-        if (btnPdf) btnPdf.addEventListener('click', () => this.downloadBookingPdf(group));
-
+        if (btnPdf) btnPdf.addEventListener('click', () => this.openBookingPdf(group));
         const btnAttach = document.getElementById('attach-btn');
         if (btnAttach) btnAttach.addEventListener('click', () => this.viewAttachment(group));
       }
     });
 
   } else {
-    // equipment (หลายชิ้น)
-    let rowsHtml = '';
-    group.items.forEach((item, idx) => {
-      const requester = this.userMap[item.user_id] || item.requester || item.user_id || '-';
-      rowsHtml += `
-        <div style="padding:8px 0; border-bottom:1px dashed #c7c7c7;">
-          ${row('อุปกรณ์ที่ ' + (idx + 1) + ':', item.name || '-')}
-          ${row('จำนวน:', item.quantity || '-')}
-          ${row('ชื่อผู้ขอใช้:', item.username_form || requester )}
-          ${row('วันที่ขอยืม:', item.date ? this.formatDate(item.date) : '-')}
-          ${row('ช่วงเวลาที่ใช้:',
-                (item.since ? this.formatDate(item.since) : '-') + ' - ' + (item.uptodate ? this.formatDate(item.uptodate) : '-') )}
-        </div>
-      `;
-    });
+  const esc = (s) => String(s ?? '-')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;')
+    .replace(/'/g,'&#39;');
 
-    Swal.fire({
-      title: 'รายละเอียดอุปกรณ์',
-      html: wrap(rowsHtml, true, true),
-      confirmButtonText: 'ปิด',
-      confirmButtonColor: '#3085d6',
-      didOpen: () => {
-        const btnPdf = document.getElementById('pdf-btn');
-        if (btnPdf) btnPdf.addEventListener('click', () => this.downloadBookingPdf(group));
+  const tableWrap = (innerHtml, showPdf, showAttach) => `
+    <div class="swal-detail-wrap">
+      ${innerHtml}
+      <div class="swal-detail-actions">
+        ${showPdf ? `<button id="pdf-btn" type="button">ดูไฟล์ PDF</button>` : ``}
+        ${showAttach ? `<button id="attach-btn" type="button">ดูไฟล์แนบ</button>` : ``}
+      </div>
+    </div>
+  `;
 
-        const btnAttach = document.getElementById('attach-btn');
-        if (btnAttach) btnAttach.addEventListener('click', () => this.viewAttachment(group));
-      }
-    });
+  const bookingId = group.booking_id || group.items?.[0]?.booking_id || null;
+
+  // รวมจำนวนต่อ "ชื่ออุปกรณ์"
+  const merged = new Map();
+  (group.items || []).forEach(it => {
+    const name = it?.name || '-';
+    const qty  = Number(it?.quantity ?? 0) || 0;
+    merged.set(name, (merged.get(name) || 0) + qty);
+  });
+
+  // ค่าแสดงผล
+  let requester   = '-'; // ผู้ขอใช้ (จาก username_form)
+  let requesterId = '-'; // ไอดีผู้ขอใช้ (จาก id_form)
+  let dateBorrow  = '-';
+  let dateRange   = '-';
+
+  if (bookingId) {
+    try {
+      const res = await axios.get(`${API_BASE}/api/history`, { params: { booking_id: bookingId } });
+      let list = Array.isArray(res.data) ? res.data : [];
+      list = list
+        .filter(h => String(h?.booking_id || '') === String(bookingId))
+        .filter(h => (h?.type || '').toLowerCase() === 'equipment')
+        .sort((a,b) => new Date(b.updatedAt || b.createdAt || b.date || 0) - new Date(a.updatedAt || a.createdAt || a.date || 0));
+
+      // ผู้ขอใช้
+      const recUser = list.find(h => h?.username_form && String(h.username_form).trim());
+      if (recUser) requester = String(recUser.username_form).trim();
+
+      // รหัสนักศึกษา/พนักงาน
+      const recId = list.find(h => h?.id_form && String(h.id_form).trim());
+      if (recId) requesterId = String(recId.id_form).trim();
+
+      // วันที่ขอยืม + ช่วงวันที่ใช้
+      // วันที่ขอยืม + ช่วงวันที่ใช้  -> ใช้ createdAt เป็นหลัก
+const recDate = list.find(h => h?.createdAt || h?.date || h?.since || h?.uptodate) || list[0];
+if (recDate) {
+  // วันที่ขอยืมจาก createdAt (ถ้าไม่มี ค่อย fallback ไป date)
+  dateBorrow = recDate?.createdAt
+    ? this.formatDate(recDate.createdAt)
+    : (recDate?.date ? this.formatDate(recDate.date) : '-');
+
+  const since = recDate?.since ? this.formatDate(recDate.since) : '-';
+  const upto  = recDate?.uptodate ? this.formatDate(recDate.uptodate) : '-';
+  dateRange   = `${since} - ${upto}`;
+}
+
+    } catch (e) {
+      // ใช้ค่า default ถ้าดึงไม่สำเร็จ
+    }
   }
+
+  const rowsData = Array.from(merged.entries()).map(([name, qty], idx) => ({
+    idx: idx + 1,
+    name,
+    quantity: qty,
+    requester,
+    requesterId,
+    dateBorrow,
+    dateRange
+  }));
+
+  const rowsHtml = rowsData.map(r => `
+    <tr>
+      <td class="c">${r.idx}</td>
+      <td>${esc(r.name)}</td>
+      <td class="c">${esc(r.quantity)}</td>
+      <td class="c col-id nowrap">${esc(r.requesterId)}</td>
+      <td class="col-requester">${esc(r.requester)}</td>
+      <td class="c nowrap">${esc(r.dateBorrow)}</td>
+      <td class="c nowrap">${esc(r.dateRange)}</td>
+    </tr>
+  `).join('');
+
+  const table = `
+    <table class="swal-detail-table items">
+      <thead>
+        <tr>
+          <th style="width:64px">ลำดับ</th>
+          <th>รายการ</th>
+          <th style="width:86px">จำนวน</th>
+          <th class="col-id">รหัสนักศึกษา/พนักงาน</th>
+          <th class="col-requester">ผู้ขอใช้</th>
+          <th style="width:120px">วันที่ทำรายการ</th>
+          <th style="min-width:220px">ช่วงเวลาที่ใช้</th>
+        </tr>
+      </thead>
+      <tbody>${rowsHtml}</tbody>
+    </table>
+  `;
+
+  Swal.fire({
+    title: 'รายละเอียดอุปกรณ์',
+    html: tableWrap(table, true, true),
+    confirmButtonText: 'ปิด',
+    confirmButtonColor: '#3085d6',
+    width: 1100,
+    customClass: { popup: 'swal-equipment' },
+    didOpen: () => {
+      const btnPdf = document.getElementById('pdf-btn');
+      if (btnPdf) btnPdf.addEventListener('click', () => this.downloadBookingPdf(group));
+      const btnAttach = document.getElementById('attach-btn');
+      if (btnAttach) btnAttach.addEventListener('click', () => this.viewAttachment(group));
+    }
+  });
+}
+
 },
 
 
 
+// --- ใหม่: เปิดไฟล์ PDF ในแท็บใหม่ ---
+async openBookingPdf(target) {
+  const bookingId  = typeof target === 'string' ? target : (target?.booking_id || '');
+  const typeFilter = typeof target === 'object' ? (target?.type || '') : '';
+
+  if (!bookingId) {
+    Swal.fire('ผิดพลาด','ไม่พบ booking_id สำหรับเปิดไฟล์ PDF','error');
+    return;
+  }
+
+  try {
+    // ดึง history แล้วคัด URL ของไฟล์ (เหมือนเดิม)
+    const resHist = await axios.get(`${API_BASE}/api/history`, { params: { booking_id: bookingId } });
+    let list = Array.isArray(resHist.data) ? resHist.data : [];
+    list = list.filter(h => String(h?.booking_id || '') === String(bookingId));
+    if (typeFilter) list = list.filter(h => (h?.type || '').toLowerCase() === typeFilter.toLowerCase());
+    list.sort((a,b) => new Date(b.updatedAt || b.createdAt || b.date || 0) - new Date(a.updatedAt || a.createdAt || a.date || 0));
+
+    const picked = this.pickPdfUrl(list);
+    const rawUrl = this.normalizePdfUrl(picked);
+
+    if (!rawUrl) {
+      Swal.fire('ผิดพลาด','ไม่พบ URL ของไฟล์ PDF สำหรับรายการนี้','error');
+      return;
+    }
+
+    // เปิดแท็บใหม่ (ไม่ดาวน์โหลด)
+    let opened = window.open(rawUrl, '_blank', 'noopener');
+    if (!opened) {
+      // เผื่อโดนบล็อก/โปรโตคอลไม่แมตช์ ลองสลับ http/https อีกที
+      if (/^https:\/\//i.test(rawUrl)) {
+        opened = window.open('http://' + rawUrl.slice('https://'.length), '_blank', 'noopener');
+      } else if (/^http:\/\//i.test(rawUrl)) {
+        opened = window.open('https://' + rawUrl.slice('http://'.length), '_blank', 'noopener');
+      }
+    }
+    
+  } catch (err) {
+    console.error('openBookingPdf error:', err);
+    Swal.fire('ผิดพลาด','ไม่สามารถเปิดไฟล์ได้','error');
+  }
+},
+
      // ==== PDF DOWNLOAD BUTTON ====
   async  exportPdf(item) {
   // --------- ฟังก์ชันย่อยสำหรับ field ---------
-  function formatDate(date) {
-    if (!date) return '-';
-    if (typeof date === 'string' && date.includes('T')) {
-      const d = new Date(date);
-      if (!isNaN(d)) {
-        return `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`;
-      }
-      return date.split('T')[0].split('-').reverse().join('/');
-    }
-    if (typeof date === 'string' && date.match(/^\d{4}-\d{2}-\d{2}$/)) {
-      const [y, m, d] = date.split('-');
-      return `${d}/${m}/${y}`;
-    }
-    return date;
+  function toSafeDate(d) {
+  if (!d) return null;
+  const s = String(d).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+    const [y,m,dd] = s.split('-').map(Number);
+    return new Date(y, m - 1, dd); // กัน timezone เพี้ยน
   }
+  const dt = new Date(s);
+  return isNaN(dt) ? null : dt;
+}
+function formatDate(date) {
+  const d = toSafeDate(date);
+  if (!d) return '-';
+  return d.toLocaleDateString('th-TH-u-nu-latn', {
+    day: '2-digit', month: '2-digit', year: 'numeric'
+  });
+}
   function formatTime(time) {
     if (!time) return '-';
     if (typeof time === 'string' && time.match(/^\d{2}:\d{2}/)) return time;
@@ -1264,6 +1549,8 @@ doc.text(`โทร ${data.tel || '-'}`, 430, 100);
         date: h.date || "-",
         startTime: h.startTime || "",
         endTime: h.endTime || "",
+        proxyStudentName: h.proxyStudentName || h.proxy_name || "",
+        proxyStudentId:   h.proxyStudentId   || h.proxy_id   || "",
       }));
 
       // 2.1 group: fields แต่ละรายการ, equipment ตาม booking_id
@@ -1539,5 +1826,190 @@ doc.text(`โทร ${data.tel || '-'}`, 430, 100);
 
 .swal-center-text { text-align: center !important; }
 .swal-center-title { text-align: center !important; }
+
+/* ===== SweetAlert detail tables ===== */
+.swal2-popup .swal-detail-wrap{
+   max-width: min(1240px, 96vw);
+  overflow-x: auto; /* เผื่อคอลัมน์กว้าง */             /* ถ้ากว้างเกิน ให้เลื่อนแนวนอนได้ */
+}
+
+.swal2-popup .swal-detail-actions{
+  text-align:center;
+  margin-top: 16px;
+}
+
+.swal2-popup #pdf-btn,
+.swal2-popup #attach-btn{
+  background:#213555;
+  color:#fff;
+  padding:8px 18px;
+  border-radius:8px;
+  border:none;
+  cursor:pointer;
+  margin:0 6px;
+}
+.swal2-popup #attach-btn{ background:#3a7ca5; }
+
+/* ตาราง 2 คอลัมน์ (label/value) */
+.swal2-popup .swal-detail-table{
+  width: min(1200px, 96vw);
+  border-collapse: collapse;
+  margin: 0 auto;
+  font-size: 0.98rem;
+}
+.swal2-popup .swal-detail-table tbody th{
+  text-align: left;
+  white-space: nowrap;
+  background: #f7f9fc;
+  border:1px solid #e6e9f2;
+  padding:8px 12px;
+  width: 180px;
+  font-weight: 700;
+  color:#1f2a44;
+}
+.swal2-popup .swal-detail-table tbody td{
+  border:1px solid #e6e9f2;
+  padding:8px 12px;
+  color:#1f2a44;
+  word-break: break-word;
+}
+
+/* ตารางรายการอุปกรณ์ (มี thead) */
+.swal2-popup .swal-detail-table.items thead th{
+  background:#213555;
+  color:#fff;
+  padding:8px 10px;
+  border:1px solid #e6e9f2;
+  text-align:center;
+  font-weight:700;
+}
+.swal2-popup .swal-detail-table.items tbody td{
+  border:1px solid #e6e9f2;
+  padding:8px 10px;
+}
+.swal2-popup .swal-detail-table.items tbody td.c{
+  text-align:center;
+}
+
+.swal2-popup .swal-detail-table.items thead th:nth-child(ุ6),
+.swal2-popup .swal-detail-table.items tbody td:nth-child(6){
+  white-space: nowrap;
+  word-break: normal;            /* override จากกฎทั่วไป */
+  /* ถ้าอยากตัดเป็น … แทนการเลื่อนแนวนอน ให้เปิด 3 บรรทัดนี้แทน
+  max-width: 360px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  */
+}
+
+.swal2-popup .swal-detail-table.items thead th:nth-child(1){ width: 72px; }
+.swal2-popup .swal-detail-table.items thead th:nth-child(3){ width: 90px; }
+.swal2-popup .swal-detail-table.items thead th:nth-child(5){ width: 130px; }
+
+.swal2-popup.swal-wide{
+  width: auto !important;
+   max-width: min(1280px, 98vw) !important;  /* ปรับค่าตามต้องการ */
+  padding: 28px 26px !important;
+}
+
+@media (max-width: 600px){
+  .swal2-popup.swal-wide{ max-width: 96vw !important; }
+  .swal2-popup .swal-detail-table,
+  .swal2-popup .swal-detail-table.items{ width: 94vw; }
+}
+
+/* --- Reduce right space of SweetAlert detail dialog --- */
+@media (min-width: 601px){
+  /* บีบความกว้างกล่อง SweetAlert */
+  .swal2-popup.swal-wide{
+    max-width: 700px !important;         /* เดิม ~1280px */
+    padding: 24px 18px !important;        /* ลด padding ซ้าย/ขวา */
+  }
+
+  /* บีบความกว้าง wrapper + ตารางภายในให้พอดีกับกล่อง */
+  .swal2-popup .swal-detail-wrap{ 
+    max-width: 920px;                     /* เดิม 1240px */
+  }
+  .swal2-popup .swal-detail-table,
+  .swal2-popup .swal-detail-table.items{
+    width: 920px;                         /* เดิม 1200px */
+  }
+
+  /* ลดความกว้างคอลัมน์ label เล็กน้อย เพื่อไม่เปลืองที่ฝั่งขวา */
+  .swal2-popup .swal-detail-table tbody th{
+    width: 160px;                         /* เดิม 180px */
+  }
+}
+
+/* มือถือยังคงกว้าง ~เต็มจอเหมือนเดิม */
+@media (max-width: 600px){
+  .swal2-popup.swal-wide{ max-width: 96vw !important; }
+  .swal2-popup .swal-detail-table,
+  .swal2-popup .swal-detail-table.items{ width: 94vw; }
+}
+/* ป้องกันวันที่/เวลาแตกบรรทัด โดยเฉพาะบนมือถือ */
+.swal2-popup .nowrap { 
+  white-space: nowrap !important;
+  word-break: normal !important; /* override กฎ word-break เดิม */
+}
+/* ห้ามแตกบรรทัดคอลัมน์ 5 และ 6 ของตารางอุปกรณ์ (แก้พิมพ์ผิด nth-child) */
+.swal2-popup .swal-detail-table.items th:nth-child(5),
+.swal2-popup .swal-detail-table.items th:nth-child(6),
+.swal2-popup .swal-detail-table.items td:nth-child(5),
+.swal2-popup .swal-detail-table.items td:nth-child(6){
+  white-space: nowrap;
+  word-break: normal;
+}
+/* มือถือ: ให้ตารางมี min-width และเลื่อนแนวนอนได้ แทนการบีบจนตัวเลขแตกบรรทัด */
+@media (max-width: 600px){
+  .swal2-popup .swal-detail-wrap{ overflow-x: auto; }
+  .swal2-popup .swal-detail-table{ width: auto; min-width: 540px; }
+  .swal2-popup .swal-detail-table.items{ width: auto; min-width: 640px; }
+  .swal2-popup .swal-detail-table tbody th{ width: 130px; } /* ลดความกว้างคอลัมน์ label */
+}
+/* === กว้างเฉพาะรายละเอียดอุปกรณ์ === */
+.swal2-popup.swal-equipment{
+  max-width: 1100px !important;  /* ให้สอดคล้องกับ width ใน JS */
+  padding: 28px 26px !important;
+}
+
+/* ขยายพื้นที่ภายในตารางเฉพาะอุปกรณ์ */
+.swal2-popup.swal-equipment .swal-detail-wrap{
+  max-width: 1080px;             /* ปรับได้ตามใจ */
+}
+.swal2-popup.swal-equipment .swal-detail-table,
+.swal2-popup.swal-equipment .swal-detail-table.items{
+  width: 1080px;                  /* ให้โตไปตามกล่อง */
+}
+
+/* มือถือยังคุมให้ยืดเต็มจอ + เลื่อนแนวนอนได้เหมือนเดิม */
+@media (max-width: 600px){
+  .swal2-popup.swal-equipment{
+    max-width: 96vw !important;
+    width: auto !important;
+  }
+  .swal2-popup.swal-equipment .swal-detail-table.items{
+    width: auto;
+    min-width: 640px;             /* ค่าที่คุณมีอยู่ยังใช้ได้ */
+  }
+}
+/* ==== Widths for ID & Requester columns (เหมือน return_admin) ==== */
+.swal2-popup .swal-detail-table.items th.col-id,
+.swal2-popup .swal-detail-table.items td.col-id {
+  width: 110px;            /* คอลัมน์รหัส แคบลง */
+}
+
+.swal2-popup .swal-detail-table.items th.col-requester,
+.swal2-popup .swal-detail-table.items td.col-requester {
+  min-width: 240px;        /* คอลัมน์ผู้ขอใช้ กว้างขึ้น */
+}
+
+@media (max-width: 600px){
+  .swal2-popup .swal-detail-table.items th.col-id,
+  .swal2-popup .swal-detail-table.items td.col-id { width: 100px; }
+
+  .swal2-popup .swal-detail-table.items th.col-requester,
+  .swal2-popup .swal-detail-table.items td.col-requester { min-width: 200px; }
+}
 
 </style>

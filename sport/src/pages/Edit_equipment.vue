@@ -1,5 +1,6 @@
 <template>
-  <div class="layout" :class="{ 'sidebar-closed': isSidebarClosed }">
+  <div class="layout edit-equipment-page" :class="{ 'sidebar-closed': isSidebarClosed }">
+
     <!-- Sidebar -->
     <aside class="sidebar" :class="{ closed: isSidebarClosed }">
       <div class="sidebar-header">
@@ -690,6 +691,29 @@ input:checked+.slider:before {
   margin: .25rem auto; /* ทำให้กึ่งกลาง */
   display: block;
 }
+
+/* ทำให้ layout ของหน้า edit_equipment เป็นคอลัมน์ */
+.edit-equipment-page .main {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+/* ให้ content ขยายพื้นที่ ไม่บังคับ scroll แยก */
+.edit-equipment-page .content {
+  flex: 1;
+  overflow: visible !important;
+}
+
+/* reset footer ไม่ให้ fixed/sticky */
+.edit-equipment-page .foot {
+  position: static !important;
+  inset: auto !important;
+  width: 100%;
+  margin-top: 16px;
+  z-index: auto !important;
+}
+
 
 </style>
 

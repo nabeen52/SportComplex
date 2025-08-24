@@ -426,7 +426,7 @@ beforeUnmount() {
   vertical-align: top;
   margin-left: 4px;
 }
-/* การเเจ้งเตือน   */
+/* ===== CSS แจ้งเตือนแบบ history ===== */
 .notification-dropdown {
   position: absolute;
   right: 0;
@@ -445,18 +445,15 @@ beforeUnmount() {
   border: none;
   animation: fadeDown 0.22s;
 }
-
 @keyframes fadeDown {
   0% { opacity: 0; transform: translateY(-24px);}
   100% { opacity: 1; transform: translateY(0);}
 }
-
 .notification-dropdown ul {
   padding: 0;
   margin: 0;
   list-style: none;
 }
-
 .notification-dropdown li {
   background: linear-gradient(90deg, #f6fafd 88%, #e2e7f3 100%);
   margin: 0.2em 0.8em;
@@ -474,11 +471,9 @@ beforeUnmount() {
   cursor: default;
   transition: background 0.2s;
 }
-
 .notification-dropdown li:not(:last-child) {
   margin-bottom: 0.15em;
 }
-
 .notification-dropdown li::before {
   content: "🔔";
   font-size: 1.2em;
@@ -486,14 +481,12 @@ beforeUnmount() {
   color: #1976d2;
   opacity: 0.80;
 }
-
 .notification-dropdown li.no-noti {
   background: #f2f3f6;
   color: #a7aab7;
   justify-content: center;
   font-style: italic;
 }
-
 .notification-dropdown::-webkit-scrollbar {
   width: 7px;
 }
@@ -520,9 +513,15 @@ beforeUnmount() {
   border-left: 4px solid #bb2124;
   color: #91061a;
 }
+.notification-item.returned {
+  background: linear-gradient(90deg, #e0f0ff 85%, #b6e0ff 100%);
+  border-left: 4px solid #1976d2;
+  color: #1976d2;
+}
 .notification-item {
   transition: background 0.3s, border-color 0.3s, color 0.3s;
 }
+
 .notification-backdrop {
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
