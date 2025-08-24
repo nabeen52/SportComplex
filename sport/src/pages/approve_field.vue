@@ -80,7 +80,7 @@
               <template v-for="group in filteredGrouped" :key="group.type + '_' + (group.booking_id || group.items[0].id)">
                 <!-- สนาม -->
                 <tr v-if="group.type === 'field'">
-                  <td>{{ formatDate(group.items[0].date) }}</td>
+                  <td>{{ formatDate(group.items[0].createdAt || group.items[0].date) }}</td>
                   <td>สนาม</td>
                   <td>
                     {{ group.items[0].name }}
@@ -109,7 +109,7 @@
 
                 <!-- อุปกรณ์ -->
                 <tr v-else>
-                  <td>{{ formatDate(group.items[0].date) }}</td>
+                  <td>{{ formatDate(group.items[0].createdAt || group.items[0].date) }}</td>
                   <td>อุปกรณ์</td>
                   <td>
                     <span v-for="(item, idx) in group.items" :key="item.id">
@@ -407,6 +407,7 @@ async downloadBookingPdf(target) {
         proxyStudentName: h.proxyStudentName || h.proxy_name || "",
         proxyStudentId:   h.proxyStudentId   || h.proxy_id   || "",
         id_form: h.id_form || "-",
+        createdAt: h.createdAt?.$date || h.createdAt || h.created_at?.$date || h.created_at || null,
       }));
 
       // 3) group ข้อมูล
@@ -1123,7 +1124,7 @@ function formatDate(date) {
       const doc = new jsPDF({ unit: 'pt', format: 'a4' });
       doc.setFont('Sarabun');
 
-      // ------- ใช้รูปแบบ field จาก form_field4 ---------
+     // ------- ใช้รูปแบบ field จาก form_field4 ---------
       doc.setFont('Sarabun', 'bold');
       doc.setFontSize(17);
       doc.text('แบบฟอร์มขออนุมัติใช้สถานที่ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง', 80, 48);
@@ -1551,6 +1552,7 @@ doc.text(`โทร ${data.tel || '-'}`, 430, 100);
         endTime: h.endTime || "",
         proxyStudentName: h.proxyStudentName || h.proxy_name || "",
         proxyStudentId:   h.proxyStudentId   || h.proxy_id   || "",
+         createdAt: h.createdAt?.$date || h.createdAt || h.created_at?.$date || h.created_at || null,
       }));
 
       // 2.1 group: fields แต่ละรายการ, equipment ตาม booking_id

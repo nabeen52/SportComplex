@@ -619,9 +619,11 @@ export default {
           <input type="radio" name="equipStatus" value="bad"> ไม่สมบูรณ์
         </label>
       </div>
-      <div id="remarkBox" style="margin-top:1em; display:none;">
-        <input id="remarkInput" class="swal2-input" placeholder="กรุณากรอกหมายเหตุ" />
-      </div>
+     <div id="remarkBox"
+     style="margin-top:1em; display:none; justify-content:center; align-items:center; width:100%;">
+  <input id="remarkInput" class="swal2-input" placeholder="กรุณากรอกหมายเหตุ" />
+</div>
+
     `,
     icon: 'question',
     input: null,
@@ -662,7 +664,7 @@ export default {
       radios.forEach(radio => {
         radio.addEventListener('change', () => {
           document.getElementById('remarkBox').style.display =
-            radio.value === 'bad' && radio.checked ? 'block' : 'none';
+           radio.value === 'bad' && radio.checked ? 'flex' : 'none';
         });
       });
     },
@@ -1279,5 +1281,32 @@ export default {
   padding-left: 6px;
   padding-right: 6px;
 }
+/* ✅ ขยายและจัดกลางช่องกรอกหมายเหตุใน SweetAlert */
+/* กล่องครอบช่องกรอกให้กินเต็มความกว้างของ popup */
+.equip-swal #remarkBox{
+  width: 100%;
+  padding: 0 16px;          /* กันชิดขอบนิดนึง */
+  box-sizing: border-box;
+  gap: 8px;
+}
+
+/* ขยาย input ให้เต็มความกว้างของ #remarkBox */
+.equip-swal #remarkInput.swal2-input{
+  width: 100% !important;
+  max-width: 100% !important;  /* เดิมเป็น 720px */
+  min-width: 0 !important;
+  margin: 0 auto !important;
+  flex: 1 1 auto;              /* เผื่ออยู่ใน flex container */
+}
+
+/* หน้าจอเล็กก็ยังเต็ม กว้างพอดี */
+@media (max-width: 640px){
+  .equip-swal #remarkInput.swal2-input{
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+}
+
 
 </style>
