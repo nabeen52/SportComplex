@@ -107,23 +107,63 @@
       <td>
         <!-- แสดงปุ่มเหมือนเดิม (ไม่ต้องแก้) -->
         <template v-if="group.items.every(item => item.status?.toLowerCase() === 'pending')">
-          <div>
-            <button class="approve-btn" @click="approveGroup(group)" style="margin-right:10px;">อนุมัติ</button>
-            <button class="cancel-btn" @click="cancelGroup(group)">ไม่อนุมัติ</button>
-          </div>
-        </template>
+  <div>
+    <button
+      class="approve-btn"
+      @click="approveGroup(group)"
+      :disabled="processingGroups.has(group.booking_id)"  
+      style="margin-right:10px;"
+    >
+      อนุมัติ
+    </button>
+    <button
+      class="cancel-btn"
+      @click="cancelGroup(group)"
+      :disabled="processingGroups.has(group.booking_id)"  
+    >
+      ไม่อนุมัติ
+    </button>
+
+    <!-- ✅ ข้อความแจ้งกำลังประมวลผล -->
+    <span
+      v-if="processingGroups.has(group.booking_id)"
+      style="margin-left:8px;font-size:.9rem;color:#555;"
+    >
+      กำลังดำเนินการ...
+    </span>
+  </div>
+</template>
+
+
+
         <template v-else-if="group.items.every(item => item.status?.toLowerCase() === 'approved')">
           <span class="status-bg status-approved">ถูกอนุมัติ</span>
         </template>
         <template v-else-if="group.items.every(item => item.status?.toLowerCase() === 'disapproved')">
           <span class="status-bg status-disapproved">ไม่ถูกอนุมัติ</span>
         </template>
-        <template v-else-if="group.items.some(item => item.status?.toLowerCase() === 'return-pending')">
 
-          <div>
-            <button class="return-btn" @click="returnGroup(group)">รับคืนอุปกรณ์</button>
-          </div>
-        </template>
+        <template v-else-if="group.items.some(item => item.status?.toLowerCase() === 'return-pending')">
+  <div>
+    <button
+      class="return-btn"
+      @click="returnGroup(group)"
+      :disabled="processingGroups.has(group.booking_id)"
+    >
+      รับคืนอุปกรณ์
+    </button>
+
+    <!-- ✅ ข้อความกำลังดำเนินการ -->
+    <span
+      v-if="processingGroups.has(group.booking_id)"
+      style="margin-left:8px;font-size:.9rem;color:#555;"
+    >
+      กำลังดำเนินการ...
+    </span>
+  </div>
+</template>
+
+
         <template v-else-if="group.items.some(item => item.status?.toLowerCase() === 'returned')">
           <span class="status-bg status-returned">รับคืนอุปกรณ์แล้ว</span>
         </template>
@@ -182,6 +222,7 @@ export default {
       polling: null,
       pollingNotif: null,
       lastSeenTimestamp: 0,
+       processingGroups: new Set(),
     }
   },
  computed: {
@@ -352,6 +393,9 @@ export default {
       }
     },
     async approveGroup(group) {
+  // ✅ กันกดย้ำ: ถ้า group นี้กำลังประมวลผลอยู่ ให้ return ทันที
+  if (this.processingGroups.has(group.booking_id)) return;
+
   const ask = await Swal.fire({
     title: 'อนุมัติรายการนี้',
     text: 'คุณต้องการอนุมัติรายการยืมอุปกรณ์นี้?',
@@ -366,7 +410,9 @@ export default {
 
   const staffId = localStorage.getItem('user_id');
 
-  // error บางแบบ (เช่น อนุมัติไว้แล้ว) ให้นับเป็น "สำเร็จ"
+  // ✅ ล็อก group ไว้ก่อน กันยิงซ้ำ
+  this.processingGroups.add(group.booking_id);
+
   const isAlreadyApprovedError = (err) => {
     const code = err?.response?.status;
     const msg  = (err?.response?.data?.message || err?.message || '').toLowerCase();
@@ -374,70 +420,76 @@ export default {
            (code === 400 && /already|approved|อนุมัติแล้ว|ซ้ำ/.test(msg));
   };
 
-  const results = await Promise.allSettled(
-    group.items.map(item =>
-      axios.patch(`${API_BASE}/api/history/${item.id}/approve_equipment`, { staff_id: staffId })
-        .then(() => ({ ok: true, item }))
-        .catch(err => ({ ok: isAlreadyApprovedError(err), err, item }))
-    )
-  );
+  try {
+    // ✅ ยิงทีละ item เหมือนเดิม แต่ล็อกไว้แล้วจะไม่ถูกกดย้ำ
+    const results = await Promise.allSettled(
+      group.items.map(item =>
+        axios.patch(`${API_BASE}/api/history/${item.id}/approve_equipment`, { staff_id: staffId })
+          .then(() => ({ ok: true, item }))
+          .catch(err => ({ ok: isAlreadyApprovedError(err), err, item }))
+      )
+    );
 
-  const logicalSuccessIdx = [];
-  const hardFailed = [];
-  results.forEach((r, i) => {
-    const payload = r.status === 'fulfilled' ? r.value : r.reason;
-    if (payload.ok) logicalSuccessIdx.push(i);
-    else hardFailed.push({ i, name: group.items[i]?.name, err: payload.err });
-  });
+    const logicalSuccessIdx = [];
+    const hardFailed = [];
+    results.forEach((r, i) => {
+      const payload = r.status === 'fulfilled' ? r.value : r.reason;
+      if (payload.ok) logicalSuccessIdx.push(i);
+      else hardFailed.push({ i, name: group.items[i]?.name, err: payload.err });
+    });
 
-  // อัปเดตสถานะฝั่ง UI สำหรับตัวที่สำเร็จ
-  logicalSuccessIdx.forEach(i => { group.items[i].status = 'Approved'; });
+    // อัปเดตสถานะฝั่ง UI สำหรับตัวที่สำเร็จ
+    logicalSuccessIdx.forEach(i => { group.items[i].status = 'Approved'; });
 
-  // ฟังก์ชันตรวจซ้ำว่า booking นี้ “approved หมดแล้วจริงไหม”
-  const verifyAllApproved = async () => {
-    try {
-      const res = await axios.get(`${API_BASE}/api/history`);
-      const all = Array.isArray(res.data) ? res.data : [];
-      const items = all.filter(h =>
-        h.type !== 'field' &&
-        (h.booking_id || `single_${h._id?.$oid || h._id}`) === group.booking_id
-      );
-      if (items.length === 0) return logicalSuccessIdx.length > 0; // fallback
-      return items.every(h => (h.status || '').toLowerCase() === 'approved');
-    } catch {
-      return logicalSuccessIdx.length > 0; // fallback เมื่อเช็คไม่ได้
+    // ✅ ตรวจซ้ำจาก backend ว่าทั้งกลุ่มอนุมัติครบแล้วจริงหรือไม่
+    const verifyAllApproved = async () => {
+      try {
+        const res = await axios.get(`${API_BASE}/api/history`);
+        const all = Array.isArray(res.data) ? res.data : [];
+        const items = all.filter(h =>
+          h.type !== 'field' &&
+          (h.booking_id || `single_${h._id?.$oid || h._id}`) === group.booking_id
+        );
+        if (items.length === 0) return logicalSuccessIdx.length > 0; // fallback
+        return items.every(h => (h.status || '').toLowerCase() === 'approved');
+      } catch {
+        return logicalSuccessIdx.length > 0; // fallback เมื่อเช็คไม่ได้
+      }
+    };
+
+    let allApproved = hardFailed.length === 0;
+    if (!allApproved && logicalSuccessIdx.length > 0) {
+      allApproved = await verifyAllApproved();
     }
-  };
 
-  let allApproved = hardFailed.length === 0;
-  if (!allApproved && logicalSuccessIdx.length > 0) {
-    // ถ้ามี “สำเร็จบางส่วน” ให้ตรวจซ้ำจาก backend
-    allApproved = await verifyAllApproved();
+    if (allApproved) {
+      group.items.forEach(it => (it.status = 'Approved'));
+      Swal.fire({
+        title: 'สำเร็จ',
+        text: 'รายการทั้งหมดถูกอนุมัติ',
+        icon: 'success',
+        timer: 1500,
+        showConfirmButton: false
+      });
+    } else if (logicalSuccessIdx.length > 0) {
+      const failedNames = hardFailed.map(f => f.name || `#${f.i + 1}`).join(', ');
+      Swal.fire({
+        title: 'สำเร็จบางส่วน',
+        html: `อนุมัติสำเร็จ ${logicalSuccessIdx.length} รายการ<br>ล้มเหลว ${hardFailed.length} รายการ<br><small>ที่ล้มเหลว: ${failedNames}</small>`,
+        icon: 'warning'
+      });
+    } else {
+      Swal.fire('Error', 'อนุมัติไม่สำเร็จ', 'error');
+    }
+
+    // ✅ รีเฟรชรายการหลังทำเสร็จ
+    this.fetchPendingEquipments();
+  } finally {
+    // ✅ ปลดล็อก ไม่ว่าจะสำเร็จ/ล้มเหลว
+    this.processingGroups.delete(group.booking_id);
   }
-
-  if (allApproved) {
-    // ✅ ให้ขึ้นเป็น success ไปเลย
-    group.items.forEach(it => (it.status = 'Approved'));
-    Swal.fire({
-      title: 'สำเร็จ',
-      text: 'รายการทั้งหมดถูกอนุมัติ',
-      icon: 'success',
-      timer: 1500,
-      showConfirmButton: false
-    });
-  } else if (logicalSuccessIdx.length > 0) {
-    const failedNames = hardFailed.map(f => f.name || `#${f.i + 1}`).join(', ');
-    Swal.fire({
-      title: 'สำเร็จบางส่วน',
-      html: `อนุมัติสำเร็จ ${logicalSuccessIdx.length} รายการ<br>ล้มเหลว ${hardFailed.length} รายการ<br><small>ที่ล้มเหลว: ${failedNames}</small>`,
-      icon: 'warning'
-    });
-  } else {
-    Swal.fire('Error', 'อนุมัติไม่สำเร็จ', 'error');
-  }
-
-  this.fetchPendingEquipments(); // refresh รายการ
 },
+
 
     async cancelGroup(group) {
   const { value: remark } = await Swal.fire({
@@ -609,6 +661,10 @@ export default {
 
 
     async returnGroup(group) {
+  // ✅ กันกดย้ำ
+  if (this.processingGroups.has(group.booking_id)) return;
+  this.processingGroups.add(group.booking_id);
+
   const staffId = localStorage.getItem('user_id');
   const itemWithPhoto = group.items.find(item => !!item.attachment || !!item.returnPhoto || !!item.fileData);
   const imgSrc =
@@ -650,14 +706,12 @@ export default {
           <input type="radio" name="equipStatus" value="bad"> ไม่สมบูรณ์
         </label>
       </div>
-     <div id="remarkBox"
-     style="margin-top:1em; display:none; justify-content:center; align-items:center; width:100%;">
-  <input id="remarkInput" class="swal2-input" placeholder="กรุณากรอกหมายเหตุ" />
-</div>
-
+      <div id="remarkBox"
+           style="margin-top:1em; display:none; justify-content:center; align-items:center; width:100%;">
+        <input id="remarkInput" class="swal2-input" placeholder="กรุณากรอกหมายเหตุ" />
+      </div>
     `,
     icon: 'question',
-    input: null,
     showCancelButton: true,
     confirmButtonText: 'คืนอุปกรณ์',
     cancelButtonText: 'ยกเลิก',
@@ -695,7 +749,7 @@ export default {
       radios.forEach(radio => {
         radio.addEventListener('change', () => {
           document.getElementById('remarkBox').style.display =
-           radio.value === 'bad' && radio.checked ? 'flex' : 'none';
+            radio.value === 'bad' && radio.checked ? 'flex' : 'none';
         });
       });
     },
@@ -704,7 +758,10 @@ export default {
     }
   });
 
-  if (!result) return;
+  if (!result) {
+    this.processingGroups.delete(group.booking_id);
+    return;
+  }
 
   // หา since กับ uptodate จาก item ที่มี (ถ้ามีมากกว่าหนึ่ง ใช้ตัวแรกที่เจอ)
   let since = null;
@@ -727,17 +784,18 @@ export default {
           attachment: item.attachment || item.returnPhoto || item.fileData,
           fileName: item.fileName,
           booking_id: item.booking_id || null,
-          // ส่ง since กับ uptodate เพิ่มเติม
           ...(since ? { since } : {}),
           ...(uptodate ? { uptodate } : {})
         })
       )
     );
+
     group.items.forEach(item => {
       item.status = 'Returned';
       if (since) item.since = since;
       if (uptodate) item.uptodate = uptodate;
     });
+
     Swal.fire({
       title: 'สำเร็จ',
       text: `คุณได้คืนอุปกรณ์กลุ่มนี้แล้ว`,
@@ -745,11 +803,16 @@ export default {
       timer: 1500,
       showConfirmButton: false
     });
+
     this.fetchPendingEquipments();
-  } catch {
+  } catch (err) {
     Swal.fire('Error', 'คืนอุปกรณ์ไม่สำเร็จ', 'error');
+  } finally {
+    // ✅ ปลดล็อกกลุ่มนี้ไม่ว่าจะสำเร็จหรือล้มเหลว
+    this.processingGroups.delete(group.booking_id);
   }
 },
+
 
 
     async fetchAllEquipments() {
@@ -1228,6 +1291,12 @@ export default {
 
 .status-return-pending {
   background: #f6d365 !important; /* สีเหลืองจางๆ สำหรับ return-pending */
+}
+
+.approve-btn[disabled],
+.cancel-btn[disabled]{
+  opacity: .6;
+  cursor: not-allowed;
 }
 
 

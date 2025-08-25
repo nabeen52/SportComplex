@@ -1756,149 +1756,146 @@ app.patch('/api/history/:id/cancel_field', async (req, res) => {
     }
 });
 // --------- PATCH APPROVE ------------
+// --------- PATCH APPROVE (FIXED: deduct only once) ------------
 app.patch('/api/history/:id/approve_equipment', async (req, res) => {
     try {
         const staffId = req.body.staff_id;
         if (!staffId) {
             return res.status(400).json({ success: false, message: "ต้องระบุ staff_id (user_id ของ admin/staff)" });
         }
+
+        // ชื่อผู้อนุมัติ
         const staff = await User.findOne({ user_id: staffId });
+        const staffName =
+            (staff?.name && String(staff.name)) ||
+            (staff?.email && String(staff.email)) ||
+            String(staffId);
 
-        let staffName = "";
-        if (staff) {
-            if (staff.name && typeof staff.name === 'string') {
-                staffName = staff.name;
-            } else if (staff.email && typeof staff.email === 'string') {
-                staffName = staff.email;
-            } else if (staff.user_id && typeof staff.user_id === 'string') {
-                staffName = staff.user_id;
-            } else if (staff.user_id) {
-                staffName = staff.user_id.toString();
-            } else {
-                staffName = staffId.toString();
-            }
-        } else {
-            staffName = staffId.toString();
-        }
-
-        // หา record
+        // เอกสารเป้าหมาย
         const old = await History.findById(req.params.id);
         if (!old) return res.status(404).send({ message: 'Not found' });
+        if (old.type !== 'equipment') {
+            return res.status(400).json({ success: false, message: 'ไม่ใช่รายการอุปกรณ์' });
+        }
 
-        let updatedList = [];
-        let now = new Date();
-
+        // === 1) เลือก "เฉพาะ pending" ที่จะอนุมัติในครั้งนี้ ===
+        let pendingQuery;
         if (old.booking_id) {
-            await History.updateMany(
-                { booking_id: old.booking_id.toString() },
-                {
-                    $set: {
-                        status: 'approved',
-                        approvedBy: staffName,
-                        approvedById: staffId.toString(),
-                        approvedAt: now
-                    }
-                }
-            );
-            updatedList = await History.find({ booking_id: old.booking_id.toString() });
+            pendingQuery = {
+                booking_id: String(old.booking_id),
+                type: 'equipment',
+                status: 'pending'
+            };
         } else {
-            const updated = await History.findByIdAndUpdate(
-                req.params.id,
-                {
+            pendingQuery = { _id: old._id, type: 'equipment', status: 'pending' };
+        }
+
+        // ดึงรายการที่ยัง pending (จะใช้คำนวนหักสต็อก)
+        const pendingItems = await History.find(pendingQuery).lean();
+
+        // ถ้าไม่มีอะไรต้องอนุมัติแล้ว (เช่น เผลอกดซ้ำ) -> ส่ง 409 ให้ frontend ถือว่าสำเร็จแบบ idempotent
+        if (!pendingItems.length) {
+            return res.status(409).json({ success: true, message: 'already-approved-or-no-pending' });
+        }
+
+        // === 2) อัปเดตสถานะเฉพาะ pending -> approved ===
+        const now = new Date();
+        await History.updateMany(
+            pendingQuery,
+            {
+                $set: {
                     status: 'approved',
                     approvedBy: staffName,
-                    approvedById: staffId.toString(),
+                    approvedById: String(staffId),
                     approvedAt: now
-                },
-                { new: true }
-            );
-            updatedList = [updated];
-        }
-        // อัพเดตจำนวนอุปกรณ์
-        // สะสมจำนวน approve ของแต่ละอุปกรณ์ (รวมทุกอันใน booking_id เดียวกัน)
-        // แทนที่จะ push หลายรอบ ให้รวมจำนวนของแต่ละอุปกรณ์แล้ว push แค่รอบเดียว
-        const usageUpdateMap = {}; // { 'ชื่ออุปกรณ์': จำนวนที่ approve }
-        for (const h of updatedList) {
-            if (h && h.name && h.quantity) {
-                const equipName = (h.name || '').trim();
-                // ถ้ามีอยู่แล้วไม่ต้อง push object ใหม่ ให้รวมจำนวนแล้ว push object เดียว
-                usageUpdateMap[equipName] = (usageUpdateMap[equipName] || 0) + Math.abs(h.quantity);
-            }
-        }
-        for (const [equipName, usageQty] of Object.entries(usageUpdateMap)) {
-            const now = new Date();
-            const year = now.getFullYear();
-            const month = now.getMonth() + 1;
-
-            const equipment = await Equipment.findOne({ name: equipName });
-            if (equipment) {
-                equipment.usageByMonthYear = equipment.usageByMonthYear || [];
-                // ===== เช็คซ้ำก่อน push =====
-                const found = equipment.usageByMonthYear.find(
-                    (item) => item.year === year && item.month === month
-                );
-                if (found) {
-                    found.usage += usageQty;
-                } else {
-                    equipment.usageByMonthYear.push({
-                        year,
-                        month,
-                        usage: usageQty
-                    });
                 }
-                equipment.quantity -= usageQty;
-                equipment.usageCount = (equipment.usageCount || 0) + usageQty;
-
-                equipment.markModified('usageByMonthYear');
-                await equipment.save();
             }
+        );
+
+        // === 3) คำนวนยอดหักสต็อก "เฉพาะที่เพิ่งอนุมัติ" ===
+        // รวมตามชื่ออุปกรณ์
+        const usageUpdateMap = {}; // { 'ชื่ออุปกรณ์': จำนวนอนุมัติ }
+        for (const h of pendingItems) {
+            const equipName = (h.name || '').trim();
+            const qty = Math.abs(Number(h.quantity) || 0);
+            if (!equipName || !qty) continue;
+            usageUpdateMap[equipName] = (usageUpdateMap[equipName] || 0) + qty;
         }
-        // ======= ส่งอีเมลแจ้งเตือน (เวอร์ชันส่งฉบับเดียว) =======
-        if (updatedList.length > 0) {
-            // (กรณี booking_id เดียว user_id ควรเหมือนกันหมด)
-            const userId = updatedList[0].user_id;
+
+        // หักสต็อก + อัปเดต usage เฉพาะยอดของรอบนี้
+        const year = now.getFullYear();
+        const month = now.getMonth() + 1;
+
+        for (const [equipName, usageQty] of Object.entries(usageUpdateMap)) {
+            const equipment = await Equipment.findOne({ name: equipName });
+            if (!equipment) continue;
+
+            // อัปเดต usageByMonthYear (รวมกับเดือนไม่ให้ push ซ้ำ)
+            equipment.usageByMonthYear = equipment.usageByMonthYear || [];
+            const found = equipment.usageByMonthYear.find(x => x.year === year && x.month === month);
+            if (found) {
+                found.usage += usageQty;
+            } else {
+                equipment.usageByMonthYear.push({ year, month, usage: usageQty });
+            }
+
+            // หักจำนวนคงเหลือเฉพาะรอบนี้
+            equipment.quantity = (Number(equipment.quantity) || 0) - usageQty;
+            // กันติดลบ (ถ้าอยากอนุญาตให้ติดลบตัดบรรทัดนี้ออก)
+            if (equipment.quantity < 0) equipment.quantity = 0;
+
+            equipment.usageCount = (Number(equipment.usageCount) || 0) + usageQty;
+            equipment.markModified('usageByMonthYear');
+            await equipment.save();
+        }
+
+        // === 4) ส่งเมลให้ผู้ใช้สรุปเฉพาะรายการที่อนุมัติในรอบนี้ ===
+        try {
+            const userId = pendingItems[0].user_id;
             let user = await User.findOne({ user_id: userId });
             if (!user) user = await User.findById(userId).catch(() => null);
 
-            if (user && user.email) {
-                // รวมชื่ออุปกรณ์กับจำนวน
+            if (user?.email) {
                 let listHtml = '<ul style="font-size:1.1em">';
-                updatedList.forEach((h, idx) => {
+                pendingItems.forEach((h, idx) => {
                     listHtml += `<li>${idx + 1}. ${h.name || '-'} (จำนวน: ${h.quantity || '-'})</li>`;
                 });
                 listHtml += '</ul>';
-                const html = `
-            <div>
-                <h2>รายการยืมอุปกรณ์ของคุณได้รับการอนุมัติแล้ว</h2>
-                <p><b>ชื่อผู้ยืม:</b> ${user.firstname || user.name || ""}</p>
-                ${listHtml}
-                <p>กรุณาติดต่อรับอุปกรณ์ที่ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง</p>
-                <hr>
-                <p style="font-size: 0.95em; color: #888;">Sport Complex – MFU</p>
-            </div>
-        `;
+
                 await transporter.sendMail({
                     from: '"MFU Sport Complex" <your.email@gmail.com>',
                     to: user.email,
                     subject: 'แจ้งเตือน: อนุมัติการยืมอุปกรณ์',
-                    html
+                    html: `
+            <div>
+              <h2>รายการยืมอุปกรณ์ของคุณได้รับการอนุมัติแล้ว</h2>
+              <p><b>ชื่อผู้ยืม:</b> ${user.firstname || user.name || user.email || ''}</p>
+              ${listHtml}
+              <p>กรุณาติดต่อรับอุปกรณ์ที่ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง</p>
+              <hr>
+              <p style="font-size: 0.95em; color: #888;">Sport Complex – MFU</p>
+            </div>
+          `
                 });
             }
+        } catch (mailErr) {
+            console.error('send approve mail error:', mailErr.message);
         }
-        // ====== จบส่งอีเมล =======
+
+        // === 5) ส่งกลับเฉพาะสิ่งที่อนุมัติจริงในรอบนี้ ===
         res.send({
             success: true,
-            approved_by: {
-                user_id: staffId.toString(),
-                name: staffName
-            },
-            updated: updatedList
+            approved_by: { user_id: String(staffId), name: staffName },
+            approved_count: pendingItems.length,
+            deducted: usageUpdateMap
         });
 
     } catch (err) {
+        console.error('approve_equipment error:', err);
         res.status(500).send({ message: err.message });
     }
 });
+
 // Approve field booking
 app.patch('/api/history/:id/approve_field', async (req, res) => {
     try {

@@ -148,7 +148,7 @@
     </select>
   </label>
 
-  <label>เดือน:
+  <label>ตั้งเเต่:
     <select v-model="fieldStartMonth">
       <option v-for="(m, i) in months" :key="i" :value="i+1">{{ m }}</option>
     </select>
@@ -162,7 +162,7 @@
 
   <span>ถึง:</span>
 
-  <label>เดือน:
+  <label>
     <select v-model="fieldEndMonth">
       <option v-for="(m, i) in months" :key="i" :value="i+1">{{ m }}</option>
     </select>

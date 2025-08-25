@@ -336,11 +336,7 @@ async function loadBookingInfo() {
               </tr>
               <tr>
                 <th>วันที่ขอยืม</th>
-                <td>${esc(formatDateOnly(historyList[0].since))}</td>
-              </tr>
-              <tr>
-                <th>วันที่คืน</th>
-                <td>${esc(formatDateOnly(historyList[0].uptodate))}</td>
+                <td>${esc(formatDateOnly(historyList[0].since))} - ${esc(formatDateOnly(historyList[0].uptodate))} </td>
               </tr>
               <tr>
                 <th>รายการอุปกรณ์</th>

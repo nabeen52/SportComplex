@@ -990,6 +990,9 @@ pickNonEmpty(...vals) {
 
 
    async showDetailGroup(group) {
+      let html = ''; 
+
+
   const esc = (s) => String(s ?? '-')
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
     .replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/\n/g,'<br>');
@@ -1028,35 +1031,44 @@ pickNonEmpty(...vals) {
   };
 
   const it = group.items?.[0] || {};
-  let html = '';
 
-  if (group.type === 'field') {
-    // แปลงสถานะ cancel -> Cancelled สำหรับแสดงผล
-    const prettyStatus = ((it.status || '').toLowerCase() === 'cancel') ? 'Cancelled' : (it.status || '-');
+if (group.type === 'field') {
+  // เดิม: ใช้ it.date อย่างเดียว → แก้เป็นช่วง since - uptodate
+  const startDateRaw = it.since || it.start_date || it.startDate;
+  const endDateRaw   = it.uptodate || it.end_date || it.endDate;
 
-    const requesterCell =
-      it.username_form || it.requester || it.userName || it.user_name || it.user || '-';
+  const dateCell = (() => {
+    const s = fmt(startDateRaw);
+    const e = fmt(endDateRaw);
+    if (s !== '-' && e !== '-') return `${s} - ${e}`; // มีทั้งสองวัน
+    if (s !== '-') return s;                           // มีแค่ since
+    if (e !== '-') return e;                           // มีแค่ uptodate
+    return fmt(it.date);                               // fallback
+  })();
 
-    html = `
-      <div class="swal-table-wrap">
-        <table class="swal-table-2col">
-          <tbody>
-            <tr><th>สนาม</th><td>${esc(it.name)}</td></tr>
-            <tr><th>ผู้ขอใช้</th><td>${esc(requesterCell)}</td></tr>
-            <tr><th>รหัสนักศึกษา/พนักงาน</th><td>${esc(it.id_form || '-')}</td></tr>
-            <tr><th>จองให้ผู้ใช้</th><td>${esc(it.proxyStudentName || '-')}</td></tr>
-            <tr><th>รหัสนักศึกษา/พนักงาน (ของผู้ที่ถูกจองแทน)</th><td>${esc(it.proxyStudentId || '-')}</td></tr>
-            <tr><th>วันที่</th><td>${fmt(it.date)}</td></tr>
-            <tr><th>เวลา</th><td>${esc(this.addThaiMinuteSuffix(it.time))}</td></tr>
-            <tr><th>สถานะ</th><td>${esc(prettyStatus)}</td></tr>
-            <tr><th>ผู้อนุมัติ/ผู้ไม่อนุมัติ</th><td>${esc(it.approvedBy || it.disapprovedBy || '-')}</td></tr>
-            <tr><th>หมายเหตุ</th><td>${esc(it.remark || '-')}</td></tr>
-            <tr><th>ผู้ยกเลิก</th><td>${esc(it.canceledBy || '-')}</td></tr>
-          </tbody>
-        </table>
-      </div>
-    `;
-  } else {
+  const prettyStatus = ((it.status || '').toLowerCase() === 'cancel') ? 'Cancelled' : (it.status || '-');
+  const requesterCell = it.username_form || it.requester || it.userName || it.user_name || it.user || '-';
+
+  html = `
+    <div class="swal-table-wrap">
+      <table class="swal-table-2col">
+        <tbody>
+          <tr><th>สนาม</th><td>${esc(it.name)}</td></tr>
+          <tr><th>ผู้ขอใช้</th><td>${esc(requesterCell)}</td></tr>
+          <tr><th>รหัสนักศึกษา/พนักงาน</th><td>${esc(it.id_form || '-')}</td></tr>
+          <tr><th>จองให้ผู้ใช้</th><td>${esc(it.proxyStudentName || '-')}</td></tr>
+          <tr><th>รหัสนักศึกษา/พนักงาน (ของผู้ที่ถูกจองแทน)</th><td>${esc(it.proxyStudentId || '-')}</td></tr>
+          <tr><th>วันที่จอง</th><td>${dateCell}</td></tr> <!-- ✅ ใช้ช่วง since - uptodate -->
+          <tr><th>เวลาที่จอง</th><td>${esc(this.addThaiMinuteSuffix(it.time))}</td></tr>
+          <tr><th>สถานะ</th><td>${esc(prettyStatus)}</td></tr>
+          <tr><th>ผู้อนุมัติ/ผู้ไม่อนุมัติ</th><td>${esc(it.approvedBy || it.disapprovedBy || '-')}</td></tr>
+          <tr><th>หมายเหตุ</th><td>${esc(it.remark || '-')}</td></tr>
+          <tr><th>ผู้ยกเลิก</th><td>${esc(it.canceledBy || '-')}</td></tr>
+        </tbody>
+      </table>
+    </div>
+  `;
+} else {
     // equipment
     const itemsToShow = this.selectItemsForDetail(group);
     const groupRequester = pick(

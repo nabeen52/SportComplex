@@ -375,81 +375,125 @@ async downloadBookingPdf(target) {
   },
 
    async fetchAndGroup() {
-    try {
-      // 1) users (ถ้าจำเป็นครั้งแรก)
-      if (!Object.keys(this.userMap || {}).length) {
-        const userRes = await axios.get(`${API_BASE}/api/users`);
-        this.userMap = {};
-        userRes.data.forEach(u => {
-          this.userMap[u.user_id] =
-            (u.firstname && u.lastname) ? `${u.firstname} ${u.lastname}` : (u.name || u.user_id);
-        });
-      }
-
-      // 2) ข้อมูลอนุมัติ
-      const res = await axios.get(`${API_BASE}/api/history/approve_field`);
-      const bookings = (res.data || []).map((h, idx) => ({
-        id: h._id?.$oid || h._id || idx + 1,
-        name: h.name || "-",
-        requester: h.requester || "-",
-        user_id: h.user_id || "-",
-        booking_id: h.booking_id || "",
-        type: h.type || "field",
-        since: h.since || "-",
-        uptodate: h.uptodate || "-",
-        reason: h.reason || h.reasons || "-",
-        zone: h.zone || "-",
-        quantity: h.quantity || "-",
-        date: h.date || "-",
-        startTime: h.startTime || "",
-        endTime: h.endTime || "",
-        username_form: h.username_form || "-",
-        proxyStudentName: h.proxyStudentName || h.proxy_name || "",
-        proxyStudentId:   h.proxyStudentId   || h.proxy_id   || "",
-        id_form: h.id_form || "-",
-        createdAt: h.createdAt?.$date || h.createdAt || h.created_at?.$date || h.created_at || null,
-      }));
-
-      // 3) group ข้อมูล
-      const fields = bookings
-        .filter(b => b.type === 'field')
-        .map(f => ({ type: 'field', items: [f], booking_id: f.booking_id || '' }));
-
-      const equipGroups = {};
-      bookings.filter(b => b.type === 'equipment').forEach(eq => {
-        const key = eq.booking_id || 'single_' + eq.id;
-        if (!equipGroups[key]) equipGroups[key] = [];
-        equipGroups[key].push(eq);
+  try {
+    // 1) โหลด users ครั้งแรก (ทำ map user_id -> ชื่อ)
+    if (!Object.keys(this.userMap || {}).length) {
+      const userRes = await axios.get(`${API_BASE}/api/users`);
+      this.userMap = {};
+      (userRes.data || []).forEach(u => {
+        this.userMap[u.user_id] =
+          (u.firstname && u.lastname) ? `${u.firstname} ${u.lastname}` : (u.name || u.user_id);
       });
-      const equipments = Object.entries(equipGroups).map(([booking_id, items]) => ({
-        type: 'equipment',
-        booking_id,
-        items
+    }
+
+    // 2) โหลดรายการที่ต้องอนุมัติ (ทั้ง field/equipment) จาก backend
+    const res = await axios.get(`${API_BASE}/api/history/approve_field`);
+    const raw = Array.isArray(res.data) ? res.data : [];
+
+    // 3) ทำให้เป็นรูปแบบเดียวกัน + ป้องกันค่า undefined
+    const bookings = raw.map((h, idx) => ({
+      id: h._id?.$oid || h._id || idx + 1,
+      name: h.name ?? "-",
+      requester: h.requester ?? "-",
+      user_id: h.user_id ?? "-",
+      booking_id: h.booking_id ?? "",
+      type: (h.type || "field").toLowerCase(),   // normalize
+      since: h.since ?? "-",
+      uptodate: h.uptodate ?? "-",
+      reason: h.reason || h.reasons || "-",
+      zone: h.zone ?? "-",
+      quantity: h.quantity ?? "-",
+      date: h.date ?? "-",
+      startTime: h.startTime || "",
+      endTime: h.endTime || "",
+      username_form: h.username_form || "-",
+      proxyStudentName: h.proxyStudentName || h.proxy_name || "",
+      proxyStudentId:   h.proxyStudentId   || h.proxy_id   || "",
+      id_form: h.id_form || "-",
+      createdAt: h.createdAt?.$date || h.createdAt || h.created_at?.$date || h.created_at || null,
+      updatedAt: h.updatedAt?.$date || h.updatedAt || h.updated_at?.$date || h.updated_at || null,
+      status: (h.status || '').toLowerCase()
+    }));
+
+    // 4) de-duplicate: กันรายการซ้ำจาก _id เดิม
+    const dedupMap = new Map();
+    for (const b of bookings) {
+      const key = String(b.id);
+      if (!dedupMap.has(key)) dedupMap.set(key, b);
+    }
+    const bookingsClean = Array.from(dedupMap.values());
+
+    // 5) แยกกลุ่ม
+    // 5.1 field: แถวต่อแถว (ไม่รวมกับใคร)
+    const fieldGroups = bookingsClean
+      .filter(b => b.type === 'field')
+      .map(f => ({
+        type: 'field',
+        booking_id: f.booking_id || '',
+        items: [f]
       }));
 
-      const next = [...fields, ...equipments];
+    // 5.2 equipment: รวมตาม booking_id เดียวกัน
+    const equipBuckets = {};
+    bookingsClean
+      .filter(b => b.type === 'equipment')
+      .forEach(eq => {
+        const key = eq.booking_id || ('single_' + eq.id);
+        if (!equipBuckets[key]) equipBuckets[key] = [];
+        equipBuckets[key].push(eq);
+      });
 
-      // 4) อัปเดตเฉพาะเมื่อข้อมูลเปลี่ยนจริง ๆ (กันการกระพริบตาราง)
-      const snap = this._makeSnapshot(next);
-      if (snap !== this._lastSnapshot) {
-        this.grouped = next;
-        this._lastSnapshot = snap;
+    const equipmentGroups = Object.entries(equipBuckets).map(([booking_id, items]) => ({
+      type: 'equipment',
+      booking_id,
+      items
+    }));
+
+    // 6) รวมทั้งหมด แล้วเรียงตามวันที่ล่าสุด
+    const combined = [...fieldGroups, ...equipmentGroups];
+
+    // ตัวช่วยแปลงวันเพื่อ sort
+    const safeToTime = (v) => {
+      if (!v) return 0;
+      const s = String(v).trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+        const [y, m, d] = s.split('-').map(Number);
+        return new Date(y, m - 1, d).getTime() || 0;
       }
-    } catch (err) {
-      console.error('โหลดข้อมูลอนุมัติสนามไม่สำเร็จ:', err);
+      const t = new Date(s).getTime();
+      return isNaN(t) ? 0 : t;
+    };
+
+    combined.sort((A, B) => {
+      const a0 = A.items?.[0] || {};
+      const b0 = B.items?.[0] || {};
+      // ใช้ updatedAt > createdAt > date
+      const ta = safeToTime(a0.updatedAt) || safeToTime(a0.createdAt) || safeToTime(a0.date);
+      const tb = safeToTime(b0.updatedAt) || safeToTime(b0.createdAt) || safeToTime(b0.date);
+      return tb - ta; // ล่าสุดก่อน
+    });
+
+    // 7) อัปเดตเฉพาะเมื่อข้อมูลเปลี่ยนจริง ๆ (กันกระพริบ)
+    const snap = this._makeSnapshot(combined);
+    if (snap !== this._lastSnapshot) {
+      this.grouped = combined;
+      this._lastSnapshot = snap;
     }
-  },
+  } catch (err) {
+    console.error('โหลด/จัดกลุ่มข้อมูลอนุมัติไม่สำเร็จ:', err);
+  }
+},
 
 async approveGroup(group) {
   const groupType = (group.type || group.items?.[0]?.type || '').toLowerCase();
   const isEquipment = groupType === 'equipment';
 
   const result = await Swal.fire({
-    title: isEquipment ? 'อนุมัติรายการนี้' : 'อนุมัติรายการนี้',
-    text: isEquipment ? 'ยืนยันการอนุมัติสำหรับรายการนี้' : 'ยืนยันการอนุมัติสำหรับรายการนี้',
+    title: 'อนุมัติรายการนี้',
+    text: 'ยืนยันการอนุมัติสำหรับรายการนี้',
     icon: 'question',
     showCancelButton: true,
-    confirmButtonText: isEquipment ? 'อนุมัติอุปกรณ์' : 'อนุมัติ',
+    confirmButtonText: 'อนุมัติ',
     cancelButtonText: 'ยกเลิก',
     confirmButtonColor: '#0cad00',
     cancelButtonColor: '#999',
@@ -458,58 +502,81 @@ async approveGroup(group) {
   if (!result.isConfirmed) return;
 
   const adminUserId = localStorage.getItem('user_id') || '';
-  const approveDate = new Date().toISOString();
+  const approveDate  = new Date().toISOString();
 
-  Swal.fire({ title: 'กำลังดำเนินการ...', didOpen: () => Swal.showLoading(), allowOutsideClick: false, allowEscapeKey: false });
+  Swal.fire({
+    title: 'กำลังดำเนินการ...',
+    didOpen: () => Swal.showLoading(),
+    allowOutsideClick: false,
+    allowEscapeKey: false
+  });
+
+  // 1) กันรายการซ้ำใน group.items ตามฟิลด์ id (หรือ _id)
+  const seen = new Set();
+  const uniqItems = [];
+  for (const it of group.items || []) {
+    const key = String(it.id ?? it._id ?? '') || `${it.name}-${it.booking_id}-${it.startTime}-${it.endTime}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      uniqItems.push(it);
+    }
+  }
+
+  // 2) อนุมัติแบบ "ทีละคำขอ" (sequential) กัน race condition ฝั่ง backend
+  const ok = [];
+  const fail = [];
 
   try {
-    const calls = group.items.map(item => {
-  const isField = (item.type || group.type) === 'field';
-  const url = isField
-    ? `${API_BASE}/api/history/${item.id}/approve_field`
-    : `${API_BASE}/api/history/${item.id}/approve_equipment`;
+    for (const item of uniqItems) {
+      const isField = (item.type || group.type) === 'field';
+      const url = isField
+        ? `${API_BASE}/api/history/${item.id}/approve_field`
+        : `${API_BASE}/api/history/${item.id}/approve_equipment`;
 
-  // 👇 ส่ง key ให้ถูกประเภท
-  const payload = isField
-    ? { admin_id: adminUserId, approvedAt: approveDate }
-    : { staff_id: adminUserId, approvedAt: approveDate };
+      // payload ให้ถูกตามประเภท
+      const payload = isField
+        ? { admin_id: adminUserId, approvedAt: approveDate }
+        : { staff_id: adminUserId, approvedAt: approveDate };
 
-  return axios.patch(url, payload)
-    .then(res => ({ ok: true, res, item }))
-    .catch(err => {
-      const code = err?.response?.status;
-      const msg  = (err?.response?.data?.message || '').toString();
-      if (code === 409 || /already|อนุมัติแล้ว|processed|not pending/i.test(msg)) {
-        return { ok: true, res: { data: 'skipped' }, item };
+      // (ทางเลือก) ส่ง Idempotency-Key ป้องกันซ้ำ กรณี user เผลอกดหลายครั้ง/เน็ตหลุดแล้วส่งซ้ำ
+      const headers = {
+        'X-Idempotency-Key': `${item.id}-${item.booking_id || ''}-${approveDate}`
+      };
+
+      try {
+        const res = await axios.patch(url, payload, { headers });
+        ok.push({ item, res });
+      } catch (err) {
+        // ถ้า backend แจ้งว่าเคยอนุมัติแล้ว/ถูกประมวลผลแล้ว ให้ถือว่าสำเร็จ (ไม่ต้องหักซ้ำ)
+        const code = err?.response?.status;
+        const msg  = (err?.response?.data?.message || '').toString();
+        if (code === 409 || /already|อนุมัติแล้ว|processed|not pending/i.test(msg)) {
+          ok.push({ item, res: { data: 'skipped' } });
+        } else {
+          fail.push({ item, err });
+        }
       }
-      return { ok: false, err, item };
-    });
-});
+    }
 
+    // ดึงข้อมูลใหม่หลังจบ (ลดโอกาสแสดงจำนวนผิดหลัง race)
+    try { await this.fetchAndGroup(); } catch (_) {}
 
-    const results = await Promise.all(calls);
-const ok   = results.filter(r => r.ok);
-const fail = results.filter(r => !r.ok);
-
-try { await this.fetchAndGroup(); } catch(e){}
-
-// ✅ ถ้ามีสำเร็จอย่างน้อย 1 รายการ ให้ถือว่าสำเร็จเลย
-if (ok.length > 0) {
-  Swal.fire('สำเร็จ', isEquipment ? 'อนุมัติอุปกรณ์เรียบร้อยแล้ว' : 'อนุมัติเรียบร้อยแล้ว', 'success');
-  // (ถ้าต้องการเก็บรายละเอียดรายการที่ล้มเหลวไว้ดูใน console)
-  if (fail.length) {
-    console.warn('บางรายการอนุมัติไม่สำเร็จ:', fail.map(f => ({
-      id: f.item?.id, name: f.item?.name,
-      status: f.err?.response?.status,
-      msg: f.err?.response?.data?.message || f.err?.message
-    })));
-  }
-} else {
-  const e = fail[0]?.err;
-  const status = e?.response?.status;
-  const msg = e?.response?.data?.message || e?.message || (isEquipment ? 'ไม่สามารถอนุมัติอุปกรณ์ได้' : 'ไม่สามารถอนุมัติได้');
-  Swal.fire('ผิดพลาด', `${msg}${status ? ` (รหัส ${status})` : ''}`, 'error');
-}
+    if (ok.length > 0) {
+      Swal.fire('สำเร็จ', isEquipment ? 'อนุมัติอุปกรณ์เรียบร้อยแล้ว' : 'อนุมัติเรียบร้อยแล้ว', 'success');
+      if (fail.length) {
+        console.warn('บางรายการอนุมัติไม่สำเร็จ:', fail.map(f => ({
+          id: f.item?.id,
+          name: f.item?.name,
+          status: f.err?.response?.status,
+          msg: f.err?.response?.data?.message || f.err?.message
+        })));
+      }
+    } else {
+      const e = fail[0]?.err;
+      const status = e?.response?.status;
+      const msg = e?.response?.data?.message || e?.message || (isEquipment ? 'ไม่สามารถอนุมัติอุปกรณ์ได้' : 'ไม่สามารถอนุมัติได้');
+      Swal.fire('ผิดพลาด', `${msg}${status ? ` (รหัส ${status})` : ''}`, 'error');
+    }
   } catch (err) {
     const status = err?.response?.status;
     const msg = err?.response?.data?.message || err?.message || (isEquipment ? 'ไม่สามารถอนุมัติอุปกรณ์ได้' : 'ไม่สามารถอนุมัติได้');
@@ -879,11 +946,11 @@ isMultiDayEquipment(item) {
           <tr><th>จองแทนผู้ใช้</th><td>${esc(it.proxyStudentName || '-')}</td></tr>
           <tr><th>รหัสนักศึกษา/พนักงาน (ของผู้ที่ถูกจองแทน)</th><td>${esc(it.proxyStudentId || '-')}</td></tr>
           <!-- /แถวใหม่ -->
-          <tr><th>วันที่ขอใช้</th>
+          <tr><th>วันที่ทำรายการ</th>
   <td><span class="nowrap">${it.date ? esc(this.formatDate(it.date)) : '-'}</span></td>
 </tr>
 <tr>
-  <th>ช่วงวันที่ใช้งาน</th>
+  <th>ช่วงวันที่ขอใช้</th>
   <td>
     <span class="nowrap">
       ${esc(it.since ? this.formatDate(it.since) : '-')} - ${esc(it.uptodate ? this.formatDate(it.uptodate) : '-')}
@@ -1012,7 +1079,7 @@ if (recDate) {
         <th class="col-id">รหัสนักศึกษา/พนักงาน</th>
         <th class="col-requester">ผู้ขอใช้</th>
         <th style="width:120px">วันที่ทำรายการ</th>
-        <th class="col-period">ช่วงเวลาที่ใช้</th>
+        <th class="col-period">วันที่ขอยืม</th>
       </tr>
     </thead>
     <tbody>${rowsHtml}</tbody>

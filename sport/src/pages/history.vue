@@ -112,8 +112,8 @@
                 >
                   <!-- Date -->
                   <td style="padding: 8px; text-align: center;">
-                    {{ formatDateOnly(group.items[0].date) }}
-                  </td>
+  {{ formatDateOnly(getGroupCreatedAt(group)) }}
+</td>
 
                   <!-- Type -->
                   <td style="padding: 8px; text-align: center; text-transform: capitalize;">
@@ -418,6 +418,16 @@ export default {
   },
 
   methods: {
+getGroupCreatedAt(group) {
+  // เลือก createdAt ที่ใหม่สุดภายในกลุ่ม เพื่อให้ตรงกับการ sort
+  const dates = (group.items || [])
+    .map(it => new Date(it.createdAt))
+    .filter(d => d instanceof Date && !isNaN(d));
+
+  if (!dates.length) return null; // ให้ formatDateOnly จัดการคืน '-'
+  const latest = new Date(Math.max(...dates.map(d => d.getTime())));
+  return latest; // formatDateOnly รองรับ Date object ได้
+},
 
     buildReturnPayload(bookingId) {
   // ดึงรายการทั้งหมดของ booking นี้ (เลือกตัวที่อนุมัติไว้ก่อน)
@@ -932,6 +942,13 @@ export default {
         if (A!=='-' && B!=='-') return `${A} - ${B}`;
         return A!=='-' ? A : B;
       };
+const fmtDateRange = (a, b) => {
+  const A = fmtDate(a), B = fmtDate(b);
+  if (A !== '-' && B !== '-') return `${A} - ${B}`;
+  if (A !== '-') return A;
+  if (B !== '-') return B;
+  return '-';
+};
 
       let html = '';
 
@@ -940,6 +957,10 @@ export default {
         const startTime = it.startTime || it.since_time || '';
         const endTime   = it.endTime   || it.until_thetime || '';
         const timeRange = fmtTimeRange(startTime, endTime);
+const dateCell =
+  (it.since || it.uptodate)
+    ? fmtDateRange(it.since, it.uptodate)   // ใช้ช่วง since - uptodate
+    : fmtDate(it.date);                      // fallback เป็น date เดิม
 
         html = `
           <div class="swal-table-wrap">
@@ -969,7 +990,7 @@ export default {
                     <div><b>Name:</b> ${esc(it.username_form || '-')}</div>
                     <div><b>Book for:</b> ${esc(it.proxyStudentName || '-')}</div>
                   </td>
-                  <td class="td-center">${esc(fmtDate(it.date))}</td>
+                  <td class="td-center">${esc(dateCell)}</td>
                   <td class="td-center">${esc(timeRange)}</td>
                   <td class="td-center">${esc(it.status)}</td>
                   <td>${esc(it.remark || '-')}</td>
@@ -996,47 +1017,53 @@ export default {
         const isOneDayBorrow = (!first.since && !first.uptodate);
         const showPdfButton  = !isOneDayBorrow;
 
-        const rows = shown.map((it, idx) => {
-          const retDate = it.returnedAt ? fmtDate(it.returnedAt) : '-';
+       const rows = shown.map((it, idx) => {
+  const retDate = it.returnedAt ? fmtDate(it.returnedAt) : '-';
 
-          const borrowerName =
-            it.username_form ||
-            (group.items?.[0]?.username_form) ||
-            it.requester || '-';
+  const borrowerName =
+    it.username_form ||
+    (group.items?.[0]?.username_form) ||
+    it.requester || '-';
 
-          const attArr = Array.isArray(it.attachment)
-            ? it.attachment
-            : (it.attachment ? [it.attachment] : []);
+  const attArr = Array.isArray(it.attachment)
+    ? it.attachment
+    : (it.attachment ? [it.attachment] : []);
 
-          const firstUrl = attArr[0] || null;
+  const firstUrl = attArr[0] || null;
 
-          const retPhotoCell =
-            (['Returned','Return-pending'].includes(it.status) && firstUrl)
-              ? `
-                <img
-                  src="${firstUrl}"
-                  alt="return-photo"
-                  class="swal-thumb"
-                  onclick="window.__showFullReturnPhoto && window.__showFullReturnPhoto('${firstUrl}')"
-                />
-                <div class="swal-thumb-hint">(คลิกเพื่อดูรูปเต็ม)</div>
-              `
-              : '-';
+  const retPhotoCell =
+    (['Returned','Return-pending'].includes(it.status) && firstUrl)
+      ? `
+        <img
+          src="${firstUrl}"
+          alt="return-photo"
+          class="swal-thumb"
+          onclick="window.__showFullReturnPhoto && window.__showFullReturnPhoto('${firstUrl}')"
+        />
+        <div class="swal-thumb-hint">(คลิกเพื่อดูรูปเต็ม)</div>
+      `
+      : '-';
 
-          return `
-            <tr>
-              <td class="td-center">${esc(idx+1)}</td>
-              <td>${esc(it.name)}</td>
-              <td class="td-center">${esc(it.quantity ?? '-')}</td>
-              <td>${esc(borrowerName)}</td>
-              <td class="td-center">${esc(fmtDate(it.date))}</td>
-              <td class="td-center">${esc(it.status)}</td>
-              <td>${esc(it.remark || '-')}</td>         <!-- NEW: Remark -->
-              <td class="td-center">${retDate}</td>
-              <td class="td-center">${retPhotoCell}</td>
-            </tr>
-          `;
-        }).join('');
+  // *** ใช้ since - uptodate ถ้ามี ไม่งั้น fallback เป็น date เดิม ***
+  const dateCell = (it.since || it.uptodate)
+    ? fmtDateRange(it.since, it.uptodate)
+    : fmtDate(it.date);
+
+  return `
+    <tr>
+      <td class="td-center">${esc(idx+1)}</td>
+      <td>${esc(it.name)}</td>
+      <td class="td-center">${esc(it.quantity ?? '-')}</td>
+      <td>${esc(borrowerName)}</td>
+      <td class="td-center">${esc(dateCell)}</td>
+      <td class="td-center">${esc(it.status)}</td>
+      <td>${esc(it.remark || '-')}</td>
+      <td class="td-center">${retDate}</td>
+      <td class="td-center">${retPhotoCell}</td>
+    </tr>
+  `;
+}).join('');
+
 
         html = `
           <div class="swal-table-wrap">
