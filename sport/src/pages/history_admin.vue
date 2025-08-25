@@ -862,7 +862,12 @@ getFileNameFromUrl(u, fallback = 'booking.pdf') {
         const found = rows.find(h => h.bookingPdfUrl || h.booking_pdf_url);
         if (found && tryOpen(found.bookingPdfUrl || found.booking_pdf_url)) return;
 
-        Swal.fire('ไม่พบไฟล์ PDF', 'รายการนี้ไม่มี PDF Form ', 'warning');
+        Swal.fire({
+  icon: 'warning',
+  title: 'ไม่พบไฟล์ PDF',
+  html: '<div style="text-align:center">รายการนี้ไม่มี PDF Form</div>',
+  confirmButtonText: 'OK'
+});
         return;
       } catch (e) {
         console.error('openPdfLikeApprove lookup error:', e);
