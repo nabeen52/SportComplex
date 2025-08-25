@@ -1,8 +1,7 @@
 require('dotenv').config();
 const fs = require('fs');
-
-const connectDB = require('./db'); // << ต้องมี!
-connectDB(); // << ต้องเรียกแค่ที่เดียว!
+const connectDB = require('./db');
+connectDB();
 
 const express = require('express');
 const mongoose = require('mongoose');
@@ -31,8 +30,6 @@ const UploadFile = require('./models/upload_file');
 const BookingField = require('./models/booking_field');
 const app = express();
 
-
-// วางใกล้ๆ ส่วนอื่นที่ set uploads/ อยู่แล้ว
 const uploadRoot = path.join(__dirname, 'uploads');
 const newsDir = path.join(uploadRoot, 'news');
 if (!fs.existsSync(newsDir)) fs.mkdirSync(newsDir, { recursive: true });
@@ -57,12 +54,9 @@ const uploadNews = multer({
     }
 });
 
-
 const jwt = require('jsonwebtoken');
 const SECRET = process.env.JWT_SECRET || "YOUR_SUPER_SECRET";
 const nodemailer = require('nodemailer');
-
-// กำหนด transport ของคุณ (gmail, outlook, smtp ต่างๆ)
 const transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: {
@@ -83,7 +77,6 @@ const uploadDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });
 }
-// ฟังก์ชันสำหรับส่งอีเมล
 // ฟังก์ชันส่งอีเมล
 async function sendApproveEmail({ to, name, equipment, quantity }) {
     if (!to) return;
@@ -110,8 +103,6 @@ async function sendApproveEmail({ to, name, equipment, quantity }) {
         console.error('ส่งเมลไม่สำเร็จ:', err);
     }
 }
-
-// Helper: ดึงอีเมล staff ทั้งหมดในระบบ (role staff/admin)
 async function getStaffEmails() {
     const staff = await User.find({ role: 'staff', email: { $exists: true, $ne: "" } });
     return staff.map(s => s.email);
@@ -146,8 +137,6 @@ async function notifyAdminNewBorrow({ requester, items, booking_id }) {
         html
     });
 }
-
-
 // แจ้งเตือน staff ทุกคนเมื่อมีรายการยืมอุปกรณ์วันเดียว
 async function notifyStaffNewBorrow({ requester, items, booking_id }) {
     const staffEmails = await getStaffEmails();
@@ -172,7 +161,6 @@ async function notifyStaffNewBorrow({ requester, items, booking_id }) {
         html
     });
 }
-// Helper: ส่งอีเมลแจ้งเตือน staff (ใช้ subject กับ html อะไรก็ได้)
 // Helper: ส่งอีเมลแจ้งเตือนคน approve ว่ามีรายการรอ confirm การคืน
 async function notifyApproverReturnPending({ approverId, userName, equipment, quantity, booking_id }) {
     if (!approverId) return;
@@ -198,8 +186,6 @@ async function notifyApproverReturnPending({ approverId, userName, equipment, qu
         html
     });
 }
-
-
 // ฟังก์ชันส่งอีเมลแจ้ง user ว่า "ไม่ได้รับการอนุมัติการยืมอุปกรณ์"
 async function sendDisapproveEquipmentEmail({ to, name, equipment, quantity }) {
     if (!to) return;
@@ -226,10 +212,6 @@ async function sendDisapproveEquipmentEmail({ to, name, equipment, quantity }) {
         console.error('ส่งเมลแจ้ง disapprove equipment ไม่สำเร็จ:', err);
     }
 }
-
-
-
-
 // ส่งอีเมลแจ้ง user ว่าคืนของสำเร็จแล้ว
 async function sendReturnSuccessEmail({ to, name, equipment, quantity }) {
     if (!to) return;
@@ -256,10 +238,6 @@ async function sendReturnSuccessEmail({ to, name, equipment, quantity }) {
         console.error('ส่งเมลคืนของสำเร็จไม่สำเร็จ:', err);
     }
 }
-
-
-
-
 // แจ้งเตือน admin ทุกคนเมื่อมีรายการขอใช้สนามเข้ามาใหม่ (pending)
 async function notifyAdminNewFieldBooking({ requester, building, activity, since, uptodate, zone, booking_id }) {
     const adminEmails = await getAdminEmails();
@@ -286,7 +264,6 @@ async function notifyAdminNewFieldBooking({ requester, building, activity, since
         html
     });
 }
-
 // ส่งอีเมลแจ้ง user ว่าได้รับการอนุมัติการขอใช้สนาม
 async function sendApproveFieldEmail({ to, name, field, activity, since, uptodate, startTime, endTime }) {
     if (!to) return;
@@ -315,7 +292,6 @@ async function sendApproveFieldEmail({ to, name, field, activity, since, uptodat
         console.error('ส่งเมลแจ้ง approve field ไม่สำเร็จ:', err);
     }
 }
-
 // ส่งอีเมลแจ้ง user ว่าไม่ได้รับการอนุมัติจองสนาม
 async function sendDisapproveFieldEmail({ to, name, field, activity, since, uptodate, startTime, endTime }) {
     if (!to) return;
@@ -344,7 +320,6 @@ async function sendDisapproveFieldEmail({ to, name, field, activity, since, upto
         console.error('ส่งเมลแจ้ง disapprove field ไม่สำเร็จ:', err);
     }
 }
-
 // ฟังก์ชันส่งอีเมลแจ้ง user ว่า "รายการขอใช้สนามของคุณถูกยกเลิก"
 async function sendCancelFieldEmail({ to, name, field, activity, since, uptodate, startTime, endTime }) {
     if (!to) return;
@@ -373,10 +348,6 @@ async function sendCancelFieldEmail({ to, name, field, activity, since, uptodate
         console.error('ส่งเมลแจ้ง cancel field ไม่สำเร็จ:', err);
     }
 }
-
-
-
-
 async function saveGoogleProfilePic(picUrl, userId) {
     try {
         const response = await axios.get(picUrl, { responseType: 'arraybuffer' });
@@ -389,30 +360,7 @@ async function saveGoogleProfilePic(picUrl, userId) {
         return null;
     }
 }
-
-
-// mongoose.connection.once('open', () => {
-//     console.log('[MongoDB connected]', mongoose.connection.name);
-// });
-
-
-
-// Connect MongoDB
-
-
-// =============== เชื่อมต่อ MongoDB ที่เดียว! ==================
-// mongoose.connect(process.env.MONGO_URI, { // options จะใส่หรือไม่ใส่ก็ได้
-//     useNewUrlParser: true,
-//     useUnifiedTopology: true,
-// })
-//     .then(() => console.log('[MongoDB connected]', mongoose.connection.name))
-//     .catch(err => console.error('MongoDB connection error:', err));
-// // =
-
-
 app.set('trust proxy', 1);
-
-
 const allowedOrigins = [
     'http://localhost:5173',
     'http://localhost:8010',
@@ -434,13 +382,10 @@ app.use(cors({
     },
     credentials: true
 }));
-
 app.use(express.json({ limit: '110mb' }));
 app.use(express.urlencoded({ limit: '110mb', extended: true }));
 
 //login oauth
-
-
 app.use(session({
     secret: process.env.SESSION_SECRET || 'YOUR_SECRET',
     resave: false,
@@ -453,22 +398,6 @@ app.use(session({
         domain: process.env.NODE_ENV === 'production' ? '.mfu.ac.th' : undefined // ใส่ให้ตรง domain จริง
     }
 }));
-
-
-// app.use(session({
-//     secret: process.env.SESSION_SECRET || 'YOUR_SECRET',
-//     resave: false,
-//     saveUninitialized: false,
-//     cookie: {
-//         secure: process.env.NODE_ENV === 'production',         // true = require HTTPS (production)
-//         sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',  // 'none' = cross-site (prod), 'lax' = dev
-//         httpOnly: true,
-//         path: '/',
-//         // domain: 'reserv-scc.mfu.ac.th'   // เปิดถ้าต้องการ lock domain (แนะนำกรณี deploy จริง)
-//     }
-// }));
-
-
 app.use(passport.initialize());
 app.use(passport.session());
 
@@ -482,101 +411,121 @@ passport.deserializeUser(async (id, done) => {
         done(err);
     }
 });
+// สร้าง user_id สำหรับโดเมน @mfu.ac.th ให้ยาว <= 10 และไม่ซ้ำ
+async function generateUniqueMfuUserId(originalIdLike) {
+    const MAX = 10;
+    let base = String(originalIdLike || '').trim();
+    if (!base) base = String(Date.now());
+    base = base.slice(0, MAX); // ตัดความยาวพื้นฐานให้ <= 10
 
+    // ถ้ายังไม่ชน ใช้ได้เลย
+    if (!(await User.exists({ user_id: base }))) return base;
 
+    // ถ้าชน: ลดฐานลง แล้วเติม suffix ให้รวมแล้วไม่เกิน 10
+    // เริ่มจากตัดเหลือ 9 ตัว แล้วลองเติมตัวเลข/ตัวอักษร 1 ตัว
+    let core = base.slice(0, MAX - 1);
+    const candidates = [];
+    for (let i = 0; i <= 9; i++) candidates.push(core + i);
+    for (let c = 97; c <= 122; c++) candidates.push(core + String.fromCharCode(c)); // a-z
 
-// passport.use(new GoogleStrategy({
-//     clientID: process.env.GOOGLE_CLIENT_ID,
-//     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-//     callbackURL: process.env.GOOGLE_CALLBACK_URL,
-// },
-//     async (accessToken, refreshToken, profile, done) => {
-//         try {
-//             const email = profile.emails[0].value;
-//             // บังคับให้ login ได้เฉพาะ email @mfu.ac.th เท่านั้น
-//             if (!email.endsWith('.mfu.ac.th')) {
-//                 // ถ้า email ไม่ตรง จะไม่ login ให้
-//                 return done(null, false, { message: 'อนุญาตเฉพาะอีเมล mfu.ac.th เท่านั้น' });
-//             }
-//             let user = await User.findOne({ email });
-//             // ดึง url รูปจาก Google profile
-//             let profilePicUrl = profile._json.picture || '';
+    for (const cand of candidates) {
+        if (!(await User.exists({ user_id: cand }))) return cand;
+    }
 
-//             // ดาวน์โหลดและบันทึกรูป Google profile เป็นไฟล์ใน server (และได้ url กลับมา)
-//             let savedPicUrl = null;
-//             if (profilePicUrl && profile.id) {
-//                 savedPicUrl = await saveGoogleProfilePic(profilePicUrl, profile.id);
-//             }
+    // fallback แบบสุ่มภายใน 10 ตัว
+    for (let i = 0; i < 50; i++) {
+        const rand = Math.random().toString(36).slice(2, 2 + (MAX - core.length));
+        const cand = (core + rand).slice(0, MAX);
+        if (!(await User.exists({ user_id: cand }))) return cand;
+    }
 
-//             if (!user) {
-//                 user = new User({
-//                     email: email,
-//                     name: profile.displayName,
-//                     user_id: profile.id,
-//                     role: 'user',
-//                     picture: savedPicUrl || profilePicUrl
-//                 });
-//                 await user.save();
-//             } else {
-//                 user.picture = savedPicUrl || profilePicUrl;
-//                 await user.save();
-//             }
-//             return done(null, user);
-//         } catch (error) {
-//             return done(error, null);
-//         }
-//     }
-// ));
+    // สุดท้ายจริงๆ
+    return core.padEnd(MAX, '0');
+}
 
-passport.use(new GoogleStrategy({
-    clientID: process.env.GOOGLE_CLIENT_ID,
-    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    callbackURL: process.env.GOOGLE_CALLBACK_URL,
-},
+passport.use(new GoogleStrategy(
+    {
+        clientID: process.env.GOOGLE_CLIENT_ID,
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+        callbackURL: process.env.GOOGLE_CALLBACK_URL,
+    },
     async (accessToken, refreshToken, profile, done) => {
         try {
-            const email = profile.emails?.[0]?.value;
+            const email = profile.emails?.[0]?.value || '';
+            const domainOk = email.endsWith('@mfu.ac.th') || email.endsWith('@lamduan.mfu.ac.th');
 
             console.log("Google Email Login:", email);
-
-            // ✅ แก้ตรงนี้!
-            if (!(email.endsWith('@mfu.ac.th') || email.endsWith('@lamduan.mfu.ac.th'))) {
+            if (!domainOk) {
                 console.log("Reject email:", email);
                 return done(null, false, { message: 'อนุญาตเฉพาะอีเมล @mfu.ac.th หรือ @lamduan.mfu.ac.th เท่านั้น' });
             }
-            // === ส่วนที่เพิ่มเข้าไป ===
-            let user_id;
-            if (email.endsWith('@lamduan.mfu.ac.th')) {
-                user_id = email.split('@')[0]; // เลขไอดีหน้า @
-            } else {
-                user_id = profile.id; // Google ID เดิม
-            }
 
+            const isLamduan = email.endsWith('@lamduan.mfu.ac.th');
+            const isMfu = email.endsWith('@mfu.ac.th');
+
+            // url รูปจาก Google
+            const profilePicUrl = profile._json?.picture || '';
+
+            // หา user ตาม email ก่อน
             let user = await User.findOne({ email });
 
-            // ดึง url รูปจาก Google profile
-            let profilePicUrl = profile._json.picture || '';
+            // === คำนวณ user_id ตามโดเมน ===
+            let desiredUserId = null;
 
-            // ดาวน์โหลดและบันทึกรูป Google profile เป็นไฟล์ใน server (และได้ url กลับมา)
+            if (isLamduan) {
+                // lamduan: เหมือนเดิม ใช้ส่วนหน้า @
+                desiredUserId = email.split('@')[0];
+            } else if (isMfu) {
+                // mfu: “เซตเหมือนเดิม” = อิง profile.id แต่บังคับ ≤ 10 และไม่ซ้ำ
+                // - ถ้ามี user เดิมอยู่แล้ว: **ไม่ทับค่าเดิม** (กัน data เปลี่ยน)
+                // - ถ้ายังไม่มี: สร้างตามกติกา
+                if (!user) {
+                    desiredUserId = await generateUniqueMfuUserId(profile.id);
+                }
+            }
+
+            // ดาวน์โหลด/บันทึกรูป (ชื่อไฟล์อิง user_id ที่จะใช้)
+            // ถ้า user เดิมมี user_id อยู่แล้ว ใช้อันนั้นชื่อไฟล์ได้เลย
+            const tmpUserIdForPic = desiredUserId || user?.user_id || profile.id || email.split('@')[0];
             let savedPicUrl = null;
-            if (profilePicUrl && profile.id) {
-                savedPicUrl = await saveGoogleProfilePic(profilePicUrl, user_id);
+            if (profilePicUrl) {
+                savedPicUrl = await saveGoogleProfilePic(profilePicUrl, tmpUserIdForPic);
             }
 
             if (!user) {
+                // สร้าง user ใหม่
                 user = new User({
-                    email: email,
+                    email,
                     name: profile.displayName,
-                    user_id: user_id,  // << ใช้ user_id ที่ set แล้ว
+                    user_id: desiredUserId || (isLamduan ? email.split('@')[0] : String(profile.id).slice(0, 10)),
                     role: 'user',
                     picture: savedPicUrl || profilePicUrl
                 });
+
+                // mfu: เผื่อกรณีซ้ำอีกชั้น (อยู่ดีๆ profile.id 10 ตัวซ้ำ)
+                if (isMfu) {
+                    if (await User.exists({ user_id: user.user_id })) {
+                        user.user_id = await generateUniqueMfuUserId(profile.id);
+                    }
+                }
+
                 await user.save();
             } else {
+                // อัปเดตรูปเสมอ
                 user.picture = savedPicUrl || profilePicUrl;
-                if (user.user_id !== user_id) user.user_id = user_id; // อัปเดตให้เสมอ
+
+                // อัปเดต user_id เฉพาะ lamduan ให้ sync กับหน้า @ (ตามสเปคเดิม)
+                if (isLamduan) {
+                    const lamduanId = email.split('@')[0];
+                    if (user.user_id !== lamduanId) {
+                        user.user_id = lamduanId;
+                    }
+                }
+
+                // mfu: **ไม่เปลี่ยน user_id เดิม** (คงค่าเดิมตามที่เคยมี)
                 await user.save();
             }
+
             return done(null, user);
         } catch (error) {
             console.error("Google OAuth error:", error);
@@ -584,8 +533,6 @@ passport.use(new GoogleStrategy({
         }
     }
 ));
-
-
 
 function requireLogin(req, res, next) {
     if (req.isAuthenticated && req.isAuthenticated()) return next();
@@ -617,18 +564,12 @@ app.use('/api', (req, res, next) => {
 });
 
 // ====== OAuth Routes ======
-
-// app.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
-
 app.get('/auth/google',
     passport.authenticate('google', {
         scope: ['profile', 'email'],
         prompt: 'select_account'  // <<< บังคับให้ Google ถามเลือกบัญชีใหม่ทุกครั้ง
     })
 );
-
-
-
 app.post('/auth/login', async (req, res) => {
     // ... ตรวจ user/pass ตามระบบเดิม
     const { username, password } = req.body;
@@ -669,22 +610,13 @@ app.get('/auth/logout', (req, res) => {
     });
 });
 
-
-
-
-
 app.get('/auth/logout-google', (req, res) => {
-    res.redirect('https://accounts.google.com/Logout?continue=https://appengine.google.com/_ah/logout?continue=http://localhost:3000/auth/google');
+    const next = encodeURIComponent(`${FRONTEND_URL}/login?error=logout`);
+    res.redirect(
+        `https://accounts.google.com/Logout?continue=https://appengine.google.com/_ah/logout?continue=${next}`
+    );
 });
 
-
-// app.get('/auth/google/callback',
-//     passport.authenticate('google', { failureRedirect: '/login', session: true }),
-//     (req, res) => {
-//         // เปลี่ยนให้ redirect ไปที่ url ที่กำหนดใน env
-//         res.redirect(`${FRONTEND_URL}/login-success`);
-//     }
-// );
 
 app.get('/auth/google/callback',
     passport.authenticate('google', {
@@ -695,19 +627,6 @@ app.get('/auth/google/callback',
         res.redirect(`${FRONTEND_URL}/login-success`);
     }
 );
-
-
-
-// app.get('/api/me', (req, res) => {
-//     if (req.user) {
-//         res.json({
-//             loggedIn: true,
-//             user: req.user
-//         });
-//     } else {
-//         res.status(401).json({ loggedIn: false });
-//     }
-// });
 
 app.get('/api/me', (req, res) => {
     console.log("REQ USER:", req.user);
@@ -722,19 +641,6 @@ app.get('/api/me', (req, res) => {
         res.status(500).send(e.message || "Unknown error");
     }
 });
-
-
-
-
-
-
-
-
-
-// ไม่มี EquipmentBorrow (ใช้ BookingEquipment แทน)
-
-
-
 
 function calcTotalHours(since, uptodate, startTime, endTime) {
     if (!since || !uptodate || !startTime || !endTime) return 0;
@@ -764,75 +670,12 @@ const bookingFieldUpload = multer({
     limits: { fileSize: 10 * 1024 * 1024 }
 });
 
-
-
-
-// สมมติว่าใช้ mongoose model History
-
-// app.get('/api/history/pdf', async (req, res) => {
-//     const bookingId = req.query.booking_id;
-//     if (!bookingId) return res.status(400).json({ error: 'booking_id required' });
-
-//     try {
-//         // ค้นหา history ที่มี booking_id นั้น
-//         const historyItem = await History.findOne({ booking_id: bookingId }).lean();
-
-//         if (!historyItem || !historyItem.bookingPdf) {
-//             return res.status(404).json({ error: 'PDF not found' });
-//         }
-
-//         // bookingPdf อาจเก็บเป็น base64 string หรือ Buffer
-//         // ถ้าเป็น base64 string:
-//         // const pdfBuffer = Buffer.from(historyItem.bookingPdf, 'base64');
-//         // หรือถ้าเก็บเป็น Buffer ใน MongoDB แล้วใช้ตรง ๆ ได้เลย
-
-//         let pdfBuffer;
-//         if (typeof historyItem.bookingPdf === 'string') {
-//             pdfBuffer = Buffer.from(historyItem.bookingPdf, 'base64');
-//         } else {
-//             pdfBuffer = historyItem.bookingPdf;
-//         }
-
-//         res.set({
-//             'Content-Type': 'application/pdf',
-//             'Content-Disposition': `attachment; filename=booking_${bookingId}.pdf`,
-//             'Content-Length': pdfBuffer.length,
-//         });
-
-//         res.send(pdfBuffer);
-
-//     } catch (err) {
-//         console.error(err);
-//         res.status(500).json({ error: 'Server error' });
-//     }
-// });
-
-// // PDF download by booking_id or _id
-// app.get('/api/history/pdf/:anyid', async (req, res) => {
-//     try {
-//         let doc = await History.findById(req.params.anyid);
-//         if (!doc) doc = await History.findOne({ booking_id: req.params.anyid });
-//         if (!doc || !doc.bookingPdf) return res.status(404).send('Not found');
-//         const pdfBuffer = Buffer.from(doc.bookingPdf, 'base64');
-//         res.set('Content-Type', 'application/pdf');
-//         res.set('Content-Disposition', 'inline; filename="booking-form.pdf"');
-//         res.send(pdfBuffer);
-//     } catch (err) {
-//         console.log('Error download pdf:', err);
-//         res.status(500).send('Server error');
-//     }
-// });
-
 // ตัวเลือก (ถ้าจำเป็น): redirect ถ้ามี bookingPdfUrl
 app.get('/api/history/pdfbyurl/:id', async (req, res) => {
     const doc = await History.findById(req.params.id).lean();
     if (!doc || !doc.bookingPdfUrl) return res.status(404).send('Not found');
     return res.redirect(doc.bookingPdfUrl);
 });
-
-
-
-
 
 // ============ Multer + Static Uploads (upload file to ./uploads) ==========
 app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
@@ -844,7 +687,6 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
         }
     }
 }));
-
 
 const upload = multer({
     storage: multer.diskStorage({
@@ -863,9 +705,6 @@ const upload = multer({
             : cb(new Error('Unsupported file type'), false);
     }
 });
-
-
-
 
 app.post('/api/upload', (req, res, next) => {
     upload.single('file')(req, res, function (err) {
@@ -895,9 +734,6 @@ app.post('/api/uploads', (req, res, next) => {
         return res.json({ success: true, fileUrls });
     });
 });
-
-// ===========================================================================
-
 // ==================== Health Check ====================
 app.get('/', (req, res) => res.send('Backend is running!'));
 
@@ -905,91 +741,6 @@ app.get('/', (req, res) => res.send('Backend is running!'));
 app.post('/api/register', (req, res) => {
     res.send({ success: true, message: 'Register completed' });
 });
-
-// app.get('/auth/callback', async (req, res) => {
-//     const code = req.query.code;
-//     if (!code) return res.status(400).send('No code provided');
-//     try {
-//         const tokenResponse = await axios.post('https://lamduan.mfu.ac.th/oauth/token', {
-//             grant_type: 'authorization_code',
-//             code,
-//             redirect_uri: 'http://localhost:3000/auth/callback',
-//             client_id: 'YOUR_CLIENT_ID',
-//             client_secret: 'YOUR_CLIENT_SECRET'
-//         }, {
-//             headers: { 'Content-Type': 'application/json' }
-//         });
-//         const access_token = tokenResponse.data.access_token;
-//         const userResponse = await axios.get('https://lamduan.mfu.ac.th/api/userinfo', {
-//             headers: { Authorization: `Bearer ${access_token}` }
-//         });
-//         const { email, name, student_id } = userResponse.data;
-//         let user = await User.findOne({ email });
-//         if (!user) {
-//             user = new User({ email, name, user_id: student_id, role: 'user' });
-//             await user.save();
-//         }
-//         res.json({
-//             success: true,
-//             user: {
-//                 name: user.name,
-//                 email: user.email,
-//                 user_id: user.user_id,
-//                 role: user.role
-//             }
-//         });
-//     } catch (err) {
-//         res.status(500).json({ success: false, message: err.message });
-//     }
-// });
-
-
-// app.post('/api/login', async (req, res) => {
-//     const { username, password } = req.body;
-//     const user = await User.findOne({ username, password });
-//     if (!user) return res.status(401).send({ success: false, message: "Username หรือ Password ไม่ถูกต้อง" });
-//     res.send({
-//         success: true,
-//         token: "dummy-token",
-//         user_id: user.user_id,
-//         role: user.role,
-//         name: user.name,
-//         email: user.email   // <<<< เพิ่มบรรทัดนี้
-//     });
-// });
-
-
-// app.post('/api/login', async (req, res) => {
-//     try {
-//         const { username, password } = req.body;
-
-//         // บังคับให้ login ได้เฉพาะ email @mfu.ac.th เท่านั้น
-//         if (!(username.endsWith('@lamduan.mfu.ac.th') || username.endsWith('@mfu.ac.th'))) {
-
-//             return res.status(401).json({ success: false, message: 'กรุณาใช้ email ที่ลงท้ายด้วย @mfu.ac.th' });
-//         }
-
-//         // หา user จาก username
-//         const user = await User.findOne({ username });
-//         if (!user) return res.status(401).json({ success: false, message: "Username หรือ Password ไม่ถูกต้อง" });
-
-//         // ตรวจสอบ password กับ hash ที่อยู่ใน database
-//         const isMatch = await bcrypt.compare(password, user.password);
-//         if (!isMatch) return res.status(401).json({ success: false, message: "Username หรือ Password ไม่ถูกต้อง" });
-
-//         // สำเร็จ!
-//         res.json({
-//             success: true,
-//             token: "dummy-token", // หรือ JWT จริงก็ได้
-//             user_id: user.user_id,
-//             role: user.role,
-//             name: user.name
-//         });
-//     } catch (err) {
-//         res.status(500).json({ success: false, message: err.message });
-//     }
-// });
-
 
 app.post('/api/login', async (req, res) => {
     try {
@@ -1020,9 +771,6 @@ app.post('/api/login', async (req, res) => {
         res.status(500).json({ success: false, message: err.message });
     }
 });
-
-
-
 
 // ==================== User APIs ====================
 app.get('/api/users', async (req, res) => {
@@ -1288,8 +1036,6 @@ app.patch('/api/users/update_id', async (req, res) => {
         res.status(500).json({ success: false, message: 'เกิดข้อผิดพลาดในระบบ' });
     }
 });
-
-// ==================== History (Borrow/Return/Approve/Disapprove) ====================
 // ==================== History (Borrow/Return/Approve/Disapprove) ====================
 app.post('/api/history', async (req, res) => {
     try {
@@ -1321,8 +1067,6 @@ app.post('/api/history', async (req, res) => {
         if (exist) {
             return res.status(409).json({ success: false, message: "พบรายการที่ยังไม่อนุมัติอยู่แล้ว", duplicate: exist });
         }
-        // ============================================================
-
         let agencyName = (req.body.agency || '').trim();
 
         if (req.body.type === 'field') {
@@ -1439,17 +1183,12 @@ app.post('/api/history', async (req, res) => {
         res.status(500).send({ success: false, message: err.message });
     }
 });
-
-
-
-
-
 app.get('/api/history', async (req, res) => {
     try {
         const filter = {};
-        if (req.query.user_id) {
-            filter.user_id = req.query.user_id;
-        }
+        if (req.query.user_id) filter.user_id = req.query.user_id;
+        if (req.query.booking_id) filter.booking_id = req.query.booking_id; 
+        
         const histories = await History.find(filter).lean();
         console.log("All histories:", histories.map(h => ({ name: h.name, user_id: h.user_id, type: h.type, status: h.status })));
 
@@ -1488,9 +1227,6 @@ app.get('/api/history', async (req, res) => {
     }
 });
 
-
-
-
 app.delete('/api/history/:id', async (req, res) => {
     try {
         const deleted = await History.findByIdAndDelete(req.params.id);
@@ -1500,68 +1236,60 @@ app.delete('/api/history/:id', async (req, res) => {
         res.status(500).send({ message: err.message });
     }
 });
+// == Return equipment (keep ALL original fields) ==
 app.patch('/api/history/:id/return', async (req, res) => {
     try {
         const staffId = req.body.staff_id;
-        const staff = await User.findOne({ user_id: staffId });
-        const staffName = staff ? staff.name : staffId;
+        const condition = req.body.status || 'good';   // สมบูรณ์/ไม่สมบูรณ์จากหน้าบ้าน
+        const remark = (req.body.remark || '').trim();
 
-        const oldRecord = await History.findById(req.params.id);
-        if (!oldRecord) return res.status(404).send({ message: 'Not found' });
+        const staff = staffId ? await User.findOne({ user_id: staffId }) : null;
+        const old = await History.findById(req.params.id);
+        if (!old) return res.status(404).send({ message: 'Not found' });
 
-        // อัปเดตสต็อก
-        await Equipment.updateOne(
-            { name: oldRecord.name.trim() },
-            { $inc: { quantity: Math.abs(oldRecord.quantity) } }
-        );
+        // 1) คืนสต็อกเฉพาะอุปกรณ์
+        if (old.type === 'equipment' && old.name && old.quantity) {
+            await Equipment.updateOne(
+                { name: (old.name || '').trim() },
+                { $inc: { quantity: Math.abs(old.quantity) } }
+            );
+        }
 
-        const returnedRecord = new History({
-            user_id: oldRecord.user_id,
-            name: oldRecord.name,
-            type: oldRecord.type,
-            quantity: oldRecord.quantity,
-            date: new Date(),
-            status: 'returned',
-            approvedBy: oldRecord.approvedBy,      // คงค่าอนุมัติเดิมไว้
-            approvedById: oldRecord.approvedById,
-            returnedBy: staffName,
-            returnedById: staffId,
-            remark: req.body.remark || '',
-            returnedAt: new Date(),
-            attachment: oldRecord.attachment || null,
-            fileName: oldRecord.fileName || null,
-            fileType: oldRecord.fileType || null,
-            booking_id: oldRecord.booking_id || null,
-            since: oldRecord.since || '',
-            uptodate: oldRecord.uptodate || ''
-        });
+        // 2) อัปเดตเอกสารเดิมให้เป็น "returned"
+        old.status = 'returned';
+        old.returnedById = staffId || old.returnedById || '';
+        old.returnedBy = (staff && staff.name) ? staff.name : (staffId || old.returnedBy || '');
+        old.returnedAt = new Date();
+        old.condition = condition;          // (เพิ่ม field นี้ใน schema ถ้ายังไม่มี)
+        if (remark) old.remark = remark;
 
-        await returnedRecord.save();
-        await History.findByIdAndDelete(req.params.id);
+        // ถ้าหน้าบ้านส่งรูปคืนมาใหม่ให้ทับได้ แต่ถ้าไม่ส่ง คงค่าที่เคยบันทึกไว้ (จาก request-return)
+        if (req.body.returnPhoto) {
+            old.returnPhoto = req.body.returnPhoto;
+        }
 
-        // ✅ ส่งอีเมลคืนสำเร็จ พร้อมชื่อผู้อนุมัติเดิม
+        await old.save();                       // <-- ไม่สร้างเอกสารใหม่ ไม่ลบทิ้ง ฟิลด์อื่นอยู่ครบ
+
+        // 3) เมลแจ้งผู้ใช้ (เหมือนเดิม)
         try {
-            const user = await User.findOne({ user_id: oldRecord.user_id });
-            if (user && user.email) {
+            const user = await User.findOne({ user_id: old.user_id });
+            if (user?.email) {
                 await sendReturnSuccessEmail({
                     to: user.email,
-                    name: user.name || user.email || oldRecord.user_id,
-                    equipment: oldRecord.name,
-                    quantity: oldRecord.quantity,
-                    approvedBy: oldRecord.approvedBy || ''   // << ส่งชื่อผู้อนุมัติเดิม
+                    name: user.name || user.email || old.user_id,
+                    equipment: old.name,
+                    quantity: old.quantity
                 });
             }
         } catch (mailErr) {
-            console.error('ส่งเมลคืนของสำเร็จไม่สำเร็จ:', mailErr.message);
+            console.error('send return mail error:', mailErr.message);
         }
 
-        res.send(returnedRecord);
+        res.send(old);
     } catch (err) {
         res.status(500).send({ message: err.message });
     }
 });
-
-
 
 
 app.patch('/api/history/:id/request-return', uploadReturn.single('attachment'), async (req, res) => {
@@ -1569,9 +1297,8 @@ app.patch('/api/history/:id/request-return', uploadReturn.single('attachment'), 
         const oldRecord = await History.findById(req.params.id);
         if (!oldRecord) return res.status(404).json({ message: 'Not found' });
 
-        // ---- ดึงไฟล์จาก multipart หรือ base64 เดิม ----
+        // ---- รับไฟล์แนบจาก multipart/base64 ----
         let buffer, ext = 'jpg', mimeType = 'image/jpeg';
-
         if (req.file) {
             buffer = req.file.buffer;
             mimeType = req.file.mimetype || 'image/jpeg';
@@ -1586,33 +1313,60 @@ app.patch('/api/history/:id/request-return', uploadReturn.single('attachment'), 
             return res.status(400).json({ error: 'No attachment provided' });
         }
 
-        // ---- บันทึกไฟล์ลง /uploads/returns ----
+        // ---- บันทึกรูปไปที่ /uploads/returns ----
         const fname = `return_${oldRecord.booking_id || oldRecord._id}_${Date.now()}.${ext}`;
         const fpath = path.join(returnsDir, fname);
         await fs.promises.writeFile(fpath, buffer);
         const fileUrl = `${req.protocol}://${req.get('host')}/uploads/returns/${fname}`;
 
-        // ---- สร้างรายการ return-pending (เหมือน logic เดิม แต่แนบเป็น URL) ----
+        // ---- รวมข้อมูล: ถ้า front ส่งมาก็ใช้ของ front, ถ้าไม่ส่งให้ fallback เป็นของเดิม ----
+        const merged = (key, def = '') => (req.body[key] ?? oldRecord[key] ?? def);
+
         const returnRequest = new History({
+            // ค่าหลัก
             user_id: oldRecord.user_id,
             name: oldRecord.name,
             type: oldRecord.type,
             quantity: oldRecord.quantity,
-            date: new Date(),
             status: 'return-pending',
-            attachment: fileUrl,                // ถ้า schema เป็น array ให้เปลี่ยนเป็น [fileUrl]
-            fileName: fname,
-            fileType: mimeType,
+            date: new Date(),
             booking_id: oldRecord.booking_id || null,
-            returnPhoto: fileUrl,
+
+            // ค่าที่ต้องการ “ติดไปด้วย”
+            zone: merged('zone', oldRecord.zone || ''),
+            agency: merged('agency', oldRecord.agency || ''),
+            username_form: merged('username_form', oldRecord.username_form || ''),
+            id_form: merged('id_form', oldRecord.id_form || ''),
+            proxyStudentName: merged('proxyStudentName', oldRecord.proxyStudentName || ''),
+            proxyStudentId: merged('proxyStudentId', oldRecord.proxyStudentId || ''),
+            bookingPdf: merged('bookingPdf', oldRecord.bookingPdf || null),
+            bookingPdfUrl: merged('bookingPdfUrl', oldRecord.bookingPdfUrl || null),
+            name_active: merged('name_active', oldRecord.name_active || ''),
+            startTime: merged('startTime', oldRecord.startTime || ''),
+            endTime: merged('endTime', oldRecord.endTime || ''),
+            remark: merged('remark', oldRecord.remark || ''),
+
+            // ช่วงวันที่ยืม
             since: oldRecord.since || '',
             uptodate: oldRecord.uptodate || '',
+
+            // คนอนุมัติเดิม
             approvedBy: oldRecord.approvedBy || '',
-            approvedById: oldRecord.approvedById || ''
+            approvedById: oldRecord.approvedById || '',
+
+            // แนบไฟล์รูปคืน (ชัดเจนว่าเป็น array)
+            attachment: [fileUrl],
+            fileName: [fname],
+            fileType: [mimeType],
+            returnPhoto: fileUrl,
+
+            // timestamp อื่น ๆ ถ้าต้องใช้
+            updatedAt: new Date()
         });
+
         await returnRequest.save();
 
-        // ---- แจ้งคนอนุมัติเดิมเหมือนเดิม ----
+        // แจ้งผู้อนุมัติเดิม (เหมือนเดิม)
         try {
             const approverId = oldRecord.approvedById;
             const borrower = await User.findOne({ user_id: oldRecord.user_id });
@@ -1629,7 +1383,7 @@ app.patch('/api/history/:id/request-return', uploadReturn.single('attachment'), 
             console.error('[Send return-pending notify mail error]', mailErr.message);
         }
 
-        return res.json({ success: true, id: returnRequest._id, attachment: fileUrl });
+        return res.json({ success: true, doc: returnRequest });
     } catch (err) {
         console.error('request-return error:', err);
         res.status(500).json({ error: 'Server error' });
@@ -1637,11 +1391,6 @@ app.patch('/api/history/:id/request-return', uploadReturn.single('attachment'), 
 });
 
 
-
-
-
-// app.js (backend)
-// app.js (backend)
 app.get('/api/history/file/:id', async (req, res) => {
     try {
         const { id } = req.params;
@@ -1700,8 +1449,6 @@ app.get('/api/history/file/:id', async (req, res) => {
                 return res.redirect(full);
             }
         }
-
-
         // ถ้าเป็น base64
         let base64Data = fileData;
         if (base64Data.startsWith('data:')) {
@@ -1749,12 +1496,6 @@ app.get('/file-proxy/pdf', async (req, res) => {
         res.status(502).send('Failed to fetch PDF');
     }
 });
-
-
-
-
-
-
 // ยืมวันเดียว
 app.post('/api/history/singleday', async (req, res) => {
     try {
@@ -1834,10 +1575,6 @@ app.get('/api/equipments/return-pending', async (req, res) => {
         res.status(500).send({ message: err.message });
     }
 });
-
-
-
-
 // === Helper: เช็คว่ายืมวันเดียวหรือหลายวัน ===
 function isSingleDay(history) {
     // เอา key ที่ใช้จริงใน schema ด้วย (since/uptodate หรือ start_date/end_date)
@@ -1847,9 +1584,6 @@ function isSingleDay(history) {
     if (!u) return true;     // ถ้าไม่มีวันคืน ก็ถือว่าวันเดียว
     return s === u;
 }
-
-
-
 app.get('/api/equipments/pending', async (req, res) => {
     try {
         const items = await History.find({ type: 'equipment', status: 'pending' });
@@ -1860,9 +1594,6 @@ app.get('/api/equipments/pending', async (req, res) => {
         res.status(500).send({ message: err.message });
     }
 });
-
-
-
 app.get('/api/equipments/approve-list', async (req, res) => {
     try {
         // คืนทั้ง pending, approved, disapproved, return-pending, returned
@@ -1890,54 +1621,29 @@ app.patch('/api/equipments/:id/status', async (req, res) => {
     }
 });
 
-
-// app.patch('/api/history/:id/approve_equipment', async (req, res) => {
-//     try {
-//         const staffId = req.body.staff_id;
-//         const staff = await User.findOne({ user_id: staffId });
-//         const staffName = staff ? staff.name : staffId;
-//         const updated = await History.findByIdAndUpdate(
-//             req.params.id,
-//             {
-//                 status: 'approved',
-//                 approvedBy: staffName,
-//                 approvedById: staffId,
-//                 approvedAt: new Date()
-//             },
-//             { new: true }
-//         );
-//         if (updated && updated.name && updated.quantity) {
-//             const equipName = (updated.name || '').trim();
-//             await Equipment.updateOne(
-//                 { name: equipName },
-//                 { $inc: { quantity: -Math.abs(updated.quantity) } }
-//             );
-//         }
-//         res.send(updated);
-//     } catch (err) {
-//         res.status(500).send({ message: err.message });
-//     }
-// });
-
-
 app.patch('/api/history/:id/disapprove_equipment', async (req, res) => {
     try {
         const staffId = req.body.staff_id;
+        const remark = (req.body.remark || '').trim(); // ✅ รับ remark
+
         const staff = await User.findOne({ user_id: staffId });
         const staffName = staff ? staff.name : staffId;
+
+        const updateDoc = {
+            status: 'disapproved',
+            disapprovedBy: staffName,
+            disapprovedById: staffId,
+            disapprovedAt: new Date(),
+        };
+        if (remark) updateDoc.remark = remark; // ✅ บันทึกหมายเหตุ
+
         const updated = await History.findByIdAndUpdate(
             req.params.id,
-            {
-                status: 'disapproved',
-                disapprovedBy: staffName,
-                disapprovedById: staffId,
-                disapprovedAt: new Date()
-            },
+            updateDoc,
             { new: true }
         );
 
-
-        // ======== ส่งอีเมลแจ้ง user ว่า "ไม่ได้รับอนุมัติ" ========
+        // ======== ส่งอีเมลแจ้ง user ว่าไม่ได้รับอนุมัติ (เหมือนเดิม) ========
         if (updated) {
             try {
                 const user = await User.findOne({ user_id: updated.user_id });
@@ -1947,21 +1653,20 @@ app.patch('/api/history/:id/disapprove_equipment', async (req, res) => {
                         name: user.name || user.email || updated.user_id,
                         equipment: updated.name,
                         quantity: updated.quantity
+                        // ถ้าต้องการใส่ remark ในอีเมล ให้เพิ่มใน template ของเมลด้วย
                     });
                 }
             } catch (mailErr) {
                 console.error('ส่งเมลแจ้ง disapprove equipment ไม่สำเร็จ:', mailErr.message);
             }
         }
-        // =======================================================
+
         res.send(updated);
     } catch (err) {
         res.status(500).send({ message: err.message });
     }
 });
-
 // ========== Approve/Disapprove Field ==========
-
 app.get('/api/history/approve_field', async (req, res) => {
     try {
         // 1. เอาทั้ง field และ equipment (pending)
@@ -2007,6 +1712,7 @@ app.patch('/api/history/:id/cancel_field', async (req, res) => {
 
         // ====== เพิ่มบรรทัดนี้ ======
         const oldHistory = await History.findById(req.params.id);
+        const remark = (req.body.remark || '').trim();
 
         const updated = await History.findByIdAndUpdate(
             req.params.id,
@@ -2014,7 +1720,8 @@ app.patch('/api/history/:id/cancel_field', async (req, res) => {
                 status: 'cancel',
                 canceledBy: adminName,
                 canceledById: adminId,
-                canceledAt: new Date()
+                canceledAt: new Date(),
+                ...(remark ? { remark } : {})
             },
             { new: true }
         );
@@ -2048,9 +1755,6 @@ app.patch('/api/history/:id/cancel_field', async (req, res) => {
         res.status(500).send({ message: err.message });
     }
 });
-
-
-// ====== อันนี้คือตัวที่ต้องเหลือไว้เท่านั้น! ======
 // --------- PATCH APPROVE ------------
 app.patch('/api/history/:id/approve_equipment', async (req, res) => {
     try {
@@ -2110,7 +1814,6 @@ app.patch('/api/history/:id/approve_equipment', async (req, res) => {
             );
             updatedList = [updated];
         }
-
         // อัพเดตจำนวนอุปกรณ์
         // สะสมจำนวน approve ของแต่ละอุปกรณ์ (รวมทุกอันใน booking_id เดียวกัน)
         // แทนที่จะ push หลายรอบ ให้รวมจำนวนของแต่ละอุปกรณ์แล้ว push แค่รอบเดียว
@@ -2150,8 +1853,6 @@ app.patch('/api/history/:id/approve_equipment', async (req, res) => {
                 await equipment.save();
             }
         }
-
-
         // ======= ส่งอีเมลแจ้งเตือน (เวอร์ชันส่งฉบับเดียว) =======
         if (updatedList.length > 0) {
             // (กรณี booking_id เดียว user_id ควรเหมือนกันหมด)
@@ -2184,9 +1885,7 @@ app.patch('/api/history/:id/approve_equipment', async (req, res) => {
                 });
             }
         }
-
         // ====== จบส่งอีเมล =======
-
         res.send({
             success: true,
             approved_by: {
@@ -2200,13 +1899,6 @@ app.patch('/api/history/:id/approve_equipment', async (req, res) => {
         res.status(500).send({ message: err.message });
     }
 });
-
-
-
-
-
-
-
 // Approve field booking
 app.patch('/api/history/:id/approve_field', async (req, res) => {
     try {
@@ -2224,13 +1916,11 @@ app.patch('/api/history/:id/approve_field', async (req, res) => {
             },
             { new: true }
         );
-
         // ======== คำนวณชั่วโมงจากข้อมูล history ========
         let totalHours = 0;
         if (updated && updated.since && updated.uptodate && updated.startTime && updated.endTime) {
             totalHours = calcTotalHours(updated.since, updated.uptodate, updated.startTime, updated.endTime);
         }
-
         // ==== อัปเดต usageByMonthYear พร้อมชื่อสนามด้วย ====
         if (updated && updated.agency && updated.agency.trim() !== "" && updated.approvedAt) {
             const dt = new Date(updated.approvedAt);
@@ -2251,7 +1941,6 @@ app.patch('/api/history/:id/approve_field', async (req, res) => {
                 { upsert: true, new: true }
             );
         }
-
         // ========= เพิ่มส่วนนี้ (แจ้ง user) =========
         try {
             // หา user จาก user_id ของประวัติ
@@ -2278,34 +1967,28 @@ app.patch('/api/history/:id/approve_field', async (req, res) => {
         res.status(500).send({ message: err.message });
     }
 });
-
-
-
-
-
-
-
-
-
-
-
-
 app.patch('/api/history/:id/disapprove_field', async (req, res) => {
     try {
         const adminId = req.body.admin_id;
+        const remark = (req.body.remark || '').trim();  // ✅ รับหมายเหตุ
+
         const admin = await User.findOne({ user_id: adminId });
         const adminName = admin ? admin.name : adminId;
+
+        const updateDoc = {
+            status: 'disapproved',
+            disapprovedBy: adminName,
+            disapprovedById: adminId,
+            disapprovedAt: new Date(),                     // ✅ บันทึกเวลาไม่อนุมัติ
+        };
+        if (remark) updateDoc.remark = remark;           // ✅ บันทึกหมายเหตุ
+
         const updated = await History.findByIdAndUpdate(
             req.params.id,
-            {
-                status: 'disapproved',
-                disapprovedBy: adminName,
-                disapprovedById: adminId
-            },
+            updateDoc,
             { new: true }
         );
-
-        // ======== ส่งอีเมลแจ้ง user ว่าไม่ได้รับการอนุมัติจองสนาม ========
+        // (ออปชัน) ส่งอีเมลแจ้งผู้ใช้เหมือนโค้ดเดิมของคุณ
         if (updated) {
             try {
                 const user = await User.findOne({ user_id: updated.user_id });
@@ -2319,20 +2002,19 @@ app.patch('/api/history/:id/disapprove_field', async (req, res) => {
                         uptodate: updated.uptodate,
                         startTime: updated.startTime,
                         endTime: updated.endTime
+                        // ถ้าจะใส่ remark ในเนื้อเมล ให้ไปเพิ่มในเทมเพลตฟังก์ชันได้เลย
                     });
                 }
             } catch (mailErr) {
                 console.error('ส่งเมลแจ้ง disapprove field ไม่สำเร็จ:', mailErr.message);
             }
         }
-        // =======================================================
 
         res.send(updated);
     } catch (err) {
         res.status(500).send({ message: err.message });
     }
 });
-
 // ==================== Announcement (News) ====================
 app.put('/api/announcement', async (req, res) => {
     try {
@@ -2362,7 +2044,6 @@ app.delete('/api/announcement', async (req, res) => {
         res.status(500).send({ message: err.message });
     }
 });
-
 // ==================== Booking Equipment (form data) ====================
 app.post('/api/booking_equipment', async (req, res) => {
     try {
@@ -2394,9 +2075,6 @@ app.post('/api/booking_equipment', async (req, res) => {
         res.status(500).send({ success: false, message: err.message });
     }
 });
-
-
-
 app.get('/api/booking_equipment', async (req, res) => {
     try {
         const id = req.query.id;
@@ -2408,8 +2086,6 @@ app.get('/api/booking_equipment', async (req, res) => {
         res.status(500).json({ message: err.message });
     }
 });
-
-
 app.get('/api/booking_equipment/:id', async (req, res) => {
     try {
         const { id } = req.params;
@@ -2426,9 +2102,6 @@ app.get('/api/booking_equipment/:id', async (req, res) => {
         res.status(500).json({ message: err.message });
     }
 });
-
-
-
 // =================== Booking Equipment Borrow API (ใช้ BookingEquipment) ===================
 app.get('/api/booking_equipment_borrow', async (req, res) => {
     try {
@@ -2438,7 +2111,6 @@ app.get('/api/booking_equipment_borrow', async (req, res) => {
         res.status(500).send({ message: err.message });
     }
 });
-
 // ======================= BookingField CRUD ============================
 app.post('/api/booking_field', upload.array('files', 10), async (req, res) => {
     try {
@@ -2496,10 +2168,6 @@ app.post('/api/booking_field', upload.array('files', 10), async (req, res) => {
             id_form: req.body.id_form || '',
 
         };
-
-        // -- debug log ถ้าอยากดู req.body ว่ามีอะไรส่งมา --
-        // console.log('REQ.BODY:', req.body);
-
         // -- สร้าง booking ใหม่ใน DB --
         const booking = await BookingField.create(bookingData);
 
@@ -2515,8 +2183,6 @@ app.post('/api/booking_field', upload.array('files', 10), async (req, res) => {
         res.status(500).json({ success: false, message: err.message });
     }
 });
-
-
 // GET: ข้อมูล booking_field ตาม id (พร้อมไฟล์แนบ)
 app.get('/api/booking_field/:id', async (req, res) => {
     try {
@@ -2565,8 +2231,6 @@ app.post('/api/booking_field_and_history', async (req, res) => {
         res.status(500).send({ success: false, message: err.message });
     }
 });
-
-
 // ================== UploadFile API (base64 style) ==================
 app.post('/api/upload_file', async (req, res) => {
     try {
@@ -2591,8 +2255,6 @@ app.get('/api/upload_file', async (req, res) => {
         res.status(500).send({ success: false, message: err.message });
     }
 });
-
-
 app.get('/api/uploadfile/:id', async (req, res) => {
     const file = await UploadFile.findById(req.params.id);
     if (!file) return res.status(404).send('File not found');
@@ -2606,33 +2268,7 @@ app.get('/api/uploadfile/:id', async (req, res) => {
     res.send(buffer);
 });
 
-
-
-
-
-// // Download base64 file by id
-// app.get('/api/uploadfile/:id', async (req, res) => {
-//     const file = await UploadFile.findById(req.params.id);
-//     if (!file) return res.status(404).send('File not found');
-//     let base64Data = file.fileData;
-//     if (base64Data.startsWith('data:')) {
-//         base64Data = base64Data.split(',')[1];
-//     }
-//     const buffer = Buffer.from(base64Data, 'base64');
-//     res.set('Content-Type', file.mimetype || 'application/octet-stream');
-//     res.set('Content-Disposition', `attachment; filename="${file.fileName}"`);
-//     res.send(buffer);
-// });
-
-
-
 // ==================== News Image API ====================
-// ============= IMG_NEWS API (FILE-BASED) =============
-
-// GET: list images (คืน absolute URL ใน img_url, fallback ให้ข้อมูลเก่าแบบ base64 ถ้ามี)
-// ถ้าใช้ Mongoose
-// แนะนำให้เปิด timestamps ใน schema ด้วย (timestamps: true)
-// และรองรับฟิลด์ order หากอนาคตอยากจัดเองจากหลังบ้าน
 app.get('/api/img_news', async (req, res) => {
     try {
         const rows = await ImgNews.find({}, { img_url: 1, order: 1, createdAt: 1 })
@@ -2643,8 +2279,6 @@ app.get('/api/img_news', async (req, res) => {
         res.status(500).json({ error: e.message });
     }
 });
-
-
 // POST: อัปโหลดรูปใหม่ (multipart/form-data, field name = "image")
 app.post('/api/img_news', uploadNews.single('image'), async (req, res) => {
     try {
@@ -2658,7 +2292,6 @@ app.post('/api/img_news', uploadNews.single('image'), async (req, res) => {
         res.status(500).json({ error: 'cannot create image' });
     }
 });
-
 // PUT: แทนที่ไฟล์รูปของรายการเดิม
 app.put('/api/img_news/:id', uploadNews.single('image'), async (req, res) => {
     try {
@@ -2781,9 +2414,7 @@ app.delete('/api/members/:email', async (req, res) => {
         res.status(500).send({ message: err.message });
     }
 });
-
 // ==================== Dashboard/Information ====================
-// สมมติใน app.js
 app.get('/api/information', async (req, res) => {
     try {
         const filter = {};
@@ -2885,9 +2516,6 @@ app.post('/api/information/aggregate-usage', async (req, res) => {
         res.status(500).json({ success: false, message: err.message });
     }
 });
-
-// ใน app.js
-// สร้าง BookingEquipment + History พร้อมคัดลอกไฟล์แนบ
 app.post('/api/booking_equipment_and_history', async (req, res) => {
     try {
         // 1. สร้าง booking อุปกรณ์ (BookingEquipment)
@@ -2931,9 +2559,6 @@ app.post('/api/booking_equipment_and_history', async (req, res) => {
         res.status(500).send({ success: false, message: err.message });
     }
 });
-
-
-
 // GET: ไฟล์แนบทีละไฟล์ จาก id ของ history และ index ของไฟล์ใน array
 app.get('/api/history/:id/file/:idx', async (req, res) => {
     try {
@@ -2955,24 +2580,6 @@ app.get('/api/history/:id/file/:idx', async (req, res) => {
         res.status(500).send(error.message);
     }
 });
-
-
-
-
-// // GET: ดาวน์โหลดไฟล์ base64 จาก UploadFile collection
-// app.get('/api/uploadfile/:id', async (req, res) => {
-//     try {
-//         const file = await UploadFile.findById(req.params.id);
-//         if (!file) return res.status(404).send('File not found');
-//         res.set('Content-Type', file.mimetype || 'application/octet-stream');
-//         res.set('Content-Disposition', `attachment; filename="${file.fileName}"`);
-//         res.send(file.fileData);
-//     } catch (e) {
-//         res.status(500).send('Download error');
-//     }
-// });
-
-
 app.post('/api/booking_field_upload', bookingFieldUpload.array('files'), async (req, res) => {
     try {
         const data = req.body;
@@ -2999,11 +2606,6 @@ app.post('/api/booking_field_upload', bookingFieldUpload.array('files'), async (
         res.status(500).json({ success: false, message: err.message });
     }
 });
-
-
-
-
-
 // ========== Start server ==========
 const PORT = process.env.PORT || 8021;
 app.listen(PORT, () => console.log('Backend running on port', PORT));

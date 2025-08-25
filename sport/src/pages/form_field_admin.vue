@@ -254,7 +254,7 @@
                     style="width:48%"
                   />
                 </div>
-                <small class="note-text">* กรุณาจองก่อนใช้งานจริง 5 วัน</small>
+                
               </div>
                             <div class="form-row time-range-row">
                 <label>
@@ -313,7 +313,7 @@
   type="text"
   :class="inputClass('id_form')"
   v-model="id_form"
-  placeholder="กรอกรหัสนักศึกษา/รหัสพนักงาน"
+  placeholder="กรอกรหัสนักศึกษา/พนักงาน"
   inputmode="numeric"
   pattern="\d*"
   @input="onIdFormInput"

@@ -133,7 +133,14 @@
   <button @click="exportFieldPDF" class="export-btn sum">ExportPDF</button>
 </div>
 
-         <div class="filter-options">
+       <div class="filter-options field-filter">
+  <label>แสดงสูงสุด:
+    <select v-model="fieldShowLimit">
+      <option :value="null">ทั้งหมด</option>
+      <option v-for="n in [5,10,15,20,50,100]" :key="n" :value="n">{{ n }} รายการ</option>
+    </select>
+  </label>
+
   <label>ชื่อสนาม:
     <select v-model="selectedFieldName">
       <option value="">ทั้งหมด</option>
@@ -146,38 +153,38 @@
       <option v-for="(m, i) in months" :key="i" :value="i+1">{{ m }}</option>
     </select>
   </label>
-  <label>ปี:
+
+  <label>
     <select v-model="fieldStartYear">
       <option v-for="y in years" :key="y" :value="y">{{ y }}</option>
     </select>
   </label>
-  <span>ถึง</span>
+
+  <span>ถึง:</span>
+
   <label>เดือน:
     <select v-model="fieldEndMonth">
       <option v-for="(m, i) in months" :key="i" :value="i+1">{{ m }}</option>
     </select>
   </label>
-  <label>ปี:
+
+  <label>
     <select v-model="fieldEndYear">
       <option v-for="y in years" :key="y" :value="y">{{ y }}</option>
     </select>
   </label>
-
-  <label>แสดงสูงสุด:
-    <select v-model="fieldShowLimit">
-      <option :value="null">ทั้งหมด</option>
-      <option v-for="n in [5,10,15,20,50,100]" :key="n" :value="n">{{ n }} รายการ</option>
-    </select>
-  </label>
 </div>
 
+
          
-          <UnitUsageChart
-  :units="filteredFieldUnits"
-  unitType="usage"
-  yLabel="จำนวนชั่วโมงการใช้งาน"
-/>
-        </div>
+         <div class="chart-container overall">
+  <UnitUsageChart
+    :units="filteredFieldUnits"
+    unitType="usage"
+    yLabel="จำนวนชั่วโมงการใช้งาน"
+  />
+</div>
+</div>
 
         <!-- Card 2: อุปกรณ์กีฬา -->
         <div class="dashboard-section">
@@ -1054,9 +1061,10 @@ function exportPDF(data, header, filename, filterSummary, type = 'field') {
   text-align: center;
   margin: 0;
 }
+/* ===== ExportPDF buttons (สีเขียวเดียวกัน) ===== */
 .export-btn {
-  background: #d32f2f;
-  color: white;
+  background: #39b844;        /* เขียวหลัก */
+  color: #fff;
   border: none;
   border-radius: 8px;
   padding: 7px 15px;
@@ -1068,22 +1076,24 @@ function exportPDF(data, header, filename, filterSummary, type = 'field') {
   gap: 4px;
   transition: background 0.2s;
 }
-.export-btn.sum{
-background: #39b844;
-}
-.export-btn.sum:hover{
-  background: #307722;
 
-}
-.export-btn.equip {
-  background: #488bff;
-}
+.export-btn:hover,
+.export-btn.sum:hover,
 .export-btn.equip:hover {
-  background: #1a235d;
+  background: #307722;        /* เขียวเข้มตอน hover */
 }
-.export-btn:hover {
-  background: #b71c1c;
+
+/* บังคับให้ปุ่มที่มี class เสริมก็ยังเป็นสีเขียวเดียวกัน */
+.export-btn.sum,
+.export-btn.equip {
+  background: #39b844;
 }
+
+
+
+
+
+
 
 /* ==== Notification styles ==== */
 .notification-dropdown {
@@ -1242,6 +1252,35 @@ background: #39b844;
 }
 @media (max-width: 600px) {
   .filter-options > * { margin-bottom: 0; }
+}
+/* ฟิลเตอร์ของการ์ด "สนามกีฬาของหน่วยงาน" ให้ชิดกันและชิดซ้าย */
+.field-filter {
+  justify-content: flex-end;          /* >>> ชิดขวาเหมือนการ์ดอื่น */
+  align-items: center;
+  gap: 12px;                          /* ระยะห่างกำลังดี */
+  margin: 1.3rem 1.5rem 0.2rem 0;     /* ให้เท่ากับ .filter-options ทั่วไป */
+}
+
+.field-filter label,
+.field-filter span { min-width: unset; margin-bottom: 0; }
+
+.field-filter select {
+  min-width: 72px;
+  max-width: 140px;
+}
+
+/* ลบ margin-bottom ของลูกใน row นี้ (ทับ global rule) */
+.field-filter > * { margin-bottom: 0; }
+
+/* มือถือยังคงซ้อนเป็นคอลัมน์ตามเดิมได้ */
+@media (max-width: 600px) {
+  .field-filter {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    margin: 0.7rem 0.3rem 0.1rem 0.3rem;   /* ให้พฤติกรรมเหมือนการ์ดอื่นตอนจอเล็ก */
+  }
+  .field-filter select { width: 100%; max-width: 100%; }
 }
 
 </style>

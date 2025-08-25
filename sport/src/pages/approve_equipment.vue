@@ -439,33 +439,64 @@ export default {
   this.fetchPendingEquipments(); // refresh รายการ
 },
 
-
-
     async cancelGroup(group) {
-      const result = await Swal.fire({
-        title: 'ไม่อนุมัติรายการ',
-        text: 'คุณต้องการไม่อนุมัติรายการยืมอุปกรณ์นี้?',
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonText: 'ไม่อนุมัติ',
-        cancelButtonText: 'ยกเลิก',
-        confirmButtonColor: '#ff4d4f',
-        cancelButtonColor: '#999'
-      });
-      if (result.isConfirmed) {
-        const staffId = localStorage.getItem('user_id');
-        await Promise.all(group.items.map(item =>
-          axios.patch(`${API_BASE}/api/history/${item.id}/disapprove_equipment`, {
-            staff_id: staffId
-          })
-        ));
-        group.items.forEach(item => {
-          item.status = 'Disapproved';
-        });
-        Swal.fire('Cancelled', 'รายการทั้งหมดถูกยกเลิก', 'error');
-        this.fetchPendingEquipments();
+  const { value: remark } = await Swal.fire({
+    title: 'ไม่อนุมัติรายการ',
+    html: `
+      <div style="text-align:center;margin-bottom:8px;">
+        กรุณาระบุหมายเหตุที่ไม่อนุมัติ
+      </div>
+    `,
+    input: 'textarea',
+    inputAttributes: { 'aria-label': 'remark' },
+    showCancelButton: true,
+    confirmButtonText: 'ไม่อนุมัติ',
+    cancelButtonText: 'ยกเลิก',
+    inputPlaceholder: 'ระบุหมายเหตุ (จำเป็นต้องกรอก)',
+    confirmButtonColor: '#ff4d4f',
+    cancelButtonColor: '#999',
+    preConfirm: (val) => {
+      const v = (val || '').trim();
+      if (!v) {
+        Swal.showValidationMessage('กรุณากรอกหมายเหตุ');
+        return false;
       }
-    },
+      return v;
+    }
+  });
+
+  if (remark === undefined) return; // กดยกเลิก
+
+  const staffId = localStorage.getItem('user_id');
+
+  try {
+    await Promise.all(
+      group.items.map(item =>
+        axios.patch(`${API_BASE}/api/history/${item.id}/disapprove_equipment`, {
+          staff_id: staffId,
+          remark   // ✅ ส่ง remark ไปด้วย
+        })
+      )
+    );
+
+    // อัปเดตสถานะฝั่ง UI
+    group.items.forEach(item => { item.status = 'Disapproved'; });
+
+    await Swal.fire({
+      icon: 'error',
+      title: 'ดำเนินการสำเร็จ',
+      text: 'ยกเลิกรายการเรียบร้อยแล้ว',
+      timer: 1500,
+      showConfirmButton: false
+    });
+
+    this.fetchPendingEquipments(); // refresh รายการ
+  } catch (err) {
+    console.error(err);
+    Swal.fire('Error', 'ไม่สามารถบันทึกการไม่อนุมัติได้', 'error');
+  }
+},
+
     detailGroup(group) {
   const esc = (s) =>
     String(s ?? '-')

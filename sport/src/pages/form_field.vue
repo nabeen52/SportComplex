@@ -303,7 +303,7 @@
   type="text"
   :class="inputClass('id_form')"
   v-model="id_form"
-  placeholder="กรอกรหัสนักศึกษา/รหัสพนักงาน"
+  placeholder="กรอกรหัสนักศึกษา/พนักงาน"
   inputmode="numeric"
   pattern="\d*"
   @input="onIdFormInput"

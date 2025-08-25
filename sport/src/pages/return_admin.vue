@@ -335,120 +335,132 @@ export default {
 
     // ---------- Return ----------
     async returnGroup(group) {
-      const staffId = localStorage.getItem('user_id');
-      const itemWithPhoto = group.items.find(item => !!item.returnPhoto);
+  const staffId = localStorage.getItem('user_id');
+  const itemWithPhoto = group.items.find(item => !!item.returnPhoto);
 
-      let photoHtml = '';
-      if (itemWithPhoto && itemWithPhoto.returnPhoto) {
-        photoHtml = `
-          <div style="text-align:center;margin-bottom:12px;">
-            <img
-              src="${itemWithPhoto.returnPhoto}"
-              style="max-width:220px;max-height:170px;object-fit:contain;cursor:pointer;border-radius:10px;border:1.5px solid #bbb;"
-              alt="รูปคืนอุปกรณ์"
-              onclick="window.__showFullPhoto && window.__showFullPhoto()"
-            />
-            <div style="font-size:0.9em;color:#888;margin-top:0.4em;">คลิกที่รูปเพื่อดูแบบเต็มจอ</div>
-          </div>
-        `;
-      } else {
-        photoHtml = `<div style="text-align:center;color:#bbb;margin-bottom:12px;">ไม่มีรูปคืนอุปกรณ์แนบมา</div>`;
+  let photoHtml = '';
+  if (itemWithPhoto && itemWithPhoto.returnPhoto) {
+    photoHtml = `
+      <div style="text-align:center;margin-bottom:12px;">
+        <img
+          src="${itemWithPhoto.returnPhoto}"
+          style="max-width:220px;max-height:170px;object-fit:contain;cursor:pointer;border-radius:10px;border:1.5px solid #bbb;"
+          alt="รูปคืนอุปกรณ์"
+          onclick="window.__showFullPhoto && window.__showFullPhoto()"
+        />
+        <div style="font-size:0.9em;color:#888;margin-top:0.4em;">คลิกที่รูปเพื่อดูแบบเต็มจอ</div>
+      </div>
+    `;
+  } else {
+    photoHtml = `<div style="text-align:center;color:#bbb;margin-bottom:12px;">ไม่มีรูปคืนอุปกรณ์แนบมา</div>`;
+  }
+
+  const { value: result } = await Swal.fire({
+    title: 'ยืนยันการคืนอุปกรณ์',
+    html: `
+      <div style="margin-bottom:8px; text-align:center;">
+        ${photoHtml}
+        <hr>
+        <div style="font-size:1.02rem; font-weight:600; margin:6px 0 2px;">
+          คุณต้องการรับคืนอุปกรณ์นี้หรือไม่
+        </div>
+        <div style="font-size:0.9rem; color:#666; margin-top:2px;">
+          (กรุณาเลือกสถานะและกรอกหมายเหตุหากอุปกรณ์ไม่สมบูรณ์)
+        </div>
+      </div>
+
+      <div style="display:flex; justify-content:center; align-items:center; margin-bottom:8px;">
+        <label style="margin-right:2em;">
+          <input type="radio" name="equipStatus" value="good" checked> สมบูรณ์
+        </label>
+        <label>
+          <input type="radio" name="equipStatus" value="bad"> ไม่สมบูรณ์
+        </label>
+      </div>
+
+      <div id="remarkBox" style="margin-top:1em; display:none; text-align:center;">
+        <input
+          id="remarkInput"
+          class="swal2-input"
+          placeholder="กรุณากรอกหมายเหตุ"
+          style="width:min(780px,92%); max-width:none; margin:8px auto 0; display:block;"
+        />
+      </div>
+    `,
+    icon: 'question',
+    input: null,
+    showCancelButton: true,
+    confirmButtonText: 'รับคืนอุปกรณ์',
+    cancelButtonText: 'ยกเลิก',
+    focusConfirm: false,
+    preConfirm: () => {
+      const status = document.querySelector('input[name="equipStatus"]:checked').value;
+      const remark = document.getElementById('remarkInput')?.value || "";
+      if (status === 'bad' && !remark.trim()) {
+        Swal.showValidationMessage('กรุณากรอกหมายเหตุหากอุปกรณ์ไม่สมบูรณ์');
+        return false;
       }
-
-      const { value: result } = await Swal.fire({
-        title: 'ยืนยันการคืนอุปกรณ์ทั้งกลุ่ม?',
-        html: `
-          <div style="margin-bottom:8px;">
-            ${photoHtml}
-            <hr>
-            คุณต้องการคืนอุปกรณ์ทั้งหมดนี้หรือไม่?<br>
-            <span style="font-size:0.9em;color:#666;">(กรุณาเลือกสถานะ และกรอกหมายเหตุถ้าไม่สมบูรณ์)</span>
-          </div>
-          <div style="display: flex; justify-content: center; align-items: center; margin-bottom: 8px;">
-            <label style="margin-right: 2em;">
-              <input type="radio" name="equipStatus" value="good" checked> สมบูรณ์
-            </label>
-            <label>
-              <input type="radio" name="equipStatus" value="bad"> ไม่สมบูรณ์
-            </label>
-          </div>
-          <div id="remarkBox" style="margin-top:1em; display:none; text-align:center;">
-  <input
-    id="remarkInput"
-    class="swal2-input"
-    placeholder="กรุณากรอกหมายเหตุ"
-    style="width:min(780px,92%);max-width:none;margin:8px auto 0;display:block;"
-  />
-</div>
-
-        `,
-        icon: 'question',
-        input: null,
-        showCancelButton: true,
-        confirmButtonText: 'คืนอุปกรณ์',
-        cancelButtonText: 'ยกเลิก',
-        focusConfirm: false,
-        preConfirm: () => {
-          const status = document.querySelector('input[name="equipStatus"]:checked').value;
-          const remark = document.getElementById('remarkInput')?.value || "";
-          if (status === 'bad' && !remark.trim()) {
-            Swal.showValidationMessage('กรุณากรอกหมายเหตุหากอุปกรณ์ไม่สมบูรณ์');
-            return false;
-          }
-          return { status, remark };
-        },
-        didOpen: () => {
-          window.__showFullPhoto = () => {
-            if (itemWithPhoto && itemWithPhoto.returnPhoto) {
-              const imgWin = window.open("", "_blank");
-              imgWin.document.write(`
-                <html>
-                  <head>
-                    <title>รูปคืนอุปกรณ์</title>
-                    <style>
-                      body { background:#111;margin:0;display:flex;align-items:center;justify-content:center;height:100vh;}
-                      img { max-width:100vw;max-height:100vh;object-fit:contain;border-radius:16px;box-shadow:0 8px 30px #0008;}
-                    </style>
-                  </head>
-                  <body onclick="window.close()">
-                    <img src="${itemWithPhoto.returnPhoto}" alt="รูปคืนอุปกรณ์" />
-                  </body>
-                </html>
-              `);
-            }
-          };
-          const radios = document.getElementsByName('equipStatus');
-          radios.forEach(radio => {
-            radio.addEventListener('change', () => {
-              document.getElementById('remarkBox').style.display =
-                radio.value === 'bad' && radio.checked ? 'block' : 'none';
-            });
-          });
-        },
-        willClose: () => { window.__showFullPhoto = undefined; }
-      });
-
-      if (!result) return;
-
-      try {
-        await Promise.all(
-          group.items.map(item =>
-            axios.patch(`${API_BASE}/api/history/${item.id}/return`, {
-              staff_id: staffId,
-              status: result.status,
-              remark: result.remark,
-              attachment: item.fileData,
-              fileName: item.fileName,
-              booking_id: item.booking_id || null
-            })
-          )
-        );
-        Swal.fire({ title: 'สำเร็จ', text: `คุณได้คืนอุปกรณ์กลุ่มนี้แล้ว`, icon: 'success', timer: 1500, showConfirmButton: false });
-        await this.fetchEquipments();
-      } catch {
-        Swal.fire('Error', 'คืนอุปกรณ์ไม่สำเร็จ', 'error');
-      }
+      return { status, remark };
     },
+    didOpen: () => {
+      window.__showFullPhoto = () => {
+        if (itemWithPhoto && itemWithPhoto.returnPhoto) {
+          const imgWin = window.open("", "_blank");
+          imgWin.document.write(`
+            <html>
+              <head>
+                <title>รูปคืนอุปกรณ์</title>
+                <style>
+                  body { background:#111;margin:0;display:flex;align-items:center;justify-content:center;height:100vh;}
+                  img { max-width:100vw;max-height:100vh;object-fit:contain;border-radius:16px;box-shadow:0 8px 30px #0008;}
+                </style>
+              </head>
+              <body onclick="window.close()">
+                <img src="${itemWithPhoto.returnPhoto}" alt="รูปคืนอุปกรณ์" />
+              </body>
+            </html>
+          `);
+        }
+      };
+      const radios = document.getElementsByName('equipStatus');
+      radios.forEach(radio => {
+        radio.addEventListener('change', () => {
+          document.getElementById('remarkBox').style.display =
+            radio.value === 'bad' && radio.checked ? 'block' : 'none';
+        });
+      });
+    },
+    willClose: () => { window.__showFullPhoto = undefined; }
+  });
+
+  if (!result) return;
+
+  try {
+    await Promise.all(
+      group.items.map(item =>
+        axios.patch(`${API_BASE}/api/history/${item.id}/return`, {
+          staff_id: staffId,
+          status: result.status,
+          remark: result.remark,
+          attachment: item.fileData,
+          fileName: item.fileName,
+          booking_id: item.booking_id || null
+        })
+      )
+    );
+    Swal.fire({
+      title: 'สำเร็จ',
+      text: `คุณได้คืนอุปกรณ์กลุ่มนี้แล้ว`,
+      icon: 'success',
+      timer: 1500,
+      showConfirmButton: false
+    });
+    await this.fetchEquipments();
+  } catch {
+    Swal.fire('Error', 'คืนอุปกรณ์ไม่สำเร็จ', 'error');
+  }
+},
+
 
     // ---------- Detail (เหมือน approve_field.vue กรณี equipment) ----------
     // ---------- Detail ----------

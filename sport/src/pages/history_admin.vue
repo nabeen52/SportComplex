@@ -177,7 +177,7 @@
                       </button>
                     </td>
 
-                    
+
 
 
                     <!-- การกระทำ -->
@@ -896,21 +896,24 @@ getFileNameFromUrl(u, fallback = 'booking.pdf') {
   if (!group || !group.items || !group.items.length) return '-';
 
   if (group.type === 'field') {
-    const s = (group.items[0].status || '-').toString();
-    return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+    // เดิม: แปลงตัวแรกเป็นพิมพ์ใหญ่เฉย ๆ เลยกลายเป็น "Cancel"
+    // ใหม่: ถ้าเป็น cancel ให้ใช้คำว่า "Cancelled"
+    const raw = (group.items[0].status || '').toLowerCase();
+    if (raw === 'cancel') return 'Cancelled';
+    return raw.charAt(0).toUpperCase() + raw.slice(1);
   }
 
   const items = group.items;
   const has = (s) => items.some(it => (it.status || '').toLowerCase() === s);
 
-  // ✅ ไม่พิจารณา return-pending
+  // (อุปกรณ์) ไม่พิจารณา return-pending
   if (has('returned'))     return 'Returned';
   if (has('approved'))     return 'Approved';
   if (has('disapproved'))  return 'Disapproved';
 
-  // ทั้งกลุ่มเป็นสถานะอื่น/ถูกกรอง
   return '-';
 },
+
 
 
   uniqueListByName(items) {
@@ -986,7 +989,7 @@ pickNonEmpty(...vals) {
 
 
 
-   showDetailGroup(group) {
+   async showDetailGroup(group) {
   const esc = (s) => String(s ?? '-')
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
     .replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/\n/g,'<br>');
@@ -997,7 +1000,7 @@ pickNonEmpty(...vals) {
     return isNaN(dt) ? '-' : dt.toLocaleDateString('th-TH', { year:'numeric', month:'2-digit', day:'2-digit' });
   };
 
-  // ✅ helper ที่หายไป
+  // helper เลือกค่าตัวแรกที่ไม่ว่าง
   const pick = (...vals) => {
     for (const v of vals) {
       const s = (v ?? '').toString().trim();
@@ -1006,59 +1009,54 @@ pickNonEmpty(...vals) {
     return '-';
   };
 
-  // แทนที่ฟังก์ชัน reviewerName เดิม
-const reviewerName = (row) => {
-  const s = (row.status || '').toLowerCase();
-
-  // กรณีอนุมัติ/ไม่อนุมัติตามปกติ
-  if (s === 'approved')    return esc(row.approvedBy || '-');
-  if (s === 'disapproved') return esc(row.disapprovedBy || '-');
-
-  // ✅ กรณี Returned: แสดงชื่อผู้อนุมัติ (หรือผู้ไม่อนุมัติถ้าไม่มี approvedBy)
-  if (s === 'returned') {
-    // ถ้าแถวนี้ไม่มีชื่อ ให้ลองหาจากรายการอื่นในกลุ่มเดียวกัน
-    const fallback = (group.items || []).find(x => x.approvedBy || x.disapprovedBy);
-    return esc(
-      row.approvedBy ||
-      row.disapprovedBy ||
-      fallback?.approvedBy ||
-      fallback?.disapprovedBy ||
-      '-'
-    );
-  }
-
-  return '-';
-};
+  // ชื่อผู้อนุมัติ/ไม่อนุมัติ/กรณี returned เอาชื่อผู้อนุมัติเป็นหลัก
+  const reviewerName = (row) => {
+    const s = (row.status || '').toLowerCase();
+    if (s === 'approved')    return esc(row.approvedBy || '-');
+    if (s === 'disapproved') return esc(row.disapprovedBy || '-');
+    if (s === 'returned') {
+      const fb = (group.items || []).find(x => x.approvedBy || x.disapprovedBy);
+      return esc(
+        row.approvedBy ||
+        row.disapprovedBy ||
+        fb?.approvedBy ||
+        fb?.disapprovedBy ||
+        '-'
+      );
+    }
+    return '-';
+  };
 
   const it = group.items?.[0] || {};
   let html = '';
 
   if (group.type === 'field') {
-  const requesterCell = it.username_form || it.requester || it.userName || it.user_name || it.user ||  '-';
+    // แปลงสถานะ cancel -> Cancelled สำหรับแสดงผล
+    const prettyStatus = ((it.status || '').toLowerCase() === 'cancel') ? 'Cancelled' : (it.status || '-');
 
-  html = `
-    <div class="swal-table-wrap">
-      <table class="swal-table-2col">
-        <tbody>
-         
-          
+    const requesterCell =
+      it.username_form || it.requester || it.userName || it.user_name || it.user || '-';
 
-          <tr><th>สนาม</th><td>${esc(it.name)}</td></tr>
-          <tr><th>ผู้ขอใช้</th><td>${esc(requesterCell)}</td></tr>
-          <tr><th>รหัสนักศึกษา/พนักงาน</th><td>${esc(it.id_form || it.user_id || '-')}</td></tr>
-          <tr><th>จองให้ผู้ใช้</th><td>${esc(it.proxyStudentName || '-')}</td></tr>
-          <tr><th>รหัสนักศึกษา/พนักงาน (ของผู้ที่ถูกจองแทน)</th><td>${esc(it.proxyStudentId || '-')}</td></tr>
-          <tr><th>วันที่</th><td>${fmt(it.date)}</td></tr>
-          <tr><th>เวลา</th><td>${esc(this.addThaiMinuteSuffix(it.time))}</td></tr>
-          <tr><th>สถานะ</th><td>${esc(it.status || '-')}</td></tr>
-          <tr><th>ผู้อนุมัติ/ผู้ไม่อนุมัติ</th><td>${esc(it.approvedBy || it.disapprovedBy || '-')}</td></tr>
-          
-          <tr><th>ผู้ยกเลิก</th><td>${esc(it.canceledBy || '-')}</td></tr>
-        </tbody>
-      </table>
-    </div>
-  `;
-} else {
+    html = `
+      <div class="swal-table-wrap">
+        <table class="swal-table-2col">
+          <tbody>
+            <tr><th>สนาม</th><td>${esc(it.name)}</td></tr>
+            <tr><th>ผู้ขอใช้</th><td>${esc(requesterCell)}</td></tr>
+            <tr><th>รหัสนักศึกษา/พนักงาน</th><td>${esc(it.id_form || '-')}</td></tr>
+            <tr><th>จองให้ผู้ใช้</th><td>${esc(it.proxyStudentName || '-')}</td></tr>
+            <tr><th>รหัสนักศึกษา/พนักงาน (ของผู้ที่ถูกจองแทน)</th><td>${esc(it.proxyStudentId || '-')}</td></tr>
+            <tr><th>วันที่</th><td>${fmt(it.date)}</td></tr>
+            <tr><th>เวลา</th><td>${esc(this.addThaiMinuteSuffix(it.time))}</td></tr>
+            <tr><th>สถานะ</th><td>${esc(prettyStatus)}</td></tr>
+            <tr><th>ผู้อนุมัติ/ผู้ไม่อนุมัติ</th><td>${esc(it.approvedBy || it.disapprovedBy || '-')}</td></tr>
+            <tr><th>หมายเหตุ</th><td>${esc(it.remark || '-')}</td></tr>
+            <tr><th>ผู้ยกเลิก</th><td>${esc(it.canceledBy || '-')}</td></tr>
+          </tbody>
+        </table>
+      </div>
+    `;
+  } else {
     // equipment
     const itemsToShow = this.selectItemsForDetail(group);
     const groupRequester = pick(
@@ -1066,70 +1064,71 @@ const reviewerName = (row) => {
         x.username_form, x.requester, x.userName, x.user_name, x.user
       ])
     );
+    const groupIdForm = pick(...(group.items || []).map(x => x.id_form));
 
     const list = (itemsToShow.length ? itemsToShow : group.items);
     const rows = list.map((row, idx) => {
-  const requesterCell = pick(row.username_form, row.requester, row.userName, row.user_name, row.user, groupRequester);
-  return `
-    <tr>
-      <td>${idx + 1}</td>
-      <td class="left">${esc(row.name)}</td>
-      <td>${esc(row.quantity ?? '-')}</td>
-      <td class="left req">${esc(requesterCell)}</td>
-      <td class="left">${esc(row.user_id || '-')}</td>
-      <td>${row.since && row.uptodate ? `${fmt(row.since)} - ${fmt(row.uptodate)}` : fmt(row.date)}</td>
-      <td>${esc(row.status || '-')}</td>
-      <td>${row.returnedAt ? fmt(row.returnedAt) : '-'}</td>
-      <td class="left">${esc(row.remark || '-')}</td>
-      <td class="left">${reviewerName(row)}</td>
-      <td class="left">${esc(row.returnedBy || '-')}</td>
-    </tr>
-  `;
-}).join('');
-
-   html = `
-  <div class="swal-table-wrap">
-    <table class="swal-table">
-      <thead>
+      const requesterCell = pick(row.username_form, row.requester, row.userName, row.user_name, row.user, groupRequester);
+      return `
         <tr>
-          <th>ลำดับ</th>
-          <th>อุปกรณ์</th>
-          <th>จำนวน</th>
-          <th class="req">ผู้ขอใช้</th>
-          <th>รหัสนักศึกษา/พนักงาน</th>
-          <th>วันที่ขอยืม</th>
-          <th>สถานะ</th>
-          <th>วันที่คืน</th>
-          <th>หมายเหตุ</th>
-          <th>ผู้อนุมัติ/ผู้ไม่อนุมัติ</th>
-          <th>ผู้รับคืน</th>
+          <td>${idx + 1}</td>
+          <td class="left">${esc(row.name)}</td>
+          <td>${esc(row.quantity ?? '-')}</td>
+          <td class="left req">${esc(requesterCell)}</td>
+          <td class="left">${esc(pick(row.id_form, row.user_id, groupIdForm) || '-')}</td>
+          <td>${row.since && row.uptodate ? `${fmt(row.since)} - ${fmt(row.uptodate)}` : fmt(row.date)}</td>
+          <td>${esc(row.status || '-')}</td>
+          <td>${row.returnedAt ? fmt(row.returnedAt) : '-'}</td>
+          <td class="left">${esc(row.remark || '-')}</td>
+          <td class="left">${reviewerName(row)}</td>
+          <td class="left">${esc(row.returnedBy || '-')}</td>
         </tr>
-      </thead>
-      <tbody>
-        ${rows || `<tr><td colspan="11" style="text-align:center">ไม่มีรายการ</td></tr>`}
-      </tbody>
-    </table>
-  </div>
-`;
+      `;
+    }).join('');
+
+    html = `
+      <div class="swal-table-wrap">
+        <table class="swal-table">
+          <thead>
+            <tr>
+              <th>ลำดับ</th>
+              <th>อุปกรณ์</th>
+              <th>จำนวน</th>
+              <th class="req">ผู้ขอใช้</th>
+              <th>รหัสนักศึกษา/พนักงาน</th>
+              <th>วันที่ขอยืม</th>
+              <th>สถานะ</th>
+              <th>วันที่คืน</th>
+              <th>หมายเหตุ</th>
+              <th>ผู้อนุมัติ/ผู้ไม่อนุมัติ</th>
+              <th>ผู้รับคืน</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows || `<tr><td colspan="11" style="text-align:center">ไม่มีรายการ</td></tr>`}
+          </tbody>
+        </table>
+      </div>
+    `;
   }
 
   const isField = group.type === 'field';
 
-Swal.fire({
-  title: 'รายละเอียดรายการ',
-  html,
-  confirmButtonText: 'ปิด',
-  confirmButtonColor: '#3085d6',
-  // แคบลงเฉพาะ field
-  width: isField
-    ? Math.min(window.innerWidth * 0.85, 720) + 'px'
-    : Math.min(window.innerWidth * 0.96, 900) + 'px',
-  customClass: {
-    popup: isField ? 'mfu-swal mfu-swal--field' : 'mfu-swal',
-    htmlContainer: 'mfu-swal-body'
-  }
-});
+  Swal.fire({
+    title: 'รายละเอียดรายการ',
+    html,
+    confirmButtonText: 'ปิด',
+    confirmButtonColor: '#3085d6',
+    width: isField
+      ? Math.min(window.innerWidth * 0.85, 720) + 'px'
+      : Math.min(window.innerWidth * 0.96, 900) + 'px',
+    customClass: {
+      popup: isField ? 'mfu-swal mfu-swal--field' : 'mfu-swal',
+      htmlContainer: 'mfu-swal-body'
+    }
+  });
 },
+
 
 
 
@@ -1184,7 +1183,7 @@ Swal.fire({
 
   try {
     if (item.type === 'field') {
-     // ------------------ FIELD (แบบใหม่) --------------------
+    // ------------------ FIELD (แบบใหม่) --------------------
       const res = await axios.get(`${API_BASE}/api/booking_field?id=${mainBookingId}`);
       let data;
       if (Array.isArray(res.data)) {
@@ -1667,29 +1666,57 @@ doc.text(`โทร ${data.tel || '-'}`, 430, 100);
   } catch {}
 },
     async cancelFieldBooking(item) {
-      const result = await Swal.fire({
-        title: "ยืนยันยกเลิกการจองสนาม?",
-        text: "ต้องการยกเลิกการจองสนามนี้ใช่หรือไม่? (จะไม่สามารถย้อนกลับได้)",
-        icon: "warning",
-        showCancelButton: true,
-        confirmButtonText: "ยืนยัน",
-        cancelButtonText: "ยกเลิก"
-      });
-      if (!result.isConfirmed) return;
-      try {
-        const res = await axios.patch(`${API_BASE}/api/history/${item.id}/cancel_field`, {
-          admin_id: JSON.parse(localStorage.getItem("user"))?.user_id || ""
-        })
-        if (res.data && res.data.status === "cancel") {
-          Swal.fire("สำเร็จ", "ยกเลิกการจองสนามแล้ว", "success")
-          window.location.reload()
-        } else {
-          throw new Error("เกิดข้อผิดพลาด")
-        }
-      } catch (err) {
-        Swal.fire("ผิดพลาด", err.message || "ไม่สามารถยกเลิกได้", "error")
+  const { isConfirmed, value } = await Swal.fire({
+    title: "ยืนยันยกเลิกการจองสนาม?",
+    text: "คุณต้องการยกเลิกการจองสนามนี้ใช่หรือไม่(จะไม่สามารถย้อนกลับได้)",
+    icon: "warning",
+    showCancelButton: true,
+    confirmButtonText: "ยืนยัน",
+    cancelButtonText: "ยกเลิก",
+    input: "textarea",                      // << ช่องกรอกหมายเหตุ
+    inputLabel: "กรุณากรอกหมายเหตุ (จำเป็น)",
+    inputPlaceholder: "กรอกเหตุผล/หมายเหตุในการยกเลิก...",
+    inputAttributes: { maxlength: 500, "aria-label": "remark" },
+    preConfirm: (val) => {
+      const remark = (val || "").trim();
+      if (!remark) {
+        Swal.showValidationMessage("กรุณากรอกหมายเหตุ");
+        return false;
       }
-    },
+      return remark; // ส่งให้ value
+    }
+  });
+
+  if (!isConfirmed) return;
+
+  try {
+    const adminId = JSON.parse(localStorage.getItem("user"))?.user_id || "";
+    const remark = (value || "").trim();   // << รับค่าจาก SweetAlert
+
+    const res = await axios.patch(
+      `${API_BASE}/api/history/${item.id}/cancel_field`,
+      { admin_id: adminId, remark }        // << ส่ง remark ไปที่ backend
+    );
+
+    if (res.data && res.data.status === "cancel") {
+      await Swal.fire("สำเร็จ", "ยกเลิกการจองสนามแล้ว", "success");
+
+      // อัปเดตหน้าจอแบบไม่ต้องรีเฟรชทั้งหน้า (ถ้าต้องการ)
+      item.status = "cancel";
+      item.canceledById = adminId;
+      item.canceledAt = new Date().toISOString();
+      item.remark = remark;
+
+      // ถ้าต้องการรีโหลดทั้งหน้าเหมือนเดิม ให้ปลดคอมเมนต์บรรทัดล่าง:
+      // window.location.reload();
+    } else {
+      throw new Error("เกิดข้อผิดพลาด");
+    }
+  } catch (err) {
+    Swal.fire("ผิดพลาด", err.message || "ไม่สามารถยกเลิกได้", "error");
+  }
+},
+
     handleResize() {
     this.isMobile = window.innerWidth <= 600;
     if (!this.isMobile) this.isSidebarClosed = false;
@@ -1756,7 +1783,7 @@ doc.text(`โทร ${data.tel || '-'}`, 430, 100);
     dateFormat: 'Y-m-d',
     altInput: true,
     altFormat: 'd/m/Y',
-    altInputClass: 'mfu-alt-input', 
+    altInputClass: 'mfu-alt-input',
     allowInput: true,
     disableMobile: true,
     defaultDate: this.dateFilterStart || null,
@@ -1780,7 +1807,7 @@ doc.text(`โทร ${data.tel || '-'}`, 430, 100);
     dateFormat: 'Y-m-d',
     altInput: true,
     altFormat: 'd/m/Y',
-    altInputClass: 'mfu-alt-input', 
+    altInputClass: 'mfu-alt-input',
     allowInput: true,
     disableMobile: true,
     defaultDate: this.dateFilterEnd || null,
@@ -1850,7 +1877,7 @@ doc.text(`โทร ${data.tel || '-'}`, 430, 100);
           canceledById: h.canceledById,
           canceledAt: h.canceledAt,
           username_form: h.username_form || '-',
-          id_form: h.id_form || '',               
+          id_form: h.id_form || '',
           proxyStudentId: h.proxyStudentId || '',
           proxyStudentName: h.proxyStudentName || h.proxy_name || h.proxyStudent || h.proxy_user_name || '-',
           proxyStudentId:   h.proxyStudentId   || h.proxy_user_id || h.proxy_id     || '',
@@ -1868,7 +1895,7 @@ doc.text(`โทร ${data.tel || '-'}`, 430, 100);
  if (this.fpStart) { this.fpStart.destroy(); this.fpStart = null }
   if (this.fpEnd)   { this.fpEnd.destroy();   this.fpEnd = null }
   }
-  
+
 }
 </script>
 
@@ -2526,7 +2553,7 @@ doc.text(`โทร ${data.tel || '-'}`, 430, 100);
 .mfu-swal .swal-table th:nth-child(8),
 .mfu-swal .swal-table td:nth-child(8) {
   text-align: center;
- 
+
 }
 
 

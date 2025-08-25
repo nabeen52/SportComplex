@@ -436,7 +436,7 @@ async downloadBookingPdf(target) {
         this._lastSnapshot = snap;
       }
     } catch (err) {
-      console.error('โหลดข้อมูล approve_field ไม่สำเร็จ:', err);
+      console.error('โหลดข้อมูลอนุมัติสนามไม่สำเร็จ:', err);
     }
   },
 
@@ -445,8 +445,8 @@ async approveGroup(group) {
   const isEquipment = groupType === 'equipment';
 
   const result = await Swal.fire({
-    title: isEquipment ? 'อนุมัติอุปกรณ์ทั้งหมด?' : 'Approve รายการนี้ทั้งหมด?',
-    text: isEquipment ? 'ยืนยันการอนุมัติอุปกรณ์สำหรับรายการนี้' : 'ยืนยันการอนุมัติสำหรับรายการนี้',
+    title: isEquipment ? 'อนุมัติรายการนี้' : 'อนุมัติรายการนี้',
+    text: isEquipment ? 'ยืนยันการอนุมัติสำหรับรายการนี้' : 'ยืนยันการอนุมัติสำหรับรายการนี้',
     icon: 'question',
     showCancelButton: true,
     confirmButtonText: isEquipment ? 'อนุมัติอุปกรณ์' : 'อนุมัติ',
@@ -523,10 +523,17 @@ if (ok.length > 0) {
 
 
 async cancelGroup(group) {
-  const result = await Swal.fire({
-    title: 'Cancel รายการนี้ทั้งหมด?',
-    text: 'ยืนยันการไม่อนุมัติสำหรับรายการนี้',
+  // กล่องยืนยัน + ช่องกรอกหมายเหตุ (บังคับกรอก)
+  const { isConfirmed, value } = await Swal.fire({
+    title: 'ไม่อนุมัติรายการนี้',
+    html: 'ยืนยันการไม่อนุมัติสำหรับรายการนี้',
     icon: 'warning',
+    input: 'textarea',
+    inputPlaceholder: 'ระบุหมายเหตุ (จำเป็นต้องกรอก)',
+    inputAttributes: { 'aria-label': 'หมายเหตุ', rows: 4 },
+    inputValidator: (v) => {
+      if (!v || !v.trim()) return 'กรุณากรอกหมายเหตุ';
+    },
     showCancelButton: true,
     confirmButtonText: 'ยืนยันไม่อนุมัติ',
     cancelButtonText: 'กลับ',
@@ -534,12 +541,14 @@ async cancelGroup(group) {
     cancelButtonColor: '#999',
     customClass: {
       htmlContainer: 'swal-center-text',
-      title: 'swal-center-title'
-    }
+      title: 'swal-center-title',
+    },
   });
-  if (!result.isConfirmed) return;
+  if (!isConfirmed) return;
 
-  // ✅ ดึงข้อมูลผู้ปฏิเสธ (ผู้ดูแลที่ล็อกอิน)
+  const remark = value.trim();
+
+  // ผู้ปฏิเสธ
   const adminId = localStorage.getItem('user_id') || '';
   const adminName =
     (localStorage.getItem('firstname') && localStorage.getItem('lastname'))
@@ -552,45 +561,67 @@ async cancelGroup(group) {
     title: 'กำลังดำเนินการ...',
     didOpen: () => Swal.showLoading(),
     allowOutsideClick: false,
-    allowEscapeKey: false
+    allowEscapeKey: false,
   });
 
   try {
-    await Promise.all(
-      group.items.map(item => {
-        const isField = (item.type || group.type) === 'field';
-        const url = isField
-          ? `${API_BASE}/api/history/${item.id}/disapprove_field`
-          : `${API_BASE}/api/history/${item.id}/disapprove_equipment`;
+    // ส่ง patch ให้ทุกแถวใน group (กรณี equipment มีหลายชิ้น)
+    const calls = group.items.map(item => {
+      const isField = (item.type || group.type) === 'field';
+      const url = isField
+        ? `${API_BASE}/api/history/${item.id}/disapprove_field`
+        : `${API_BASE}/api/history/${item.id}/disapprove_equipment`;
 
-        // ⬇️ โหลด payload ให้ตรงตามประเภท
-        // - field: เดิมใช้ admin_id (ถ้าต้องการบันทึกชื่อด้วยก็ใส่เพิ่มได้ ไม่กระทบหลังบ้าน)
-        // - equipment: ตามที่ขอ → ส่ง disapprovedBy + disapprovedById (และใส่ staff_id เหมือนตอนอนุมัติ)
-        const payload = isField
-          ? {
-              admin_id: adminId,
-              disapprovedBy: adminName,      // (ไม่บังคับ ถ้าไม่ต้องการเก็บสำหรับ field สามารถลบสองบรรทัดนี้ได้)
-              disapprovedById: adminId,
-              disapprovedAt
-            }
-          : {
-              staff_id: adminId,
-              disapprovedBy: adminName,      // ✅ ต้องมีสำหรับ equipment
-              disapprovedById: adminId,      // ✅ ต้องมีสำหรับ equipment
-              disapprovedAt
-            };
+      // แนบ remark ไปกับ payload ของทั้งสองประเภท
+      const payload = isField
+        ? {
+            admin_id: adminId,
+            disapprovedBy: adminName,   // เก็บชื่อผู้ปฏิเสธ (ไม่บังคับ ลบได้ถ้าไม่ต้องการ)
+            disapprovedById: adminId,
+            disapprovedAt,
+            remark,                     // ⬅️ สำคัญ: เก็บหมายเหตุ
+          }
+        : {
+            staff_id: adminId,
+            disapprovedBy: adminName,   // ตามที่กำหนดสำหรับ equipment
+            disapprovedById: adminId,
+            disapprovedAt,
+            remark,                     // ⬅️ สำคัญ: เก็บหมายเหตุ
+          };
 
-        return axios.patch(url, payload);
-      })
-    );
+      return axios.patch(url, payload)
+        .then(res => ({ ok: true, res, item }))
+        .catch(err => ({ ok: false, err, item }));
+    });
 
-    await this.fetchAndGroup();
-    Swal.fire('Cancelled', 'ยกเลิกรายการเรียบร้อยแล้ว', 'error');
+    const results = await Promise.all(calls);
+    const ok = results.filter(r => r.ok);
+    const fail = results.filter(r => !r.ok);
+
+    try { await this.fetchAndGroup(); } catch (e) {}
+
+    if (ok.length > 0) {
+      Swal.fire('สำเร็จ', 'บันทึกการไม่อนุมัติเรียบร้อยแล้ว', 'success');
+      if (fail.length) {
+        console.warn('บางรายการไม่อนุมัติไม่สำเร็จ:', fail.map(f => ({
+          id: f.item?.id,
+          name: f.item?.name,
+          status: f.err?.response?.status,
+          msg: f.err?.response?.data?.message || f.err?.message
+        })));
+      }
+    } else {
+      const e = fail[0]?.err;
+      const status = e?.response?.status;
+      const msg = e?.response?.data?.message || e?.message || 'ไม่สามารถทำรายการไม่อนุมัติได้';
+      Swal.fire('ผิดพลาด', `${msg}${status ? ` (รหัส ${status})` : ''}`, 'error');
+    }
   } catch (err) {
     console.error('cancelGroup error:', err);
-    Swal.fire('ผิดพลาด', 'ไม่สามารถยกเลิกได้', 'error');
+    Swal.fire('ผิดพลาด', 'ไม่สามารถทำรายการไม่อนุมัติได้', 'error');
   }
-},
+}
+,
 
 
   // วันที่แบบไทย: วัน/เดือน/ปี พ.ศ. และใช้เลขอารบิก
@@ -960,34 +991,33 @@ if (recDate) {
   }));
 
   const rowsHtml = rowsData.map(r => `
-    <tr>
-      <td class="c">${r.idx}</td>
-      <td>${esc(r.name)}</td>
-      <td class="c">${esc(r.quantity)}</td>
-      <td class="c col-id nowrap">${esc(r.requesterId)}</td>
-      <td class="col-requester">${esc(r.requester)}</td>
-      <td class="c nowrap">${esc(r.dateBorrow)}</td>
-      <td class="c nowrap">${esc(r.dateRange)}</td>
-    </tr>
-  `).join('');
+  <tr>
+    <td class="c">${r.idx}</td>
+    <td class="col-name">${esc(r.name)}</td>
+    <td class="c col-qty">${esc(r.quantity)}</td>
+    <td class="c col-id nowrap">${esc(r.requesterId)}</td>
+    <td class="col-requester">${esc(r.requester)}</td>
+    <td class="c nowrap">${esc(r.dateBorrow)}</td>
+    <td class="c nowrap col-period" title="${esc(r.dateRange)}">${esc(r.dateRange)}</td>
+  </tr>
+`).join('');
 
   const table = `
-    <table class="swal-detail-table items">
-      <thead>
-        <tr>
-          <th style="width:64px">ลำดับ</th>
-          <th>รายการ</th>
-          <th style="width:86px">จำนวน</th>
-          <th class="col-id">รหัสนักศึกษา/พนักงาน</th>
-          <th class="col-requester">ผู้ขอใช้</th>
-          <th style="width:120px">วันที่ทำรายการ</th>
-          <th style="min-width:220px">ช่วงเวลาที่ใช้</th>
-        </tr>
-      </thead>
-      <tbody>${rowsHtml}</tbody>
-    </table>
-  `;
-
+  <table class="swal-detail-table items">
+    <thead>
+      <tr>
+        <th style="width:64px">ลำดับ</th>
+        <th class="col-name">รายการ</th>
+        <th class="col-qty">จำนวน</th>
+        <th class="col-id">รหัสนักศึกษา/พนักงาน</th>
+        <th class="col-requester">ผู้ขอใช้</th>
+        <th style="width:120px">วันที่ทำรายการ</th>
+        <th class="col-period">ช่วงเวลาที่ใช้</th>
+      </tr>
+    </thead>
+    <tbody>${rowsHtml}</tbody>
+  </table>
+`;
   Swal.fire({
     title: 'รายละเอียดอุปกรณ์',
     html: tableWrap(table, true, true),
@@ -1606,223 +1636,74 @@ doc.text(`โทร ${data.tel || '-'}`, 430, 100);
 
 
 <style scoped>
+/* ===== Layout & page ===== */
 .histbody{
-  width: 100%;
-  height: 100vh;
-  padding: 20px;
-  box-sizing: border-box;
-  overflow-x: hidden;
+  width:100%;
+  height:100vh;
+  padding:20px;
+  box-sizing:border-box;
+  overflow-x:hidden;
 }
-.history-filter {
-  display: flex;
-  justify-content: flex-start;
-  gap: 10px;
-  margin-bottom: 18px;
-  margin-top: 0px;
-  padding-left: 70px;
+.history-filter{
+  display:flex; gap:10px; margin:0 0 18px; padding-left:70px;
 }
-.history-filter button {
-  background: #f3f4f6;
-  border: 1.5px solid #a5b4fc;
-  color: #213555;
-  font-weight: 600;
-  padding: 7px 22px;
-  border-radius: 10px;
-  cursor: pointer;
-  transition: background 0.16s;
+.history-filter button{
+  background:#f3f4f6; border:1.5px solid #a5b4fc; color:#213555;
+  font-weight:600; padding:7px 22px; border-radius:10px; cursor:pointer;
+  transition:background .16s;
 }
-.history-filter button.active,
-.history-filter button:hover {
-  background: #1d4ed8;
-  color: #fff;
-  border-color: #1d4ed8;
-}
-.hist-grid{
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  padding: 1rem 70px;
-}
-.hist-card{
-  background-color: rgb(235, 235, 235);
-  border-radius: 12px;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
-  padding: 1rem 1.5rem;
-  width: 100%;
-}
-.hist-row {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  justify-content: space-between;
-}
-.item-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.item-amount {
-  text-align: center;
-}
-.status-group {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  justify-self: end;
-}
-.approve-btn {
-  padding: 4px 10px;
-  background-color: #80e479d8;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 0.8rem;
-  transition: background-color 0.3s;
-}
-.approve-btn:hover {
-  background-color: #478a48;
-}
-.cancel-btn {
-  padding: 4px 10px;
-  background-color: #f54c4fd5;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 0.8rem;
-  transition: background-color 0.3s;
-  margin-left: 10px;
-}
-.cancel-btn:hover {
-  background-color: #7a292d;
-}
-.detail-btn {
-  padding: 4px 10px;
-  background-color: #304674;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 0.8rem;
-  transition: background-color 0.3s;
-}
-.detail-btn:hover {
-  background-color: #2953d1;
+.history-filter button.active,.history-filter button:hover{
+  background:#1d4ed8; color:#fff; border-color:#1d4ed8;
 }
 
-.sidebar-overlay {
-  position: fixed;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0,0,0,0.16);
-  z-index: 1100;
-}
-.sidebar {
-  z-index: 1200;
-}
+.hist-grid{ display:flex; flex-direction:column; gap:1rem; padding:1rem 70px; }
+.hist-card{ background:#ebebeb; border-radius:12px; box-shadow:0 4px 10px rgba(0,0,0,.15); padding:1rem 1.5rem; width:100%; }
+.hist-row{ display:flex; align-items:center; justify-content:space-between; gap:1rem; }
+.item-name{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.status-group{ display:flex; gap:8px; justify-content:flex-end; }
 
-.table-container {
-  padding: 0 70px;
-  overflow-x: auto;
+.approve-btn,.cancel-btn,.detail-btn{
+  padding:4px 10px; color:#fff; border:none; border-radius:6px; cursor:pointer; font-size:.8rem; transition:background-color .3s;
 }
-.approve-table {
-  width: 100%;
-  border-collapse: collapse;
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+.approve-btn{ background:#80e479; } .approve-btn:hover{ background:#478a48; }
+.cancel-btn{ background:#f54c4f; margin-left:10px; } .cancel-btn:hover{ background:#7a292d; }
+.detail-btn{ background:#304674; } .detail-btn:hover{ background:#2953d1; }
+
+/* ===== Sidebar overlay ===== */
+.sidebar-overlay{ position:fixed; inset:0; background:rgba(0,0,0,.16); z-index:1100; }
+.sidebar{ z-index:1200; }
+
+/* ===== Main table ===== */
+.table-container{ padding:0 70px; overflow-x:auto; }
+.approve-table{
+  width:100%; border-collapse:collapse; background:#fff; border-radius:12px;
+  box-shadow:0 2px 8px rgba(0,0,0,.08);
 }
-.approve-table th, .approve-table td {
-  padding: 0.75rem 1rem;
-  text-align: center;
-  border-bottom: 1px solid #e2e8f0;
-}
-.approve-table th {
-  background: #1e3a8a;
-  color: #fff;
-  font-weight: bold;
-}
-.approve-table tr:last-child td {
-  border-bottom: none;
-}
+.approve-table th,.approve-table td{ padding:.75rem 1rem; text-align:center; border-bottom:1px solid #e2e8f0; }
+.approve-table th{ background:#1e3a8a; color:#fff; font-weight:700; }
+.approve-table tr:last-child td{ border-bottom:none; }
 
-
-
-
-@media (max-width: 600px) {
- .item-name {
-    white-space: normal !important;
-    word-break: break-word !important;
-    overflow: visible !important;
-    text-overflow: unset !important;
-    max-width: 100%;
-    display: block !important;
-    font-size: 1em;
-    font-weight: 500;
-    text-align: center;  /* <<--- บังคับกลาง */
-    margin-bottom: 4px;  /* ระยะห่างด้านล่างเล็กน้อย */
-  }
-
-  .histbody {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding: 14px 0 0 0 !important;
-    width: 100vw;
-    min-width: unset;
-    overflow-x: auto !important;
-  }
-  .histbody > h1 {
-    padding-left: 0 !important;
-    width: 100vw;
-    text-align: center !important;
-    font-size: 1.35rem;
-    margin-bottom: 16px;
-  }
-  .history-filter {
-    justify-content: center !important;
-    padding-left: 0 !important;
-    width: 100vw;
-    margin-bottom: 18px;
-  }
-  .hist-grid {
-    min-width: 320px;
-    width: 95vw;
-    max-width: 440px;
-    padding: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-    align-items: center;
-  }
-  .hist-card {
-    min-width: 95vw;
-    max-width: 440px;
-    margin: 0 auto;
-    box-sizing: border-box;
-  }
-  
-  .hist-row {
-    flex-direction: column !important;   /* แยกบรรทัด */
-    align-items: center !important;      /* ให้ทุกอันอยู่ตรงกลาง */
-    min-width: unset !important;
-    width: 100% !important;
-    gap: 0.5rem;
-    justify-content: center !important;
-  }
+/* ===== Notifications ===== */
+.notification-backdrop{ position:fixed; inset:0; background:transparent; z-index:1001; }
+.notification-dropdown{
+  position:absolute; right:0; top:38px; background:#fff; border-radius:18px 0 18px 18px;
+  box-shadow:0 8px 24px rgba(27,50,98,.14),0 2px 4px rgba(33,125,215,.06);
+  min-width:330px; max-width:370px; max-height:420px; overflow-y:auto; z-index:1002; padding:0; border:none;
 }
 
-.notification-backdrop{
-  position: fixed;
-  top:0; left:0; right:0; bottom:0;
-  background: transparent;
-  z-index: 1001; /* ต้องต่ำกว่า .notification-dropdown */
+/* ===== Mobile (<=600px) ===== */
+@media (max-width:600px){
+  .item-name{ white-space:normal !important; word-break:break-word !important; overflow:visible !important; text-overflow:unset !important; max-width:100%; display:block !important; font-weight:500; text-align:center; margin-bottom:4px; }
+  .histbody{ display:flex; flex-direction:column; align-items:center; padding:14px 0 0 !important; width:100vw; overflow-x:auto !important; }
+  .histbody>h1{ padding-left:0 !important; width:100vw; text-align:center !important; font-size:1.35rem; margin-bottom:16px; }
+  .history-filter{ justify-content:center !important; padding-left:0 !important; width:100vw; margin-bottom:18px; }
+  .hist-grid{ width:95vw; max-width:440px; padding:0; gap:1rem; align-items:center; }
+  .hist-card{ min-width:95vw; max-width:440px; margin:0 auto; box-sizing:border-box; }
+  .hist-row{ flex-direction:column !important; align-items:center !important; width:100% !important; gap:.5rem; justify-content:center !important; }
 }
-
-.notification-dropdown { position: absolute; right: 0; top: 38px; background: #fff; border-radius: 18px 0 18px 18px; box-shadow: 0 8px 24px 0 rgba(27, 50, 98, 0.14), 0 2px 4px 0 rgba(33, 125, 215, 0.06); min-width: 330px; max-width: 370px; max-height: 420px; overflow-y: auto; z-index: 1002; padding: 0; border: none; animation: fadeDown 0.22s; }
-
-
 </style>
+
+
 <style>
 @import '../css/style.css';
 
@@ -2013,5 +1894,142 @@ doc.text(`โทร ${data.tel || '-'}`, 430, 100);
   .swal2-popup .swal-detail-table.items th.col-requester,
   .swal2-popup .swal-detail-table.items td.col-requester { min-width: 200px; }
 }
+
+/* === Width tuning for Equipment detail table === */
+.swal2-popup .swal-detail-table.items th.col-qty,
+.swal2-popup .swal-detail-table.items td.col-qty{
+  width: 90px !important;     /* เดิม ~90px -> แคบลง */
+}
+
+.swal2-popup .swal-detail-table.items th.col-id,
+.swal2-popup .swal-detail-table.items td.col-id{
+  width: 70px !important;    /* เดิม 110px -> แคบลง */
+}
+
+.swal2-popup .swal-detail-table.items th.col-name,
+.swal2-popup .swal-detail-table.items td.col-name{
+  min-width: 100px;           /* ขยายคอลัมน์ 'รายการ' ให้กว้างขึ้น */
+}
+
+/* มือถือ: ให้คงแคบลงอีกนิด + รายการยังอ่านง่าย */
+@media (max-width: 600px){
+  .swal2-popup .swal-detail-table.items th.col-qty,
+  .swal2-popup .swal-detail-table.items td.col-qty{ width: 64px !important; }
+
+  .swal2-popup .swal-detail-table.items th.col-id,
+  .swal2-popup .swal-detail-table.items td.col-id{ width: 90px !important; }
+
+  .swal2-popup .swal-detail-table.items th.col-name,
+  .swal2-popup .swal-detail-table.items td.col-name{ min-width: 220px; }
+}
+/* ไม่ให้หัวคอลัมน์ ลำดับ และ จำนวน ตัดบรรทัด */
+.swal2-popup .swal-detail-table.items thead th:nth-child(1),
+.swal2-popup .swal-detail-table.items thead th.col-qty{
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+/* ความกว้างเดิมของสองคอลัมน์นี้ */
+.swal2-popup .swal-detail-table.items thead th:nth-child(1){ width: 64px; } /* ลำดับ */
+.swal2-popup .swal-detail-table.items th.col-qty,
+.swal2-popup .swal-detail-table.items td.col-qty{ width: 65px !important; } /* จำนวน */
+/* บังคับตารางใช้ความกว้างคอลัมน์ตามที่กำหนด */
+.swal2-popup .swal-detail-table.items{
+  table-layout: fixed;            /* ← สำคัญมาก */
+}
+
+/* คอลัมน์รหัสนักศึกษา/พนักงาน */
+.swal2-popup .swal-detail-table.items th.col-id,
+.swal2-popup .swal-detail-table.items td.col-id{
+  width: 180px !important;         /* ปรับเลขตามที่อยากให้แคบ */
+  max-width: 72px !important;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;        /* แสดง … เมื่อความยาวเกินพื้นที่ */
+  vertical-align: middle;
+}
+
+/* มือถือ อยากกว้างขึ้นนิดก็ทำตรงนี้ */
+@media (max-width: 600px){
+  .swal2-popup .swal-detail-table.items th.col-id,
+  .swal2-popup .swal-detail-table.items td.col-id{
+    width: 200px !important;
+    max-width: 90px !important;
+  }
+}
+/* ใช้ความกว้างคอลัมน์ตามที่กำหนด */
+.swal2-popup .swal-detail-table.items{ table-layout: fixed; }
+
+/* แคบคอลัมน์ 'รายการ' */
+.swal2-popup .swal-detail-table.items th.col-name,
+.swal2-popup .swal-detail-table.items td.col-name{
+  width: 140px !important;     /* ← ปรับเลขตามต้องการ */
+  max-width: 140px !important;
+  min-width: 0 !important;     /* ล้าง min-width เดิมที่เคยตั้งไว้ */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;      /* ตัดยาวเป็น … */
+}
+
+/* มือถือ: ลดลงอีกนิด */
+@media (max-width: 600px){
+  .swal2-popup .swal-detail-table.items th.col-name,
+  .swal2-popup .swal-detail-table.items td.col-name{
+    width: 160px !important;
+    max-width: 160px !important;
+  }
+}
+/* บังคับให้ตารางยึดความกว้างตามที่ตั้ง */
+.swal2-popup .swal-detail-table.items{ table-layout: fixed; }
+
+/* ผู้ขอใช้: เพิ่มความกว้าง */
+.swal2-popup .swal-detail-table.items th.col-requester,
+.swal2-popup .swal-detail-table.items td.col-requester{
+  width: 200px !important;
+}
+
+/* ช่วงเวลาที่ใช้: ลดความกว้าง + ตัดเกินเป็น …  */
+.swal2-popup .swal-detail-table.items th.col-period,
+.swal2-popup .swal-detail-table.items td.col-period{
+  width: 160px !important;
+  max-width: 160px !important;
+  min-width: 0 !important;        /* ล้าง inline min-width เดิม */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* มือถือ: ขอให้ผู้ขอใช้ 240px และช่วงเวลา 130px */
+@media (max-width: 600px){
+  .swal2-popup .swal-detail-table.items th.col-requester,
+  .swal2-popup .swal-detail-table.items td.col-requester{
+    width: 200px !important;
+    min-width: 240px !important;
+  }
+  .swal2-popup .swal-detail-table.items th.col-period,
+  .swal2-popup .swal-detail-table.items td.col-period{
+    width: 350px !important;
+  }
+}
+/* Mobile: ให้คอลัมน์ "ช่วงเวลาที่ใช้" โชว์เต็ม ไม่ตัดเป็น … และพับบรรทัดได้ */
+@media (max-width: 600px){
+  .swal2-popup .swal-detail-table.items th.col-period,
+  .swal2-popup .swal-detail-table.items td.col-period{
+    white-space: normal !important;
+    word-break: break-word;
+    overflow: visible !important;
+    text-overflow: clip !important;
+    width: auto !important;
+    max-width: none !important;
+    line-height: 1.35;
+  }
+
+  /* ให้ตารางจัดความกว้างตามเนื้อหา เพื่อช่วยการพับบรรทัดของคอลัมน์ช่วงเวลา */
+  .swal2-popup .swal-detail-table.items{
+    table-layout: auto;
+  }
+}
+/* ขยายกล่อง textarea ของ SweetAlert ให้พิมพ์ได้สบายตา */
+.swal2-textarea{ min-height: 110px !important; }
 
 </style>

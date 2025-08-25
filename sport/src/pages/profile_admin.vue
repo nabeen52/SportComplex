@@ -97,19 +97,19 @@
   <!-- สถานะ -->
   <span class="status-label">
     <template v-if="hist.status === 'Approved'">
-      ✅ รายการถูกอนุมัติ
+       รายการถูกอนุมัติ
     </template>
     <template v-else-if="hist.status === 'Disapproved'">
-      ❌ รายการไม่ถูกอนุมัติ
+       รายการไม่ถูกอนุมัติ
     </template>
     <template v-else-if="hist.status === 'Cancel'">
-      🚫 รายการถูกยกเลิก
+       รายการถูกยกเลิก
     </template>
     <template v-else-if="hist.status === 'Returned'">
-      ✅ คืนของสำเร็จแล้ว
+       คืนของสำเร็จแล้ว
     </template>
     <template v-else-if="hist.status === 'Pending'">
-      ⏳ กำลังรออนุมัติ
+       กำลังรออนุมัติ
     </template>
     <template v-else>
       {{ hist.status }}
@@ -121,7 +121,7 @@
     <template v-if="hist.status === 'Pending'">
       <button class="cancel-btn" @click="cancelItem(hist.id)">Cancel</button>
     </template>
-    <button class="remark-btn" @click="detailGroup([hist])">Detail</button>
+    <button class="remark-btn" @click="openDetail(hist)">Detail</button>
   </span>
 </span>
 
@@ -169,13 +169,14 @@ const FRONTEND_URL = import.meta.env.VITE_FRONTEND_URL
 const router = useRouter()
 const userStore = useUserStore()
 
-
-
+/* =========================
+   Reactive states
+========================= */
 const isMobile = ref(window.innerWidth <= 600)
 const info = ref({ id: "-", name: "-", email: "-", picture: null })
 
 const history = ref([])
-const userMap = ref({}) // <<--- เพิ่ม userMap
+const userMap = ref({})
 
 const editId = ref(false)
 const editUserId = ref('')
@@ -184,15 +185,12 @@ const canEditUserId = computed(() => {
   return info.value?.email?.toLowerCase().endsWith('@mfu.ac.th')
 })
 
-
 const profileImageUrl = computed(() => {
   if (!info.value || !info.value.picture) return '/img/user.png'
-  // ถ้าขึ้นต้น http = ใช้ external URL, ถ้าไม่ใช่ = ต่อ API_BASE
   if (info.value.picture.startsWith('http')) return info.value.picture
   return API_BASE + info.value.picture
 })
 function imgError(event) { event.target.src = '/img/user.png' }
-
 
 const itemsPerPage = 5
 const currentPage = ref(1)
@@ -203,7 +201,9 @@ const paginatedHistory = computed(() => {
   return sorted.slice(start, start + itemsPerPage)
 })
 
-// ==== กระดิ่งแจ้งเตือน ====
+/* =========================
+   Notifications (bell)
+========================= */
 const showNotifications = ref(false)
 const notifications = ref([])
 const unreadCount = ref(0)
@@ -232,6 +232,9 @@ function handleClickOutside(event) {
   }
 }
 
+/* =========================
+   Edit User ID
+========================= */
 function startEdit() {
   editUserId.value = info.value.id
   editId.value = true
@@ -264,7 +267,9 @@ async function saveUserId() {
   }
 }
 
-
+/* =========================
+   Cancel item
+========================= */
 async function cancelItem(id) {
   const confirmed = await Swal.fire({
     title: 'ยืนยันการยกเลิก?',
@@ -286,148 +291,15 @@ async function cancelItem(id) {
     }
   }
 }
-function detailGroup(items) {
-  // กันอักขระพิเศษใน HTML
-  const esc = (s) =>
-    String(s ?? '-')
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
 
-  // ครอบตารางให้เลื่อนได้
-  const tableWrap = (innerHtml) => `
-    <div class="swal-detail-wrap">
-      ${innerHtml}
-    </div>
-  `;
-
-  // ===== helper ภายในเฉพาะฟังก์ชันนี้ =====
-  const parseToDate = (d) => {
-    if (!d) return null;
-    const s = String(d).trim();
-    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
-      const [y, m, dd] = s.split('-').map(Number);
-      return new Date(y, m - 1, dd);
-    }
-    const dt = new Date(s);
-    return isNaN(dt) ? null : dt;
-  };
-  const isSameDay = (a, b) => {
-    const A = parseToDate(a),
-      B = parseToDate(b);
-    if (!A || !B) return true;
-    return (
-      A.getFullYear() === B.getFullYear() &&
-      A.getMonth() === B.getMonth() &&
-      A.getDate() === B.getDate()
-    );
-  };
-  const isMultiDayEquipment = (it) => {
-    if (String(it?.type || '').toLowerCase() !== 'equipment') return false;
-    return !!it.since && !!it.uptodate && !isSameDay(it.since, it.uptodate);
-  };
-  // =======================================
-
-  const type = (items?.[0]?.type || '').toLowerCase();
-
-  if (type === 'field') {
-    // ===== ตาราง FIELD =====
-    const rows = items
-      .map(
-        (it, idx) => `
-      <tr>
-        <td class="c">${idx + 1}</td>
-        <td>${esc(it.name)}</td>
-        <td>${esc(it.requester || '-')}</td>
-        <td class="c">${esc(it.date ? formatDate(it.date) : '-')}</td>
-        <td class="c">${esc(it.time || '-')}</td>
-        <td class="c">${esc(it.status || '-')}</td>
-      </tr>
-    `
-      )
-      .join('');
-
-    const table = `
-      <table class="swal-detail-table items">
-        <thead>
-          <tr>
-            <th style="width:72px">ลำดับ</th>
-            <th>ชื่อสนาม</th>
-            <th>ผู้ขอใช้</th>
-            <th style="width:120px">วันที่ขอใช้</th>
-            <th style="width:120px">เวลา</th>
-            <th style="width:120px">สถานะ</th>
-          </tr>
-        </thead>
-        <tbody>${rows}</tbody>
-      </table>
-    `;
-
-    Swal.fire({
-      title: 'รายละเอียดสนาม',
-      html: tableWrap(table),
-      confirmButtonText: 'ปิด',
-      confirmButtonColor: '#3085d6',
-      customClass: { popup: 'swal-wide' }
-    });
-  } else {
-    // ===== ตาราง EQUIPMENT =====
-    // เงื่อนไขชื่อผู้ขอใช้:
-    //  - หลายวัน => ใช้ username_form
-    //  - วันเดียว => ใช้ค่าเดิม (requester / user_id)
-    const rows = items
-      .map((it, idx) => {
-        const displayName = isMultiDayEquipment(it)
-          ? it.username_form || it.requester || it.user_id || '-'
-          : it.requester || it.user_id || '-';
-
-        return `
-          <tr>
-            <td class="c">${idx + 1}</td>
-            <td>${esc(it.name)}</td>
-            <td class="c">${esc(it.quantity || '-')}</td>
-            <td>${esc(displayName)}</td>
-            <td class="c">${esc(it.date ? formatDate(it.date) : '-')}</td>
-            <td class="c">${esc(it.status || '-')}</td>
-          </tr>
-        `;
-      })
-      .join('');
-
-    const table = `
-      <table class="swal-detail-table items">
-        <thead>
-          <tr>
-            <th style="width:72px">ลำดับ</th>
-            <th>รายการ</th>
-            <th style="width:90px">จำนวน</th>
-            <th>ผู้ขอใช้</th>
-            <th style="width:120px">วันที่ขอยืม</th>
-            <th style="width:120px">สถานะ</th>
-          </tr>
-        </thead>
-        <tbody>${rows}</tbody>
-      </table>
-    `;
-
-    Swal.fire({
-      title: 'รายละเอียดอุปกรณ์',
-      html: tableWrap(table),
-      confirmButtonText: 'ปิด',
-      confirmButtonColor: '#3085d6',
-      customClass: { popup: 'swal-wide' }
-    });
-  }
-}
-
+/* =========================
+   Helpers: dates & sorting
+========================= */
 function formatDate(date) {
   if (!date) return '-'
   const d = new Date(date)
   return !isNaN(d) ? d.toLocaleDateString('th-TH') : '-'
 }
-
 function parseToDate(d) {
   if (!d) return null;
   const s = String(d).trim();
@@ -446,11 +318,32 @@ function isSameDay(a, b) {
       && A.getDate() === B.getDate();
 }
 function isMultiDayEquipment(item) {
-  // ใช้เฉพาะ type 'equipment'
   if ((item?.type || '').toLowerCase() !== 'equipment') return false;
   return !!item.since && !!item.uptodate && !isSameDay(item.since, item.uptodate);
 }
 
+// toMs & sortTimeOf ใช้จัดเรียง “ล่าสุด”
+const toMs = (v) => {
+  if (!v) return 0;
+  const t = new Date(v).getTime();
+  return Number.isFinite(t) ? t : 0;
+};
+const sortTimeOf = (h) =>
+  Math.max(
+    toMs(h.updatedAt),
+    toMs(h.approvedAt),
+    toMs(h.disapprovedAt),
+    toMs(h.canceledAt),
+    toMs(h.returnedAt),
+    toMs(h.createdAt),
+    toMs(h.date),
+    toMs(h.since),
+    toMs(h.uptodate)
+  );
+
+/* =========================
+   Fetch notifications (pending)
+========================= */
 async function fetchNotifications() {
   try {
     const res = await axios.get(`${API_BASE}/api/history/approve_field`)
@@ -481,42 +374,23 @@ async function fetchNotifications() {
   } catch (err) {}
 }
 
-// ===============================
-
-// คืนค่า ms ของวันที่ ถ้าไม่มี/พาร์สไม่ได้ = 0
-const toMs = (v) => {
-  if (!v) return 0;
-  const t = new Date(v).getTime();
-  return Number.isFinite(t) ? t : 0;
-};
-// เวลาที่ใช้จัดเรียง (หยิบค่าที่ “ล่าสุด” จากหลาย ๆ ช่อง)
-const sortTimeOf = (h) =>
-  Math.max(
-    toMs(h.updatedAt),
-    toMs(h.approvedAt),
-    toMs(h.disapprovedAt),
-    toMs(h.canceledAt),
-    toMs(h.returnedAt),
-    toMs(h.createdAt),
-    toMs(h.date),
-    toMs(h.since),
-    toMs(h.uptodate)
-  );
-
-
+/* =========================
+   Mount / Unmount
+========================= */
 onMounted(async () => {
-   window.addEventListener('resize', handleResize)
+  window.addEventListener('resize', handleResize)
   handleResize()
   document.addEventListener('mousedown', handleClickOutside)
+
   try {
-    // 1. ดึงข้อมูล user login ปัจจุบัน (session จริง)
+    // 1) me
     const resMe = await axios.get(`${API_BASE}/api/me`, { withCredentials: true })
     if (resMe.data && resMe.data.user) {
       info.value = {
         id: resMe.data.user.user_id,
         name: resMe.data.user.name,
         email: resMe.data.user.email,
-         picture: resMe.data.user.picture
+        picture: resMe.data.user.picture
       }
     } else {
       info.value = { id: '-', name: '-', email: '-' }
@@ -524,7 +398,7 @@ onMounted(async () => {
       return
     }
 
-    // 2. ดึง user ทั้งหมดมาสร้าง userMap (user_id => name)
+    // 2) users -> userMap
     try {
       const resUsers = await axios.get(`${API_BASE}/api/users`, { withCredentials: true })
       const map = {}
@@ -536,21 +410,20 @@ onMounted(async () => {
       userMap.value = {}
     }
 
-    // 3. โหลดประวัติทั้งหมด
+    // 3) histories (เกี่ยวข้องกับตัวเอง)
     const userId = info.value.id
     const resHistory = await axios.get(`${API_BASE}/api/history`, { withCredentials: true })
     let histories = resHistory.data
 
-    // กรองเฉพาะประวัติที่ตัวเองเป็นคนขอ หรือเป็นคน approve/disapprove/cancel
     let result = histories.filter(h =>
-   h.user_id === userId ||
-   h.approvedById === userId ||
-   h.disapprovedById === userId ||
-   h.canceledById === userId ||
-   h.returnedById === userId
- )
+      h.user_id === userId ||
+      h.approvedById === userId ||
+      h.disapprovedById === userId ||
+      h.canceledById === userId ||
+      h.returnedById === userId
+    )
 
-    // ลบซ้ำ
+    // unique
     let seen = new Set()
     let unique = []
     for (let h of result) {
@@ -561,41 +434,57 @@ onMounted(async () => {
       }
     }
 
-    // map ข้อมูลสำหรับแสดงผล
+    // mapping แปลง field สำหรับแสดง และ “เพิ่มฟิลด์ที่ใช้ใน modal แบบ history”
     let mapped = unique.map((h, idx) => ({
-  id: h._id?.$oid || h._id || idx + 1,
-  type: h.type,
-  name: h.name,
-  time: h.type === "field" ? `${h.startTime || "-"} - ${h.endTime || "-"}` : "",
-  quantity: h.type === "equipment" ? h.quantity : "",
-  status: statusLabel(h.status),
+      id: h._id?.$oid || h._id || idx + 1,
+      type: h.type,
+      name: h.name,
+      time: h.type === "field" ? `${h.startTime || "-"} - ${h.endTime || "-"}` : "",
+      quantity: h.type === "equipment" ? h.quantity : "",
+      status: statusLabel(h.status),
 
-  since: h.since,
-  uptodate: h.uptodate,
-  username_form: h.username_form,
-  user_id: h.user_id,
+      // ===== เพิ่มสำคัญ เพื่อให้แสดงผลเหมือนหน้า history =====
+      booking_id: h.booking_id,
+      remark: h.remark,
+      startTime: h.startTime,
+      endTime: h.endTime,
+      attachment: h.attachment,
+      bookingPdfUrl: h.bookingPdfUrl || h.booking_pdf_url, // เผื่อมีลิงก์ PDF ตรงๆ
+      returnedAt: h.returnedAt,
+      updatedAt: h.updatedAt,
+      fileName: h.fileName,
+      fileType: h.fileType,
 
-  approvedBy: h.approvedBy,
-  approvedById: h.approvedById,
-  disapprovedBy: h.disapprovedBy,
-  disapprovedById: h.disapprovedById,
-  canceledBy: h.canceledBy,
-  canceledById: h.canceledById,
-  approvedAt: h.approvedAt,
-  disapprovedAt: h.disapprovedAt,
-  canceledAt: h.canceledAt,
-  date: h.date,
+      since: h.since,
+      uptodate: h.uptodate,
+      username_form: h.username_form,
+      user_id: h.user_id,
 
-  requester: userMap.value[h.user_id] || h.user_id || "-",
+      approvedBy: h.approvedBy,
+      approvedById: h.approvedById,
+      disapprovedBy: h.disapprovedBy,
+      disapprovedById: h.disapprovedById,
+      canceledBy: h.canceledBy,
+      canceledById: h.canceledById,
+      approvedAt: h.approvedAt,
+      disapprovedAt: h.disapprovedAt,
+      canceledAt: h.canceledAt,
+      date: h.date,
 
-  // ใช้จัดเรียงล่าสุดเสมอ
-  sortAt: sortTimeOf(h),
-}));
+      createdAt: h.createdAt,
 
+      requester: userMap.value[h.user_id] || h.user_id || "-",
 
+      // ใช้จัดเรียงล่าสุดเสมอ
+      sortAt: sortTimeOf(h),
+    }));
 
-    // เรียงจากล่าสุด
-    mapped = mapped.sort((a, b) => new Date(b.approvedAt || b.disapprovedAt || b.canceledAt || b.date || 0) - new Date(a.approvedAt || a.disapprovedAt || a.canceledAt || a.date || 0))
+    // เรียงจากล่าสุด (คง logic ใกล้เคียงของเดิม)
+    mapped = mapped.sort(
+      (a, b) =>
+        new Date(b.approvedAt || b.disapprovedAt || b.canceledAt || b.date || 0) -
+        new Date(a.approvedAt || a.disapprovedAt || a.canceledAt || a.date || 0)
+    )
 
     history.value = mapped
   } catch (err) {
@@ -614,6 +503,9 @@ onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
 })
 
+/* =========================
+   Status label
+========================= */
 function statusLabel(status) {
   switch ((status || '').toLowerCase()) {
     case 'approved': return 'Approved'
@@ -621,10 +513,14 @@ function statusLabel(status) {
     case 'returned': return 'Returned'
     case 'disapproved': return 'Disapproved'
     case 'cancel': return 'Cancel'
+    case 'canceled': return 'Cancel'
     default: return status
   }
 }
 
+/* =========================
+   Pagination
+========================= */
 function nextPage() {
   if (currentPage.value < totalPages.value) currentPage.value++
 }
@@ -632,10 +528,12 @@ function prevPage() {
   if (currentPage.value > 1) currentPage.value--
 }
 
+/* =========================
+   Logout
+========================= */
 async function logout() {
   const result = await Swal.fire({
     title: 'คุณต้องการออกจากระบบใช่หรือไม่',
-    // text: "คุณต้องการออกจากระบบใช่หรือไม่",
     icon: 'warning',
     showCancelButton: true,
     confirmButtonColor: '#3085d6',
@@ -646,36 +544,325 @@ async function logout() {
 
   if (result.isConfirmed) {
     try {
-      await fetch(`${API_BASE}/auth/logout`, {
-        method: 'GET',
-        credentials: 'include'
-      });
+      await fetch(`${API_BASE}/auth/logout`, { method: 'GET', credentials: 'include' });
     } catch (err) {
-      // error ก็ ignore ได้
+      // ignore
     }
     localStorage.removeItem('jwt');
     localStorage.removeItem('user_id');
     if (userStore && userStore.$reset) userStore.$reset();
-
     window.location.href =
       `https://accounts.google.com/Logout?continue=https://appengine.google.com/_ah/logout?continue=${FRONTEND_URL}/login`;
   }
 }
 
+/* =========================
+   Sidebar
+========================= */
 const isSidebarClosed = ref(false)
 function toggleSidebar() {
   isSidebarClosed.value = !isSidebarClosed.value
 }
-
 function handleResize() {
   isMobile.value = window.innerWidth <= 600
   if (!isMobile.value) isSidebarClosed.value = false
 }
+
+/* ============================================================
+   ====== (ใหม่) DETAIL แบบหน้า history: openDetail() ======
+   ============================================================ */
+
+/* ---- Helpers ใช้ร่วมกับ modal แบบ history ---- */
+function esc(s) {
+  return String(s ?? '-')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/\n/g,'<br>')
+}
+function formatDateOnly(dateStr) {
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return '-';
+  return d.toLocaleDateString('th-TH', { year: 'numeric', month: '2-digit', day: '2-digit' });
+}
+function normalizePdfUrl(raw) {
+  if (!raw) return null;
+  let u = String(raw).trim();
+  if (!/^https?:\/\//i.test(u)) {
+    u = new URL(u.startsWith('/') ? u : `/${u}`, window.location.origin).href;
+  }
+  if (location.protocol === 'https:' && u.startsWith('http://')) {
+    u = 'https://' + u.slice('http://'.length);
+  }
+  return u;
+}
+function pickPdfUrlFromGroupItems(items) {
+  if (!Array.isArray(items)) return null;
+  const hitDirect = items.find(h => h?.bookingPdfUrl || h?.booking_pdf_url);
+  if (hitDirect) return hitDirect.bookingPdfUrl || hitDirect.booking_pdf_url;
+  const hitAttach = items.find(h =>
+    (Array.isArray(h?.attachment) && h.attachment.length > 0) ||
+    (typeof h?.attachment === 'string' && h.attachment)
+  );
+  if (hitAttach) {
+    return Array.isArray(hitAttach.attachment) ? hitAttach.attachment[0] : hitAttach.attachment;
+  }
+  const hitAlt = items.find(h => h?.pdfUrl || h?.pdf_url || h?.fileUrl);
+  if (hitAlt) return hitAlt.pdfUrl || hitAlt.pdf_url || hitAlt.fileUrl;
+  return null;
+}
+async function _downloadFromUrl(finalUrl, fallbackName) {
+  const resp = await fetch(finalUrl, { credentials: 'include' });
+  if (!resp.ok) throw new Error('DIRECT_DOWNLOAD_FAILED');
+  const blob = await resp.blob();
+  const blobUrl = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = blobUrl;
+  // ชื่อไฟล์:
+  let fname = fallbackName;
+  try {
+    const { pathname } = new URL(finalUrl);
+    const name = decodeURIComponent(pathname.split('/').pop() || '');
+    fname = name || fallbackName;
+  } catch {}
+  a.download = fname;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(blobUrl);
+}
+async function _downloadFromApi(bookingId) {
+  try {
+    const r1 = await axios.get(`${API_BASE}/api/history/pdf`, {
+      params: { booking_id: bookingId }, responseType: 'blob'
+    });
+    const url = URL.createObjectURL(new Blob([r1.data], { type: 'application/pdf' }));
+    const a = document.createElement('a');
+    a.href = url; a.download = `booking_${bookingId}.pdf`;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+    return;
+  } catch {}
+  const r2 = await axios.get(`${API_BASE}/api/history/pdf/${bookingId}`, { responseType: 'blob' });
+  const url = URL.createObjectURL(new Blob([r2.data], { type: 'application/pdf' }));
+  const a = document.createElement('a');
+  a.href = url; a.download = `booking_${bookingId}.pdf`;
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+}
+async function downloadPdfFromGroup(group) {
+  try {
+    const bookingId = group?.booking_id;
+    if (!bookingId) { await Swal.fire('ผิดพลาด', 'ไม่พบ booking_id', 'error'); return; }
+    const picked = pickPdfUrlFromGroupItems(group.items || []);
+    const finalUrl = normalizePdfUrl(picked);
+    if (finalUrl) {
+      try { await _downloadFromUrl(finalUrl, `booking_${bookingId}.pdf`); return; }
+      catch { await _downloadFromApi(bookingId); return; }
+    }
+    await _downloadFromApi(bookingId);
+  } catch {
+    await Swal.fire('ผิดพลาด', 'ไม่สามารถดาวน์โหลดไฟล์ได้', 'error');
+  }
+}
+
+/* ---- เรนเดอร์ SweetAlert2 แบบหน้า history ---- */
+function detailGroupLikeHistory(group) {
+  const fmtDate = (d) => formatDateOnly(d);
+  const fmtTime = (t) => {
+    if (!t) return '-';
+    const raw = String(t).trim().replace(/\s*น\.?$/, '');
+    if (/^\d{1,2}:\d{2}$/.test(raw)) return `${raw} น.`;
+    const dt = new Date(`1970-01-01T${raw}`);
+    if (!isNaN(dt)) {
+      const hhmm = dt.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', hour12: false });
+      return `${hhmm} น.`;
+    }
+    return `${raw} น.`;
+  };
+  const fmtTimeRange = (a,b)=>{
+    const A = fmtTime(a), B = fmtTime(b);
+    if (A==='-' && B==='-') return '-';
+    if (A!=='-' && B!=='-') return `${A} - ${B}`;
+    return A!=='-' ? A : B;
+  };
+
+  let html = '';
+
+  if ((group?.type || '').toLowerCase() === 'field') {
+    const it = group.items?.[0] || {};
+    const startTime = it.startTime || it.since_time || '';
+    const endTime   = it.endTime   || it.until_thetime || '';
+    const timeRange = fmtTimeRange(startTime, endTime);
+
+    html = `
+      <div class="swal-table-wrap">
+        <table class="swal-table">
+          <colgroup>
+            <col style="width:16%">
+            <col style="width:22%">
+            <col style="width:16%">
+            <col style="width:16%">
+            <col style="width:14%">
+            <col style="width:16%">
+          </colgroup>
+          <thead>
+            <tr>
+              <th>Field</th>
+              <th>Name</th>
+              <th>Date</th>
+              <th>Time</th>
+              <th>Status</th>
+              <th>Remark</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>${esc(it.name)}</td>
+              <td>
+                <div><b>Name:</b> ${esc(it.username_form || '-')}</div>
+                <div><b>Book for:</b> ${esc(it.proxyStudentName || '-')}</div>
+              </td>
+              <td class="td-center">${esc(fmtDate(it.date))}</td>
+              <td class="td-center">${esc(timeRange)}</td>
+              <td class="td-center">${esc(it.status)}</td>
+              <td>${esc(it.remark || '-')}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="swal-actions">
+        <button id="pdf-btn" class="pdfmake-btn">Download PDF form</button>
+      </div>
+    `;
+  } else {
+    // equipment
+    let statusToShow = '';
+    if (group.items.every(i => i.status === 'Return-pending')) statusToShow = 'Return-pending';
+    else if (group.items.every(i => i.status === 'Returned'))   statusToShow = 'Returned';
+    else if (group.items.every(i => i.status === 'Approved'))   statusToShow = 'Approved';
+    else if (group.items.every(i => i.status === 'Pending'))    statusToShow = 'Pending';
+    else if (group.items.every(i => i.status === 'Disapproved'))statusToShow = 'Disapproved';
+    else statusToShow = (group.items[0]?.status || '');
+
+    const shown = group.items.filter(i => i.status === statusToShow);
+    const first = group.items[0] || {};
+    const isOneDayBorrow = (!first.since && !first.uptodate);
+    const showPdfButton  = !isOneDayBorrow;
+
+    const rows = shown.map((it, idx) => {
+      const retDate = it.returnedAt ? fmtDate(it.returnedAt) : '-';
+      const borrowerName = it.username_form || group.items?.[0]?.username_form || it.requester || '-';
+      const attArr = Array.isArray(it.attachment) ? it.attachment : (it.attachment ? [it.attachment] : []);
+      const firstUrl = attArr[0] || null;
+      const retPhotoCell =
+        (['Returned','Return-pending'].includes(it.status) && firstUrl)
+          ? `
+            <img
+              src="${firstUrl}"
+              alt="return-photo"
+              class="swal-thumb"
+              onclick="window.__showFullReturnPhoto && window.__showFullReturnPhoto('${firstUrl}')"
+            />
+            <div class="swal-thumb-hint">(คลิกเพื่อดูรูปเต็ม)</div>
+          `
+          : '-';
+
+      return `
+        <tr>
+          <td class="td-center">${esc(idx+1)}</td>
+          <td>${esc(it.name)}</td>
+          <td class="td-center">${esc(it.quantity ?? '-')}</td>
+          <td>${esc(borrowerName)}</td>
+          <td class="td-center">${esc(fmtDate(it.date))}</td>
+          <td class="td-center">${esc(it.status)}</td>
+          <td>${esc(it.remark || '-')}</td>
+          <td class="td-center">${retDate}</td>
+          <td class="td-center">${retPhotoCell}</td>
+        </tr>
+      `;
+    }).join('');
+
+    html = `
+      <div class="swal-table-wrap">
+        <table class="swal-table equip-table">
+          <colgroup>
+            <col style="width:6%">
+            <col style="width:20%">
+            <col style="width:9%">
+            <col style="width:18%">
+            <col style="width:11%">
+            <col style="width:12%">
+            <col style="width:14%">
+            <col style="width:10%">
+            <col style="width:10%">
+          </colgroup>
+          <thead>
+            <tr>
+              <th>No</th>
+              <th>Equipment</th>
+              <th>Amount</th>
+              <th>Name</th>
+              <th>Date</th>
+              <th>Status</th>
+              <th>Remark</th>
+              <th>Return date</th>
+              <th>Photo</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows || `<tr><td colspan="9" class="td-center">ไม่มีรายการ</td></tr>`}
+          </tbody>
+        </table>
+      </div>
+      ${showPdfButton ? `<div class="swal-actions"><button id="pdf-btn" class="pdfmake-btn">Download PDF form</button></div>` : ``}
+    `;
+  }
+
+  Swal.fire({
+    title: 'Detail list',
+    html,
+    confirmButtonText: 'Close',
+    confirmButtonColor: '#3085d6',
+    customClass: { popup: 'hist-swal', title: 'hist-swal-title', htmlContainer: 'hist-swal-html' },
+    didOpen: () => {
+      const pdfBtn = document.getElementById('pdf-btn');
+      if (pdfBtn) pdfBtn.addEventListener('click', () => downloadPdfFromGroup(group));
+
+      // ตัวแสดงรูปเต็ม (เปิดซ้ำได้)
+      window.__showFullReturnPhoto = (src) => {
+        if (!src) return;
+        Swal.fire({
+          html: `
+            <div class="img-viewer-wrap">
+              <img src="${src}" alt="photo" class="img-viewer"/>
+              <div class="img-viewer-actions">
+                <a href="${src}" target="_blank" rel="noopener">เปิดในแท็บใหม่</a>
+              </div>
+            </div>
+          `,
+          showConfirmButton: false,
+          showCloseButton: true,
+          background: '#000',
+          customClass: { popup: 'img-swal' }
+        });
+      };
+    },
+    willClose: () => { window.__showFullReturnPhoto = undefined; }
+  });
+}
+
+/* ---- จุดเข้า: เรียกจากปุ่ม Detail ใน template ---- */
+function openDetail(hist) {
+  const all = history.value || [];
+  let items = [];
+  if (hist.booking_id) {
+    items = all.filter(h => h.type === hist.type && h.booking_id === hist.booking_id);
+  } else {
+    items = [hist]; // ถ้าไม่มี booking_id ก็โชว์รายการเดียว
+  }
+  const group = { type: hist.type, booking_id: hist.booking_id, items };
+  detailGroupLikeHistory(group);
+}
 </script>
-
-
-
-
 
 <style scoped>
 
@@ -1001,4 +1188,63 @@ function handleResize() {
 
 /* เผื่อคอลัมน์ชื่อผู้ขอใช้ยาว */
 .swal2-popup .swal-detail-table.items thead th:nth-child(4){ min-width: 220px; }
+</style>
+
+<style>
+/* ===== SweetAlert modal แบบ history ===== */
+.swal2-html-container{ text-align: left !important; margin: 0 !important; padding: 0 !important; }
+
+.swal-table-wrap{
+  max-width: 92vw; max-height: 70vh;
+  overflow-x: auto; overflow-y: auto; padding: 6px 2px 0;
+}
+.hist-swal.swal2-popup{
+  width: 96vw; max-width: 1500px; padding: 24px;
+}
+.hist-swal .swal2-title{ margin-bottom: 12px !important; }
+.hist-swal .swal-table-wrap{ max-width: 96vw; max-height: 72vh; overflow: auto; padding: 6px 0 0; }
+
+.swal-table{
+  width: 100%; min-width: 780px;
+  border-collapse: collapse; table-layout: auto;
+  background: #fff; border-radius: 10px; overflow: hidden;
+}
+.swal-table thead th{
+  background: #1e3a8a; color: #fff; padding: 10px 8px;
+  font-weight: 700; font-size: 0.95rem; text-align: center;
+  position: sticky; top: 0; z-index: 1;
+}
+.swal-table tbody td{
+  border-bottom: 1px solid #e6e9f3; padding: 8px 10px;
+  font-size: 0.95rem; vertical-align: top; word-break: break-word;
+}
+.swal-table tbody tr:hover{ background: #f7f9ff; }
+.td-center{ text-align: center; }
+
+/* รูปตัวอย่างใบคืน */
+.swal-thumb{
+  max-width: 120px; max-height: 85px; object-fit: contain;
+  border: 1px solid #cfd5e6; border-radius: 8px; cursor: pointer; display: inline-block;
+}
+.swal-thumb-hint{ font-size: 0.8rem; color: #8a8fa3; margin-top: 4px; }
+
+/* ปุ่มด้านล่าง */
+.swal-actions{ margin-top: 10px; display: flex; justify-content: flex-end; }
+.pdfmake-btn{
+  background: #213555; color: #fff; border: none; border-radius: 8px; padding: 8px 14px; cursor: pointer; font-weight: 600;
+}
+.pdfmake-btn:hover{ background:#4268a3; }
+
+/* Viewer รูปเต็มจอ */
+.img-swal.swal2-popup{ width: auto; max-width: 96vw; padding: 8px; background: #000; }
+.img-swal .swal2-close{ color: #fff !important; top: 6px; right: 10px; }
+.img-viewer-wrap{ display:flex; flex-direction:column; align-items:center; gap:8px; }
+.img-viewer{ max-width: 92vw; max-height: 82vh; object-fit: contain; background: #000; display:block; }
+.img-viewer-actions a{ color:#cfe3ff; text-decoration: underline; font-size: 0.95rem; }
+
+/* จัดกลางบางคอลัมน์ในตารางอุปกรณ์ */
+.hist-swal .equip-table th:nth-child(2),
+.hist-swal .equip-table td:nth-child(2){ text-align: center; }
+.hist-swal .equip-table th:nth-child(7),
+.hist-swal .equip-table td:nth-child(7){ text-align: center; }
 </style>
