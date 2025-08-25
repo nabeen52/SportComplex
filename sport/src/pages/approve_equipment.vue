@@ -393,7 +393,7 @@ export default {
       }
     },
     async approveGroup(group) {
-  // ✅ กันกดย้ำ: ถ้า group นี้กำลังประมวลผลอยู่ ให้ return ทันที
+  // กันกดย้ำขณะทำงาน
   if (this.processingGroups.has(group.booking_id)) return;
 
   const ask = await Swal.fire({
@@ -409,10 +409,9 @@ export default {
   if (!ask.isConfirmed) return;
 
   const staffId = localStorage.getItem('user_id');
-
-  // ✅ ล็อก group ไว้ก่อน กันยิงซ้ำ
   this.processingGroups.add(group.booking_id);
 
+  // ฟังก์ชันเช็คข้อความ error ที่ถือว่า "อนุมัติไปแล้ว" เพื่อทำงานแบบ idempotent
   const isAlreadyApprovedError = (err) => {
     const code = err?.response?.status;
     const msg  = (err?.response?.data?.message || err?.message || '').toLowerCase();
@@ -421,74 +420,56 @@ export default {
   };
 
   try {
-    // ✅ ยิงทีละ item เหมือนเดิม แต่ล็อกไว้แล้วจะไม่ถูกกดย้ำ
-    const results = await Promise.allSettled(
-      group.items.map(item =>
-        axios.patch(`${API_BASE}/api/history/${item.id}/approve_equipment`, { staff_id: staffId })
-          .then(() => ({ ok: true, item }))
-          .catch(err => ({ ok: isAlreadyApprovedError(err), err, item }))
-      )
+    // เอาเฉพาะที่ยัง pending
+    const pendingItems = group.items.filter(
+      it => (it.status || '').toLowerCase() === 'pending'
     );
+    if (!pendingItems.length) {
+      // ไม่มีอะไรต้องอนุมัติแล้ว (เช่น list รีเฟรชช้า)
+      return;
+    }
 
-    const logicalSuccessIdx = [];
-    const hardFailed = [];
-    results.forEach((r, i) => {
-      const payload = r.status === 'fulfilled' ? r.value : r.reason;
-      if (payload.ok) logicalSuccessIdx.push(i);
-      else hardFailed.push({ i, name: group.items[i]?.name, err: payload.err });
+    // ✅ ยิงครั้งเดียวพอ: ให้ backend อนุมัติทั้ง booking_id
+    // (กรณี single รายการ key จะเป็น 'single_<id>' ก็ยังยิงเพียงครั้งเดียวถูกต้อง)
+    const target = pendingItems[0];
+
+    try {
+      await axios.patch(
+        `${API_BASE}/api/history/${target.id}/approve_equipment`,
+        { staff_id: staffId }
+      );
+    } catch (err) {
+      // ถ้าอนุมัติไปแล้วจากการกดซ้ำ/รีเฟรชช้า ถือว่าสำเร็จเชิงตรรกะ
+      if (!isAlreadyApprovedError(err)) throw err;
+    }
+
+    // อัปเดตสถานะฝั่ง UI ให้ทั้งกลุ่ม (เฉพาะที่เดิมเป็น pending)
+    group.items.forEach(it => {
+      if ((it.status || '').toLowerCase() === 'pending') {
+        it.status = 'Approved';
+      }
     });
 
-    // อัปเดตสถานะฝั่ง UI สำหรับตัวที่สำเร็จ
-    logicalSuccessIdx.forEach(i => { group.items[i].status = 'Approved'; });
+    Swal.fire({
+      title: 'สำเร็จ',
+      text: 'รายการถูกอนุมัติแล้ว',
+      icon: 'success',
+      timer: 1500,
+      showConfirmButton: false
+    });
 
-    // ✅ ตรวจซ้ำจาก backend ว่าทั้งกลุ่มอนุมัติครบแล้วจริงหรือไม่
-    const verifyAllApproved = async () => {
-      try {
-        const res = await axios.get(`${API_BASE}/api/history`);
-        const all = Array.isArray(res.data) ? res.data : [];
-        const items = all.filter(h =>
-          h.type !== 'field' &&
-          (h.booking_id || `single_${h._id?.$oid || h._id}`) === group.booking_id
-        );
-        if (items.length === 0) return logicalSuccessIdx.length > 0; // fallback
-        return items.every(h => (h.status || '').toLowerCase() === 'approved');
-      } catch {
-        return logicalSuccessIdx.length > 0; // fallback เมื่อเช็คไม่ได้
-      }
-    };
+    // รีเฟรชข้อมูล
+    this.fetchPendingEquipments?.();
+    this.fetchAllEquipments?.();
 
-    let allApproved = hardFailed.length === 0;
-    if (!allApproved && logicalSuccessIdx.length > 0) {
-      allApproved = await verifyAllApproved();
-    }
-
-    if (allApproved) {
-      group.items.forEach(it => (it.status = 'Approved'));
-      Swal.fire({
-        title: 'สำเร็จ',
-        text: 'รายการทั้งหมดถูกอนุมัติ',
-        icon: 'success',
-        timer: 1500,
-        showConfirmButton: false
-      });
-    } else if (logicalSuccessIdx.length > 0) {
-      const failedNames = hardFailed.map(f => f.name || `#${f.i + 1}`).join(', ');
-      Swal.fire({
-        title: 'สำเร็จบางส่วน',
-        html: `อนุมัติสำเร็จ ${logicalSuccessIdx.length} รายการ<br>ล้มเหลว ${hardFailed.length} รายการ<br><small>ที่ล้มเหลว: ${failedNames}</small>`,
-        icon: 'warning'
-      });
-    } else {
-      Swal.fire('Error', 'อนุมัติไม่สำเร็จ', 'error');
-    }
-
-    // ✅ รีเฟรชรายการหลังทำเสร็จ
-    this.fetchPendingEquipments();
+  } catch (err) {
+    console.error(err);
+    Swal.fire('Error', 'อนุมัติไม่สำเร็จ', 'error');
   } finally {
-    // ✅ ปลดล็อก ไม่ว่าจะสำเร็จ/ล้มเหลว
     this.processingGroups.delete(group.booking_id);
   }
-},
+}
+,
 
 
     async cancelGroup(group) {
