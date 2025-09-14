@@ -7,15 +7,8 @@
         <p class="sidebar-title">ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง</p>
       </div>
       <nav class="nav-links">
-        <router-link to="/approve_equipment" exact-active-class="active">
-          <i class="pi pi-home"></i> อนุมัติ/รับคืนอุปกรณ์
-        </router-link>
-        <router-link to="/equipment" active-class="active">
-          <i class="pi pi-map-marker"></i> อุปกรณ์
-        </router-link>
-        <router-link to="/history_staff" active-class="active">
-          <i class="pi pi-history"></i> ประวัติการทำรายการ
-        </router-link>
+        <router-link to="/approve_field_super" active-class="active"><i class="pi pi-verified"></i> อนุมัติ</router-link>
+        <router-link to="/history_super" active-class="active"><i class="pi pi-history"></i> ประวัติการทำรายการ</router-link>
       </nav>
     </aside>
 
@@ -27,7 +20,7 @@
 
     <!-- Content ทางขวา -->
     <div class="main">
-      <!-- Topbar -->
+      <!-- Topbar (Header เล็ก) -->
       <header class="topbar">
         <button class="menu-toggle" @click="toggleSidebar">☰</button>
         <div class="topbar-actions">
@@ -42,22 +35,21 @@
               <i class="pi pi-bell"></i>
               <span v-if="unreadCount > 0" class="badge">{{ unreadCount }}</span>
             </button>
-
             <div v-if="showNotifications" class="notification-dropdown">
-              <ul>
-                <li
-                  v-for="(noti, idx) in notifications.slice(0, 10)"
-                  :key="noti.id || idx"
-                  :class="['notification-item', noti.type || '', { unread: noti.timestamp > lastSeenTimestamp }]"
-                >
-                  {{ noti.message }}
-                </li>
-                <li v-if="notifications.length === 0" class="no-noti">ไม่มีแจ้งเตือน</li>
-              </ul>
-            </div>
+            <ul>
+              <li
+                v-for="(noti, idx) in notifications.slice(0, 10)"
+                :key="noti.id || idx"
+                :class="['notification-item', noti.type || '', { unread: noti.timestamp > lastSeenTimestamp }]"
+              >
+                {{ noti.message }}
+              </li>
+              <li v-if="notifications.length === 0" class="no-noti">ไม่มีแจ้งเตือน</li>
+            </ul>
           </div>
 
-          <router-link to="/profile_staff"><i class="pi pi-user"></i></router-link>
+          </div>
+          <router-link to="/profile_super"><i class="pi pi-user"></i></router-link>
         </div>
       </header>
 

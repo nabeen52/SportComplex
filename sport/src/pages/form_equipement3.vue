@@ -1,4 +1,4 @@
-<template>
+<template>  
   <div class="layout">
     <aside class="sidebar" :class="{ closed: isSidebarClosed }">
       <div class="sidebar-header">
@@ -155,12 +155,32 @@
           </table>
         </div>
 
+<!-- ========= ลายเซ็นผู้ยืม (ชิดขวา, วันที่อยู่ “ระหว่างคำว่าลงชื่อกับผู้ยืม” และกึ่งกลางใต้ชื่อ) ========= -->
+<div class="sigX">
+  <div class="sigX-row">
+    <span class="sigX-left">ลงชื่อ</span>
+
+    <!-- กล่องกลาง = สมอของวันที่ -->
+    <span class="sigX-nameAnchor">
+      <span class="sigX-name">{{ booking && booking.username_form || "-" }}</span>
+      <!-- ใช้วันที่วันนี้แทนจุด -->
+      <span class="sigX-date">
+        <span class="dots">วันที่ {{ todayThai }}</span>
+      </span>
+    </span>
+
+    <span class="sigX-right">ผู้ยืม</span>
+  </div>
+</div>
+<!-- ========= /ลายเซ็นผู้ยืม ========= -->
+
+
         <!-- ================= ส่วนลายเซ็น/ความเห็น ================= -->
         <div class="form-row" style="padding-top: 10px;">
           <table class="approval-table">
             <thead>
               <tr>
-                <th style="width: 50%;">ความคิดเห็น/คำสั่ง/ผลการพิจารณา</th>
+                <th style="width: 50%;">ผลการดำเนินการ/ผลการปฏิบัติงาน</th>
                 <th style="width: 50%;">ผลการดำเนินการ/ผลการปฏิบัติงาน</th>
               </tr>
             </thead>
@@ -170,12 +190,12 @@
               <td class="approval-cell">
                 <div class="approval-content">
                   <div class="approval-lines">
-                    ............................................................................<br>
-                    ............................................................................<br>
+                    ..........................................................................<br>
+                    ..........................................................................<br>
                   </div>
                   <div class="approval-sign">
-                    ลงชื่อ.....................................................หัวหน้าส่วน<br>
-                    (......................................................................)<br>
+                    ลงชื่อ......................................................ผู้ส่งมอบ<br>
+                    
                     วันที่.............../.............../...............
                   </div>
                 </div>
@@ -185,13 +205,12 @@
               <td class="approval-cell">
                 <div class="approval-content">
                   <div class="approval-lines">
-                    ............................................................................<br>
-                    ............................................................................<br>
+                    ..........................................................................<br>
+                    ..........................................................................<br>
                   </div>
                   <div class="approval-sign">
-                    ลงชื่อ...................................ผู้ปฏิบัติงาน/ผู้รับผิดชอบ<br>
-                    (......................................................................)<br>
-                    วันที่.............../.............../...............
+                    ลงชื่อ........................................................ผู้รับคืน<br>
+                                    วันที่.............../.............../...............
                   </div>
                 </div>
               </td>
@@ -204,20 +223,7 @@
 <p class="note-block"> <b> *หมายเหตุ หากอุปกรณ์/วัสดุ/ครุภัณฑ์ เกิดการชำรุดเสียหายในระหว่างที่ผู้ยืมเป็นผู้รับผิดชอบ ผู้ยืมจะต้องชดใช้ค่าเสียหายที่เกิดขึ้นทั้งหมด</b>
  
 </p>
-        <!-- หมายเหตุ -->
-        <!-- ลายเซ็น: ชิดขวา และชื่อจะอยู่ใต้เส้นพอดีแบบ responsive -->
-<div class="signature">
-  <div class="sig-row">
-    <span>ลงชื่อ</span>
-    <span class="sig-dots" aria-hidden="true"></span>  <!-- เปลี่ยนจาก sig-line เป็น sig-dots -->
-    <span>ผู้ยืม</span>
-  </div>
-  <div class="sig-name">
-    ( {{ booking && booking.username_form || "-" }} )
-  </div>
-</div>
-
-
+       
       </div>
 
       <!-- ไฟล์แนบ (ยังไม่อัปโหลด) -->
@@ -281,6 +287,9 @@ const unreadCount = ref(0)
 const userId = localStorage.getItem('user_id') || ''
 const tempFiles = ref([])
 
+/* >>> ใช้วันที่วันนี้ (ไทย) สำหรับลายเซ็นผู้ยืม */
+const todayThai = ref(new Date().toLocaleDateString('th-TH'))
+
 const lastSeenTimestamp = ref(parseInt(localStorage.getItem('lastSeenTimestamp') || '0'))
 let polling = null
 
@@ -322,7 +331,6 @@ function exportToPDF() {
   smartPageBreak();
   const element = document.getElementById('pdf-section');
   element.classList.add('pdf-export-font-size'); // <<< เพิ่มคลาสลดฟอนต์
-  // option ตามด้านบน
  const opt = {
   margin: [0.5, 0.5, 0.5, 0.5],
   filename: PDF_FILENAME,
@@ -487,22 +495,25 @@ async function fetchNotifications() {
 
 
 onMounted(async () => {
-
   lastSeenTimestamp.value = parseInt(localStorage.getItem('lastSeenTimestamp') || '0')
+
   const formDataRaw = localStorage.getItem('equipmentFormData')
   let bookingId = null
+
   if (formDataRaw) {
     const parsed = JSON.parse(formDataRaw)
     booking.value = parsed.form
 
     // ✅ ดึงค่าที่ส่งมาจากหน้าแรก
     booking.value.username_form = parsed.form.username_form || ""
-    booking.value.id_form = parsed.form.id_form || ""
+    booking.value.id_form       = parsed.form.id_form || ""
+    booking.value.number        = parsed.form.number || parsed.form.tel || parsed.form.phone || "" // ✅ เพิ่มบรรทัดนี้
 
     bookingId = booking.value.booking_id || booking.value._id || booking.value.id
     if (!booking.value.booking_id && (booking.value._id || booking.value.id)) {
       booking.value.booking_id = booking.value._id || booking.value.id
     }
+
     if (booking.value.items && Array.isArray(booking.value.items)) {
       equipmentList.value = booking.value.items.map(item => ({
         name: item.item_name,
@@ -511,13 +522,15 @@ onMounted(async () => {
       }))
     }
   }
-loadTempFilesFromPage1()
+
+  loadTempFilesFromPage1()
+
   const fileData = localStorage.getItem('equipment_upload_file')
   if (fileData) {
     try {
       uploadedFiles.value = JSON.parse(fileData)
-    } catch { 
-      uploadedFiles.value = [] 
+    } catch {
+      uploadedFiles.value = []
     }
   }
 
@@ -525,6 +538,7 @@ loadTempFilesFromPage1()
     try {
       const res = await axios.get(`${API_BASE}/api/booking_equipment/${bookingId}`)
       attachedFiles.value = res.data.attachedFiles || res.data.attachment || []
+
       if (res.data.items && Array.isArray(res.data.items)) {
         equipmentList.value = res.data.items.map(item => ({
           name: item.item_name,
@@ -535,11 +549,13 @@ loadTempFilesFromPage1()
     } catch {
       attachedFiles.value = []
     }
+
     fetchNotifications()
-  polling = setInterval(fetchNotifications, 30000)
+    polling = setInterval(fetchNotifications, 30000)
     await loadCart()
   }
 })
+
 
 onBeforeUnmount(() => {
   if (polling) clearInterval(polling)
@@ -577,40 +593,45 @@ function tryGoStep(index) {
 }
 async function handleNext() {
   if (!booking.value || equipmentList.value.length === 0) {
-    alert('ไม่มีข้อมูลจะบันทึก')
-    return
+    alert('ไม่มีข้อมูลจะบันทึก');
+    return;
   }
-  const bookingIdFromServer = booking.value.booking_id || booking.value._id || booking.value.id || ''
+
+  const bookingIdFromServer = booking.value.booking_id || booking.value._id || booking.value.id || '';
   if (!bookingIdFromServer) {
-    alert('ไม่พบ booking_id กรุณากรอกข้อมูลใหม่อีกครั้ง')
-    return
+    alert('ไม่พบ booking_id กรุณากรอกข้อมูลใหม่อีกครั้ง');
+    return;
   }
-  isLoading.value = true
+
+  isLoading.value = true;
   try {
-    // 1) สร้าง PDF เป็น Blob (ไม่ทำ base64)
-    const pdfBlob = await htmlToPdfBlob('pdf-section')
+    // 1) สร้าง PDF เป็น Blob
+    const pdfBlob = await htmlToPdfBlob('pdf-section');
 
-    // 2) ให้ผู้ใช้ดาวน์โหลดไฟล์ PDF เหมือนเดิม
-    const link = document.createElement('a')
-    link.href = URL.createObjectURL(pdfBlob)
-    link.download = PDF_FILENAME
-    document.body.appendChild(link)
-    link.click()
-    link.remove()
+    // 2) ดาวน์โหลดให้ผู้ใช้ (optional UI)
+    // const link = document.createElement('a');
+    // link.href = URL.createObjectURL(pdfBlob);
+    // link.download = PDF_FILENAME;
+    // document.body.appendChild(link);
+    // link.click();
+    // link.remove();
 
-    // 3) อัปโหลด PDF ไปที่ server เพื่อเอา URL มาเก็บใน DB
-    const pdfUrl = await uploadPdfBlob(pdfBlob)
+    // 3) อัปโหลด PDF เก็บ URL
+    const pdfUrl = await uploadPdfBlob(pdfBlob);
 
-    // 4) อัปโหลดไฟล์แนบจริงที่ผู้ใช้เลือก (ได้เป็น URL/ID กลับมา)
-    const uploaded = await uploadTempFiles()  // [{fileName,mimeType,fileUrl}]
+    // 4) อัปโหลดไฟล์แนบชั่วคราวทั้งหมด (จากหน้า 1)
+    const uploaded = await uploadTempFiles(); // [{fileName,mimeType,fileUrl}]
 
-    // 5) บันทึก history โดย “แนบเป็น URL” (ไม่ใช่ base64)
+    // 5) บันทึก history (แนบ URL) — ★ ใส่ type: 'equipment' และ reasons
     for (const item of equipmentList.value) {
       await axios.post(`${API_BASE}/api/history`, {
+        type: 'equipment',                              // ★ บอกชัดว่าเป็นอุปกรณ์
         booking_id: bookingIdFromServer,
         user_id: booking.value.user_id,
         username_form: booking.value.username_form || '',
         id_form: booking.value.id_form || '',
+        number: (booking.value.number ?? '').toString().trim(), // ★ ส่งเบอร์ (จะ map เป็น tel ที่ฝั่ง BE)
+
         name: item.name,
         quantity: item.quantity,
         status: 'pending',
@@ -618,28 +639,32 @@ async function handleNext() {
         attachment: uploaded.map(u => u.fileUrl || u.fileId).filter(Boolean),
         fileName: uploaded.map(u => u.fileName),
         fileType: uploaded.map(u => u.mimeType),
-        reason: booking.value.reason || '',
+
+        reasons: booking.value.reason || '',            // ★ ใช้ reasons (BE รองรับทั้ง reason/reasons อยู่แล้ว)
         since: booking.value.start_date || '',
         uptodate: booking.value.end_date || '',
+
         receive_date: booking.value.receive_date || '',
         receive_time: booking.value.receive_time || '',
-        bookingPdfUrl: pdfUrl,            // ✅ เก็บ URL ของไฟล์ PDF
-      })
+
+        bookingPdfUrl: pdfUrl
+      });
     }
 
-    // 6) เคลียร์รถเข็น/ไฟล์ชั่วคราว/Local Storage แล้วไปหน้าสำเร็จ
-    await axios.delete(`${API_BASE}/api/cart`, { data: { user_id: booking.value.user_id } })
-    window._equipTempFiles = []
-    localStorage.removeItem('equipmentFormData')
-    localStorage.setItem('equipment_booking_id', bookingIdFromServer)
+    // 6) เคลียร์รถเข็น/ไฟล์ชั่วคราว แล้วไปหน้าสำเร็จ
+    await axios.delete(`${API_BASE}/api/cart`, { data: { user_id: booking.value.user_id } });
+    window._equipTempFiles = [];
+    localStorage.removeItem('equipmentFormData');
+    localStorage.setItem('equipment_booking_id', bookingIdFromServer);
 
-    router.push('/form_equipment4')
+    router.push('/form_equipment4');
   } catch (err) {
-    alert('เกิดข้อผิดพลาด: ' + (err.response?.data?.message || err.message))
+    alert('เกิดข้อผิดพลาด: ' + (err.response?.data?.message || err.message));
   } finally {
-    isLoading.value = false
+    isLoading.value = false;
   }
 }
+
 
 
 </script>
@@ -1077,7 +1102,7 @@ async function handleNext() {
   gap: 12px; /* ระยะห่างระหว่าง "ลงชื่อ" กับชื่อ */
   margin-bottom: 16px;
   flex-wrap: wrap;
-  justify-content: flex-end; /* ชิดขวา */
+  justify-content: flex-start; /* ชิดซ้าย */
 }
 .form-row-sign {
   display: flex;
@@ -1089,7 +1114,6 @@ async function handleNext() {
 .form-row-sign .label {
   white-space: nowrap; /* ป้องกันคำว่า "ลงชื่อ" หักบรรทัด */
 }
-/* PDF ONLY */
 /* PDF ONLY */
 .pdf-export-font-size {
   font-size: 16px !important;   /* ฟอนต์ปกติ */
@@ -1104,8 +1128,6 @@ async function handleNext() {
   font-weight: bold;
 }
 
-
-
 .pdf-export-header {
   font-size: 18px !important;
   font-weight: bold;
@@ -1116,40 +1138,58 @@ async function handleNext() {
   text-align: center; /* จัดข้อความกลาง */
 }
 
-/* ลายเซ็น – ไม่ใช้ margin fix พิกเซล */
-.signature{
-  margin-top: 30px;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-}
-.sig-row{
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  justify-content: flex-end;
+/* ==================== ลายเซ็น (เฉพาะที่แก้) ==================== */
+/* กล่องลายเซ็นรวม – ชิดขวาเหมือนเดิม และเผื่อพื้นที่สำหรับวันที่ */
+.sigX{
+  width:100%;
+  max-width:700px;
+  margin:12px 0 2px auto;  /* ชิดขวา */
+  padding-bottom:26px;     /* กันพื้นที่สำหรับวันที่ */
 }
 
-/* เส้นจุดเล็ก คงที่ */
-.sig-dots{
+/* ใช้ grid 3 คอลัมน์: ซ้าย(ลงชื่อ) | กลาง(ชื่อ+วันที่) | ขวา(ผู้ยืม) */
+.sigX-row{
+  display:grid;
+  grid-template-columns:auto max-content auto;
+  justify-content:end;     /* ดันทั้งชุดไปชิดขวา */
+  align-items:baseline;    /* ให้ baseline เท่ากัน */
+  column-gap:12px;
+  white-space:nowrap;
+  line-height:1.2;
+}
+
+.sigX-left,.sigX-right{ font-weight:400; }
+
+/* สมอของ “ชื่อ + วันที่” */
+.sigX-nameAnchor{
+  position: relative;
   display: inline-block;
-  width: 25ch;           /* ความยาวเส้น ปรับได้ */
-  height: 0;             /* ไม่กินความสูงบรรทัด */
-  border-bottom: 1px dotted #000;  /* เม็ดจุดเล็ก */
-  transform: translateY(8px);     /* ยกเส้นขึ้นให้ระดับเดียวกับข้อความ "ลงชื่อ / ผู้ยืม" */
+  width: max-content;          /* ให้กว้างพอรองรับวันที่ */
 }
 
-/* ชื่อใต้เส้น */
-/* ชื่อใต้เส้น */
-/* ชื่อใต้เส้น */
-.sig-name{
-  margin-top: 6px;
-  width: 25ch;           
-  text-align: center;    
-  position: relative;    /* ใช้ relative เพื่อให้เลื่อนด้วย left ได้ */
-  left: -25px;           /* ค่านี้ปรับได้ตามต้องการเพื่อเลื่อนซ้าย */
+.sigX-name{
+  display:inline-block;
+  white-space:nowrap;
 }
+
+/* วันที่อยู่ “ใต้ชื่อ” กึ่งกลาง และไม่แตกบรรทัด */
+.sigX-date{
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-top: 10px;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  white-space: nowrap;
+  line-height: 1;
+  font-size: 0.9em;
+  z-index: 1;
+}
+
+/* =============================================================== */
+
 /* หมายเหตุ: ให้เป็นบล็อกธรรมดา ชิดซ้ายเต็มความกว้าง */
 .note-block{
   display: block;
@@ -1175,59 +1215,62 @@ async function handleNext() {
 }
 .approval-lines{ 
   line-height: 1.9; 
-  /* ถ้าอยากเว้นระยะบรรทัดกับลายเซ็นมากขึ้น เพิ่ม margin-bottom ได้ */
   margin-bottom: 8px; 
 }
 .approval-sign{ 
   line-height: 1.8; 
-  margin-top: 12px;    /* ปรับเพิ่ม/ลดเพื่อเลื่อนลงหรือขึ้นอีกเล็กน้อย */
+  margin-top: 12px;    
 }
 :root{
-  --topbar-h: 64px;   /* ความสูงแถบด้านบนของคุณ */
-  --subbar-h: 0px;    /* ถ้ามี subbar เพิ่ม */
+  --topbar-h: 64px;
+  --subbar-h: 0px;
   --gap: 12px;
 }
 
-/* === Tighten only the red-marked gaps === */
-
-/* 1) ระยะก่อน/หลังตารางรายการอุปกรณ์ */
+/* ตัดช่องว่างส่วนอื่นให้กระชับ (เดิมของคุณ) */
 .equipment-table{
-  margin-top: 6px !important;      /* เดิม 20px */
-  margin-bottom: 10px !important;  /* เดิม 30px */
+  margin-top: 6px !important;
+  margin-bottom: 10px !important;
+}
+/* ===== บีบช่องว่างเฉพาะกรอบความเห็น (ซ้าย/ขวา) ===== */
+/* 1) ระยะ padding ล่างของเซลล์ในตารางความเห็น */
+.approval-table td{
+  /* เดิม 3px */
+  padding: 6px 6px 8px 6px !important; /* ↑ เพิ่มช่องว่างจากเส้นกรอบล่าง */
 }
 
-/* 2) ระยะก่อนตารางความเห็น/ผลการปฏิบัติงาน */
-.approval-table{
-  margin-top: 10px !important;     /* เดิม 24px */
+.approval-cell { 
+  padding: 0 !important; 
+  vertical-align: top !important;   /* ไม่ต้องดันเนื้อหาลงกลางเซลล์ */
 }
-
-/* 3) ภายในช่องความคิดเห็น/ผลการปฏิบัติงาน ให้เส้นกับลายเซ็นชิดกันขึ้น */
-.approval-cell{ padding: 0 !important; }
 
 .approval-content{
-  /* ไม่ดันเว้นที่ว่างด้านในมากเกินไป */
-  min-height: 150px !important;    /* เดิม 210px – ลดให้กระชับ */
-  justify-content: flex-start !important; /* ไม่ดันลายเซ็นไปชิดก้นกล่อง */
-  gap: 6px !important;             /* คุมระยะระหว่างบล็อก */
-  padding: 10px 10px 12px !important;
+  /* เอาความสูงขั้นต่ำออก และลด padding ล่างสุด */
+  min-height: unset !important;
+  padding: 8px 8px 2px 8px !important;   /* เดิม 10 10 12 */
+  gap: 4px !important;                   /* ลดช่องไฟภายใน */
+  justify-content: flex-start !important;
 }
 
 .approval-lines{
-  line-height: 1.6 !important;     /* เดิม 1.9 */
-  margin-bottom: 4px !important;   /* เดิม 8px */
+  line-height: 1.5 !important;
+  margin-bottom: 2px !important;
 }
 
 .approval-sign{
-  line-height: 1.4 !important;     /* เดิม 1.8 */
-  margin-top: 4px !important;      /* เดิม 12px */
+  line-height: 1.25 !important;
+  margin-top: 3px !important;            /* ลดช่องไฟก่อนบล็อกล่าง */
+  margin-bottom: 0 !important;           /* กันระยะล่างเกิน */
 }
 
+/* กัน element สุดท้ายในกรอบมี margin ล่าง */
+.approval-content > *:last-child {
+  margin-bottom: 0 !important;
+}
 
-/* หน้าจอเล็ก ลดความยาวเส้นลง */
 @media (max-width: 540px){
-  .sig-dots, .sig-name{ width: 20ch; }
+  .sigX{ max-width:520px; }
 }
-
 </style>
 <!-- วางบล็อกนี้ท้ายไฟล์ SFC เลย -->
 <style>
@@ -1264,8 +1307,6 @@ async function handleNext() {
 #pdf-section .form-header h3{
   font-weight: 700;
 }
-</style>
 
-<style>
 @import '../css/style.css';
 </style>

@@ -13,7 +13,7 @@
         <router-link to="/edit_equipment" active-class="active"><i class="pi pi-clipboard"></i> แก้ไขอุปกรณ์ </router-link>
         <router-link to="/booking_field_admin" active-class="active"><i class="pi pi-map-marker"></i> จองสนาม</router-link>
         <router-link to="/approve_field" active-class="active"><i class="pi pi-verified"></i> อนุมัติ</router-link>
-        <router-link to="/return_admin" active-class="active"><i class="pi pi-box"></i> รับคืนอุปกรณ์ </router-link>
+        <!-- <router-link to="/return_admin" active-class="active"><i class="pi pi-box"></i> รับคืนอุปกรณ์ </router-link> -->
         <router-link to="/members" active-class="active"><i class="pi pi-user-edit"></i> พนักงาน/ผู้ดูแล </router-link>
         <router-link to="/history_admin" active-class="active"><i class="pi pi-history"></i> ระบบประวัติการทำรายการ</router-link>
       </nav>
@@ -53,32 +53,30 @@
           <h1 style="padding-left: 50px;">Profile</h1>
           <div class="profile-container">
   <div class="proinfo">
-   <img :src="profileImageUrl" alt="profile" class="profile-img" @error="imgError" />
+    <!-- Avatar -->
+    <img :src="profileImageUrl" alt="profile" class="profile-img" @error="imgError" />
+
     <div class="profile-details" v-if="info">
       <p>Username : {{ info.name }}</p>
-      <!-- <div class="editable-row">
-        <span>ID :</span>
-        <template v-if="!editId">
-          <span>{{ info.id }}</span>
-          <button
-            v-if="canEditUserId"
-            class="edit-btn"
-            @click="startEdit"
-          >แก้ไข</button>
-        </template>
-        <template v-else>
-          <input v-model="editUserId" style="padding:6px 12px;font-size:1rem;border-radius:4px;border:1px solid #d1d5db;" />
-          <button class="save-btn" @click="saveUserId">บันทึก</button>
-          <button class="cancel-btn" @click="cancelEdit">ยกเลิก</button>
-        </template>
-      </div> -->
       <p>Email : {{ info.email }}</p>
+      <p>Phone : {{ info.phone || '-' }}</p>
+
+      <div class="signature-wrap">
+        <div class="signature-label">Signature :</div>
+        <template v-if="info.signaturePath">
+          <img :src="signatureImageUrl" alt="signature" class="signature-img" @error="signatureError" />
+        </template>
+        <span v-else class="signature-empty">ยังไม่มีลายเซ็น</span>
+      </div>
     </div>
-    <div v-else>
-      Loading...
-              </div>
-            </div>
-          </div>
+
+    <!-- ปุ่มแก้ไข: มุมขวาล่างของการ์ด -->
+    <button class="card-edit-btn" @click="openEditSwal" title="Edit profile">
+      <i class="pi pi-pencil"></i>
+    </button>
+  </div>
+</div>
+
         </div>
         <!-- History -->
         <div>
@@ -173,7 +171,16 @@ const userStore = useUserStore()
    Reactive states
 ========================= */
 const isMobile = ref(window.innerWidth <= 600)
-const info = ref({ id: "-", name: "-", email: "-", picture: null })
+const info = ref({
+  id: "-",
+  name: "-",
+  email: "-",
+  picture: null,
+  phone: "",
+  // รองรับทั้ง signaturePath และ signature
+  signaturePath: "",
+  signature: ""
+})
 
 const history = ref([])
 const userMap = ref({})
@@ -190,8 +197,25 @@ const profileImageUrl = computed(() => {
   if (info.value.picture.startsWith('http')) return info.value.picture
   return API_BASE + info.value.picture
 })
-function imgError(event) { event.target.src = '/img/user.png' }
 
+
+function imgError(event) { event.target.src = '/img/user.png' }
+const rawSignaturePath = computed(() =>
+  (info.value?.signaturePath || info.value?.signature || '').trim()
+)
+
+const sigBust = ref(0)
+const signatureImageUrl = computed(() => {
+  const p = rawSignaturePath.value
+  if (!p) return ''
+  if (/^(https?:|data:|blob:)/i.test(p)) {
+    return sigBust.value ? `${p}${p.includes('?') ? '&' : '?'}v=${sigBust.value}` : p
+  }
+  const base = (API_BASE || '').replace(/\/+$/, '')
+  const path = p.startsWith('/') ? p : `/${p}`
+  return `${base}${path}${sigBust.value ? `?v=${sigBust.value}` : ''}`
+})
+function signatureError(e) { e.target.style.display = 'none' }
 const itemsPerPage = 5
 const currentPage = ref(1)
 const totalPages = computed(() => Math.ceil(history.value.length / itemsPerPage) || 1)
@@ -373,6 +397,82 @@ async function fetchNotifications() {
     }
   } catch (err) {}
 }
+async function openEditSwal() {
+  const currentSig = signatureImageUrl.value
+  const html = `
+    <div class="swal-edit-wrap">
+      <input type="tel" id="swal-phone" class="swal2-input" placeholder="เบอร์โทร" value="${info.value.phone || ''}">
+      <input type="file" id="swal-signature" class="swal2-file" accept="image/*" style="margin-top:6px;">
+      <div id="swal-preview" class="swal-preview">
+        ${currentSig
+          ? `<img src="${currentSig}" class="swal-signature-img">`
+          : `<span class="swal-signature-empty">ยังไม่มีลายเซ็น</span>`}
+      </div>
+    </div>
+  `
+
+  const { isConfirmed, value } = await Swal.fire({
+    title: 'Edit Profile',
+    html,
+    focusConfirm: false,
+    showCancelButton: true,
+    confirmButtonText: 'Save',
+    cancelButtonText: 'Cancel',
+    width: 560,
+    customClass: { popup: 'swal-center-popup' },
+    didOpen: () => {
+      const fileEl = document.getElementById('swal-signature')
+      const previewEl = document.getElementById('swal-preview')
+      fileEl?.addEventListener('change', () => {
+        const f = fileEl.files?.[0]
+        if (!f) {
+          previewEl.innerHTML = `<span class="swal-signature-empty">ยังไม่มีลายเซ็น</span>`
+          return
+        }
+        const url = URL.createObjectURL(f)
+        previewEl.innerHTML = `<img src="${url}" class="swal-signature-img">`
+      })
+    },
+    preConfirm: () => {
+      const phone = (document.getElementById('swal-phone')?.value || '').trim()
+      const file = document.getElementById('swal-signature')?.files?.[0] || null
+      const hasPhoneChange = phone !== (info.value.phone || '')
+      const hasSignature = !!file
+      if (!hasPhoneChange && !hasSignature) {
+        Swal.showValidationMessage('ใส่เบอร์ใหม่หรืออัปโหลดลายเซ็นอย่างน้อย 1 อย่าง')
+        return false
+      }
+      return { phone, file }
+    }
+  })
+
+  if (!isConfirmed) return
+  const { phone, file } = value
+
+  try {
+    const fd = new FormData()
+    if (phone !== (info.value.phone || '')) fd.append('phone', phone)
+    if (file) fd.append('signature', file) // ฝั่งหลังบ้านอ่าน field 'signature'
+
+    const res = await axios.patch(`${API_BASE}/api/users/profile`, fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      withCredentials: true
+    })
+
+    if (res.data?.success && res.data?.user) {
+      info.value.phone = res.data.user.phone || ''
+      info.value.signaturePath = res.data.user.signaturePath || res.data.user.signature || ''
+      info.value.signature = info.value.signaturePath
+      sigBust.value = Date.now()
+      Swal.fire('บันทึกสำเร็จ', '', 'success')
+    } else {
+      throw new Error(res.data?.message || 'อัปเดตไม่สำเร็จ')
+    }
+  } catch (e) {
+    Swal.fire('เกิดข้อผิดพลาด', e.response?.data?.message || e.message, 'error')
+  }
+}
+
 
 /* =========================
    Mount / Unmount
@@ -387,11 +487,15 @@ onMounted(async () => {
     const resMe = await axios.get(`${API_BASE}/api/me`, { withCredentials: true })
     if (resMe.data && resMe.data.user) {
       info.value = {
-        id: resMe.data.user.user_id,
-        name: resMe.data.user.name,
-        email: resMe.data.user.email,
-        picture: resMe.data.user.picture
-      }
+  id: resMe.data.user.user_id,
+  name: resMe.data.user.name,
+  email: resMe.data.user.email,
+  picture: resMe.data.user.picture,
+  phone: resMe.data.user.phone || '',
+  signaturePath: resMe.data.user.signaturePath || resMe.data.user.signature || '',
+  signature: resMe.data.user.signature || ''
+}
+
     } else {
       info.value = { id: '-', name: '-', email: '-' }
       router.push('/login')
@@ -876,6 +980,7 @@ function openDetail(hist) {
 }
 
 .proinfo{
+  position: relative;           /* << เพิ่มบรรทัดนี้ */
   background-color: rgb(235, 235, 235);
   border-radius: 20px;
   padding: 30px 40px;
@@ -892,16 +997,51 @@ function openDetail(hist) {
   border-radius: 16px;
   box-shadow: 0 1px 12px #e3e3e3;
   margin-right: 24px;
+  align-self: center; /* เพิ่มบรรทัดนี้ */
 }
-.profile-details {
-  color: #333;
-  font-size: 1rem;
-  padding-left: 12px;
+.profile-details { color:#333; font-size: 1.07rem; padding-left: 12px; }
+/* Signature UI */
+.signature-wrap{ margin-top:10px; display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.signature-label{ font-weight:600; color:#334155; }
+.signature-img{
+  width: 220px; height: 80px; object-fit: contain;
+  border: 1px dashed #cbd5e1; background: #f8fafc; border-radius: 8px; padding: 6px;
 }
+.signature-empty{ color:#94a3b8; font-style: italic; }
 .profile-container {
   padding: 1rem 70px;
 }
+.card-edit-btn{
+  position: absolute;
+  right: 20px;
+  bottom: 20px;
+  width: 48px;
+  height: 48px;
+  border-radius: 999px;
+  border: none;
+  background: #f59e42;
+  color: #fff;
+  font-size: 18px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+.card-edit-btn:hover{ background:#ea580c; }
 
+/* จัดกลางใน SweetAlert (พรีวิวลายเซ็น) */
+.swal-edit-wrap{ width:100%; display:flex; flex-direction:column; align-items:center; }
+.swal-preview{ margin-top:10px; display:flex; justify-content:center; width:100%; }
+.swal-signature-img{
+  max-width: 260px; max-height: 100px; object-fit: contain;
+  border: 1px dashed #cbd5e1; background: #f8fafc; border-radius: 6px; padding: 4px;
+}
+.swal-signature-empty{ color:#94a3b8; font-style:italic; }
+
+/* มือถือ */
+@media (max-width: 768px) {
+  .profile-container { padding: 1rem 15px; }
+  .proinfo { width: 100%; max-width: 100%; padding: 20px; }
+}
 .profile-grid {
   display: flex;
   flex-direction: column;
@@ -1091,12 +1231,18 @@ function openDetail(hist) {
     width: 100vw;
   }
   .proinfo {
-    min-width: 370px;
-    width: max-content;
-    padding: 20px 20px;
-    box-sizing: border-box;
-    overflow-x: auto;
-  }
+  position: relative;
+  background-color: white;
+  border-radius: 20px;
+  padding: 30px 60px 30px 40px;
+  display: flex;
+  align-items: center; /* center เหมือน profile.vue */
+  gap: 2rem;
+  width: 100%;
+  min-height: 160px;
+  overflow-x: auto;
+  max-width: 100%;
+}
   .profile-grid {
     padding: 0 2px !important;
   }
@@ -1247,4 +1393,19 @@ function openDetail(hist) {
 .hist-swal .equip-table td:nth-child(2){ text-align: center; }
 .hist-swal .equip-table th:nth-child(7),
 .hist-swal .equip-table td:nth-child(7){ text-align: center; }
+
+/* จัด SweetAlert ให้อยู่กึ่งกลางและให้พรีวิวอยู่กลางจริง ๆ */
+.swal-center-popup .swal2-html-container{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+}
+.swal-edit-wrap{ width:100%; display:flex; flex-direction:column; align-items:center; }
+.swal-preview{ margin-top:10px; display:flex; justify-content:center; width:100%; }
+.swal-signature-img{
+  max-width:260px; max-height:100px; object-fit:contain;
+  border:1px dashed #cbd5e1; background:#f8fafc; border-radius:6px; padding:4px;
+}
+.swal-signature-empty{ color:#94a3b8; font-style:italic; }
+
 </style>

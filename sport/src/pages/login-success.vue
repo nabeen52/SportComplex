@@ -34,6 +34,9 @@ onMounted(async () => {
 
       setTimeout(() => {
         switch (data.user.role) {
+          case 'super':
+            router.replace('/approve_field_super')
+            break
           case 'admin':
             router.replace('/dashboard')
             break

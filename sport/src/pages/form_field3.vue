@@ -111,7 +111,7 @@
               <span class="bold">เรื่อง</span><span>ขออนุมัติใช้สถานที่</span>
             </div>
             <div class="form-row mt-15" style="margin-left: 0px;">
-              <span class="bold">เรียน</span><span>อธิการบดี</span>
+              <span class="bold">เรียน</span><span>หัวหน้าศูนย์กีฬาฯ</span>
             </div>
 
             <div class="form-row mt-15" style="text-indent: 80px; text-align: left; line-height: 2.0;">
@@ -144,44 +144,51 @@
     </span>
   </div>
 
-  <!-- ข้อ 2 -->
-  <div class="form-row bold" style="margin-left: 0;">
-    <span>2. ขออนุมัติใช้ระบบสาธารณูปโภค</span>
-    <input type="radio" value="yes" :checked="isUtilityYes(info.utilityRequest)" disabled/>
+<!-- ข้อ 2 -->
+<!-- ข้อ 2 -->
+<div class="form-row util-header" style="margin-left:0;">
+  <span class="bold">2. ขออนุมัติใช้ระบบสาธารณูปโภค</span>
+
+  <div class="util-choose">
+    <span :class="['radio-print', { on: isYes(info.utilityRequest) }]"></span>
     <label style="margin-right: 18px;">เลือก</label>
-    <input type="radio" value="no" :checked="isUtilityNo(info.utilityRequest)" disabled/>
+    <span :class="['radio-print', { on: isNo(info.utilityRequest) }]"></span>
     <label>ไม่เลือก</label>
   </div>
+</div>
 
-  <!-- ตารางสาธารณูปโภค -->
-  <div v-if="isUtilityYes(info.utilityRequest)" class="util-wrap" style="margin-left:80px;">
-    <table class="util-table">
-      <colgroup>
-        <col class="c-label" />
-        <col class="c-time" />
-        <col class="c-sep" />
-        <col class="c-time" />
-      </colgroup>
-      <tr>
-        <td class="util-label">2.1 เปิดเครื่องปรับอากาศตั้งแต่ :</td>
-        <td class="time">{{ formatTimeTH(info.turnon_air) }}</td>
-        <td class="sep">ถึง</td>
-        <td class="time">{{ formatTimeTH(info.turnoff_air) }}</td>
-      </tr>
-      <tr>
-        <td class="util-label">2.2 ไฟฟ้าส่องสว่างตั้งแต่ :</td>
-        <td class="time">{{ formatTimeTH(info.turnon_lights) }}</td>
-        <td class="sep">ถึง</td>
-        <td class="time">{{ formatTimeTH(info.turnoff_lights) }}</td>
-      </tr>
-      <tr>
-        <td class="util-label">2.3 อื่นๆ :</td>
-        <td class="other-value" colspan="3">
-          {{ info.other && info.other.trim() !== '' ? info.other : '-' }}
-        </td>
-      </tr>
-    </table>
-  </div>
+<div v-if="isYes(info.utilityRequest)" class="util-wrap" style="margin-left:80px;">
+  <table class="util-table util-colon-align">
+    <colgroup>
+      <col class="c-label" />
+      <col class="c-colon" />
+      <col class="c-time" />
+      <col class="c-sep" />
+      <col class="c-time" />
+    </colgroup>
+
+    <!-- 2.1 -->
+   <tr>
+  <td class="util-label">2.1 ไฟฟ้าส่องสว่าง</td>
+  <td class="colon">:</td>
+  <td class="time"><span class="since">ตั้งแต่</span> {{ formatTimeTH(info.turnon_lights) }}</td>
+  <td class="sep"> - </td>
+  <td class="time">{{ formatTimeTH(info.turnoff_lights) }}</td>
+</tr>
+
+
+    <!-- 2.2 ห้องสุขา -->
+    <tr>
+      <td class="util-label">2.2 ห้องสุขา</td>
+      <td class="colon">:</td>
+      <td class="restroom-text" colspan="3">
+        {{ isYes(info.restroom) ? 'ต้องการใช้งาน' : (isNo(info.restroom) ? 'ไม่ต้องการใช้งาน' : '-') }}
+      </td>
+    </tr>
+  </table>
+</div>
+
+
 
   <div class="note-line">
     <span style="font-weight:bold; font-size: 15px;">
@@ -192,13 +199,13 @@
   <!-- ข้อ 3 -->
   <div class="form-row bold" style="margin-left: 0;">
     <span>3. ขออนุมัติรายการประกอบอาคาร</span>
-    <input type="radio" value="yes" :checked="isFacilityYes(info.facilityRequest)" disabled/>
+    <span :class="['radio-print', { on: isYes(info.facilityRequest) }]" style="margin-left:8px;"></span>
     <label style="margin-right: 18px;">เลือก</label>
-    <input type="radio" value="no" :checked="isFacilityNo(info.facilityRequest)" disabled/>
+    <span :class="['radio-print', { on: isNo(info.facilityRequest) }]"></span>
     <label>ไม่เลือก</label>
   </div>
 
-  <div v-if="isFacilityYes(info.facilityRequest)">
+  <div v-if="isYes(info.facilityRequest)">
     <div class="form-row block-row" style="margin-left: 80px;">
       <span style="white-space: nowrap;">3.1 ดึงอัฒจันทร์ภายในอาคารเฉลิมพระเกียรติฯ :</span>
       <span class="line-field block-text force-inline">{{ info.amphitheater && info.amphitheater.trim() !== '' ? info.amphitheater : '-' }}</span>
@@ -224,120 +231,98 @@
 <!-- === Uniform spacing end === -->
 
 
-            <!-- ตารางเซ็นชื่อ 3 ช่อง (ด้านบน) -->
-            <table class="sign-header-table">
-              <tbody>
-                <tr>
-                  <td>
-                    ลงชื่อ......................................<br><br>
-                    <span style=" white-space: nowrap;">
-                                  ( {{ info.proxyStudentName || info.username_form || '-' }} )
-                    </span>
-                    <br><br>
-                    นักศึกษา/ผู้รับผิดชอบ<br><br>
-                    วันที่............/............/............
-                  </td>
-                  <td>
-                    ลงชื่อ......................................<br><br>
-                    (............................................)<br><br>
-                    อาจารย์/ที่ปรึกษาโครงการ<br><br>
-                    วันที่............/............/............
-                  </td>
-                  <td>
-                    ลงชื่อ......................................<br><br>
-                    (............................................)<br><br>
-                    คณบดี/หัวหน้าหน่วยงาน<br><br>
-                    วันที่............/............/............
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+           <!-- ตารางเซ็นชื่อ (เหลือ 1 ช่อง: นักศึกษา/ผู้รับผิดชอบ ชิดขวา) -->
+<table class="sign-header-table single-right">
+  <tbody>
+    <tr>
+      <td>
 
-            <!-- ตารางเซ็นชื่อ 3 ช่อง (ด้านล่าง) -->
-            <div class="avoid-break">
-              <div class="form-row" style="padding-top: 10px;">
-                <table class="approval-sign-table avoid-break">
-                  <thead>
-                    <tr>
-                      <th>1. เลขานุการศูนย์กีฬาฯ</th>
-                      <th>2. หัวหน้าศูนย์กีฬาฯ</th>
-                      <th>3. อธิการบดี</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-  <tr>
-    <!-- ช่อง 1 -->
-    <td>
-      <div class="td-inner">
-        <div class="checkbox-line">
-          <input type="checkbox" id="chk1-1" disabled>
-          <label for="chk1-1">เรียน หัวหน้าศูนย์กีฬาฯ</label>
-        </div>
-        <div class="checkbox-line">
-          <input type="checkbox" id="chk1-2" disabled>
-          <label for="chk1-2">เพื่อโปรดพิจารณา</label>
-        </div>
-        <div class="checkbox-line">
-          <input type="checkbox" id="chk1-3" disabled>
-          <label for="chk1-3">อื่นๆ</label>
-          <span class="dot-line dot-line-custom"></span>
-        </div>
+        <div class="sig-box">
+  <!-- sign-line คงเดิม -->
+  <div class="sign-line">
+    <span class="sign-text">ลงชื่อ</span>
+    <div class="signature-wrap">
+      <template v-if="signatureUrl">
+        <img :src="signatureUrl" alt="ลายเซ็น" class="signature-img" crossorigin="anonymous" @error="signatureUrl = ''" />
+      </template>
+      <template v-else>
+        <span class="dot-line-inline">......................................</span>
+      </template>
+    </div>
+    <span aria-hidden="true"></span>
+  </div>
 
-        <div class="line-row">(<span class="dot-line short"></span>)</div>
-        <div class="line-row"><span class="dot-line short"></span></div>
-        <div class="date-row">วันที่ ............/............/............</div>
-      </div>
-    </td>
+  <!-- ▼ ใช้บล็อคแทน <br /> เพื่อคุมระยะ -->
+  <div class="sig-under">
+    <div class="sig-name" style="padding-bottom: 8px;">( {{ info.proxyStudentName || info.username_form || '-' }} )</div>
+    <div class="sig-role" style="padding-bottom: 8px;">ผู้รับผิดชอบ</div>
+    <div class="sig-date">วันที่ {{ todayTH }}</div>
+  </div>
+</div>
 
-    <!-- ช่อง 2 -->
-    <td>
-      <div class="td-inner">
-        <div class="checkbox-line">
-          <input type="checkbox" id="chk2-1" disabled>
-          <label for="chk2-1">เรียน รองอธิการบดี</label>
-        </div>
-        <div class="checkbox-line">
-          <input type="checkbox" id="chk2-2" disabled>
-          <label for="chk2-2">เพื่อโปรดพิจารณา</label>
-        </div>
-        <div class="checkbox-line">
-          <input type="checkbox" id="chk2-3" disabled>
-          <label for="chk2-3">อื่นๆ</label>
-          <span class="dot-line dot-line-custom"></span>
-        </div>
+      </td>
+    </tr>
+  </tbody>
+</table>
 
-        <div class="line-row">(<span class="dot-line short"></span>)</div>
-        <div class="line-row"><span class="dot-line short"></span></div>
-        <div class="date-row">วันที่ ............/............/............</div>
-      </div>
-    </td>
 
-    <!-- ช่อง 3 -->
-    <td>
-      <div class="td-inner">
-        <div class="checkbox-line">
-          <input type="checkbox" id="chk3-1" disabled>
-          <label for="chk3-1">อนุมัติข้อ</label>
-        </div>
-        <div class="checkbox-line">
-          <input type="checkbox" id="chk3-2" disabled>
-          <label for="chk3-2">อื่นๆ</label>
-          <span class="dot-line dot-line-custom"></span>
-        </div>
-        <!-- เติมช่องว่างให้ครบ 3 บรรทัดเหมือนคอลัมน์อื่น -->
-        <div class="checkbox-line placeholder"></div>
 
-        <div class="line-row">(<span class="dot-line short"></span>)</div>
-        <div class="line-row"><span class="dot-line short"></span></div>
-        <div class="date-row">วันที่ ............/............/............</div>
-      </div>
-    </td>
-  </tr>
-</tbody>
+          <!-- ตารางเซ็นชื่อ 2 ช่อง (ด้านล่าง) -->
+<div class="avoid-break">
+  <div class="form-row" style="padding-top:10px;">
+    <table class="approval-sign-table avoid-break two-cols">
+      <thead>
+        <tr>
+          <th>1. เลขานุการศูนย์กีฬาฯ</th>
+          <th>2. หัวหน้าศูนย์กีฬาฯ</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <!-- กล่องที่ 1: เลขานุการศูนย์กีฬาฯ -->
+          <td>
+            <div class="td-inner">
+             <div class="checkbox-line">
+  <span class="box-print"></span>      <!-- เดิม: radio-print -->
+  <label>เรียน หัวหน้าศูนย์กีฬาฯ</label>
+</div>
+<div class="checkbox-line">
+  <span class="box-print"></span>      <!-- เดิม: radio-print -->
+  <label>อื่นๆ</label>
+  <span class="dot-line dot-line-custom"></span>
+</div>
 
-                </table>
-              </div>
+              <div class="line-row"><span class="dot-line"></span></div>
+              <div class="line-row">(<span class="dot-line"></span>)</div>
+              <div class="date-row">วันที่ ............/............/............</div>
             </div>
+          </td>
+
+          <!-- กล่องที่ 2: หัวหน้าศูนย์กีฬาฯ -->
+          <td>
+            <div class="td-inner">
+            <!-- กล่องที่ 2: หัวหน้าศูนย์กีฬาฯ -->
+<div class="checkbox-line">
+  <span class="box-print"></span>      <!-- เดิม: radio-print -->
+  <label>เห็นชอบ</label>
+</div>
+<div class="checkbox-line">
+  <span class="box-print"></span>      <!-- เดิม: radio-print -->
+  <label>อื่นๆ</label>
+  <span class="dot-line dot-line-custom"></span>
+</div>
+
+              <div class="line-row"><span class="dot-line"></span></div>
+              <div class="line-row">(<span class="dot-line"></span>)</div>
+              <div class="date-row">วันที่ ............/............/............</div>
+            </div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
 
             <div style="margin-top:12px;">
               <span style="font-weight:bold; font-size: 15px;">
@@ -404,6 +389,14 @@ import html2pdf from 'html2pdf.js'
 
 const API_BASE = import.meta.env.VITE_API_BASE
 
+
+/* === helper: ตรวจ yes/no รองรับหลายรูปแบบ === */
+const norm = v => (v ?? '').toString().trim().toLowerCase()
+const YES_TOKENS = ['yes','เลือก','ต้องการ','true','1']
+const NO_TOKENS  = ['no','ไม่เลือก','ไม่ต้องการ','false','0']
+const isYes = v => YES_TOKENS.includes(norm(v))
+const isNo  = v => NO_TOKENS.includes(norm(v))
+
 // --------------- แจ้งเตือน -----------------
 const showNotifications = ref(false)
 const notifications = ref([])
@@ -413,6 +406,31 @@ const userId = localStorage.getItem('user_id') || ''
 const lastCheckedIds = new Set()
 const lastSeenTimestamp = ref(parseInt(localStorage.getItem('lastSeenTimestamp') || '0'))
 let polling = null
+
+const signatureUrl = ref('')  // URL รูปลายเซ็นของผู้ยื่น
+
+// แปลง path เป็น URL สมบูรณ์ (เหมือนหน้า approve_field)
+function toAbsUrl(p) {
+  if (!p) return ''
+  const s = String(p)
+  if (/^https?:\/\//i.test(s)) return s
+  if (s.startsWith('/')) return `${API_BASE}${s}`
+  return `${API_BASE}/${s}`
+}
+
+const todayTH = ref('')
+
+function getTodayTH() {
+  const now = new Date()
+  const d = String(now.getDate()).padStart(2, '0')
+  const m = String(now.getMonth() + 1).padStart(2, '0')
+  const y = String(now.getFullYear() + 543) // แปลงเป็น พ.ศ.
+  return `${d}/${m}/${y}`
+}
+
+todayTH.value = getTodayTH()
+
+
 
 function pruneOldNotifications() {
   const cutoff = Date.now() - (7 * 24 * 60 * 60 * 1000) // 7 วัน
@@ -673,11 +691,6 @@ function formatDateOnly(dateTime) {
   return `${d.padStart(2, '0')}/${m.padStart(2, '0')}/${buddhistYear}`
 }
 
-function isUtilityYes(val) { return val === 'yes' }
-function isUtilityNo(val) { return val === 'no' }
-function isFacilityYes(val) { return val === 'yes' }
-function isFacilityNo(val) { return val === 'no' }
-
 function blobToBase64(blob) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
@@ -705,10 +718,16 @@ onMounted(async () => {
     const res = await axios.get(`${API_BASE}/api/booking_field/${bookingId}`)
     info.value = res.data
 
+    // map เดิม (ไม่รื้อ)
     if (info.value.utilityRequest === 'เลือก') info.value.utilityRequest = 'yes'
     if (info.value.utilityRequest === 'ไม่เลือก') info.value.utilityRequest = 'no'
     if (info.value.facilityRequest === 'เลือก') info.value.facilityRequest = 'yes'
     if (info.value.facilityRequest === 'ไม่เลือก') info.value.facilityRequest = 'no'
+
+    // ✅ normalize เพิ่มเติมให้แน่นอน
+    info.value.utilityRequest  = isYes(info.value.utilityRequest)  ? 'yes' : (isNo(info.value.utilityRequest)  ? 'no' : '')
+    info.value.restroom        = isYes(info.value.restroom)        ? 'yes' : (isNo(info.value.restroom)        ? 'no' : '')
+    info.value.facilityRequest = isYes(info.value.facilityRequest) ? 'yes' : (isNo(info.value.facilityRequest) ? 'no' : '')
 
     if (info.value.user_id) {
       try {
@@ -728,6 +747,29 @@ onMounted(async () => {
         })
       }
     }
+
+    if (info.value.user_id) {
+  try {
+    const userRes = await axios.get(`${API_BASE}/api/user/${info.value.user_id}`)
+    info.value.requester = userRes.data.name || '-'
+
+    // ✅ ดึงลายเซ็นจาก users.signaturePath
+    const sigPath =
+      userRes.data.signaturePath ||
+      userRes.data.signature_url ||
+      userRes.data.signature ||
+      ''
+
+    signatureUrl.value = sigPath ? toAbsUrl(sigPath) : ''
+  } catch {
+    info.value.requester = '-'
+    signatureUrl.value = ''
+  }
+}
+
+
+
+
   } catch (err) {
     Swal.fire('ดึงข้อมูลไม่สำเร็จ')
     console.error(err)
@@ -757,34 +799,80 @@ async function uploadTempFilesAndGetUrls() {
   return uploaded
 }
 
+
+
+
+function preferFilled(baseObj = {}, overrideObj = {}) {
+  // รวม object โดยให้ค่าที่ "มีจริง" (ไม่ null/undefined/'' ) จาก override ชนะ
+  const out = { ...baseObj }
+  for (const [k, v] of Object.entries(overrideObj || {})) {
+    const isFilled = v !== undefined && v !== null && !(typeof v === 'string' && v.trim() === '')
+    if (isFilled) out[k] = v
+  }
+  return out
+}
+
+function normalizeYesNo(v) {
+  if (v === 'เลือก' || v === true || v === 'true' || v === 'yes') return 'yes'
+  if (v === 'ไม่เลือก' || v === false || v === 'false' || v === 'no') return 'no'
+  return (typeof v === 'string') ? v : ''
+}
+
+function normTime(t) {
+  // รับได้ทั้ง "HH:mm", "HH:mm:ss", หรือ string อื่น ๆ
+  if (!t) return ''
+  if (typeof t !== 'string') return String(t)
+  return t.slice(0,5)
+}
+
+
+
+
 async function handleNext() {
   try {
     const bookingId = localStorage.getItem('bookingId')
-    if (!bookingId) {
-      Swal.fire('ไม่พบ bookingId'); return
-    }
+    if (!bookingId) { Swal.fire('ไม่พบ bookingId'); return }
 
-    // 1) สร้าง PDF (เลิก base64)
+    // 0) เอา draft จากหน้า form_field มารวมกับที่โหลดจาก DB
+    const draft = (() => {
+      try { return JSON.parse(sessionStorage.getItem('form_field_save') || 'null') || {} }
+      catch { return {} }
+    })()
+    let bookingData = preferFilled(info.value || {}, draft || {})
+
+    // ✅ normalize radio/เวลา (เพิ่ม restroom ตรงนี้)
+    bookingData.utilityRequest  = normalizeYesNo(bookingData.utilityRequest)
+    bookingData.restroom        = normalizeYesNo(bookingData.restroom)   // << เพิ่ม
+    bookingData.facilityRequest = normalizeYesNo(bookingData.facilityRequest)
+    bookingData.turnon_air      = normTime(bookingData.turnon_air)
+    bookingData.turnoff_air     = normTime(bookingData.turnoff_air)
+    bookingData.turnon_lights   = normTime(bookingData.turnon_lights)
+    bookingData.turnoff_lights  = normTime(bookingData.turnoff_lights)
+    bookingData.since_time      = normTime(bookingData.since_time)
+    bookingData.until_thetime   = normTime(bookingData.until_thetime)
+
+    // 1) ทำ PDF 1 หน้าแล้วโหลดให้ผู้ใช้ (เหมือนเดิม)
     const pdfBlob = await htmlToPdfBlob('pdf-section')
 
-    // (ให้ผู้ใช้ดาวน์โหลดเหมือนเดิม)
-    const url = window.URL.createObjectURL(pdfBlob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = pdfFilename
-    document.body.appendChild(link); link.click()
-    setTimeout(() => { window.URL.revokeObjectURL(url); link.remove() }, 80)
+  // ===== ปิดการดาวน์โหลดอัตโนมัติไว้ก่อน (เผื่อเปิดใช้ภายหลัง) =====
+    // const url = window.URL.createObjectURL(pdfBlob)
+    // const link = document.createElement('a')
+    // link.href = url
+    // link.download = pdfFilename
+    // document.body.appendChild(link)
+    // link.click()
+    // setTimeout(() => { window.URL.revokeObjectURL(url); link.remove() }, 80)
 
-    // 2) อัปโหลด PDF ไป storage → ได้ URL กลับมา
+
+    // 2) อัปโหลด PDF -> ได้ URL
     const pdfUrl = await uploadPdfBlob(pdfBlob)
 
-    // 3) (ออปชัน) อัปโหลด temp files ที่เพิ่งแนบ (ถ้ายัง)
+    // 3) อัปโหลดไฟล์แนบชั่วคราว (ถ้ามี)
     const hasTemp = Array.isArray(window._tempSelectedFiles) && window._tempSelectedFiles.length > 0
     const uploadedNow = hasTemp ? await uploadTempFilesAndGetUrls() : []
 
-    // 4) รวมไฟล์ทั้งหมดให้เป็น URL ไม่ใช่ไฟล์จริงหรือ base64
-    const bookingData = { ...info.value }
-    const multerFiles = Array.isArray(bookingData.files) ? bookingData.files : []
+    // 4) รวมไฟล์แนบทั้งหมดเป็น URL/ชื่อไฟล์
+    const multerFiles   = Array.isArray(bookingData.files) ? bookingData.files : []
     const allAttachments = [
       ...multerFiles.map(f => f.fileUrl || f.url).filter(Boolean),
       ...uploadedNow.map(f => f.url),
@@ -794,7 +882,7 @@ async function handleNext() {
       ...uploadedNow.map(f => f.fileName || 'ไฟล์แนบ'),
     ]
 
-    // 5) ส่ง /api/history โดย “ไม่” แนบ base64
+    // 5) payload (เพิ่ม restroom ลงไปด้วย)
     const payload = {
       user_id: bookingData.user_id,
       name: bookingData.building,
@@ -813,14 +901,39 @@ async function handleNext() {
       date: new Date(),
       proxyStudentName: bookingData.proxyStudentName || '',
       proxyStudentId: bookingData.proxyStudentId || '',
-      bookingPdfUrl: pdfUrl,     // ✅ ใช้ URL แทน base64
+      bookingPdfUrl: pdfUrl,
       username_form: bookingData.username_form || localStorage.getItem('username_form') || '',
       id_form:       bookingData.id_form       || localStorage.getItem('id_form')       || '',
 
+      // ----- เพิ่ม restroom -----
+      utilityRequest:  bookingData.utilityRequest || '',
+      restroom:        bookingData.restroom || '',         // <<<< สำคัญ
+      facilityRequest: bookingData.facilityRequest || '',
+
+      // รายละเอียดสาธารณูปโภค/รายการประกอบอาคาร
+      turnon_air:      bookingData.turnon_air || '',
+      turnoff_air:     bookingData.turnoff_air || '',
+      turnon_lights:   bookingData.turnon_lights || '',
+      turnoff_lights:  bookingData.turnoff_lights || '',
+      other:           bookingData.other || '',
+      amphitheater:    bookingData.amphitheater || '',
+      need_equipment:  bookingData.need_equipment || '',
+
+      // อื่น ๆ
+      aw:           bookingData.aw || '',
+      tel:          bookingData.tel || '',
+      reasons:      bookingData.reasons || '',
+      participants: bookingData.participants || '',
+      requester:    bookingData.requester || '',
+      no_receive:   bookingData.no_receive || '',
+      date_receive: bookingData.date_receive || null,
+      receiver:     bookingData.receiver || '',
+      fileUrl:      bookingData.fileUrl || '',
     }
 
     await axios.post(`${API_BASE}/api/history`, payload)
 
+    // 6) เคลียร์และไปหน้าถัดไป
     sessionStorage.removeItem('form_field_save')
     window._tempSelectedFiles = []
     localStorage.removeItem('username_form')
@@ -828,11 +941,7 @@ async function handleNext() {
     router.push('/form_field4')
   } catch (err) {
     if (err?.response?.status === 413) {
-      Swal.fire({
-        icon: 'error',
-        title: 'ไฟล์รวมใหญ่เกินไป',
-        text: 'กรุณาลดจำนวน/ขนาดไฟล์ หรือบีบอัดก่อน แล้วลองอีกครั้ง',
-      })
+      Swal.fire({ icon: 'error', title: 'ไฟล์รวมใหญ่เกินไป', text: 'กรุณาลดจำนวน/ขนาดไฟล์ หรือบีบอัดก่อน แล้วลองอีกครั้ง' })
     } else if (err?.response?.status === 409) {
       Swal.fire({ icon: 'warning', title: 'คำขอซ้ำ', text: err.response.data.message || 'คุณมีรายการที่รออนุมัติอยู่แล้ว' })
     } else {
@@ -841,6 +950,7 @@ async function handleNext() {
     console.error(err)
   }
 }
+
 
 
 function formatTimeTH(timeStr) {
@@ -859,8 +969,8 @@ function formatTimeTH(timeStr) {
   width: 90%;
   max-width: 900px;
   margin: 0 auto 16px;
-  background: rgba(255, 255, 255, 0.85);   /* เดิม #fff -> ให้จางลง */
-  backdrop-filter: blur(2px);               /* เพิ่มความละมุน (รองรับเบราว์เซอร์ส่วนใหญ่) */
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(2px);
   border-radius: 20px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, .1);
 }
@@ -878,7 +988,7 @@ function formatTimeTH(timeStr) {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 20px 20px 52px;   /* เดิม 20px -> เพิ่ม padding-bottom */
+  padding: 20px 20px 52px;
   border-radius: 20px;
 }
 .step{
@@ -905,8 +1015,8 @@ function formatTimeTH(timeStr) {
 /* จัด label ให้อยู่กึ่งกลางวงกลมและไม่เอียงไปทางซ้าย */
 .label{
   position: absolute;
-  top: 45px;                 /* ระยะห่างจากวงกลม ปรับได้ */
-  left: calc(30px / 2);      /* 15px = ครึ่งของเส้นผ่านศูนย์กลางวงกลม */
+  top: 45px;
+  left: calc(30px / 2);
   transform: translateX(-50%);
   font-size: 12px;
   white-space: nowrap;
@@ -989,11 +1099,61 @@ function formatTimeTH(timeStr) {
   word-break: break-word;
   padding-left: 0;
 }
+/* ===== ปรับคอลัมน์และระยะหลัง ":" ให้แคบลง + จัดจุดเริ่มข้อความหลัง ":" ให้ตรงกัน ===== */
+.util-table.util-colon-align col.c-label { width: 200px !important; } /* เดิม ~230–240 → แคบลง */
+.util-table.util-colon-align col.c-colon { width: 8px !important; }   /* ช่อง ":" ให้เล็กลง */
+
+.util-table.util-colon-align td.colon { 
+  text-align: center; 
+  padding: 0 2px !important;          /* ลด padding รอบ ":" */
+}
+
+/* จุดเริ่ม “ข้อความหลัง :” ให้คงที่ทั้ง 2.1 และ 2.2 */
+.util-table.util-colon-align td.time,
+.util-table.util-colon-align td.restroom-text{
+  padding-left: 2px !important;       /* ตัวเลข/คำ “ตั้งแต่” และคำ “ต้องการใช้งาน” เริ่มบรรทัดเดียวกัน */
+  text-indent: 0 !important;
+  margin-left: 0 !important;
+}
+
+/* ถ้าตัว “ต” แถวล่างยังเหลื่อมซ้ายเล็กน้อย ให้จูนเพิ่มทีละ 1–2px ตรงนี้ */
+.util-table.util-colon-align td.restroom-text{
+  padding-left: 3px !important;       /* ลอง 3px เพื่อให้ “ต” ล่างตรงกับ “ต” บนแบบรูปลูกศร */
+}
+
+/* (คงไว้) เว้นระยะเล็กน้อยหลังคำว่า “ตั้งแต่” */
+.util-table.util-colon-align .time .since{ margin-right:4px; }
 
 /* คุมความกว้างคอลัมน์คงเดิม */
 .util-table col.c-label { width: 240px; }
 .util-table col.c-time  { width: 76px; }
 .util-table col.c-sep   { width: 34px; }
+/* --- Utilities (ข้อ 2): จัด ":" ให้ตรงกันทุกบรรทัด + ชิดบน --- */
+.util-table.util-colon-align {
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+.util-table.util-colon-align td {
+  padding: 0 4px;
+  height: 24px;
+  vertical-align: top;        /* ยึดตำแหน่งด้านบน */
+  font-size: 15px;
+}
+
+/* คุมความกว้างคอลัมน์ (ปรับ c-label ได้ตามสายตาให้เหมือนตัวอย่าง) */
+.util-table.util-colon-align col.c-label { width: 230px; }  /* ถ้ายังไม่พอดี ลอง 220–240px */
+.util-table.util-colon-align col.c-colon { width: 12px; }
+.util-table.util-colon-align col.c-time  { width: 74px; }
+.util-table.util-colon-align col.c-sep   { width: 34px; }
+
+.util-table.util-colon-align td.util-label { white-space: nowrap; }
+.util-table.util-colon-align td.colon      { text-align: center; padding: 0; }
+.util-table.util-colon-align td.sep        { text-align: center; white-space: nowrap; }
+.util-table.util-colon-align td.time       { white-space: nowrap; }
+.util-table.util-colon-align td.restroom-text { white-space: nowrap; padding-left: 0; }
+
+.util-table.util-colon-align td { vertical-align: top; } /* ยึดด้านบนไว้ตามที่ต้องการ */
+.util-table.util-colon-align .time .since { margin-right: 4px; } /* เว้นระยะคำ “ตั้งแต่” */
 
 .attached-files-list {
   margin-top: 8px;
@@ -1024,7 +1184,7 @@ function formatTimeTH(timeStr) {
 .sign-inner-box { width: 100%; border: 1px solid #222; margin-top: 7px; padding: 8px 9px 7px 9px; font-size: 14px; background: none; box-shadow: none; }
 .sign-inner-title { font-weight: bold; margin-bottom: 4px; }
 .sign-inner-item { display: flex; align-items: center; font-size: 14px; gap: 7px; margin-bottom: 1px; }
-.sign-inner-item input[type="checkbox"] { accent-color: #222; margin-right: 5px; }
+.sign-inner-item input[type="checkbox"] { accent-color: #333; margin-right: 5px; } /* ทำให้ติ๊กสีเทาเข้มขึ้น */
 .sign-dotline { display: inline-block; min-width: 80px; font-size: 14px; border-bottom: none; letter-spacing: 2px; vertical-align: bottom; }
 .sign-inner-blank { margin: 7px 0 3px 0; }
 .sign-inner-title { font-weight: bold; margin-bottom: 4px; position: relative; padding-bottom: 0; }
@@ -1042,7 +1202,7 @@ function formatTimeTH(timeStr) {
 .td-inner { display: flex; flex-direction: column; justify-content: flex-start; height: 100%; padding: 12px 12px 10px 12px; box-sizing: border-box; }
 
 .checkbox-line { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; min-height: 26px; }
-.checkbox-line input[type="checkbox"] { width: 17px; height: 17px; accent-color: #444; margin: 0 4px 0 0; }
+.checkbox-line input[type="checkbox"] { width: 17px; height: 17px; accent-color: #333; margin: 0 4px 0 0; } /* เทาเข้ม */
 .checkbox-line label { font-size: 15px; user-select: none; }
 
 .dot-line { display: inline-block; width: 98%; border-bottom: 1px dotted #222; height: 15px; margin: 9px 0 0 0; min-width: 60px; vertical-align: middle; }
@@ -1096,10 +1256,24 @@ function formatTimeTH(timeStr) {
 .utility-other-center { font-size: 15px; text-align: center; }
 .dot-line-custom { flex: 1 1 0; border-bottom: 1.5px dotted #222; min-width: 80px; margin-left: 8px; margin-right: 6px; height: 16px; display: inline-block; }
 
-.pdf-export {
-  /* padding: 18px !important;  <-- ลบ */
-  font-size: 16px !important;
+/* radio ปลอมสำหรับ PDF + หน้าจอ (ให้จางลง) */
+/* กล่องสี่เหลี่ยมสำหรับติ๊ก (เหมือนตัวอย่าง) */
+.box-print{
+  display:inline-block;
+  width:14px; height:14px;
+  border:2px solid #444;
+  border-radius:2px;         /* <-- สี่เหลี่ยม */
+  margin-right:6px;
+  vertical-align:middle;
 }
+.box-print.on::after{
+  content:'';
+  display:block;
+  width:8px; height:8px;
+  background:#666;           /* สีติ๊กด้านใน */
+  margin:1px auto;
+}
+
 .pdf-export {
   font-size: 16px !important;
 }
@@ -1122,12 +1296,12 @@ function formatTimeTH(timeStr) {
   font-weight: 700;
 }
 /* ทำให้ 3 เส้นล่าง “เรียงแถว” ตรงกันทั้งสามช่อง */
-.approval-sign-table td { padding: 0; }              /* คุมช่องให้เหมือนกัน */
+.approval-sign-table td { padding: 0; }
 .td-inner{
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
-  height: 230px;                                     /* เท่าเดิมของคุณ */
+  height: 230px;
   padding: 12px;
   box-sizing: border-box;
 }
@@ -1137,26 +1311,26 @@ function formatTimeTH(timeStr) {
   display: flex;
   align-items: center;
   gap: 6px;
-  min-height: 26px;          /* ความสูงเท่ากัน */
-  margin: 0 0 8px 0;         /* ระยะห่างด้านล่างเท่ากัน */
-  white-space: nowrap;       /* กันข้อความขึ้นบรรทัดใหม่ */
+  min-height: 26px;
+  margin: 0 0 8px 0;
+  white-space: nowrap;
 }
-.checkbox-line.placeholder{ visibility: hidden; }     /* กินที่แต่ไม่เห็น */
+.checkbox-line.placeholder{ visibility: hidden; }
 
 .checkbox-line input[type="checkbox"]{
-  width: 17px; height: 17px; margin: 0 4px 0 0; accent-color:#444;
+  width: 17px; height: 17px; margin: 0 4px 0 0; accent-color:#333; /* เทาเข้ม */
 }
 .checkbox-line label{ font-size: 15px; }
 
-/* แถวเส้นบรรทัดทั้งสอง (ตรงที่คุณขีดเส้นแดงแถวที่ 1 และ 2) */
+/* แถวเส้นบรรทัดทั้งสอง */
 .line-row{
   display: flex;
   align-items: center;
-  height: 22px;              /* ความสูงคงที่ */
-  margin: 6px 0;             /* ระยะบน-ล่างเท่ากัน */
+  height: 22px;
+  margin: 6px 0;
 }
 
-/* แถว “วันที่ …/…/…” (เส้นแดงแถวล่างสุด) */
+/* แถว “วันที่ …/…/…” */
 .date-row{
   display: flex;
   align-items: center;
@@ -1169,11 +1343,7 @@ function formatTimeTH(timeStr) {
 .dot-line.short{ width:90%; min-width:70px; }
 .dot-line-custom{ flex:1 1 0; border-bottom:1.5px dotted #222; min-width:80px; margin-left:8px; margin-right:6px; height:16px; display:inline-block; }
 /* ขณะ export: บังคับกรอบให้เท่ากับหน้า A4 และเผื่อระยะหายใจ */
-.pdf-onepage {
-  /* padding: 20px !important;  <-- ลบหรือคอมเมนต์ทิ้ง */
-  background: #fff !important;
-  box-sizing: border-box;
-}
+.pdf-onepage { background: #fff !important; box-sizing: border-box; }
 
 /* กรอบจับภาพ A4 (สร้างตอน export เท่านั้น) */
 .a4-capture-wrapper {
@@ -1183,12 +1353,12 @@ function formatTimeTH(timeStr) {
 
 /* กันข้อความทับกันระหว่างสเกล (โดยเฉพาะฟอนต์ไทย) */
 #pdf-section, #pdf-section * {
-  line-height: 1.35;            /* ค่าเนียน ๆ สำหรับ TH Sarabun */
+  line-height: 1.35;
 }
 
-/* ย่อหน้า “ด้วย …” ให้หายเสี่ยงเกยเวลา scale ลง */
+/* ย่อหน้า “ด้วย …” */
 #pdf-section .form-row[style*="text-indent"] {
-  line-height: 1.6 !important;  /* เดิม 2.0 ก็ได้ แต่ 1.6 พอดีพื้นที่กว่า */
+  line-height: 1.6 !important;
 }
 
 </style>
@@ -1229,9 +1399,8 @@ function formatTimeTH(timeStr) {
 
 /* === Uniform line spacing for Section 1 → Notes === */
 #uniform-lines {
-  /* ปรับระยะห่างระหว่างบรรทัดที่นี่ (8–12px แล้วแต่ชอบ) */
   --line-gap: 10px;
-  line-height: 1.35; /* ให้เข้ากับ TH Sarabun ที่ตั้งไว้ */
+  line-height: 1.35;
 }
 
 /* ให้ทุกบรรทัดหลักในช่วงนี้มีช่องไฟเท่ากัน */
@@ -1253,7 +1422,7 @@ function formatTimeTH(timeStr) {
   margin-left: 80px !important;
 }
 
-/* ตารางยูทิลิตีให้สูงคงที่ทุกแถว เหมือน “บรรทัด” หนึ่งบรรทัด */
+/* ตารางยูทิลิตีให้สูงคงที่ทุกแถว */
 #uniform-lines .util-table {
   margin-top: var(--line-gap) !important;
 }
@@ -1272,6 +1441,246 @@ function formatTimeTH(timeStr) {
 
 /* หัวข้อหนาให้ความสูงบรรทัดเท่ากัน */
 #uniform-lines .bold { line-height: 1.35; }
+/* ให้ทั้ง 2.1 และ 2.2 ใช้ฟอนต์/ขนาดเท่ากัน */
+.util-table td,
+.util-table label,
+.util-table .restroom-opt {
+  font-size: 15px !important;
+  line-height: 1.35;
+}
+
+/* จัดระยะช่องวิทยุของห้องสุขาให้พอดี */
+.util-table .restroom-cell {
+  text-align: left;
+}
+.util-table .restroom-opt {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.util-table .restroom-opt input[type="radio"] {
+  margin: 0;
+}
+/* radio ปลอม: ให้จุดเลือก "จางลง" กว่าเดิม */
+.radio-print{
+  display:inline-block;
+  width:14px; height:14px;
+  border:2px solid #444;           /* เส้นวงเป็นเทาเข้ม ไม่ดำสนิท */
+  border-radius:50%;
+  margin-right:6px;
+  vertical-align:middle;
+}
+.radio-print.on::after{
+  content:'';
+  display:block;
+  width:8px; height:8px;
+  background:#666;                 /* ✅ ให้จุดด้านใน "จางลง" กว่า #333/#000 */
+  border-radius:50%;
+  margin:1px auto;
+}
+
+/* จุดดำใน checkbox ของตารางล่าง ให้เข้มขึ้นเล็กน้อย */
+.checkbox-line input[type="checkbox"]{
+  accent-color:#333;               /* ✅ เทาเข้มขึ้น */
+}
+/* ทำให้บล็อกเซ็นชื่อเดียวชิดขวา */
+.sign-header-table.single-right td{
+  width: 100%;
+  text-align: right !important;   /* ชนะกติกาเดิมที่ตั้งไว้เป็น center */
+  padding-right: 0px;            /* ปรับระยะขอบขวานิดหน่อย */
+}
+
+/* กล่องด้านในให้จัดข้อความกึ่งกลาง แต่ทั้งกล่องวางชิดขวา */
+.sign-header-table.single-right .sig-box{
+  display: inline-block;
+  text-align: center;
+  min-width: 320px;               /* ให้กล่องกว้างพอดูสวย (ปรับได้) */
+}
+.sign-header-table td {
+  padding: 14px 10px 12px 10px;
+  font-size: 16px;
+  text-align: center;
+  vertical-align: top;
+  word-break: break-word;
+  width: 100%;           /* จาก 33.33%/50% → 100% เพราะเหลือ 1 ช่อง */
+}
+/* ตารางอนุมัติ (2 กล่อง) */
+.approval-sign-table.two-cols th,
+.approval-sign-table.two-cols td { width: 50%; }
+
+/* วงกลมวิทยุปลอม (ใช้ของเดิมได้ ถ้ามีแล้วข้ามได้) */
+.radio-print{
+  display:inline-block;width:14px;height:14px;border:2px solid #444;border-radius:50%;
+  margin-right:6px;vertical-align:middle;
+}
+.radio-print.on::after{
+  content:'';display:block;width:8px;height:8px;background:#666;border-radius:50%;margin:1px auto;
+}
+/* จัดบรรทัดวันที่ให้อยู่กึ่งกลางในกล่อง */
+.approval-sign-table .date-row{
+  justify-content: center !important;  /* จัดกลางแนวนอน */
+  text-align: center !important;
+  margin-top: 4px !important;          /* ลดช่องว่างเหนือบรรทัดวันที่นิดนึง */
+}
+
+/* ==== ลดช่องว่างใต้บรรทัดวันที่ในตารางอนุมัติ ==== */
+
+/* ไม่ล็อกความสูงเซลล์อีกต่อไป */
+.approval-sign-table td{
+  height: auto !important;
+}
+
+/* ไม่ล็อกความสูงกล่องด้านใน และกำหนดแค่ขั้นต่ำ */
+.approval-sign-table .td-inner{
+  height: auto !important;      /* override ที่เคยตั้ง 230px */
+  min-height: 160px;            /* ปรับเลขนี้ 150–170 ตามชอบ */
+  padding-bottom: 2px !important;
+}
+
+/* จัดบรรทัดวันที่ให้อยู่กึ่งกลางและชิดขึ้นอีก */
+.approval-sign-table .date-row{
+  justify-content: center !important;
+  margin-top: 2px !important;
+  margin-bottom: 0 !important;
+}
+
+/* ลดช่องไฟของเส้นก่อนหน้า */
+.approval-sign-table .line-row{
+  margin: 2px 0 !important;
+}
+
+/* ลดช่องไฟของแถว checkbox ด้านบนเล็กน้อย (ถ้าต้องการ) */
+.approval-sign-table .checkbox-line{
+  margin-bottom: 6px !important;
+}
+/* ขยับบรรทัดวงเล็บลงจากบรรทัดเส้นข้างบน */
+.approval-sign-table .td-inner .line-row + .line-row{
+  margin-top: 10px !important;   /* ปรับได้ 6–14px ตามต้องการ */
+}
+
+/* ถ้ารู้สึกว่าไปชิดกับ "วันที่" เกินไป ให้เว้นด้านบนของบรรทัดวันที่เล็กน้อย */
+.approval-sign-table .date-row{
+  margin-top: 15px !important;
+}
+/* เพิ่มช่องว่างใต้บรรทัด "วันที่" ให้ห่างจากเส้นกรอบล่าง */
+.approval-sign-table .td-inner{
+  padding-bottom: 12px !important;   /* เดิมคุณตั้งไว้ 2px → ปรับตามที่ต้องการ */
+}
+
+/* ถ้ายังรู้สึกชิดอยู่ เพิ่มระยะที่ตัวบรรทัดวันที่ด้วย */
+.approval-sign-table .date-row{
+  margin-bottom: 6px !important;     /* ปรับ 4–10px ได้ตามชอบ */
+}
+/* 1) ลดความกว้างคอลัมน์ข้อความด้านซ้าย → เวลาเลยชิด ":" มากขึ้น */
+.util-table col.c-label { 
+  width: 180px !important;   /* เดิม 240px — ปรับ 200–215 ได้ตามชอบ */
+}
+
+/* 2) ลดช่องว่างหลัง ":" ของเซลล์ซ้ายสุดให้แทบไม่มี */
+.util-table td.util-label {
+  padding-right: 0px !important;   /* จะเอา 0px ก็ได้ถ้าอยากชิดสุด */
+}
+
+/* 3) ให้บรรทัด "ห้องสุขา" เริ่มตรงแนวเดียวกับคอลัมน์เวลา (เหมือนเวลาบรรทัดบน) */
+.util-table .restroom-cell {
+  padding-left: 0 !important;      /* เดิมมี padding-left 4px จากกฎรวมของ td */
+}
+/* ใช้กับทั้งตอนแสดงบนจอและตอน export */
+#pdf-section { 
+  font-size: 15px !important;
+}
+
+/* ถ้าเก็บกฎนี้ไว้ ให้ปรับเป็น 15 ให้เท่ากัน */
+.pdf-export {
+  font-size: 18px !important;   /* เดิม 16px */
+}
+
+/* บังคับให้ข้อความทั่วไปในฟอร์มสืบทอดขนาดจาก #pdf-section */
+#pdf-section .form-row,
+#pdf-section .block-row,
+#pdf-section .note-line,
+#pdf-section label,
+#pdf-section span,
+#pdf-section p,
+#pdf-section .line-field,
+#pdf-section .util-table td,
+#pdf-section .util-table .sep,
+#pdf-section .util-label {
+  font-size: inherit !important;
+}
+
+/* หัวข้อให้ใหญ่กว่าหน่อยตามเดิม */
+#pdf-section h3 { font-size: 20px !important; }
+/* === Tighten 2.1 / 2.2 spacing === */
+#pdf-section .util-table.util-colon-align{
+  table-layout: auto !important;           /* ให้คอลัมน์หดตามเนื้อหา */
+  border-collapse: collapse;
+}
+
+#pdf-section .util-table.util-colon-align col.c-label{ 
+  width: 1px !important;                    /* บังคับให้แคบสุด – ชิดข้อความ */
+}
+#pdf-section .util-table.util-colon-align col.c-colon{ 
+  width: 10px !important;                   /* ช่อง ":" เล็ก ๆ พอ */
+}
+#pdf-section .util-table.util-colon-align col.c-time{ 
+  width: 74px !important;                   /* คงความกว้างเวลาตามเดิม */
+}
+#pdf-section .util-table.util-colon-align col.c-sep{ 
+  width: 24px !important;                   /* ลดคั่นกลางนิดหน่อย */
+}
+
+#pdf-section .util-table.util-colon-align td.util-label{ 
+  padding-right: 2px !important;            /* ลดช่องก่อน ":" */
+  white-space: nowrap;
+}
+#pdf-section .util-table.util-colon-align td.colon{
+  padding: 0 2px !important;                /* ":" ชิดพอดี */
+  text-align: center;
+}
+#pdf-section .util-table.util-colon-align td.time,
+#pdf-section .util-table.util-colon-align td.restroom-text{
+  padding-left: 0 !important;               /* ข้อความหลัง ":" เริ่มทันที */
+  white-space: nowrap;
+}
+#pdf-section .util-table.util-colon-align .time .since{
+  margin-right: 4px;                         /* เว้นหลังคำว่า “ตั้งแต่” เล็กน้อย */
+}
+
+/* รูปลายเซ็นบนบรรทัด "ลงชื่อ" */
+.sign-line {
+  --sign-gap: 20px;                 /* ← ปรับระยะห่างคำว่า “ลงชื่อ” กับลายเซ็นที่นี่ */
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: end;
+  column-gap: var(--sign-gap);
+  white-space: nowrap;
+  width: 100%;
+  text-align: center;   
+}
+
+.sign-text{
+  justify-self: end;                /* “ลงชื่อ” ชิดขวาของคอลัมน์ซ้าย */
+}
+
+.signature-wrap{
+  justify-self: center;             /* รูปลายเซ็น/เส้นจุด อยู่คอลัมน์กลาง */
+  display: inline-block;
+}
+
+.signature-img {
+  height: 48px;
+  display: inline-block;
+  vertical-align: bottom;
+  max-width: 260px;
+  object-fit: contain;
+}
+
+.dot-line-inline {
+   display: inline-block;
+  min-width: 240px;
+}
+
 
 </style>
 

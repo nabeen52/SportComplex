@@ -41,6 +41,9 @@ import Form_field_admin3 from '@/pages/form_field_admin3.vue'
 import Form_field_admin4 from '@/pages/form_field_admin4.vue'
 import Booking_admin from '@/pages/booking_admin.vue'
 import Return_admin from '@/pages/return_admin.vue'
+import Approve_field_super from '@/pages/approve_field_super.vue'
+import Profile_super from '@/pages/profile_super.vue'
+import History_super from '@/pages/history_super.vue'
 
 // *** ต้อง import LoginSuccess ด้วย ***
 import LoginSuccess from '@/pages/login-success.vue'
@@ -88,7 +91,12 @@ const routes = [
     { path: '/form_field_admin3', component: Form_field_admin3, meta: { requiresAuth: true } },
     { path: '/form_field_admin4', component: Form_field_admin4, meta: { requiresAuth: true } },
     { path: '/booking_admin', component: Booking_admin, meta: { requiresAuth: true } },
-    { path: '/return_admin', component: Return_admin, meta: { requiresAuth: true } }
+    { path: '/return_admin', component: Return_admin, meta: { requiresAuth: true } },
+    { path: '/approve_field_super', component: Approve_field_super, meta: { requiresAuth: true } },
+    { path: '/profile_super', component: Profile_super, meta: { requiresAuth: true } },
+    { path: '/history_super', component: History_super, meta: { requiresAuth: true } }
+
+
 ]
 
 const router = createRouter({

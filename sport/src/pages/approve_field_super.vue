@@ -6,15 +6,9 @@
         <p class="sidebar-title">ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง</p>
       </div>
       <nav class="nav-links">
-         <router-link to="/dashboard" exact-active-class="active"><i class="pi pi-chart-pie"></i> แดชบอร์ด</router-link>
-        <router-link to="/home_admin" exact-active-class="active"><i class="pi pi-megaphone"></i> แก้ไขข่าว</router-link>
-        <router-link to="/edit_field" active-class="active"><i class="pi pi-map-marker"></i> แก้ไขสนาม</router-link>
-        <router-link to="/edit_equipment" active-class="active"><i class="pi pi-clipboard"></i> แก้ไขอุปกรณ์ </router-link>
-        <router-link to="/booking_field_admin" active-class="active"><i class="pi pi-map-marker"></i> จองสนาม</router-link>
-        <router-link to="/approve_field" active-class="active"><i class="pi pi-verified"></i> อนุมัติ</router-link>
-        <!-- <router-link to="/return_admin" active-class="active"><i class="pi pi-box"></i> รับคืนอุปกรณ์ </router-link> -->
-        <router-link to="/members" active-class="active"><i class="pi pi-user-edit"></i> พนักงาน/ผู้ดูแล </router-link>
-        <router-link to="/history_admin" active-class="active"><i class="pi pi-history"></i> ระบบประวัติการทำรายการ</router-link>
+        <router-link to="/approve_field_super" active-class="active"><i class="pi pi-verified"></i> อนุมัติ</router-link>
+        <router-link to="/history_super" active-class="active"><i class="pi pi-history"></i> ประวัติการทำรายการ</router-link>
+
       </nav>
     </aside>
 
@@ -50,18 +44,12 @@
     </ul>
   </div>
 </div>
-          <router-link to="/profile_admin"><i class="pi pi-user"></i></router-link>
+          <router-link to="/profile_super"><i class="pi pi-user"></i></router-link>
         </div>
       </header>
       <div class="histbody">
-        <h1 style="padding-left: 50px; display: flex; justify-content: center;">Field/Equipment Approve</h1>
+        <h1 style="padding-left: 50px; display: flex; justify-content: center;">Field Approve</h1>
 
-        <!-- ปุ่มกรอง -->
-        <div class="history-filter" style="display: flex; justify-content: center;">
-          <button :class="{ active: filterType === 'all' }" @click="filterType = 'all'">All</button>
-          <button :class="{ active: filterType === 'field' }" @click="filterType = 'field'">Field</button>
-          <button :class="{ active: filterType === 'equipment' }" @click="filterType = 'equipment'">Equipment</button>
-        </div>
 
         <!-- ตารางอนุมัติ (table) -->
         <div class="table-container">
@@ -70,8 +58,8 @@
               <tr>
                 <th>Transaction date</th>
                 <th>Type</th>
-                <th>Field / Equipment</th>
-                <th>Time / Amount</th>
+                <th>Field</th>
+                <th>Time</th>
                 <th>Actions</th>
                 <th>Detail</th>
               </tr>
@@ -100,46 +88,18 @@
                   </td>
                   <td>
                     <button class="approve-btn" @click="approveGroup(group)">อนุมัติ</button>
-                    <button class="cancel-btn" @click="cancelGroup(group)">ไม่อนุมัติ</button>
+                    <!-- <button class="cancel-btn" @click="cancelGroup(group)">ไม่อนุมัติ</button> -->
                   </td>
                   <td>
                     <button class="detail-btn" @click="detailGroup(group)">รายละเอียด</button>
                   </td>
                 </tr>
 
-                <!-- อุปกรณ์ -->
-                <tr v-else>
-                  <td>{{ formatDate(group.items[0].createdAt || group.items[0].date) }}</td>
-                  <td>อุปกรณ์</td>
-                  <td>
-                    <span v-for="(item, idx) in group.items" :key="item.id">
-                      {{ item.name }}<span v-if="idx < group.items.length - 1">, </span>
-                    </span>
-                  </td>
-                  <td>
-                    <span v-for="(item, idx) in group.items" :key="item.id">
-                      {{ item.quantity }}<span v-if="idx < group.items.length - 1">, </span>
-                    </span>
-                  </td>
-                  <td>
-                    <button class="approve-btn" @click="approveGroup(group)">อนุมัติ</button>
-                    <button class="cancel-btn" @click="cancelGroup(group)">ไม่อนุมัติ</button>
-                  </td>
-                  <td>
-                    <button class="detail-btn" @click="detailGroup(group)">รายละเอียด</button>
-                  </td>
-                </tr>
               </template>
             </tbody>
           </table>
         </div>
       </div>
-
-    <div
-    id="pdf-capture-approve"
-    style="position:fixed; left:-100000px; top:-100000px; width:0; height:0;"
-    ></div>
-
       <footer class="foot">
         <div class="footer-left">
           <p>
@@ -164,9 +124,7 @@ import axios from 'axios'
 
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-
 import html2pdf from 'html2pdf.js'
-
 
 // (ฟอนต์ Sarabun ต้อง import JS ไฟล์ที่ bundle มาเอง!)
 import '@/assets/fonts/Sarabun-Regular-normal.js'
@@ -192,18 +150,23 @@ export default {
       lastSeenTimestamp: 0,
       refreshTimer: null,
       _lastSnapshot: '',
-      reason_admin: '',
-      secretary_choice: null,
-      loggedThaiName: '',
+      head_choice: null,
+      head_reason: '',
+      loggedThaiName:
+        ((localStorage.getItem('firstname') || '') + ' ' + (localStorage.getItem('lastname') || '')).trim()
+        || localStorage.getItem('name') || '-',
+      loggedSignatureUrl: localStorage.getItem('signature_url') || '',
 
-      loggedSignatureUrl: '',  // ใช้แสดงผล (พรีวิว)
-      loggedSignatureRaw: '',  // << ใช้ส่งเข้า DB
+      thainame_admin:
+      (localStorage.getItem('thainame_admin') ||
+       `${(localStorage.getItem('firstname')||'')} ${(localStorage.getItem('lastname')||'')}`.trim() ||
+       localStorage.getItem('name') || '-'),
+      signaturePath_admin:
+      (localStorage.getItem('signaturePath_admin') ||
+       localStorage.getItem('signature_url') || ''),
+       head_choice_supervisor: null,
+        head_reason_supervisor: '',
 
-       // ====== ขนาด A4 (px @96dpi) และ helper แปลง DOM → PDF Blob ======
-        A4_W: Math.round(210 * (96 / 25.4)),  // ~ 794
-        A4_H: Math.round(297 * (96 / 25.4)),  // ~ 1123
-        PAD_X: 12,
-        PAD_Y: 12,
     }
   },
   computed: {
@@ -214,215 +177,40 @@ export default {
   },
   methods: {
 
-    // สร้าง DOM ฟอร์มสนามสำหรับแคปเจอร์ PDF
-_buildFieldPdfNode(b, secretary_choice = {}, reason_admin = '', secThaiName = '', secSignUrl = '') {
-  const holder = document.createElement('div');
-  holder.id = 'pdf-field';
-  Object.assign(holder.style, {
-    background: '#fff',
-    color: '#111',
-    fontFamily: `'THSarabunNew','Sarabun','Noto Sans Thai', Tahoma, sans-serif`,
-    width: '190mm',
-    margin: '10mm auto',
-    boxSizing: 'border-box',
-    padding: '0',
-  });
-
-  // ใช้เทมเพลตเดียวกับพรีวิว
-  const reqKey = b.user_id || b.id_form || '';
-  const reqSig = this.userSigMap?.[reqKey] || '';
-  holder.innerHTML = buildFieldFormPreviewV2(b, secThaiName, secSignUrl, reqSig);
-
-  // เติมค่าที่เลือกใน dialog: “เลขานุการศูนย์กีฬา > อื่นๆ”
-  const chk = holder.querySelector('#sec_other_chk');
-  const box = holder.querySelector('#sec_other_reason');
-
-  const wantOther =
-    !!(secretary_choice && secretary_choice.other_checked) ||
-    (!!reason_admin && String(reason_admin).trim() !== '');
-
-  if (chk) chk.checked = wantOther;
-  if (box) {
-    box.disabled = false;
-    box.value = wantOther ? (reason_admin || '') : '';
+    // ========== บังคับ A4 หน้าเดียว ==========
+async  _makeA4OnePageBlob(element) {
+  // รอฟอนต์ (กันเด้งตัวอักษร)
+  if (document.fonts && document.fonts.ready) {
+    try { await document.fonts.ready; } catch {}
   }
 
-  // แช่แข็ง input/checkbox ให้กลายเป็นตัวหนังสือก่อนจับภาพ
-  if (typeof this._freezeFormForPdf === 'function') {
-    this._freezeFormForPdf(holder);
-  }
+  const MARGIN_MM = 10;
 
-  return holder;
-},
-
-
-    async _buildEquipmentCtxFromGroup(group){
-  const bookingId = group.booking_id || group.items?.[0]?.booking_id || null;
-
-  // รวมจำนวนตามชื่ออุปกรณ์
-  const mergedQty = new Map();
-  (group.items || []).forEach(it => {
-    const name = it?.name || '-';
-    const q = Number(it?.quantity ?? 0) || 0;
-    mergedQty.set(name, (mergedQty.get(name) || 0) + q);
-  });
-
-  let requester='-', requesterId='-', dateBorrow='-', timeBorrow='-', dateRange='-';
-  let agency='-', reason='-', location='-', tel='';   // << ค่าว่างไว้ก่อน เพื่อไม่ให้ขึ้น "โทร -"
-  const remarkMap = {};
-
-  // helpers
-  const pick = (obj, keys=[]) => {
-    if (!obj) return '';
-    for (const k of keys) {
-      const v = obj[k];
-      if (v !== undefined && v !== null && String(v).trim()) return String(v).trim();
-    }
-    return '';
-  };
-  const pickFromList = (list, keys=[]) => {
-    for (const row of (list || [])) {
-      const v = pick(row, keys);
-      if (v) return v;
-    }
-    return '';
+  // เก็บ style เดิมไว้คืนค่า
+  const orig = {
+    width: element.style.width,
+    margin: element.style.margin,
+    padding: element.style.padding,
+    boxSizing: element.style.boxSizing,
+    transform: element.style.transform,
+    transformOrigin: element.style.transformOrigin,
+    position: element.style.position,
+    left: element.style.left,
+    top: element.style.top,
+    display: element.style.display,
   };
 
-  if (bookingId){
-    // 1) history → ชื่อผู้ยืม/รหัส/วันเวลา/ช่วงวัน + (fallback fields)
-    const resH = await axios.get(`${API_BASE}/api/history`, { params: { booking_id: bookingId } });
-    let list = Array.isArray(resH.data) ? resH.data : [];
-    list = list
-      .filter(h => String(h?.booking_id || '') === String(bookingId))
-      .filter(h => (h?.type || '').toLowerCase() === 'equipment')
-      .sort((a,b) => new Date(b.updatedAt || b.createdAt || b.date || 0) - new Date(a.updatedAt || a.createdAt || a.date || 0));
-
-    const recUser = list.find(h => h?.username_form && String(h.username_form).trim());
-    if (recUser) requester = String(recUser.username_form).trim();
-
-    const recId = list.find(h => h?.id_form && String(h.id_form).trim());
-    if (recId) requesterId = String(recId.id_form).trim();
-
-    const recDate = list[0];
-    if (recDate) {
-      if (recDate.createdAt) {
-        dateBorrow = this.formatDate(recDate.createdAt);
-        const dt = new Date(recDate.createdAt);
-        if (!isNaN(dt)) {
-          timeBorrow = dt.toLocaleTimeString('th-TH', { hour:'2-digit', minute:'2-digit', hour12:false }) + ' น.';
-        }
-      } else if (recDate.date) {
-        dateBorrow = this.formatDate(recDate.date);
-      }
-      const since = recDate?.since ? this.formatDate(recDate.since) : '-';
-      const upto  = recDate?.uptodate ? this.formatDate(recDate.uptodate) : '-';
-      dateRange = `${since} - ${upto}`;
-    }
-
-    // 2) booking_equipment → หน่วยงาน/เหตุผล/สถานที่/หมายเหตุรายรายการ
-    const resB = await axios.get(`${API_BASE}/api/booking_equipment?id=${bookingId}`);
-    const be = Array.isArray(resB.data) ? resB.data[0] : resB.data;
-    if (be){
-      agency   = pick(be, ['agency'])              || agency;
-      reason   = pick(be, ['reason','purpose'])    || reason;
-      location = pick(be, ['location'])            || location;
-
-      if (Array.isArray(be.items)){
-        be.items.forEach(i => { remarkMap[i.item_name] = i.remark || ''; });
-      }
-    }
-
-    // 3) TEL + fallback อื่น ๆ : หาได้จากทั้ง booking_equipment และ history
-    const telKeys = ['tel','phone','telephone','tel_form','telphone','contact_phone','contactTel','contact'];
-    const telFromBe   = pick(be, telKeys);
-    const telFromHist = pickFromList(list, telKeys);
-    tel = telFromBe || telFromHist || '';
-
-    if (!agency   || agency   === '-') agency   = pickFromList(list, ['agency','department','org','organization']) || agency;
-    if (!reason   || reason   === '-') reason   = pickFromList(list, ['reasons','reason','purpose'])              || reason;
-    if (!location || location === '-') location = pickFromList(list, ['location','place','place_use'])            || location;
-  }
-
-  const rows = Array.from(mergedQty.entries()).map(([name, qty], idx) => ({
-    idx: idx + 1,
-    name,
-    quantity: qty,
-    remark: remarkMap[name] || ''
-  }));
-
-  return { requester, requesterId, tel, agency, reason, location, dateBorrow, timeBorrow, dateRange, rows };
-},
-
-
-
-// แปลง input/checkbox ให้เป็น element นิ่ง ๆ เพื่อให้ html2canvas เก็บค่าถูกต้อง 100%
-_freezeFormForPdf(root) {
-  if (!root) return;
-  root.querySelectorAll('input[type="checkbox"]').forEach(cb => {
-    const mark = document.createElement('span');
-    mark.textContent = cb.checked ? '☑' : '☐';
-    mark.style.display = 'inline-block';
-    mark.style.minWidth = '1.1em';
-    mark.style.marginRight = '8px';
-    mark.style.fontSize = '16px';
-    cb.replaceWith(mark);
-  });
-  root.querySelectorAll('input[type="text"]').forEach(inp => {
-    const val = (inp.value || inp.getAttribute('value') || '').trim();
-    const span = document.createElement('span');
-    span.className = 'pdf-fake-input';
-    span.textContent = val || ' ';
-
-    // Object.assign(span.style, {
-    //   display: 'inline-block',
-    //   minWidth: '220px',
-    //   padding: '6px 8px',
-    //   border: '1px solid #cbd5e1',
-    //   borderRadius: '6px',
-    //   background: '#f8fafc',
-    // });
-
-       // ⬇️ ยกเว้นช่อง "อื่นๆ" ของ 1.เลขานุการศูนย์กีฬา และ 2.หัวหน้าศูนย์กีฬา ให้เป็นตัวหนังสือล้วนๆ
-   if (inp.id === 'sec_other_reason' || inp.id === 'head_other_reason') {
-
-     Object.assign(span.style, {
-       display: 'inline',
-       minWidth: '0',
-       padding: '0',
-       border: 'none',
-       borderRadius: '0',
-       background: 'transparent'
-     });
-   } else {
-     Object.assign(span.style, {
-       display: 'inline-block',
-       minWidth: '220px',
-       padding: '6px 8px',
-       border: '1px solid #cbd5e1',
-       borderRadius: '6px',
-       background: '#f8fafc',
-     });
-   }
-
-    inp.replaceWith(span);
-  });
-},
-
-
-
-async _makeA4OnePageBlob(element) {
-  if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch {} }
-
-  // --- เก็บ style เดิมไว้ ---
-  const orig = { width: element.style.width, margin: element.style.margin, padding: element.style.padding,
-    boxSizing: element.style.boxSizing, transform: element.style.transform, transformOrigin: element.style.transformOrigin,
-    position: element.style.position, left: element.style.left, top: element.style.top, display: element.style.display };
-
-  // wrapper กว้าง A4 (สูงตามเนื้อหา)
+  // สร้าง wrapper กว้าง A4
   const wrapper = document.createElement('div');
-  Object.assign(wrapper.style, { width: '210mm', background: '#fff', display: 'block', padding: '0', margin: '0' });
+  Object.assign(wrapper.style, {
+    width: '210mm',
+    background: '#fff',
+    display: 'block',
+    padding: '0',
+    margin: '0',
+  });
 
-  // คอนเทนต์กว้าง 190mm + margin 10mm (ให้มีขอบครั้งเดียวจาก DOM)
+  // ปรับ element ให้กว้าง 190mm และมี margin รอบด้าน 10mm
   element.style.width = '190mm';
   element.style.margin = '10mm auto';
   element.style.padding = '0';
@@ -432,201 +220,128 @@ async _makeA4OnePageBlob(element) {
   element.style.position = 'static';
   element.style.display = 'block';
 
+  // เปิดโหมดพิมพ์: ใส่คลาส pdf-print ชั่วคราว
+  const hadPrintClass = element.classList.contains('pdf-print');
+  element.classList.add('pdf-print');
+
+  // ย้ายเข้า wrapper ชั่วคราว
   const parent = element.parentNode;
   const next = element.nextSibling;
   parent.insertBefore(wrapper, element);
   wrapper.appendChild(element);
+
+  // ให้ layout คงที่ก่อนแคปเจอร์
   await new Promise(r => requestAnimationFrame(r));
 
   // DOM -> canvas
-  const worker = html2pdf().set({ html2canvas: { scale: 3, useCORS: true, backgroundColor: '#ffffff' } }).from(wrapper).toCanvas();
+  const worker = html2pdf().set({
+    html2canvas: { scale: 3, useCORS: true, backgroundColor: '#ffffff' }
+  }).from(wrapper).toCanvas();
+
   const canvas = await worker.get('canvas');
   const imgData = canvas.toDataURL('image/jpeg', 0.98);
 
-  // ---- วางรูปลง PDF: ไม่มี margin PDF และ "ชิดมุมซ้ายบน" ----
+  // วางรูปลง A4 ให้พอดีขอบ 10mm
   const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
   const pageW = pdf.internal.pageSize.getWidth();
   const pageH = pdf.internal.pageSize.getHeight();
+  const maxW = pageW - MARGIN_MM * 2;
+  const maxH = pageH - MARGIN_MM * 2;
 
   const imgRatio = canvas.width / canvas.height;
-  const pageRatio = pageW / pageH;
+  const boxRatio = maxW / maxH;
 
   let drawW, drawH;
-  if (imgRatio > pageRatio) {
-    // จับตามความกว้างหน้า (เหลือพื้นที่ด้านล่างเล็กน้อยได้)
-    drawW = pageW;
+  if (imgRatio > boxRatio) {
+    drawW = maxW;
     drawH = drawW / imgRatio;
   } else {
-    // จับตามความสูงหน้า
-    drawH = pageH;
+    drawH = maxH;
     drawW = drawH * imgRatio;
   }
 
-  // วางชิดซ้ายบน เพื่อตัดช่องว่างบน/ล่างจากการ "จัดกึ่งกลาง"
-  pdf.addImage(imgData, 'JPEG', 0, 0, drawW, drawH);
+  const x = (pageW - drawW) / 2;
+  const y = (pageH - drawH) / 2;
 
+  pdf.addImage(imgData, 'JPEG', x, y, drawW, drawH);
   const pdfBlob = pdf.output('blob');
 
-  // คืน DOM
+  // คืน DOM + style เดิม
   if (next) parent.insertBefore(element, next); else parent.appendChild(element);
   wrapper.remove();
+
+  // ปิดโหมดพิมพ์ ถ้าเดิมไม่มี
+  if (!hadPrintClass) element.classList.remove('pdf-print');
+
   Object.assign(element.style, orig);
 
   return pdfBlob;
 },
 
-
-
-
-
-async _uploadPdfBlob(pdfBlob) {
-  const fd = new FormData();
-  fd.append('file', pdfBlob, 'booking.pdf');
-  const up = await axios.post(`${API_BASE}/api/upload`, fd, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  });
-  return up.data?.fileUrl || '';
-},
-
-// สร้าง DOM ฟอร์ม (เวอร์ชันพรีวิว) แล้วแช่แข็งค่าฟอร์มก่อนแคปเจอร์
-_buildEquipmentPdfNode(ctx) {
-  const holder = document.createElement('div');
-  holder.id = 'pdf-eq';
-  Object.assign(holder.style, {
-    background: '#fff',
-    color: '#111',
-    fontFamily: `'THSarabunNew','Sarabun','Noto Sans Thai', Tahoma, sans-serif`,
-    width: '190mm',
-    margin: '10mm auto',
-    boxSizing: 'border-box',
-    padding: '0',
-  });
-
-  holder.innerHTML = buildEquipmentApprovePreviewHTML(ctx);
-
-  const fix = document.createElement('style');
-  fix.textContent = `
-    #pdf-eq, #pdf-eq *{
-      box-sizing:border-box;
-      -webkit-print-color-adjust:exact;
-      print-color-adjust:exact;
+// เรียกจาก SweetAlert preview -> สร้าง/ดาวน์โหลด PDF 1 หน้า
+async _downloadApprovePreviewPdf(group) {
+  try {
+    const p = Swal.getPopup();
+    const formEl = p?.querySelector('.mfu-form'); // เนื้อหาพรีวิวที่ buildFieldFormPreviewV2 สร้าง
+    if (!formEl) {
+      Swal.fire('ผิดพลาด', 'ไม่พบเนื้อหาแบบฟอร์มสำหรับทำ PDF', 'error');
+      return;
     }
-
-    /* โครงหน้ากระดาษ */
-    #pdf-eq .eqp-preview{
-   display:block;
-   --top-shift: 10mm;           /* ลดจาก 30mm → 10mm ให้ก้อนขยับขึ้น */
- }
-    /* ยกเลิกตัวคั่นด้านบน (เดิมใช้ ::before) */
-    #pdf-eq .eqp-preview::before{ content:none; display:none; }
-
-    /* ให้หัวติดขอบบน แล้วใส่ช่องว่างไว้ "หลังหัวข้อ" */
-    #pdf-eq .eqp-head{ margin-top:0; }
-    #pdf-eq .eqp-head::after{
-      content:"";
-      display:block;
-      height:var(--top-shift);
-    }
-
-    /* กลางหน้า + ส่วนล่างให้ชิดตาราง */
-    #pdf-eq .eqp-mid{
-      margin-top:6mm;
-    }
-    #pdf-eq .eqp-bottom{
-      margin-top:12px;             /* เดิม auto → ดันลงล่าง ตอนนี้ให้ติดตาราง */
-      padding-right:0;
-    }
-
-    /* ส่วนหัว/เมตา/ย่อหน้า */
-    #pdf-eq .eqp-head{ text-align:center; margin-bottom:10px; }
-    #pdf-eq .eqp-head .t1{ font-weight:700; font-size:20px; }
-    #pdf-eq .eqp-head .t2{ font-size:14px; margin-top:2px; }
-
-    #pdf-eq .eqp-meta{ margin:8px 0 12px; }  /* ลดระยะห่างด้านบนของ meta */
-    #pdf-eq .eqp-meta .right{ text-align:right; line-height:1.5; }
-
-    #pdf-eq .eqp-par{
-      font-size:16px; line-height:1.75; text-indent:2em;
-      word-break:break-word; margin:10px 0 16px;
-    }
-
-    /* ตารางรายการ */
-    #pdf-eq .eqp-table{ margin: 12px 0 10px !important; }
-    #pdf-eq .eqp-table thead th{
-      background:#213555; color:#fff; border:1px solid #e6e9f2; padding:10px 14px; text-align:center; font-weight:700;
-    }
-    #pdf-eq .eqp-table tbody td{ border:1px solid #e6e9f2; padding:10px 14px; vertical-align:top; }
-    #pdf-eq .eqp-table th,#pdf-eq .eqp-table td{
-      white-space:normal !important; word-break:break-word !important; overflow-wrap:anywhere !important;
-    }
-    #pdf-eq .eqp-table td.c{ text-align:center; }
-    #pdf-eq .eqp-table td.l{ text-align:left; }
-    #pdf-eq .eqp-table thead th:nth-child(1){ width:18mm !important; }
-    #pdf-eq .eqp-table thead th:nth-child(3){ width:22mm !important; }
-    #pdf-eq .eqp-table thead th:nth-child(4){ width:60mm !important; }
-
-    /* ลายเซ็นผู้ยืม */
-    #pdf-eq .eqp-sign{ margin:30px 0 !important; }   /* ← ปรับเป็น 30px ทั้งบนและล่าง */
-    #pdf-eq .eqp-sign .sig-line{
-      display:grid; grid-template-columns:auto minmax(0, 60mm) auto; column-gap:8px; align-items:center;
-    }
-    #pdf-eq .eqp-sign .sig-line .line{
-      min-width:0; height:1.2em; border-bottom:1px dotted #666;
-      display:flex; align-items:flex-end; justify-content:center; overflow:hidden;
-    }
-    #pdf-eq .eqp-sign .sig-line .name{
-      padding:0 6px; max-width:100%; white-space:nowrap; text-overflow:ellipsis; overflow:hidden; background:transparent;
-    }
-
-    /* กล่อง 2 ช่อง */
-    #pdf-eq .eqp-boxes{ margin-top: 8px !important; }
-    #pdf-eq .eqp-boxes .box{ border:1px solid #333; padding:12px 14px; min-height:176px; overflow:hidden; }
-    #pdf-eq .eqp-boxes .title{ font-weight:700; text-align:center; padding-bottom:6px; margin-bottom:10px; border-bottom:1px solid #9aa3b2; }
-    #pdf-eq .eqp-boxes .line{ margin:10px 0; }
-    #pdf-eq .eqp-boxes .sign-inline{ display:grid; grid-template-columns:auto 1fr auto; column-gap:8px; align-items:center; margin-top:6px; }
-    #pdf-eq .eqp-boxes .sign-inline .dotfill{ height:1.2em; border-bottom:1px dotted #666; }
-    #pdf-eq .eqp-boxes .date{ text-align:center; margin-top:8px; }
-
-    #pdf-eq .eqp-sign{
-  display: grid;
-  grid-template-columns: auto 240px auto;  /* คอลัมน์กลางกว้างเท่าเส้นเซ็น */
-  column-gap: 8px;
-  align-items: center;
-  justify-content: end;
-  text-align: unset;
-}
-#pdf-eq .eqp-sign .sig-line{
-  display: contents;   /* flatten ให้ lab/line/role เป็น grid item */
-}
-#pdf-eq .eqp-sign .date{
-  grid-column: 2;       /* ให้อยู่ใต้คอลัมน์ของเส้นเซ็น */
-  justify-self: center; /* จัดกลางภายใน 240px */
-  margin-top: 6px;
-}
-
-  `;
-  holder.appendChild(fix);
-
-  if (typeof this._freezeFormForPdf === 'function') this._freezeFormForPdf(holder);
-  return holder;
+    const blob = await this._makeA4OnePageBlob(formEl);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const bid = group?.booking_id || group?.items?.[0]?.booking_id || 'preview';
+    a.href = url;
+    a.download = `field_form_${bid}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch (e) {
+    console.error(e);
+    Swal.fire('ผิดพลาด', 'ไม่สามารถสร้างไฟล์ PDF ได้', 'error');
+  }
 },
 
 
-
-    // มีค่าแบบไม่ว่างหรือไม่
-hasValue(v) {
-  if (v === undefined || v === null) return false;
-  if (typeof v === 'string') return v.trim() !== '';
-  return true; // number, boolean, object, date -> นับว่ามีค่า
+    getMongoId(h) {
+  const id = h?._id?.$oid || h?._id;
+  if (!id) return '';                  // ถ้าไม่มีจริง ๆ ให้เป็นค่าว่างไปเลย
+  return String(id);
 },
 
-// ถือว่า "อนุมัติแล้ว" ถ้ามีค่าอย่างน้อย 1 ใน 5 ฟิลด์
-isApprovedRec(rec) {
-  return this.hasValue(rec?.approvedAt) ||
-         this.hasValue(rec?.approvedBy) ||
-         this.hasValue(rec?.approvedById) ||
-         this.hasValue(rec?.thaiName_admin) ||
-         this.hasValue(rec?.signaturePath_admin);
+    resolveSignUrl(raw) {
+  if (!raw) return '';
+  let u = String(raw).trim();
+  if (/^data:image\//i.test(u)) return u;                 // base64
+  if (/^(https?:|blob:)/i.test(u)) return u;               // URL เต็ม/Blob
+  if (/^\/\//.test(u)) return window.location.protocol + u;
+
+  const base = (API_BASE || window.location.origin).replace(/\/+$/,'');
+  if (u.startsWith('/')) return base + u;                  // /uploads/...
+  return base + '/' + u.replace(/^\.?\//,'');              // uploads/..., ./uploads/...
+},
+
+    
+
+    // 👇 วางไว้ใน methods
+  hasSecretaryMeta(h) {
+  const hasBy   = typeof h?.approvedBy === 'string'
+    ? h.approvedBy.trim() !== ''
+    : !!h?.approvedBy;
+
+  const hasById = typeof h?.approvedById === 'string'
+    ? h.approvedById.trim() !== ''
+    : !!h?.approvedById;
+
+  const hasAt   = !!h?.approvedAt;
+
+  return hasBy && hasById && hasAt;   // ✅ พอแค่นี้
+},
+isSuperPending(h) {
+  return String(h?.type || '').toLowerCase() === 'field'
+      && String(h?.status || '').toLowerCase() === 'pending'
+      && this.hasSecretaryMeta(h);
 },
 
 
@@ -678,46 +393,11 @@ formatTimeRangeTH(a, b) {
 
 
     normalizePdfUrl(raw) {
-  if (!raw) return '';
-  const u = String(raw).trim();
-  // data URL / absolute ก็ปล่อยไป
-  if (/^data:/i.test(u) || /^https?:\/\//i.test(u)) return u;
-
-  try {
-    // ✅ root-relative หรือ relative ให้ยึด BASE ของ API (พอร์ตแบ็กเอนด์)
-    const base = (API_BASE || '').endsWith('/') ? API_BASE : (API_BASE + '/');
-    return new URL(u, base).href;
-  } catch {
-    return u; // เผื่อแปลไม่สำเร็จ
-  }
+  if (!raw) return null;
+  let u = String(raw).trim();
+  if (u.startsWith('/')) u = new URL(u, window.location.origin).href;
+  return u;
 },
-
-pickThaiNameFromUser(u) {
-  if (!u) return '';
-  // ลองคีย์ที่พบบ่อย
-  const direct = [
-    'thaiName','thai_name','name_th','fullname_th',
-    'fullNameThai','thaiFullName','thai_fullname'
-  ].map(k => u[k]).find(v => v && String(v).trim());
-  if (direct) return String(direct).trim();
-
-  // ประกอบชื่อจาก first/last แบบไทย
-  const firstKeys = ['firstname_th','firstNameTh','firstname_thai','first_name_th','firstthai'];
-  const lastKeys  = ['lastname_th','lastNameTh','lastname_thai','last_name_th','lastthai'];
-  const first = firstKeys.map(k => u[k]).find(v => v && String(v).trim()) || '';
-  const last  = lastKeys .map(k => u[k]).find(v => v && String(v).trim()) || '';
-  return [first,last].filter(Boolean).join(' ').trim();
-},
-pickSignatureFromUser(u) {
-  if (!u) return '';
-  const sig = [
-    'signaturePath','signature_path','signatureUrl','signatureURL',
-    'sign_url','signature','signPath','sign_file'
-  ].map(k => u[k]).find(v => v && String(v).trim());
-  return sig ? String(sig).trim() : '';
-},
-
-
 
 
 pickPdfUrl(list) {
@@ -847,148 +527,123 @@ async downloadBookingPdf(target) {
     return JSON.stringify(lite);
   },
 
-   // โหลด/จัดกลุ่มข้อมูลที่ต้องอนุมัติ (Field + Equipment)
+   // ===== methods: fetchAndGroup() =====
 async fetchAndGroup() {
   try {
-    // 1) โหลด users ครั้งแรก เพื่อ map user_id -> display name
+    // โหลด users ครั้งแรกถ้ายังไม่มี (เก็บทั้งชื่อ และ URL ลายเซ็น)
     if (!Object.keys(this.userMap || {}).length) {
       const userRes = await axios.get(`${API_BASE}/api/users`);
       this.userMap = {};
+      this.userSigMap = {}; // 👈 เก็บลายเซ็นผู้ใช้
+
       (userRes.data || []).forEach(u => {
+        // ชื่อที่จะแสดง
         this.userMap[u.user_id] =
-          (u.firstname && u.lastname) ? `${u.firstname} ${u.lastname}` : (u.name || u.user_id);
+          (u.firstname && u.lastname)
+            ? `${u.firstname} ${u.lastname}`
+            : (u.name || u.user_id);
+
+        // URL ลายเซ็น (absolute) — ใช้เมธอด resolveSignUrl ที่มีอยู่ใน component
+        const sig = this.resolveSignUrl(u.signaturePath || u.signature_url || '');
+        this.userSigMap[u.user_id] = sig || '';
       });
     }
 
-    // 2) โหลดรายการที่ต้องอนุมัติทั้งหมดจาก backend
-    const res = await axios.get(`${API_BASE}/api/history/approve_field`);
-    const raw = Array.isArray(res.data) ? res.data : [];
+    // 1) ดึงข้อมูลทั้งหมดจาก backend
+    const res  = await axios.get(`${API_BASE}/api/history/approve_field`);
+    const raw  = Array.isArray(res.data) ? res.data : [];
 
-    // 3) map ให้ฟิลด์ครบ + รวมชื่อกิจกรรม (แก้ "จะดำเนินกิจกรรม/โครงการ" ไม่ขึ้น)
-    const bookings = raw.map((h, idx) => {
-      // ---- รวมชื่อกิจกรรม/โครงการ ไว้ก้อนเดียว แล้วกระจายกลับสองคีย์ ----
-      const activityName =
-        h.name_active ||
-        h.name_activity ||
-        h.activity ||
-        h.activity_name ||
-        h.project_name ||
-        "";
+    // 2) กรองเฉพาะ field ที่ pending และผ่านเลขาฯ มาแล้ว
+    const rawFiltered = raw.filter(h => this.isSuperPending(h));
 
-      return {
-        id: h._id?.$oid || h._id || idx + 1,
-        booking_id: h.booking_id ?? "",
+    // 3) map รายการ field (+ participants + ชื่อ/ลายเซ็นเลขาฯ)
+    const bookings = rawFiltered.map((h, idx) => ({
+      id:         this.getMongoId(h),
+      type:       'field',
+      booking_id: h.booking_id || '',
 
-        type: String(h.type || "field").toLowerCase(),
-        name: h.name ?? "-",
-        zone: h.zone ?? "-",
-        quantity: h.quantity ?? "-",
+      // ——— ฟิลด์พรีวิวหัวกระดาษ / เนื้อเรื่อง ———
+      aw:            h.aw ?? h.aw_no ?? h.reference ?? h.ref_no ?? '-',
+      tel:           h.tel ?? h.phone ?? h.telephone ?? '-',
+      agency:        h.agency ?? h.department ?? h.org ?? h.organization ?? '-',
+      name_active:   h.name_active ?? '',
+      name_activity: h.name_active ?? h.name_activity ?? h.activity ?? h.activity_name ?? h.project_name ?? '-',
+      reasons:       h.reasons ?? h.reason ?? '-',
 
-        requester: h.requester ?? "-",
-        username_form: h.username_form ?? "-",
-        id_form: h.id_form ?? "-",
-        user_id: h.user_id ?? "-",
-        proxyStudentName: h.proxyStudentName || h.proxy_name || "",
-        proxyStudentId:   h.proxyStudentId   || h.proxy_id   || "",
+      // เวลา (รองรับทั้งแบบฟอร์มเก่า/ใหม่)
+      since_time:     h.since_time ?? h.startTime ?? '',
+      until_thetime:  h.until_thetime ?? h.endTime   ?? '',
 
-        date: h.date ?? "-",
-        since: h.since ?? "-",
-        uptodate: h.uptodate ?? "-",
-        startTime: h.startTime || "",
-        endTime: h.endTime || "",
+      // ——— ฟิลด์จองสนาม ———
+      name:       h.name ?? '-',
+      zone:       h.zone ?? '-',
+      requester:  h.requester ?? '-',
+      user_id:    h.user_id ?? '-',
+      username_form:     h.username_form || '-',
+      id_form:           h.id_form || '-',
+      proxyStudentName:  h.proxyStudentName || h.proxy_name || '',
+      proxyStudentId:    h.proxyStudentId   || h.proxy_id   || '',
 
-        // ------ ฟิลด์ขอใช้สถานที่ (field form) ------
-        aw: h.aw || "",
-        tel: h.tel || "",
-        reasons: h.reasons || h.reason || "",
-        utilityRequest: h.utilityRequest || "",
-        facilityRequest: h.facilityRequest || "",
-        turnon_air: h.turnon_air || "",
-        turnoff_air: h.turnoff_air || "",
-        turnon_lights: h.turnon_lights || "",
-        turnoff_lights: h.turnoff_lights || "",
-        other: h.other || "",
-        amphitheater: h.amphitheater || "",
-        need_equipment: h.need_equipment || "",
-        participants: h.participants || "",
+      date:      h.date ?? '-',
+      since:     h.since ?? '-',
+      uptodate:  h.uptodate ?? '-',
+      startTime: h.startTime || '',
+      endTime:   h.endTime   || '',
 
-        agency: h.agency || "",
+      // จำนวนผู้เข้าร่วม (รองรับหลายชื่อคีย์)
+      participants:  h.participants ?? h.participant ?? h.participant_count
+                   ?? h.numParticipants ?? h.num_participants ?? '-',
 
-        // ✅ กระจายกลับให้ทั้งสองคีย์ เพื่อให้พรีวิว/ PDF หาเจอแน่ ๆ
-        name_active: activityName,
-        name_activity: activityName,
+      status:    (h.status || '').toLowerCase(),
 
-        restroom: h.restroom || "",
+      // ===== ระบบสาธารณูปโภค =====
+      utilityRequest:  h.utilityRequest ?? h.utility_request ?? h.utilities ?? h.utility ?? '',
+      turnon_air:      h.turnon_air ?? h.turnOnAir ?? h.air_on ?? '',
+      turnoff_air:     h.turnoff_air ?? h.turnOffAir ?? h.air_off ?? '',
+      turnon_lights:   h.turnon_lights ?? h.turnOnLights ?? h.light_on ?? '',
+      turnoff_lights:  h.turnoff_lights ?? h.turnOffLights ?? h.light_off ?? '',
+      restroom:        h.restroom ?? h.restroom_text ?? h.use_restroom ?? '',
+      other:           h.other ?? h.other_text ?? '',
 
-        attachment: Array.isArray(h.attachment) ? h.attachment : [],
-        fileName: Array.isArray(h.fileName) ? h.fileName : [],
-        bookingPdfUrl: h.bookingPdfUrl || h.booking_pdf_url || null,
+      // ===== รายการประกอบอาคาร =====
+      facilityRequest: h.facilityRequest ?? h.facility_request ?? h.facility ?? '',
+      amphitheater:    h.amphitheater ?? h.pull_grandstand ?? '',
+      need_equipment:  h.need_equipment ?? h.sport_equipment ?? h.equipment ?? '',
 
-        status: String(h.status || '').toLowerCase(),
-        createdAt: h.createdAt?.$date || h.createdAt || h.created_at?.$date || h.created_at || null,
-        updatedAt: h.updatedAt?.$date || h.updatedAt || h.updated_at?.$date || h.updated_at || null,
+      createdAt: h.createdAt?.$date || h.createdAt || h.created_at?.$date || h.created_at || null,
+      updatedAt: h.updatedAt?.$date || h.updatedAt || h.updated_at?.$date || h.updated_at || null,
 
-        // ฟิลด์อนุมัติ (ใช้เช็กว่าถูกอนุมัติแล้วหรือยัง)
-        approvedAt: h.approvedAt?.$date || h.approvedAt || null,
-        approvedBy: h.approvedBy || '',
-        approvedById: h.approvedById || '',
-        thaiName_admin: h.thaiName_admin || '',
-        signaturePath_admin: h.signaturePath_admin || '',
-      };
-    });
+      // meta เลขาฯ
+      approvedBy:       h.approvedBy,
+      approvedById:     h.approvedById,
+      approvedAt:       h.approvedAt,
+      reason_admin:     h.reason_admin,
+      secretary_choice: h.secretary_choice,
 
-    // 4) de-duplicate ตาม id
-    const dedupMap = new Map();
-    for (const b of bookings) {
-      const key = String(b.id);
-      if (!dedupMap.has(key)) dedupMap.set(key, b);
-    }
-    const bookingsClean = Array.from(dedupMap.values());
-
-    // 5) กรองเฉพาะที่ "ยังไม่อนุมัติ"
-    const pendingOnly = bookingsClean.filter(b => !this.isApprovedRec(b));
-
-    // 6) จัดกลุ่ม
-    // 6.1 สนาม: 1 แถว = 1 กลุ่ม
-    const fieldGroups = pendingOnly
-      .filter(b => b.type === 'field')
-      .map(f => ({
-        type: 'field',
-        booking_id: f.booking_id || '',
-        items: [f]
-      }));
-
-    // 6.2 อุปกรณ์: รวมตาม booking_id
-    const equipBuckets = {};
-    pendingOnly
-      .filter(b => b.type === 'equipment')
-      .forEach(eq => {
-        const key = eq.booking_id || ('single_' + eq.id);
-        if (!equipBuckets[key]) equipBuckets[key] = [];
-        equipBuckets[key].push(eq);
-      });
-
-    const equipmentGroups = Object.entries(equipBuckets).map(([booking_id, items]) => ({
-      type: 'equipment',
-      booking_id,
-      items
+      // ชื่อ/ลายเซ็นเลขาฯ (สำหรับกล่องที่ 1)
+      secThaiName: h.thaiName_admin ?? h.thainame_admin ?? h.thaiName ?? h.approvedBy ?? '',
+      secSignUrl:  h.signaturePath_admin ?? h.signaturePath ?? h.signature_url ?? '',
     }));
 
-    // 7) รวม + เรียงล่าสุดอยู่บน
-    const combined = [...fieldGroups, ...equipmentGroups];
+    // 4) กลุ่ม field
+    const fieldGroups = bookings.map(f => ({
+      type: 'field',
+      booking_id: f.booking_id || '',
+      items: [f],
+    }));
 
+    // 5) เรียงล่าสุดก่อน
     const safeToTime = (v) => {
       if (!v) return 0;
       const s = String(v).trim();
       if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
-        const [y, m, d] = s.split('-').map(Number);
+        const [y,m,d] = s.split('-').map(Number);
         return new Date(y, m - 1, d).getTime() || 0;
       }
       const t = new Date(s).getTime();
       return isNaN(t) ? 0 : t;
     };
-
-    combined.sort((A, B) => {
+    fieldGroups.sort((A, B) => {
       const a0 = A.items?.[0] || {};
       const b0 = B.items?.[0] || {};
       const ta = safeToTime(a0.updatedAt) || safeToTime(a0.createdAt) || safeToTime(a0.date);
@@ -996,10 +651,10 @@ async fetchAndGroup() {
       return tb - ta;
     });
 
-    // 8) อัปเดต state เฉพาะเมื่อข้อมูลเปลี่ยนจริง
-    const snap = this._makeSnapshot(combined);
+    // 6) set state เมื่อข้อมูลเปลี่ยนจริง
+    const snap = this._makeSnapshot(fieldGroups);
     if (snap !== this._lastSnapshot) {
-      this.grouped = combined;
+      this.grouped = fieldGroups;
       this._lastSnapshot = snap;
     }
   } catch (err) {
@@ -1010,154 +665,45 @@ async fetchAndGroup() {
 
 
 
-async approveAll() {
-  const targets = (this.filteredGrouped || []).filter(g =>
-    (g.items || []).some(it => (it.status || 'pending') === 'pending' && !this.isApprovedRec(it))
-  );
-  if (!targets.length) {
-    Swal.fire('ไม่มีรายการ', 'ไม่พบรายการที่อยู่ระหว่างรออนุมัติ', 'info');
-    return;
-  }
-
-  const { isConfirmed } = await Swal.fire({
-    title: 'ยืนยันอนุมัติทั้งหมด',
-    html: `ต้องการอนุมัติ <b>${targets.length}</b> รายการใช่หรือไม่`,
-    icon: 'question',
-    showCancelButton: true,
-    confirmButtonText: 'อนุมัติทั้งหมด',
-    cancelButtonText: 'ยกเลิก',
-    confirmButtonColor: '#10b981'
-  });
-  if (!isConfirmed) return;
-
-  const adminUserId = localStorage.getItem('user_id') || '';
-  const approvedAt = new Date().toISOString();
-
-  Swal.fire({ title:'กำลังอนุมัติ...', didOpen:()=>Swal.showLoading(), allowOutsideClick:false });
-
-  // host สำหรับ render PDF
-  let pdfHost = document.getElementById('pdf-capture-approve');
-  if (!pdfHost) {
-    pdfHost = document.createElement('div');
-    pdfHost.id = 'pdf-capture-approve';
-    Object.assign(pdfHost.style, { position:'fixed', left:'-100000px', top:'-100000px', width:'0', height:'0' });
-    document.body.appendChild(pdfHost);
-  }
-
-  // เก็บ URL PDF ต่อ booking_id ของ "อุปกรณ์"
-  const eqPdfByBookingId = new Map();
-
-  const seen = new Set();
-  const tasks = [];
-
-  for (const g of targets) {
-    for (const it of g.items || []) {
-      const key = String(it.id || it._id || '') || `${it.name}-${it.booking_id}-${it.startTime}-${it.endTime}`;
-      if (seen.has(key)) continue; seen.add(key);
-
-      const isField = String(it.type || g.type).toLowerCase() === 'field';
-      const url = isField
-        ? `${API_BASE}/api/history/${it.id}/approve_field`
-        : `${API_BASE}/api/history/${it.id}/approve_equipment`;
-
-      tasks.push((async () => {
-        let payload = {};
-        let pdfUrl = '';
-
-        if (isField) {
-          // Field → ทำ PDF ต่อรายการ
-          try {
-            const node = this._buildFieldPdfNode(
-              it,
-              this.secretary_choice || {},
-              this.reason_admin || '',
-              this.loggedThaiName || '',
-              this.loggedSignatureUrl || ''
-            );
-            pdfHost.appendChild(node);
-            const pdfBlob = await this._makeA4OnePageBlob(node);
-            pdfUrl = await this._uploadPdfBlob(pdfBlob);
-          } catch (e) {
-            console.warn('bulk generate/upload pdf failed:', e);
-          } finally {
-            try { pdfHost.innerHTML = ''; } catch(_) {}
-          }
-
-          payload = {
-            admin_id: adminUserId,
-            approvedAt,
-            reason_admin: this.reason_admin || '',
-            secretary_choice: this.secretary_choice || {},
-            thaiName_admin: this.loggedThaiName || '',
-            signaturePath_admin: this.loggedSignatureUrl || '',
-            bookingPdfUrl: pdfUrl || '',
-            booking_pdf_url: pdfUrl || '',
-            attachment: pdfUrl ? [pdfUrl] : []
-          };
-        } else {
-          // อุปกรณ์ → ทำ PDF แค่ครั้งเดียวต่อ booking_id
-          const bid = g.booking_id || it.booking_id || '';
-          if (bid && !eqPdfByBookingId.has(bid)) {
-            try {
-              const ctx = await this._buildEquipmentCtxFromGroup(g);
-              const node = this._buildEquipmentPdfNode(ctx);
-              pdfHost.appendChild(node);
-              const pdfBlob = await this._makeA4OnePageBlob(node);
-              const upUrl = await this._uploadPdfBlob(pdfBlob);
-              eqPdfByBookingId.set(bid, upUrl || '');
-            } catch (e) {
-              console.warn('bulk eq pdf failed:', e);
-              eqPdfByBookingId.set(bid, '');
-            } finally {
-              try { pdfHost.innerHTML = ''; } catch(_) {}
-            }
-          }
-
-          const u = bid ? (eqPdfByBookingId.get(bid) || '') : '';
-          payload = {
-            staff_id: adminUserId,
-            approvedAt,
-            bookingPdfUrl: u,
-            booking_pdf_url: u,
-            attachment: u ? [u] : []
-          };
-        }
-
-        const headers = { 'X-Idempotency-Key': `${key}-${approvedAt}` };
-        return axios.patch(url, payload, { headers });
-      })());
-    }
-  }
-
-  const results = await Promise.allSettled(tasks);
-  const failed = results.filter(r => r.status === 'rejected');
-
-  try { await this.fetchAndGroup(); } catch(e){}
-
-  if (!failed.length) {
-    Swal.fire('สำเร็จ', 'อนุมัติรายการทั้งหมดเรียบร้อย', 'success');
-  } else {
-    Swal.fire('สำเร็จบางส่วน', `อนุมัติสำเร็จ ${results.length - failed.length} รายการ, ล้มเหลว ${failed.length} รายการ`, 'warning');
-  }
-},
 
 
 async approveGroup(group) {
-  const groupType = String(group.type || group.items?.[0]?.type || "").toLowerCase().trim();
-  const isField = groupType === "field";
-  const isEquipment = groupType === "equipment";
+  const groupType = String(group.type || group.items?.[0]?.type || '').toLowerCase().trim();
 
-  // เคลียร์ค่าจากรอบก่อน
-  this.secretary_choice = null;
-  this.reason_admin = '';
+  // ====== เตรียมชื่อ/ลายเซ็นหัวหน้า ======
+  let headThaiName = this.loggedThaiName || '';
+  let headSignUrl  = this.resolveSignUrl(this.loggedSignatureUrl || '');
+  try {
+    const uid = (localStorage.getItem('user_id') || '').trim();
+    const resAll = await axios.get(`${API_BASE}/api/users`);
+    const users  = Array.isArray(resAll.data) ? resAll.data : [];
+    const me = users.find(u => String(u.user_id || '').trim() === uid)
+             || users.find(u => (u.email && u.email === (localStorage.getItem('email') || '').trim()))
+             || null;
+    headThaiName = (me?.thaiName || me?.thainame
+      || ((me?.firstname && me?.lastname) ? `${me.firstname} ${me.lastname}` : me?.name) || ''
+    ).toString().trim() || headThaiName;
+    headSignUrl = this.resolveSignUrl(me?.signaturePath || me?.signature_url || headSignUrl);
+  } catch (_) {}
 
-  if (isField) {
-    // ===== FIELD: พรีวิว พร้อมติ๊ก "อื่นๆ"
+  // ====== (เฉพาะ field) เปิดพรีวิวเพื่อให้หัวหน้าติ๊กตัวเลือก ======
+  let uploadedUrl = '';
+  let uploadedName = '';
+  if (groupType === 'field') {
     const it = group.items?.[0] || {};
-    const reqKey = it.user_id || it.id_form || '';        // เผื่อบางเคสส่ง id_form มา
-    const reqSig = this.userSigMap?.[reqKey] || '';        // URL ลายเซ็นผู้ยื่นคำขอ
-    const html = buildFieldFormPreviewV2(it, this.loggedThaiName, this.loggedSignatureUrl, reqSig);
 
+    // 👇 ลายเซ็น "ผู้ยื่นคำขอ" จาก user_id / id_form
+    const reqKey     = it.user_id || it.id_form || '';
+    const reqSignUrl = this.resolveSignUrl(this.userSigMap?.[reqKey] || '');
+
+    const html = buildFieldFormPreviewV2(
+      { ...it, approvedAt: it.approvedAt || it.updatedAt || it.createdAt },
+      it.secThaiName || it.thaiName_admin || it.thainame_admin || it.approvedBy || '',
+      this.resolveSignUrl(it.secSignUrl || it.signaturePath_admin || it.signaturePath || it.signature_url || ''),
+      headThaiName,
+      headSignUrl,
+      reqSignUrl // 👈 ส่งลายเซ็นผู้ยื่นคำขอเข้าไปในพรีวิว
+    );
 
     const result = await Swal.fire({
       title: "ยืนยันอนุมัติใช้งานสถานที่",
@@ -1167,167 +713,162 @@ async approveGroup(group) {
       showCancelButton: true,
       confirmButtonText: "ยืนยันอนุมัติ",
       cancelButtonText: "ยกเลิก",
-      customClass: { popup: "swal-form-approve" },
+      confirmButtonColor: "#695CF7",
+      customClass: { popup: "swal-form-approve", title: "swal-center-title", confirmButton: "btn-violet" },
+
+      // ✅ บังคับติ๊ก "เห็นชอบ" ก่อน
       didOpen: () => {
         const p = Swal.getPopup();
-        const chk = p.querySelector('#sec_other_chk');
-        const box = p.querySelector('#sec_other_reason');
-        const sync = () => { const on = !!chk?.checked; if (box){ box.disabled = !on; if (!on) box.value=''; } };
-        chk?.addEventListener('change', sync);
-        if (this.reason_admin) { if (chk) chk.checked = true; if (box){ box.disabled=false; box.value=this.reason_admin; } }
-        sync();
+
+        // ล็อกช่องของเลขาฯ และเปิดของหัวหน้า (ถ้ามี element เหล่านี้)
+        ['sec_to_head','sec_for_consider','sec_other_chk','sec_other_reason']
+          .forEach(id => { const el = p.querySelector('#'+id); if (el) el.disabled = true; });
+        ['head_to_vice','head_for_consider','head_other_chk','head_other_reason']
+          .forEach(id => { const el = p.querySelector('#'+id); if (el) el.disabled = false; });
+
+        // ซิงค์ "อื่นๆ" ของหัวหน้า
+        const chkOther = p.querySelector('#head_other_chk');
+        const boxOther = p.querySelector('#head_other_reason');
+        const syncOther = () => {
+          if (!boxOther) return;
+          boxOther.disabled = !chkOther?.checked;
+          if (!chkOther?.checked) boxOther.value = "";
+        };
+        chkOther?.addEventListener('change', syncOther); syncOther();
+
+        // คุมปุ่มยืนยันด้วย "เห็นชอบ"
+        const okChk = p.querySelector('#head_to_vice');
+        const syncConfirm = () => {
+          if (okChk?.checked) Swal.enableConfirmButton();
+          else Swal.disableConfirmButton();
+        };
+        Swal.disableConfirmButton();      // ปิดปุ่มไว้ก่อน
+        okChk?.addEventListener('change', syncConfirm);
+        syncConfirm();
       },
+
+      // กันการกด Enter/confirm โดยยังไม่ติ๊ก
       preConfirm: () => {
         const p = Swal.getPopup();
-        const chk = p.querySelector('#sec_other_chk');
-        const box = p.querySelector('#sec_other_reason');
-        const otherChecked = !!chk?.checked;
-        const otherText = otherChecked ? (box?.value || '').trim() : '';
-        this.reason_admin = otherChecked ? otherText : '';
-        this.secretary_choice = {
-          to_head: !!p.querySelector('#sec_to_head')?.checked,
-          for_consider: !!p.querySelector('#sec_for_consider')?.checked,
-          other_checked: otherChecked
+        const q = (id) => p.querySelector('#'+id);
+
+        if (!q('head_to_vice')?.checked) {
+          Swal.showValidationMessage('กรุณากด "เห็นชอบ" ก่อนยืนยันอนุมัติ');
+          return false;
+        }
+
+        const otherChecked = !!q('head_other_chk')?.checked;
+        const otherText    = otherChecked ? (q('head_other_reason')?.value || '').trim() : '';
+        this.head_reason_supervisor = otherText;
+        this.head_choice_supervisor = {
+          to_vice_supervisor:       true, // ติ๊กแล้วแน่นอน
+          for_consider_supervisor:  !!q('head_for_consider')?.checked,
+          other_checked_supervisor:  otherChecked
         };
         return true;
       }
     });
     if (!result.isConfirmed) return;
 
-  } else {
-    // ===== EQUIPMENT: พรีวิวจาก ctx ที่ประกอบอัตโนมัติ
-    const ctx = await this._buildEquipmentCtxFromGroup(group);
-    const html = buildEquipmentApprovePreviewHTML(ctx);
-
-    const result = await Swal.fire({
-      title: 'ยืนยันอนุมัติยืมอุปกรณ์',
-      html,
-      width: 1100,
-      focusConfirm: false,
-      showCancelButton: true,
-      confirmButtonText: 'ยืนยันอนุมัติ',
-      cancelButtonText: 'ยกเลิก',
-      customClass: { popup: 'swal-equip-approve' }
-    });
-    if (!result.isConfirmed) return;
-
-    // เตรียม PDF ของ "กลุ่มนี้" (ครั้งเดียว)
-    let pdfHost = document.getElementById('pdf-capture-approve');
-    if (!pdfHost) {
-      pdfHost = document.createElement('div');
-      pdfHost.id = 'pdf-capture-approve';
-      Object.assign(pdfHost.style, { position:'fixed', left:'-100000px', top:'-100000px', width:'0', height:'0' });
-      document.body.appendChild(pdfHost);
-    }
-
-    this.__eqPdfUrl = '';
+    // ====== ✅ สร้าง PDF จากพรีวิวแล้วอัปโหลดไฟล์ ======
     try {
-      const node = this._buildEquipmentPdfNode(ctx);
-      pdfHost.appendChild(node);
-      const pdfBlob = await this._makeA4OnePageBlob(node);
-      this.__eqPdfUrl = await this._uploadPdfBlob(pdfBlob);   // URL ไฟล์ PDF ใหม่
+      const p = Swal.getPopup();
+      const formEl = p?.querySelector('.mfu-form');
+      if (formEl) {
+        const blob = await this._makeA4OnePageBlob(formEl);
+        const bid  = group?.booking_id || it.booking_id || 'booking';
+        uploadedName = `field_form_${bid}.pdf`;
+
+        const fd = new FormData();
+        fd.append('file', blob, uploadedName);
+
+        const up = await axios.post(`${API_BASE}/api/upload`, fd, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        uploadedUrl = up.data?.url || up.data?.path || '';
+      }
     } catch (e) {
-      console.warn('Generate/Upload equipment PDF failed:', e);
-      this.__eqPdfUrl = '';
-    } finally {
-      try { pdfHost.innerHTML = ''; } catch(_) {}
+      console.warn('สร้าง/อัปโหลด PDF ไม่สำเร็จ (อนุมัติต่อได้):', e);
     }
   }
 
-  // ===== เริ่มบันทึกอนุมัติ =====
+  // ===== ส่งอนุมัติไป backend =====
   const adminUserId = localStorage.getItem("user_id") || "";
   const approveDate = new Date().toISOString();
 
-  Swal.fire({ title: "กำลังดำเนินการ...", didOpen: () => Swal.showLoading(), allowOutsideClick: false });
-
-  // กันซ้ำในกลุ่ม
   const seen = new Set();
   const uniqItems = [];
   for (const it of group.items || []) {
-    const key = String(it.id ?? it._id ?? "") || `${it.name}-${it.booking_id}-${it.startTime}-${it.endTime}`;
-    if (!seen.has(key)) { seen.add(key); uniqItems.push(it); }
+    const key = String(it.id ?? it._id ?? "");
+    if (key && !seen.has(key)) { seen.add(key); uniqItems.push(it); }
   }
 
-  // host เผื่อ field render pdf
-  let pdfHost = document.getElementById('pdf-capture-approve');
-  if (!pdfHost) {
-    pdfHost = document.createElement('div');
-    pdfHost.id = 'pdf-capture-approve';
-    Object.assign(pdfHost.style, { position:'fixed', left:'-100000px', top:'-100000px', width:'0', height:'0' });
-    document.body.appendChild(pdfHost);
-  }
+  Swal.fire({ title: "กำลังดำเนินการ...", didOpen: () => Swal.showLoading(), allowOutsideClick: false });
 
   const ok = [], fail = [];
   for (const item of uniqItems) {
-    const isFieldItem = String(item.type || group.type).toLowerCase() === "field";
+    const isFieldItem = String(item.type || group.type).toLowerCase().trim() === "field";
     const url = isFieldItem
-      ? `${API_BASE}/api/history/${item.id}/approve_field`
+      ? `${API_BASE}/api/history/${item.id}/approve_field_super`
       : `${API_BASE}/api/history/${item.id}/approve_equipment`;
 
-    let payload;
+    const payload = isFieldItem
+      ? {
+          admin_id: adminUserId,
+          status: 'approved',
 
-    if (isFieldItem) {
-      // Field: render + upload PDF ต่อรายการ
-      let pdfUrl = '';
-      try {
-        const node = this._buildFieldPdfNode(
-          item,
-          this.secretary_choice,
-          this.reason_admin,
-          this.loggedThaiName || '',
-          this.loggedSignatureUrl || ''
-        );
-        pdfHost.appendChild(node);
-        const pdfBlob = await this._makeA4OnePageBlob(node);
-        pdfUrl = await this._uploadPdfBlob(pdfBlob);
-      } catch (e) {
-        console.warn('Generate/Upload field PDF failed:', e);
-      } finally {
-        try { pdfHost.innerHTML = ''; } catch(_) {}
-      }
+          to_vice_supervisor:       this.head_choice_supervisor?.to_vice_supervisor || false,
+          for_consider_supervisor:  this.head_choice_supervisor?.for_consider_supervisor || false,
+          other_checked_supervisor: this.head_choice_supervisor?.other_checked_supervisor || false,
+          reason_supervisor:        this.head_reason_supervisor || '',
 
-      payload = {
-        admin_id: adminUserId,
-        approvedAt: approveDate,
-        reason_admin: this.reason_admin || '',
-        secretary_choice: this.secretary_choice || {},
-        thaiName_admin: this.loggedThaiName || '',
-        signaturePath_admin: this.loggedSignatureUrl || '',
-        bookingPdfUrl: pdfUrl || '',
-        booking_pdf_url: pdfUrl || '',
-        attachment: pdfUrl ? [pdfUrl] : []
-      };
-    } else {
-      // Equipment: ใช้ PDF เดียวกันทั้งกลุ่ม
-      payload = {
-        staff_id: adminUserId,
-        approvedAt: approveDate,
-        bookingPdfUrl: this.__eqPdfUrl || '',
-        booking_pdf_url: this.__eqPdfUrl || '',
-        attachment: this.__eqPdfUrl ? [this.__eqPdfUrl] : []
-      };
-    }
+          thaiName_supervisor:      headThaiName || '',
+          signaturePath_supervisor: headSignUrl  || '',
+          approvedAt_supervisor:    approveDate,
+          head_choice_supervisor: {
+            to_vice_supervisor:       this.head_choice_supervisor?.to_vice_supervisor || false,
+            for_consider_supervisor:  this.head_choice_supervisor?.for_consider_supervisor || false,
+            other_checked_supervisor: this.head_choice_supervisor?.other_checked_supervisor || false
+          },
 
-    const headers = { "X-Idempotency-Key": `${item.id}-${item.booking_id || ""}-${approveDate}` };
+          // ✅ แนบ URL ไฟล์ที่อัปโหลด (ถ้ามี)
+          ...(uploadedUrl ? {
+            bookingPdfUrl: uploadedUrl,
+            fileName: uploadedName,
+            attachment: [uploadedUrl]
+          } : {})
+        }
+      : { staff_id: adminUserId, status: 'approved', approvedAt: approveDate };
+
     try {
-      const res = await axios.patch(url, payload, { headers });
+      const res = await axios.patch(url, payload, {
+        headers: { "X-Idempotency-Key": `${item.id}-${item.booking_id || ""}-${approveDate}` }
+      });
       ok.push({ item, res });
     } catch (err) {
-      fail.push({ item, err });
+      const code = err?.response?.status;
+      const msg = (err?.response?.data?.message || "").toString();
+      if (code === 409 || /already|อนุมัติแล้ว|processed|not pending/i.test(msg)) {
+        ok.push({ item, res: { data: "skipped" } });
+      } else {
+        fail.push({ item, err });
+      }
     }
   }
 
   try { await this.fetchAndGroup(); } catch (_) {}
 
   if (ok.length) {
-    Swal.fire("สำเร็จ", isEquipment ? "อนุมัติอุปกรณ์และบันทึก PDF เรียบร้อย" : "อนุมัติเรียบร้อยแล้ว", "success");
+    Swal.fire("สำเร็จ", "อนุมัติเรียบร้อยแล้ว", "success");
   } else {
     const e = fail[0]?.err;
-    const status = e?.response?.status;
     const msg = e?.response?.data?.message || e?.message || "ไม่สามารถอนุมัติได้";
+    const status = e?.response?.status;
     Swal.fire("ผิดพลาด", `${msg}${status ? ` (รหัส ${status})` : ""}`, "error");
   }
 },
+
+
 
 
 
@@ -1476,52 +1017,62 @@ pruneOldNotifications() {
         this.closeNotifications()
       }
     },
+    
     async fetchNotifications() {
   try {
-    const cutoff = Date.now() - (7 * 24 * 60 * 60 * 1000);
-    this.pruneOldNotifications();
-
-    // ดึง pending field/equipment
-    const res = await axios.get(`${API_BASE}/api/history/approve_field`);
-    const data = Array.isArray(res.data) ? res.data : [];
-
-    const pendings = data.filter(item =>
-      item.status === 'pending' &&
-      (item.type === 'field' || item.type === 'equipment')
-    );
-
-    if (pendings.length) {
-      const newMessages = pendings.map(item => {
-        const id = item._id?.$oid || item._id;
-        const ts =
-          (item.updatedAt && new Date(item.updatedAt).getTime()) ??
-          (item.createdAt && new Date(item.createdAt).getTime()) ??
-          (item.date && new Date(item.date).getTime()) ??
-          Date.now();
-        return {
-          id,
-          type: 'pending',
-          timestamp: ts,
-          message: item.type === 'field'
-            ? `สนาม '${item.name}' กำลังรอการอนุมัติ`
-            : `อุปกรณ์ '${item.name}' กำลังรอการอนุมัติ`,
-        };
-      });
-
-      // รวม + unique ตาม id + sort ล่าสุดอยู่บน
-      this.notifications = [...this.notifications, ...newMessages]
-        .filter((v, i, arr) => arr.findIndex(x => (x.id || i) === (v.id || i)) === i)
-        .sort((a, b) => b.timestamp - a.timestamp);
-
-      this.pruneOldNotifications();
+    // ให้ตรงกับตาราง: ใช้ grouped ที่ผ่าน isSuperPending() จาก fetchAndGroup แล้ว
+    if (!Array.isArray(this.grouped) || this.grouped.length === 0) {
+      await this.fetchAndGroup();
     }
 
-    // นับ unread จาก timestamp > lastSeenTimestamp (sync ทุกหน้า)
-    this.unreadCount = this.notifications.filter(n => n.timestamp > this.lastSeenTimestamp).length;
-  } catch (err) {
-    // ไม่ต้องแจ้ง error
+    const toTs = (v) => {
+      if (!v) return 0;
+      const s = String(v).trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+        const [y,m,d] = s.split('-').map(Number);
+        return new Date(y, m - 1, d).getTime() || 0;
+      }
+      const t = new Date(s).getTime();
+      return isNaN(t) ? 0 : t;
+    };
+
+    // สร้าง noti จากกลุ่มที่ “เห็นในตาราง”
+    const notis = (this.grouped || []).map(g => {
+      const it = g.items?.[0] || {};
+      const ts = toTs(it.updatedAt) || toTs(it.createdAt) || toTs(it.date) || Date.now();
+      const zone = it.zone && it.zone !== '-' ? ` (โซน: ${it.zone})` : '';
+      const timeStr = this.formatTimeRangeTH(it.startTime, it.endTime);
+      const dayStr = it.since ? this.formatDate(it.since) : (it.date ? this.formatDate(it.date) : '-');
+
+      let msg = `สนาม '${it.name || '-'}'${zone} รออนุมัติ`;
+      
+
+      return {
+        id: `field_${g.booking_id || it.id || ts}`, // ให้ unique ต่อ booking
+        type: 'field',
+        timestamp: ts,
+        message: msg
+      };
+    });
+
+    // จัด unique + เรียงล่าสุดก่อน
+    const seen = new Set();
+    const unique = [];
+    for (const n of notis) {
+      if (seen.has(n.id)) continue;
+      seen.add(n.id);
+      unique.push(n);
+    }
+    unique.sort((a, b) => b.timestamp - a.timestamp);
+
+    // อัปเดต dropdown + badge
+    this.notifications = unique;
+    this.unreadCount = unique.filter(n => n.timestamp > this.lastSeenTimestamp).length;
+  } catch (_) {
+    // เงียบไว้ ไม่ต้องเด้ง error
   }
 },
+
 
 handleResize() {
     this.isMobile = window.innerWidth <= 800;
@@ -1643,7 +1194,7 @@ isMultiDayEquipment(item) {
 
 
     
- async detailGroup(group) {
+async detailGroup(group) {
   const esc = (s) => String(s ?? '-')
     .replace(/&/g,'&amp;').replace(/</g,'&lt;')
     .replace(/>/g,'&gt;').replace(/"/g,'&quot;')
@@ -1685,10 +1236,8 @@ isMultiDayEquipment(item) {
           <tr><th>ชื่อผู้ขอใช้</th><td>${esc(requester)}</td></tr>
           <tr><th>รหัสนักศึกษา/พนักงาน</th><td>${esc(it.id_form || '-')}</td></tr>
           <!-- แถวใหม่ -->
-
-        <!--  <tr><th>จองแทนผู้ใช้</th><td>${esc(it.proxyStudentName || '-')}</td></tr>
+         <!-- <tr><th>จองแทนผู้ใช้</th><td>${esc(it.proxyStudentName || '-')}</td></tr>
           <tr><th>รหัสนักศึกษา/พนักงาน (ของผู้ที่ถูกจองแทน)</th><td>${esc(it.proxyStudentId || '-')}</td></tr> -->
-
           <!-- /แถวใหม่ -->
           <tr><th>วันที่ทำรายการ</th>
   <td><span class="nowrap">${it.date ? esc(this.formatDate(it.date)) : '-'}</span></td>
@@ -1998,7 +1547,8 @@ doc.text(`โทร ${data.tel || '-'}`, 430, 100);
       const activityLines = doc.splitTextToSize('ด้วย ' + (data.agency || '-'), 500);
       y = drawLines(doc, activityLines, 55, y);
 
-      const projectLines = doc.splitTextToSize('จะดำเนินกิจกรรม / โครงการ ' + (data.name_activity || '-'), 500);
+      const projectName = data.name_active || data.name_activity || data.activity || data.activity_name || data.project_name || '-';
+      const projectLines = doc.splitTextToSize('จะดำเนินกิจกรรม / โครงการ ' + projectName, 500);
       y = drawLines(doc, projectLines, 25, y);
 
       const reasonLabel = 'เหตุผลในการขอใช้คือ';
@@ -2355,95 +1905,157 @@ doc.text(`โทร ${data.tel || '-'}`, 430, 100);
 }
 
   },
-  async mounted() {
+  // ===== lifecycle: mounted() =====
+// ===== lifecycle: mounted() =====
+async mounted() {
   // responsive
   window.addEventListener('resize', this.handleResize);
   this.handleResize();
 
-  // 1) โหลดผู้ใช้ + เตรียม map ชื่อ/ลายเซ็น + ค่าของแอดมินที่ล็อกอิน
+  // 1) โหลด users -> ทั้งชื่อไว้โชว์ และดัชนีลายเซ็นหลายคีย์
   try {
     const userRes = await axios.get(`${API_BASE}/api/users`);
+    const users = Array.isArray(userRes.data) ? userRes.data : [];
 
-    // map ไว้โชว์ชื่อจาก user_id
+    // ชื่อที่จะแสดง
     this.userMap = {};
-    (userRes.data || []).forEach(u => {
-      const displayName =
+    users.forEach(u => {
+      this.userMap[u.user_id] =
         (u.firstname && u.lastname)
           ? `${u.firstname} ${u.lastname}`
           : (u.name || u.user_id);
-      this.userMap[u.user_id] = displayName;
     });
 
-    // ✅ map ลายเซ็นของผู้ใช้ทุกคน (รองรับ signaturePath / signatureUrl / ฯลฯ)
-    this.userSigMap = {};
-    (userRes.data || []).forEach(u => {
-      const raw = this.pickSignatureFromUser(u);    // ดึงจากหลายคีย์ เช่น signaturePath
-      this.userSigMap[u.user_id] = this.normalizePdfUrl(raw || '');
-    });
-
-    // หา record ของคนที่ล็อกอินตอนนี้ (ไว้ตั้งชื่อ/ลายเซ็นของแอดมิน)
-    const myId =
-      localStorage.getItem('user_id') ||
-      localStorage.getItem('id') ||
-      '';
-    const me = (userRes.data || []).find(
-      u => String(u.user_id) === String(myId) || String(u.id) === String(myId)
-    );
-
-    // ✅ ชื่อไทยของผู้ล็อกอิน
-    this.loggedThaiName =
-      this.pickThaiNameFromUser(me) ||
-      localStorage.getItem('thaiName') ||
-      localStorage.getItem('thai_name') ||
-      '';
-
-    // ✅ ลายเซ็นของผู้ล็อกอิน (raw สำหรับเก็บ DB + url สำหรับแสดงผล)
-    const rawSig =
-      this.pickSignatureFromUser(me) ||
-      localStorage.getItem('signaturePath') ||
-      localStorage.getItem('signature_url') ||
-      '';
-    this.loggedSignatureRaw = rawSig || '';
-    this.loggedSignatureUrl = this.normalizePdfUrl(rawSig);
-
-    // debug
-    console.debug('approve_field/mounted', {
-      myId,
-      thaiName: this.loggedThaiName,
-      sigUrl: this.loggedSignatureUrl
-    });
+    // 👇 ทำดัชนีลายเซ็นให้ครอบคลุมหลายคีย์ (user_id, id_form, email, ชื่อ-สกุล ฯลฯ)
+    this.userSigMap = this.buildUserSigIndex(users);
   } catch (err) {
-    console.error('โหลด users ไม่สำเร็จ:', err);
     this.userMap = {};
     this.userSigMap = {};
-    this.loggedThaiName = '';
-    this.loggedSignatureRaw = '';
-    this.loggedSignatureUrl = '';
+    console.error('โหลด users ไม่สำเร็จ:', err);
   }
 
-  // 2) โหลด/จัดกลุ่มข้อมูลที่ต้องอนุมัติรอบแรก
+  // 2) โหลดรอบแรกจาก /approve_field (เฉพาะที่ผ่านเลขาฯแล้วและสถานะ pending)
   try {
-    await this.fetchAndGroup();
-  } catch (e) {
-    console.error('fetchAndGroup @mounted ล้มเหลว:', e);
+    const res = await axios.get(`${API_BASE}/api/history/approve_field`);
+    const raw = Array.isArray(res.data) ? res.data : [];
+    const rawFiltered = raw.filter(h => this.isSuperPending(h));
+
+    const fieldGroups = rawFiltered.map(h => ({
+      type: 'field',
+      booking_id: h.booking_id || '',
+      items: [{
+        id:   this.getMongoId(h),
+        type: 'field',
+
+        booking_id: h.booking_id || '',
+
+        // ——— ฟิลด์พรีวิวหัวกระดาษ / เนื้อเรื่อง ———
+        aw:            h.aw ?? h.aw_no ?? h.reference ?? h.ref_no ?? '-',
+        tel:           h.tel ?? h.phone ?? h.telephone ?? '-',
+        agency:        h.agency ?? h.department ?? h.org ?? h.organization ?? '-',
+        name_active:   h.name_active ?? '',
+        name_activity: h.name_active ?? h.name_activity ?? h.activity ?? h.activity_name ?? h.project_name ?? '-',
+        reasons:       h.reasons ?? h.reason ?? '-',
+
+        since_time:     h.since_time ?? h.startTime ?? '',
+        until_thetime:  h.until_thetime ?? h.endTime   ?? '',
+
+        // ——— ฟิลด์จองสนาม ———
+        name:       h.name ?? '-',
+        zone:       h.zone ?? '-',
+        requester:  h.requester ?? '-',
+        user_id:    h.user_id ?? '-',
+        username_form:     h.username_form || '-',
+        id_form:           h.id_form || '-',
+        proxyStudentName:  h.proxyStudentName || h.proxy_name || '',
+        proxyStudentId:    h.proxyStudentId   || h.proxy_id   || '',
+
+        date:      h.date ?? '-',
+        since:     h.since ?? '-',
+        uptodate:  h.uptodate ?? '-',
+        startTime: h.startTime || '',
+        endTime:   h.endTime   || '',
+
+        // จำนวนผู้เข้าร่วม
+        participants:  h.participants ?? h.participant ?? h.participant_count
+                     ?? h.numParticipants ?? h.num_participants ?? '-',
+
+        status:    (h.status || '').toLowerCase(),
+
+        // ===== ข้อ 2 ระบบสาธารณูปโภค =====
+        utilityRequest:  h.utilityRequest ?? h.utility_request ?? h.utilities ?? h.utility ?? '',
+        turnon_air:      h.turnon_air ?? h.turnOnAir ?? h.air_on ?? '',
+        turnoff_air:     h.turnoff_air ?? h.turnOffAir ?? h.air_off ?? '',
+        turnon_lights:   h.turnon_lights ?? h.turnOnLights ?? h.light_on ?? '',
+        turnoff_lights:  h.turnoff_lights ?? h.turnOffLights ?? h.light_off ?? '',
+        restroom:        h.restroom ?? h.restroom_text ?? h.use_restroom ?? '',
+        other:           h.other ?? h.other_text ?? '',
+
+        // ===== ข้อ 3 รายการประกอบอาคาร =====
+        facilityRequest: h.facilityRequest ?? h.facility_request ?? h.facility ?? '',
+        amphitheater:    h.amphitheater ?? h.pull_grandstand ?? '',
+        need_equipment:  h.need_equipment ?? h.sport_equipment ?? h.equipment ?? '',
+
+        createdAt: h.createdAt?.$date || h.createdAt || h.created_at?.$date || h.created_at || null,
+        updatedAt: h.updatedAt?.$date || h.updatedAt || h.updated_at?.$date || h.updated_at || null,
+
+        // meta เลขาฯ
+        approvedBy:       h.approvedBy,
+        approvedById:     h.approvedById,
+        approvedAt:       h.approvedAt,
+        reason_admin:     h.reason_admin,
+        secretary_choice: h.secretary_choice,
+
+        // ชื่อ/ลายเซ็นเลขาฯ (สำหรับกล่องที่ 1)
+        secThaiName: h.thaiName_admin ?? h.thainame_admin ?? h.thaiName ?? h.approvedBy ?? '',
+        secSignUrl:  h.signaturePath_admin ?? h.signaturePath ?? h.signature_url ?? '',
+      }]
+    }));
+
+    // เรียงล่าสุดก่อน
+    const safeToTime = (v) => {
+      if (!v) return 0;
+      const s = String(v).trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+        const [y,m,d] = s.split('-').map(Number);
+        return new Date(y, m - 1, d).getTime() || 0;
+      }
+      const t = new Date(s).getTime();
+      return isNaN(t) ? 0 : t;
+    };
+    fieldGroups.sort((A, B) => {
+      const a0 = A.items?.[0] || {};
+      const b0 = B.items?.[0] || {};
+      const ta = safeToTime(a0.updatedAt) || safeToTime(a0.createdAt) || safeToTime(a0.date);
+      const tb = safeToTime(b0.updatedAt) || safeToTime(b0.createdAt) || safeToTime(b0.date);
+      return tb - ta;
+    });
+
+    this.grouped = fieldGroups;
+    this._lastSnapshot = this._makeSnapshot(fieldGroups);
+  } catch (err) {
+    this.grouped = [];
+    console.error('โหลดข้อมูล booking ไม่สำเร็จ:', err);
   }
 
-  // 3) ระบบแจ้งเตือน + ตั้งค่า polling/refresh
-  this.lastSeenTimestamp =
-    parseInt(localStorage.getItem(ADMIN_LAST_SEEN_KEY) || '0', 10) || 0;
+  // 3) sync ต่อเนื่อง (จะโหลด users/ลายเซ็นซ้ำเมื่อจำเป็น และกรองเฉพาะที่รอหัวหน้า)
+  await this.fetchAndGroup();
 
-  try {
-    await this.fetchNotifications();
-  } catch (_) { /* เงียบได้ */ }
-
+  // 4) Notifications + Polling
+  this.lastSeenTimestamp = parseInt(localStorage.getItem(ADMIN_LAST_SEEN_KEY) || '0', 10) || 0;
+  await this.fetchNotifications();
   this.polling = setInterval(this.fetchNotifications, 30000);
-  this.refreshTimer = setInterval(this.fetchAndGroup, 8000);
 
+  // 5) รีเฟรช และ focus
+  this.refreshTimer = setInterval(this.fetchAndGroup, 8000);
   this._onVisibility = () => { if (!document.hidden) this.fetchAndGroup(); };
   document.addEventListener('visibilitychange', this._onVisibility);
 
+  // 6) ปิด dropdown เมื่อคลิคนอก
   document.addEventListener('mousedown', this.handleClickOutside);
 },
+
+
 
 
 
@@ -2455,9 +2067,16 @@ doc.text(`โทร ${data.tel || '-'}`, 430, 100);
   }
 }
 
-// --- Field detail popup helpers (module-scope, no `this`) ---
-// --- Field detail popup helpers (module-scope) ---
-function buildFieldFormPreviewV2(b = {}, secThaiName = '', secSignUrl = '', reqSignUrl = '') {
+
+// ===== Replace this in approve_field_super =====
+function buildFieldFormPreviewV2(
+  b = {},
+  secThaiName = '',
+  secSignUrl = '',
+  headThaiName = '',
+  headSignUrl = '',
+  reqSignUrl = ''   // ลายเซ็น "ผู้ขอใช้"
+) {
   const dash = v => {
     const s = (v ?? '').toString().trim();
     return s ? s : '-';
@@ -2466,13 +2085,13 @@ function buildFieldFormPreviewV2(b = {}, secThaiName = '', secSignUrl = '', reqS
   const fmtDate = s => {
     if (!s) return '-';
     const t = String(s).includes('T') ? String(s).split('T')[0] : String(s);
-    const [y, m, dd] = t.split('-').map(Number);
-    if (!y || !m || !dd) return t;
-    return `${String(dd).padStart(2,'0')}/${String(m).padStart(2,'0')}/${y + 543}`;
+    const [y,m,dd] = t.split('-').map(Number);
+    if(!y||!m||!dd) return t;
+    return `${String(dd).padStart(2,'0')}/${String(m).padStart(2,'0')}/${y+543}`;
   };
   const fmtTime = t => {
     if (!t) return '-';
-    const s = String(t).trim().replace(/\s*น\.?$/i, '');
+    const s = String(t).trim().replace(/\s*น\.?$/i,'');
     return /^\d{1,2}:\d{2}/.test(s) ? `${s.slice(0,5)} น.` :
            /^\d{1,2}:\d{2}:\d{2}$/.test(s) ? `${s.slice(0,5)} น.` : `${s} น.`;
   };
@@ -2480,7 +2099,6 @@ function buildFieldFormPreviewV2(b = {}, secThaiName = '', secSignUrl = '', reqS
   const tStart = b?.since_time || b?.startTime || '';
   const tEnd   = b?.until_thetime || b?.endTime   || '';
 
-  // แสดงจุดเลือก/ไม่เลือก (●/○) พร้อม fallback อัตโนมัติ
   const ynPack = (v, fallbackOn) => {
     const s = String(v ?? '').trim().toLowerCase();
     if (['yes','true','1','เลือก','อนุญาต','allow','allowed'].includes(s)) {
@@ -2494,7 +2112,7 @@ function buildFieldFormPreviewV2(b = {}, secThaiName = '', secSignUrl = '', reqS
     return { yChar:'○', yOn:false, nChar:'○', nOn:false };
   };
 
-  const hasU = [b?.turnon_air,b?.turnoff_air,b?.turnon_lights,b?.turnoff_lights,b?.other,b?.restroom]
+  const hasU = [b?.turnon_air,b?.turnoff_air,b?.turnon_lights,b?.turnoff_lights,b?.other]
     .some(v => String(v ?? '').trim() && String(v ?? '').trim() !== '-');
   const hasF = [b?.amphitheater,b?.need_equipment]
     .some(v => String(v ?? '').trim() && String(v ?? '').trim() !== '-');
@@ -2503,12 +2121,19 @@ function buildFieldFormPreviewV2(b = {}, secThaiName = '', secSignUrl = '', reqS
   const f = ynPack(b?.facilityRequest, hasF ? true : undefined);
 
   const restroomText = (() => {
-    const raw = (b?.restroom ?? '').toString().trim().toLowerCase();
+    const raw = (b?.restroom ?? b?.restroom_text ?? '').toString().trim().toLowerCase();
     if (!raw) return '-';
     if (['yes','true','1','use','ใช้','ใช้งาน','ต้องการ','ต้องการใช้งาน'].includes(raw)) return 'ต้องการใช้งาน';
     if (['no','false','0','not use','ไม่ใช้','ไม่ใช้งาน','ไม่ต้องการ','ไม่ต้องการใช้งาน'].includes(raw)) return 'ไม่ต้องการใช้งาน';
-    return b.restroom;
+    return raw;
   })();
+
+  const sc = b?.secretary_choice || {};
+  const sec_other_chk    = !!sc.other_checked;
+  const sec_other_reason = d(b?.reason_admin).replace(/^-$/,'');
+
+  const todayIso = new Date().toISOString().slice(0,10);
+  const todayTH  = fmtDate(todayIso);
 
   return `
   <div class="mfu-form">
@@ -2516,6 +2141,7 @@ function buildFieldFormPreviewV2(b = {}, secThaiName = '', secSignUrl = '', reqS
       .mfu-form{
         font-family:'THSarabunNew','Sarabun','Noto Sans Thai',system-ui,sans-serif;
         color:#111; line-height:1.35;
+        -webkit-font-smoothing: antialiased; text-rendering: geometricPrecision;
       }
       .mfu-head{text-align:center;margin-bottom:10px;}
       .mfu-title{font-size:22px;font-weight:700;}
@@ -2524,17 +2150,7 @@ function buildFieldFormPreviewV2(b = {}, secThaiName = '', secSignUrl = '', reqS
 
       .mfu-sec{margin-top:14px;font-size:16px;display:block;}
       .mfu-sec h4{margin:0;padding:0 0 10px;line-height:1.35;font-weight:700;}
-      .mfu-par{text-indent:2em;margin-top:6px;}
-
-      /* list rows (ไม่ใช้ตาราง เพื่อให้ขึ้นบรรทัดใหม่ดีใน PDF) */
-      .mfu-list{list-style:none;margin:4px 0 0;padding:0;}
-      .mfu-list li{padding:6px 0;border-bottom:1px dashed #e5e7eb;}
-      .mfu-list li:first-child{border-bottom:0;}
-      .mfu-list li:last-child{border-bottom:0;}
-      .mfu-list b{display:inline-block;min-width:210px;white-space:nowrap;color:#111;}
-      .mfu-list-util b{width:165px;min-width:166px;}
-      /* ทำให้บรรทัด “อาคาร” แคบลงเฉพาะแถวนี้ */
-      .mfu-list li.tight b{ min-width:60px; }
+      .mfu-spacer{height:8px;display:block;}
 
       .mfu-yn{margin:4px 0 6px;display:flex;gap:18px;}
       .mfu-yn .choice{display:inline-flex;align-items:center;gap:6px;font-size:16px;color:#374151;}
@@ -2542,56 +2158,114 @@ function buildFieldFormPreviewV2(b = {}, secThaiName = '', secSignUrl = '', reqS
       .mfu-yn .choice.on{color:#111;font-weight:700;}
       .mfu-yn .choice.on .dot{color:currentColor;}
 
+      .mfu-list{list-style:none; margin:4px 0 0; padding:0;}
+      .mfu-list li{padding:6px 0; border-bottom:1px dashed #e5e7eb;}
+      .mfu-list li:last-child{border-bottom:0;}
+      .mfu-list b{display:inline-block; min-width:210px; white-space:nowrap; color:#111;}
+
+      .mfu-list-loc li:first-child b{ min-width:130px; }
+      .mfu-list-util b{ width:165px; min-width:166px; }
+      .mfu-list li:first-child b{ min-width:60px; }
+
+      @media (max-width:720px){
+        .mfu-list li:first-child b{ min-width:110px; }
+      }
+
+      .mfu-par{text-indent:2em;margin-top:6px;}
       .mfu-boxes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:12px;}
       @media (max-width:720px){.mfu-boxes{grid-template-columns:1fr;}}
-      .mfu-box{border:1px solid #333;padding:10px 12px;min-height:200px;position:relative;}
+      .mfu-box{border:1px solid #d1d5db;border-radius:12px;background:#fff;padding:12px 14px;min-height:200px;position:relative;}
+      .mfu-box.locked input[disabled],
+      .mfu-box.locked textarea[disabled]{background:#fff !important;color:#111 !important;opacity:1 !important;}
       .mfu-box h5{margin:0 0 8px;font-size:16px;font-weight:700;text-align:center;}
-      .mfu-box .row{display:flex;align-items:center;gap:8px;margin:10px 0;min-height:36px;}
-      .mfu-input{flex:1;min-width:0;padding:6px 8px;border:1px solid #cbd5e1;border-radius:6px;font:inherit;}
+      .mfu-box .row{display:flex;align-items:center;gap:8px;margin:10px 0;}
+      .mfu-input{flex:1;min-width:0;padding:6px 8px;border:1px solid #cbd5e1;border-radius:6px;font:inherit;background:#fff;}
       .row.center{justify-content:center;}
       .paren{opacity:.85;}
-      .mfu-box .sig-row{ position:relative; min-height:56px; display:grid; }
-      .mfu-box .sigimg{ position:absolute; top:-6px; left:0; right:0; margin-left:auto; margin-right:auto; max-height:48px; width:auto; opacity:.95; pointer-events:none; }
+      .mfu-box .sig-row{ position:relative; min-height:64px; display:grid; }
+      .mfu-box .sigimg{ position:absolute; top:8px; left:0; right:0; margin-left:auto; margin-right:auto; max-height:52px; width:auto; opacity:.95; pointer-events:none; }
 
-      .mfu-note{margin-top:8px;font-size:14px;opacity:.9;}
-
-      /* ===================== SIGNATURE LINE (แก้ให้ใช้ได้ตอนทำ PDF) ===================== */
-      .mfu-sign{ display:flex; justify-content:flex-end; padding-right:20px; margin-top:10px; }
-      .mfu-sign.mfu-signline{
-        --sign-width: clamp(210px,36vw,260px);
-        display:grid;
-        grid-template-columns:auto var(--sign-width);
-        column-gap:6px;
-        align-items:center;
-        margin-left:auto;
-        text-align:right;
+      /* โหมดพิมพ์ */
+      .mfu-form.pdf-print #sec_other_reason,
+      .mfu-form.pdf-print #head_other_reason{
+        border: 0 !important; outline: 0 !important; box-shadow: none !important;
+        background: transparent !important; display: inline !important; width: auto !important; min-width: 0 !important;
+        height: auto !important; padding: 0 !important; margin-left: 6px !important; line-height: 1.35 !important;
+        vertical-align: baseline !important; -webkit-text-fill-color: #111 !important; color: #111 !important;
+        white-space: normal; word-break: break-word;
       }
-      .mfu-sign.mfu-signline .lab{ white-space:nowrap; }
-      .mfu-sign.mfu-signline .dots{
-        height:1.15em;
-        border-bottom:1px dotted #888;
-        position:relative;
-      }
+      .mfu-form.pdf-print .mfu-box .row{ align-items: baseline !important; }
 
-      .mfu-sign.mfu-signline .sigimg{
-      position:absolute; top:-34px; left:0; right:0; margin:0 auto;
-      max-height:48px; width:auto; opacity:.95; pointer-events:none;
+      /* ช่อง "อื่นๆ" ของเลขาฯ */
+      #sec_other_reason{
+        border: 0 !important; outline: 0 !important; box-shadow: none !important; background: transparent !important;
+        display: inline !important; width: auto !important; min-width: 0 !important; height: auto !important;
+        padding: 0 !important; margin-left: 6px !important; line-height: 1.35 !important; vertical-align: baseline !important;
+        -webkit-text-fill-color: #111 !important; color: #111 !important; white-space: normal; word-break: break-word;
       }
 
-      .mfu-sign.mfu-signline .name,
-      .mfu-sign.mfu-signline .role{
-        grid-column:2;
-        text-align:center;
-        display:block;
-        margin-top:6px;
-      }
-        .mfu-sign.mfu-signline .date{
-        grid-column:2;
-        text-align:center;
-        display:block;
-        margin-top:6px;
-      }
-      /* ================================================================================ */
+      /* —— ลายเซ็นผู้ขอใช้งาน (จัดกลาง + เส้นประ) —— */
+      /* —— ลายเซ็นผู้ขอใช้งาน (ชิดขวา + ติดเส้นประ) —— */
+.mfu-sign{
+  /* ปรับเลขนี้ได้ถ้าต้องการ */
+  --sig-max: 360px;       /* ความกว้างสูงสุดของบรรทัดลายเซ็น */
+  --sig-gap: 10px;        /* ช่องว่างระหว่าง "ลงชื่อ" กับเส้นประ */
+  --sig-label-w: 54px;    /* ความกว้างคำว่า "ลงชื่อ" (ปรับตามฟอนต์) */
+
+  margin-top:8px;
+  display:flex;
+  flex-direction:column;
+  align-items:flex-end;        /* ทั้งบล็อกชิดขวา */
+}
+.mfu-sign .sig-canvas{
+  position:relative;
+  height:56px;
+  max-width:var(--sig-max);
+  width:100%;
+  margin:0 0 6px auto;         /* ชิดขวา */
+}
+.mfu-sign .sig-canvas .sigimg{
+  position:absolute;
+  left:50%;
+  transform:translateX(-50%);
+  bottom:-2px;                 /* ดันให้แนบเส้นประ */
+  max-height:46px;
+  width:auto;
+  opacity:.95;
+  pointer-events:none;
+}
+
+/* บรรทัด "ลงชื่อ ......" */
+.mfu-sign .sigline{
+  display:flex;
+  align-items:center;
+  gap:var(--sig-gap);
+  max-width:var(--sig-max);
+  width:100%;
+  margin:0 0 6px auto;         /* ชิดขวา */
+}
+.mfu-sign .sigline .label{
+  width:var(--sig-label-w);    /* ทำให้ความกว้าง label คงที่ */
+  white-space:nowrap;
+}
+.mfu-sign .sigline .dots{
+  flex:1;
+  height:0;
+  border-bottom:1.5px dotted #9ca3af;
+}
+
+/* 3 บรรทัดหลังให้อยู่ "กึ่งกลางของพื้นที่เส้นประ" */
+.mfu-sign .name,
+.mfu-sign .role,
+.mfu-sign .date{
+  width:var(--sig-max);
+  max-width:100%;
+  margin-left:auto;                           /* ตำแหน่งเดียวกับบรรทัดลายเซ็น */
+  padding-left:calc(var(--sig-label-w) + var(--sig-gap)); /* เว้นซ้ายเท่ากับพื้นที่คำว่า "ลงชื่อ" */
+  text-align:center;                          /* จัดกลางภายในพื้นที่เส้นประ */
+}
+
+
     </style>
 
     <div class="mfu-head">
@@ -2616,11 +2290,11 @@ function buildFieldFormPreviewV2(b = {}, secThaiName = '', secSignUrl = '', reqS
       </div>
     </div>
 
-    <!-- 1) ขออนุมัติใช้สถานที่ -->
+    <!-- 1) รายละเอียดสถานที่ -->
     <div class="mfu-sec">
       <h4>1. ขออนุมัติใช้สถานที่</h4>
-      <ul class="mfu-list" style="margin-left:31px;">
-        <li class="tight"><b>อาคาร:</b> ${d(b?.name)}</li>
+      <ul class="mfu-list" style="margin-left: 31px;">
+        <li class="no-sep"><b>อาคาร:</b> ${d(b?.name)}</li>
         <li><b>ตำแหน่งพื้นที่/ห้องที่ต้องการใช้:</b> ${dash(b?.zone)}</li>
       </ul>
     </div>
@@ -2632,8 +2306,8 @@ function buildFieldFormPreviewV2(b = {}, secThaiName = '', secSignUrl = '', reqS
         <span class="choice yes ${u.yOn ? 'on' : ''}"><span class="dot">${u.yChar}</span> เลือก</span>
         <span class="choice no  ${u.nOn ? 'on' : ''}"><span class="dot">${u.nChar}</span> ไม่เลือก</span>
       </div>
-      <ul class="mfu-list mfu-list-util" style="margin-left:31px;">
-        <li><b>2.1 ไฟฟ้าส่องสว่าง:</b> ตั้งแต่ ${fmtTime(b?.turnon_lights)} - ${fmtTime(b?.turnoff_lights)}</li>
+      <ul class="mfu-list mfu-list-util" style="margin-left: 31px;">
+        <li class="no-sep"><b>2.1 ไฟฟ้าส่องสว่าง:</b> ตั้งแต่ ${fmtTime(b?.turnon_lights)} - ${fmtTime(b?.turnoff_lights)}</li>
         <li><b>2.2 สุขา:</b> ${restroomText}</li>
       </ul>
     </div>
@@ -2645,187 +2319,62 @@ function buildFieldFormPreviewV2(b = {}, secThaiName = '', secSignUrl = '', reqS
         <span class="choice ${f.yOn ? 'on' : ''}"><span class="dot">${f.yOn ? '●' : '○'}</span> เลือก</span>
         <span class="choice ${f.nOn ? 'on' : ''}"><span class="dot">${f.nOn ? '●' : '○'}</span> ไม่เลือก</span>
       </div>
-      <ul class="mfu-list" style="margin-left:31px;">
-        <li><b>3.1 ดึงอัฒจันทร์ภายในอาคารเฉลิมพระเกียรติฯ:</b> ${dash(b?.amphitheater)}</li>
-        <li><b>3.2 อุปกรณ์กีฬา (โปรดระบุ):</b> ${dash(b?.need_equipment)}</li>
+      <ul class="mfu-list" style="margin-left: 31px;">
+        <li class="no-sep"><b>3.1 ดึงอัฒจันทร์ภายในอาคารเฉลิมพระเกียรติฯ:</b> ${dash(b?.amphitheater)}</li>
+        <li><b>3.2 อุปกรณ์กีฬา (โปรดระบุ):</b> ${d(b?.need_equipment)}</li>
       </ul>
     </div>
 
-    <div class="mfu-note">
-      *ต้องได้รับการอนุมัติจากรองอธิการบดีผู้กำกับดูแล และแนบเอกสารโครงการ/กำหนดการ/ตารางเรียน
+    <!-- ลายเซ็นผู้ขอ + วันที่ (อยู่กึ่งกลาง) -->
+    <div class="mfu-sign">
+      <div class="sig-canvas">
+        ${reqSignUrl ? `<img class="sigimg" src="${reqSignUrl}" alt="signature">` : ``}
+      </div>
+      <div class="sigline">
+        <div class="label">ลงชื่อ</div>
+        <div class="dots"></div>
+      </div>
+      <div class="name">( ${d(b?.username_form || b?.requester)} )</div>
+      <div class="role">ผู้รับผิดชอบ</div>
+      <div class="date">วันที่ ${fmtDate(b?.createdAt || b?.date)}</div>
     </div>
 
-    <!-- ลายเซ็นผู้ยื่นคำขอ (แก้ให้ขึ้นคนละบรรทัดตอนทำ PDF) -->
-    <div class="mfu-sign mfu-signline" style = "margin-top: 50px" >
-      <span class="lab">ลงชื่อ</span>
-     <span class="dots">
-        ${reqSignUrl ? `<img class="sigimg" src="${reqSignUrl}" crossorigin="anonymous" alt="signature">` : ``}
-      </span>
-      <span class="name">( ${d(b?.username_form || b?.requester)} )</span>
-      <span class="role">ผู้รับผิดชอบ</span>
-      <span class="date">วันที่ ${fmtDate(b?.createdAt || b?.date)}</span>
-    </div>
-
-    <!-- กล่อง 1 และ 2 -->
     <div class="mfu-boxes">
-      <div class="mfu-box">
+      <!-- กล่อง 1: เลขาฯ -->
+      <div class="mfu-box locked">
         <h5>1. เลขานุการศูนย์กีฬา</h5>
         <div class="row">
-          <label class="chk" style="padding-left:30px"><span>เรียน หัวหน้าศูนย์กีฬาฯ</span></label>
+          <label class="chk" style="padding-left: 30px"><span>เรียน หัวหน้าศูนย์กีฬาฯ</span></label>
         </div>
         <div class="row">
-          <label class="chk"><input type="checkbox" id="sec_other_chk" /> <span>อื่นๆ : </span></label>
-          <input type="text" id="sec_other_reason" class="mfu-input" placeholder="โปรดระบุ" disabled />
+          <label class="chk">
+            <input type="checkbox" id="sec_other_chk" ${sec_other_chk ? 'checked' : ''} disabled>
+            <span>อื่นๆ :</span>
+          </label>
+          <span id="sec_other_reason">${sec_other_reason || ''}</span>
         </div>
         <div class="row sig-row">
-          ${secSignUrl ? `<img class="sigimg" src="${secSignUrl}" crossorigin="anonymous" alt="signature">` : ``}
+          ${secSignUrl ? `<img class="sigimg" src="${secSignUrl}" alt="signature">` : ``}
         </div>
         <div class="row"><span class="paren">(</span><span style="flex:1;text-align:center;">${d(secThaiName)}</span><span class="paren">)</span></div>
-        <div class="row center"><span>วันที่</span><span class="date">${fmtDate(b?.createdAt || b?.date)}</span></div>
+        <div class="row center"><span>วันที่</span><span class="date">${fmtDate(b?.approvedAt || b?.createdAt || b?.date)}</span></div>
       </div>
 
+      <!-- กล่อง 2: หัวหน้า -->
       <div class="mfu-box">
         <h5>2. หัวหน้าศูนย์กีฬา</h5>
         <div class="row">
-          <label class="chk"><input type="checkbox" id="head_to_vice" disabled /><span>เห็นชอบ</span></label>
+          <label class="chk"><input type="checkbox" id="head_to_vice"><span>เห็นชอบ</span></label>
         </div>
         <div class="row">
-          <label class="chk"><input type="checkbox" id="head_other_chk" disabled /><span>อื่นๆ</span></label>
+          <label class="chk"><input type="checkbox" id="head_other_chk"><span>อื่นๆ :</span></label>
           <input type="text" id="head_other_reason" class="mfu-input" placeholder="โปรดระบุ" disabled />
         </div>
-        <div class="row sig-row"><span class="fill full"></span></div>
-        <div class="row"><span class="paren">(</span><span style="flex:1;text-align:center;"></span><span class="paren">)</span></div>
-        <div class="row center"><span>วันที่</span><span class="date">${fmtDate(b?.createdAt || b?.date)}</span></div>
-      </div>
-    </div>
-  </div>`;
-}
-
-
-
-
-// === Equipment approve preview (HTML แสดงใน Swal) ===
-function buildEquipmentApprovePreviewHTML(ctx) {
-  const esc = s =>
-    String(s ?? '-')
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
-
-  const todayStr = new Intl.DateTimeFormat('th-TH-u-nu-latn', {
-    timeZone: 'Asia/Bangkok',
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  }).format(new Date());
-
-  const splitRange = (s) => {
-    if (!s) return ['-', '-'];
-    const p = String(s).split(' - ');
-    return [p[0] || '-', p[1] || '-'];
-  };
-  const [sinceStr, uptoStr] = splitRange(ctx.dateRange);
-
-  const rows = (ctx.rows || [])
-    .map(
-      (r) => `
-        <tr>
-          <td class="c">${r.idx}</td>
-          <td class="l">${esc(r.name)}</td>
-          <td class="c">${esc(r.quantity)}</td>
-          <td class="l">${esc(r.remark || '-')}</td>
-        </tr>
-      `
-    )
-    .join('');
-
-  return `
-  <div class="eqp-preview">
-    <div class="eqp-head">
-      <div class="t1">แบบฟอร์มการยืมอุปกรณ์/วัสดุ/ครุภัณฑ์ ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง</div>
-      <div class="t2">โทร 0-5391-7820 และ 0-5391-7821 | E-mail: sport-complex@mfu.ac.th</div>
-    </div>
-
-    <div class="eqp-meta">
-      <div class="right">
-        <div>ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง</div>
-        <div>วันที่ทำรายการ ${esc(ctx.dateBorrow)}</div>
-        <div>เวลาที่ทำรายการ ${esc(ctx.timeBorrow)}</div>
-      </div>
-    </div>
-
-    <div class="date" style="margin-top:30px">วันที่ ${todayStr}</div>
-    <div style="margin-top:20px">ส่วนที่1 สำหรับผู้ขอใช้บริการ</div>
-
-    <!-- ก้อนย่อหน้า -->
-    <section class="eqp-section eqp-section--par">
-      <div class="eqp-par">
-        ข้าพเจ้า ${esc(ctx.requester)}
-        รหัสนักศึกษา/พนักงาน ${esc(ctx.requesterId)}
-        ${ctx.tel ? `โทร ${esc(ctx.tel)}` : ''}
-        มีความประสงค์ขอยืมอุปกรณ์/วัสดุ/ครุภัณฑ์ ของศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง
-        เพื่อใช้ในงาน ${esc(ctx.reason)} สถานที่ใช้งาน ${esc(ctx.location)}
-        ระหว่างวันที่ ${esc(sinceStr)} ถึงวันที่ ${esc(uptoStr)}
-      </div>
-    </section>
-
-    <!-- ก้อนตาราง -->
-    <section class="eqp-section eqp-section--table">
-      <table class="eqp-table">
-        <thead>
-          <tr>
-            <th style="width:72px">ลำดับ</th>
-            <th>รายการ</th>
-            <th style="width:100px">จำนวน</th>
-            <th style="width:260px">หมายเหตุ</th>
-          </tr>
-        </thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </section>
-
-    <!-- ก้อนล่าง: ลายเซ็น + กล่อง -->
-    <div class="eqp-bottom">
-      <div class="eqp-sign">
-        <div class="sig sig-line">
-          <span class="lab">ลงชื่อ</span>
-          <span class="line"><span class="name">${esc(ctx.requester)}</span></span>
-          <span class="role">ผู้ยืม</span>
+        <div class="row sig-row">
+          ${headSignUrl ? `<img class="sigimg" src="${headSignUrl}" alt="signature">` : ``}
         </div>
-        <div class="date">วันที่ ${todayStr}</div>
-      </div>
-
-      <div class="eqp-boxes">
-        <div class="box">
-          <div class="title">ผลการดำเนินการ/ผลการปฏิบัติงาน</div>
-          <div class="dotrow"></div>
-          <div class="dotrow"></div>
-          <div class="sign-inline">
-            <span class="lab">ลงชื่อ</span>
-            <span class="dotfill"></span>
-            <span class="role">ผู้ส่งมอบ</span>
-          </div>
-          <div class="date">วันที่........../........../..........</div>
-        </div>
-
-        <div class="box">
-          <div class="title">ผลการดำเนินการ/ผลการปฏิบัติงาน</div>
-          <div class="dotrow"></div>
-          <div class="dotrow"></div>
-          <div class="sign-inline">
-            <span class="lab">ลงชื่อ</span>
-            <span class="dotfill"></span>
-            <span class="role">ผู้รับคืน</span>
-          </div>
-          <div class="date">วันที่........../........../..........</div>
-        </div>
-      </div>
-
-      <div style="margin-top:20px">
-        *หมายเหตุ หากอุปกรณ์/วัสดุ/ครุภัณฑ์ เกิดการชำรุดเสียหายในระหว่างที่ผู้ยืมเป็นผู้รับผิดชอบ
-        ผู้ยืมจะต้องชดใช้ค่าเสียหายที่เกิดขึ้นทั้งหมด
+        <div class="row"><span class="paren">(</span><span style="flex:1;text-align:center;">${d(headThaiName)}</span><span class="paren">)</span></div>
+        <div class="row center"><span>วันที่</span><span class="date">${todayTH}</span></div>
       </div>
     </div>
   </div>`;
@@ -2855,8 +2404,7 @@ function buildEquipmentApprovePreviewHTML(ctx) {
   font-weight:600; padding:7px 22px; border-radius:10px; cursor:pointer;
   transition:background .16s;
 }
-.history-filter button.active,
-.history-filter button:hover{
+.history-filter button.active,.history-filter button:hover{
   background:#1d4ed8; color:#fff; border-color:#1d4ed8;
 }
 
@@ -2866,7 +2414,6 @@ function buildEquipmentApprovePreviewHTML(ctx) {
 .item-name{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .status-group{ display:flex; gap:8px; justify-content:flex-end; }
 
-/* Buttons */
 .approve-btn,.cancel-btn,.detail-btn{
   padding:4px 10px; color:#fff; border:none; border-radius:6px; cursor:pointer; font-size:.8rem; transition:background-color .3s;
 }
@@ -2874,11 +2421,11 @@ function buildEquipmentApprovePreviewHTML(ctx) {
 .cancel-btn{ background:#f54c4f; margin-left:10px; } .cancel-btn:hover{ background:#7a292d; }
 .detail-btn{ background:#304674; } .detail-btn:hover{ background:#2953d1; }
 
-/* Sidebar overlay */
+/* ===== Sidebar overlay ===== */
 .sidebar-overlay{ position:fixed; inset:0; background:rgba(0,0,0,.16); z-index:1100; }
 .sidebar{ z-index:1200; }
 
-/* Main table */
+/* ===== Main table ===== */
 .table-container{ padding:0 70px; overflow-x:auto; }
 .approve-table{
   width:100%; border-collapse:collapse; background:#fff; border-radius:12px;
@@ -2888,7 +2435,7 @@ function buildEquipmentApprovePreviewHTML(ctx) {
 .approve-table th{ background:#1e3a8a; color:#fff; font-weight:700; }
 .approve-table tr:last-child td{ border-bottom:none; }
 
-/* Notifications */
+/* ===== Notifications ===== */
 .notification-backdrop{ position:fixed; inset:0; background:transparent; z-index:1001; }
 .notification-dropdown{
   position:absolute; right:0; top:38px; background:#fff; border-radius:18px 0 18px 18px;
@@ -2896,7 +2443,7 @@ function buildEquipmentApprovePreviewHTML(ctx) {
   min-width:330px; max-width:370px; max-height:420px; overflow-y:auto; z-index:1002; padding:0; border:none;
 }
 
-/* Mobile (<=600px) */
+/* ===== Mobile (<=600px) ===== */
 @media (max-width:600px){
   .item-name{ white-space:normal !important; word-break:break-word !important; overflow:visible !important; text-overflow:unset !important; max-width:100%; display:block !important; font-weight:500; text-align:center; margin-bottom:4px; }
   .histbody{ display:flex; flex-direction:column; align-items:center; padding:14px 0 0 !important; width:100vw; overflow-x:auto !important; }
@@ -2905,194 +2452,121 @@ function buildEquipmentApprovePreviewHTML(ctx) {
   .hist-grid{ width:95vw; max-width:440px; padding:0; gap:1rem; align-items:center; }
   .hist-card{ min-width:95vw; max-width:440px; margin:0 auto; box-sizing:border-box; }
   .hist-row{ flex-direction:column !important; align-items:center !important; width:100% !important; gap:.5rem; justify-content:center !important; }
+
+  /* ให้คอนเทนเนอร์เลื่อนแนวนอน */
+  .table-container{
+    padding: 0 8px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-x;
+  }
+
+  /* บังคับความกว้างของตารางและไม่ให้คอลัมน์ห่อบรรทัด */
+  .approve-table{
+    width: max-content;     /* ไม่บีบให้เท่าหน้าจอ */
+    min-width: 760px;       /* ปรับได้ตามที่เห็นเหมาะ */
+    table-layout: fixed;    /* ช่วยกันคอลัมน์ซ้อน */
+  }
+  .approve-table th,
+  .approve-table td{
+    white-space: nowrap;    /* ❗ ไม่ให้ข้อความขึ้นบรรทัดใหม่ */
+  }
+
+  /* กำหนดความกว้างขั้นต่ำแต่ละคอลัมน์ (กันปุ่ม/เวลาแตกบรรทัด) */
+  .approve-table th:nth-child(1), .approve-table td:nth-child(1){ /* Transaction date */
+    min-width: 140px;
+  }
+  .approve-table th:nth-child(2), .approve-table td:nth-child(2){ /* Type */
+    min-width: 90px;
+  }
+  .approve-table th:nth-child(3), .approve-table td:nth-child(3){ /* Field */
+    min-width: 240px;
+    max-width: 260px;       /* ถ้ายาวมากให้ตัดด้วย … */
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .approve-table th:nth-child(4), .approve-table td:nth-child(4){ /* Time */
+    min-width: 140px;
+  }
+  .approve-table th:nth-child(5), .approve-table td:nth-child(5){ /* Actions */
+    min-width: 180px;
+  }
+  .approve-table th:nth-child(6), .approve-table td:nth-child(6){ /* Detail */
+    min-width: 120px;
+  }
+
+  /* กันปุ่มขึ้นบรรทัดใหม่ */
+  .approve-btn,
+  .cancel-btn,
+  .detail-btn{
+    white-space: nowrap;
+    padding: 6px 10px;      /* ย่อ padding นิดหน่อยให้พอดีคอลัมน์ */
+  }
+
+
 }
-
 </style>
-
 
 <style>
 @import '../css/style.css';
 
-.swal-center-text{ text-align:center !important; }
-.swal-center-title{ text-align:center !important; }
+/* —— SweetAlert base —— */
+.swal-center-text { text-align:center !important; }
+.swal-center-title { text-align:center !important; }
 
-/* ===== SweetAlert detail base ===== */
-.swal2-popup .swal-detail-wrap{ max-width:min(1240px,96vw); overflow-x:auto; }
+/* ===== SweetAlert detail tables (ใช้กับปุ่ม "รายละเอียด") ===== */
+.swal2-popup .swal-detail-wrap{
+  max-width:min(1240px,96vw);
+  overflow-x:auto;
+}
 .swal2-popup .swal-detail-actions{ text-align:center; margin-top:16px; }
 .swal2-popup #pdf-btn,
 .swal2-popup #attach-btn{
-  background:#213555; color:#fff; padding:8px 18px; border-radius:8px; border:none; cursor:pointer; margin:0 6px;
+  background:#213555;color:#fff;padding:8px 18px;border-radius:8px;border:none;cursor:pointer;margin:0 6px;
 }
 .swal2-popup #attach-btn{ background:#3a7ca5; }
 
-/* 2-col table (label/value) */
 .swal2-popup .swal-detail-table{
-  width:min(1200px,96vw);
-  border-collapse:collapse;
-  margin:0 auto;
-  font-size:.98rem;
+  width:min(1200px,96vw); border-collapse:collapse; margin:0 auto; font-size:.98rem;
 }
 .swal2-popup .swal-detail-table tbody th{
-  text-align:left; white-space:nowrap; background:#f7f9fc; border:1px solid #e6e9f2; padding:8px 12px; width:180px;
-  font-weight:700; color:#1f2a44;
+  text-align:left; white-space:nowrap; background:#f7f9fc;
+  border:1px solid #e6e9f2; padding:8px 12px; width:180px; font-weight:700; color:#1f2a44;
 }
 .swal2-popup .swal-detail-table tbody td{
   border:1px solid #e6e9f2; padding:8px 12px; color:#1f2a44; word-break:break-word;
 }
 
-/* Equipment table */
+/* ตารางอุปกรณ์ */
 .swal2-popup .swal-detail-table.items thead th{
-  background:#213555; color:#fff; padding:8px 10px; border:1px solid #e6e9f2; text-align:center; font-weight:700;
+  background:#213555;color:#fff;padding:8px 10px;border:1px solid #e6e9f2;text-align:center;font-weight:700;
 }
 .swal2-popup .swal-detail-table.items tbody td{ border:1px solid #e6e9f2; padding:8px 10px; }
 .swal2-popup .swal-detail-table.items tbody td.c{ text-align:center; }
+.swal2-popup .swal-detail-table.items thead th:nth-child(1){ width:72px; }
+.swal2-popup .swal-detail-table.items thead th:nth-child(3){ width:90px; }
+.swal2-popup .swal-detail-table.items thead th:nth-child(5){ width:130px; }
 
-.swal2-popup .swal-detail-table.items thead th:nth-child(1){ width:72px; } /* ลำดับ */
-.swal2-popup .swal-detail-table.items thead th:nth-child(3){ width:90px; } /* จำนวน */
+/* dialog สำหรับรายละเอียดอุปกรณ์ */
+.swal2-popup.swal-equipment{ max-width:1100px !important; padding:28px 26px !important; }
+.swal2-popup.swal-equipment .swal-detail-wrap{ max-width:1080px; }
+.swal2-popup.swal-equipment .swal-detail-table,
+.swal2-popup.swal-equipment .swal-detail-table.items{ width:1080px; }
 
-/* Dialog sizing – wide */
-.swal2-popup.swal-wide{
-  width:auto !important;
-  max-width:min(1100px,98vw) !important;
-  padding:28px 26px !important;
-}
-@media (min-width:601px){
-  .swal2-popup.swal-wide{ max-width:920px !important; padding:24px 18px !important; }
-  .swal2-popup .swal-detail-wrap{ max-width:920px; }
-  .swal2-popup .swal-detail-table,
-  .swal2-popup .swal-detail-table.items{ width:920px; }
-}
 @media (max-width:600px){
   .swal2-popup.swal-wide{ max-width:96vw !important; }
+  .swal2-popup .swal-detail-table,
+  .swal2-popup .swal-detail-table.items{ width:94vw; }
+  .swal2-popup .swal-detail-wrap{ overflow-x:auto; }
+  .swal2-popup .swal-detail-table{ width:auto; min-width:540px; }
+  .swal2-popup .swal-detail-table.items{ width:auto; min-width:640px; }
+  .swal2-popup .swal-detail-table tbody th{ width:130px; }
 }
 
-/* Optional: specific sizing for equipment dialog */
-.swal2-popup.swal-equipment{
-  max-width:1100px !important;
-  padding:28px 26px !important;
-}
-@media (max-width:600px){
-  .swal2-popup.swal-equipment{ max-width:96vw !important; width:auto !important; }
-}
-
-/* Utilities */
+/* ป้องกันวันที่/เวลาแตกบรรทัด */
 .swal2-popup .nowrap{ white-space:nowrap !important; word-break:normal !important; }
-.swal2-textarea{ min-height:110px !important; }
 
-/* ===== Approve Form dialog container tweaks ===== */
-.swal2-popup.swal-form-approve{
-  width:auto !important;
-  max-width:1100px !important;
-  padding:26px 26px !important;
-  border-radius:12px !important;
-}
-.swal2-popup.swal-form-approve .swal2-html-container{
-  max-height:70vh;
-  overflow:auto;
-  margin:10px 0 0 !important;
-}
-.swal2-popup.swal-form-approve .swal2-actions{ margin:18px 0 0 !important; }
-
-/* ===== MFU form (from buildFieldFormPreviewV2) ===== */
-.mfu-form{
-  font-family:'THSarabunNew','Sarabun','Noto Sans Thai',system-ui,sans-serif;
-  color:#111; line-height:1.35;
-}
-.mfu-head{ text-align:center; margin-bottom:10px; }
-.mfu-title{ font-size:22px; font-weight:700; }
-.mfu-sub{ font-size:14px; margin-top:4px; }
-
-.mfu-meta{
-  display:flex; gap:18px; flex-wrap:wrap;
-  font-size:16px; margin:10px 0 4px;
-}
-
-.mfu-sec{ margin-top:12px; font-size:16px; }
-.mfu-sec h4{ margin:0 0 6px; font-weight:700; }
-.mfu-par{ text-indent:2em; margin-top:6px; }
-
-/* ตาราง key/value พื้นฐาน (ค่าจริงถูก override ด้านล่างด้วย --kv-left) */
-.mfu-kv{
-  display:grid;
-  grid-template-columns: 200px 1fr;
-  border:1px solid #e6e9f2;
-  border-bottom:0;
-}
-.mfu-kv>div{
-  padding:8px 10px;
-  border-bottom:1px solid #e6e9f2;
-  white-space:normal;
-  word-break:break-word;
-  overflow-wrap:anywhere;
-  line-height:1.5;
-}
-.mfu-kv .k{
-  background:#f7f9fc;
-  font-weight:700;
-  white-space:nowrap;
-}
-
-/* เลือก/ไม่เลือก */
-.mfu-yn{ margin:6px 0 2px; }
-.mfu-yn span{ margin-right:18px; }
-
-/* ลายเซ็น + กล่อง 1–3 */
-.mfu-signrow{ display:flex; gap:24px; justify-content:space-between; margin-top:14px; }
-.mfu-sign{ flex:1; }
-.mfu-dots{ display:inline-block; min-width:210px; border-bottom:1px dotted #888; transform:translateY(-3px); }
-
-.mfu-boxes{ display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-top:12px; }
-.mfu-box{ border:1px solid #333; padding:10px 12px; min-height:170px; position:relative; }
-.mfu-box h5{ margin:0 0 8px; font-size:16px; font-weight:700; text-align:center; }
-.mfu-box .line{ margin:8px 0; }
-
-.mfu-note{ margin-top:8px; font-size:14px; opacity:.9; }
-
-/* ======= CONSOLIDATED OVERRIDES (แหล่งอ้างอิงสุดท้าย) ======= */
-
-/* 1) KV table – คุมที่เดียวด้วยตัวแปร */
-.swal2-popup.swal-form-approve .mfu-form{ --kv-left: 250px; }
-.swal2-popup.swal-form-approve .mfu-form .mfu-kv{
-  display:grid !important;
-  grid-template-columns: var(--kv-left) 1fr !important;
-  border:1px solid #e6e9f2; border-bottom:0;
-}
-.swal2-popup.swal-form-approve .mfu-form .mfu-kv>div{
-  padding:10px 12px; border-bottom:1px solid #e6e9f2;
-  line-height:1.6; white-space:normal; word-break:break-word; overflow-wrap:anywhere;
-}
-.swal2-popup.swal-form-approve .mfu-form .mfu-yn{ margin:8px 0 6px; }
-
-@media (max-width:900px){ .swal2-popup.swal-form-approve .mfu-form{ --kv-left:180px; } }
-@media (max-width:600px){ .swal2-popup.swal-form-approve .mfu-form{ --kv-left:150px; } }
-
-/* 2) Signature block – แบบชิดขวาชุดเดียว */
-.swal2-popup.swal-form-approve .mfu-form .mfu-sign{
-  width:auto !important;
-  text-align:right !important;
-  align-self:flex-end !important;
-}
-.swal2-popup.swal-form-approve .mfu-form .mfu-sign.mfu-signline{
-  --sign-width: clamp(210px,36vw,260px);
-  display:grid !important;        /* เปลี่ยนจาก inline-grid -> grid (block-level) */
-  width:fit-content;               /* กว้างเท่าที่จำเป็น */
-  grid-template-columns:auto var(--sign-width);
-  column-gap:6px; 
-  align-items:center;
-  margin-left:auto !important;     /* ดันไปชิดขวา */
-  text-align:right;                /* ให้ label “ลงชื่อ” ชิดขวาด้วย */
-}
-
-.swal2-popup.swal-form-approve .mfu-form .mfu-sign.mfu-signline .lab{ white-space:nowrap; }
-.swal2-popup.swal-form-approve .mfu-form .mfu-sign.mfu-signline .dots{
-  height:1.15em; border-bottom:1px dotted #888;
-}
-.swal2-popup.swal-form-approve .mfu-form .mfu-sign.mfu-signline .name,
-.swal2-popup.swal-form-approve .mfu-form .mfu-sign.mfu-signline .role{
-  grid-column:2; text-align:center; margin-top:6px;
-}
-
-/* 3) Equipment detail table – คอลัมน์ชุดเดียว */
+/* ปรับความกว้างคอลัมน์รายการอุปกรณ์ (เหมือนหน้า approve_field) */
 .swal2-popup .swal-detail-table.items{ table-layout:fixed; }
 .swal2-popup .swal-detail-table.items th.col-name,
 .swal2-popup .swal-detail-table.items td.col-name{
@@ -3111,7 +2585,6 @@ function buildEquipmentApprovePreviewHTML(ctx) {
   width:160px; max-width:160px; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
 }
 
-/* Mobile tuning ของตารางอุปกรณ์ */
 @media (max-width:600px){
   .swal2-popup .swal-detail-table.items{ table-layout:auto; }
   .swal2-popup .swal-detail-table.items th.col-name,
@@ -3127,233 +2600,90 @@ function buildEquipmentApprovePreviewHTML(ctx) {
   }
 }
 
-/* ให้กล่อง 1 และ 2 กว้างเต็มแถว (2 คอลัมน์) */
-.swal2-popup.swal-form-approve .mfu-form .mfu-boxes{
-  display: grid !important;
-  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-  gap: 12px !important;
+/* ====== SweetAlert “Approve form” (ให้หน้าตาเหมือน approve_field) ====== */
+.swal2-popup.swal-form-approve{
+  width:1000px !important;                 /* ใกล้เคียงขนาดในรูป1 */
+  max-width:min(1000px, 98vw) !important;
+  padding:24px 26px !important;
+  border-radius:12px !important;
+  box-shadow:0 12px 36px rgba(0,0,0,.18);
+}
+.swal2-popup.swal-form-approve .swal2-html-container{
+  max-height:72vh; overflow:auto; margin:12px 0 0 !important;
+}
+.swal2-popup.swal-form-approve .swal2-actions{ margin:18px 0 0 !important; }
+
+/* === MFU Approve (เนื้อใน SweetAlert จาก buildFieldFormPreviewV2) === */
+.mfu-approve{
+  font-family:'Sarabun','Noto Sans Thai',system-ui,sans-serif;
+  color:#0f172a; line-height:1.55; font-size:15px;
 }
 
-/* มือถือ: เรียงเป็น 1 คอลัมน์ */
-@media (max-width:700px){
-  .swal2-popup.swal-form-approve .mfu-form .mfu-boxes{
-    grid-template-columns: 1fr !important;
-  }
+/* แถบสรุปข้อมูลด้านบน — โทนเดียวกับ approve_field */
+.mfu-approve .info-card{
+  background:#f8fafc; border:1px solid #e5e7eb;
+  border-radius:12px; padding:12px 14px; margin-bottom:14px;
 }
-
-/* == เพิ่มใหม่เพื่อ checkbox / textbox == */
-.mfu-box .chk{ display:flex; align-items:center; gap:8px; cursor:pointer; }
-.mfu-box input[type="checkbox"]{ width:16px; height:16px; cursor:pointer; }
-.mfu-box .mfu-input{
-  flex:1; min-width:0; padding:6px 8px;
-  border:1px solid #cbd5e1; border-radius:6px; font:inherit;
+.mfu-approve .info-title{
+  font-weight:700; text-align:center; margin:0 0 8px; color:#111827;
 }
-
-/* ให้ทุกแถวในกล่องสูงเท่ากัน */
-.mfu-box .row{
-  display:flex;
-  align-items:center;
-  gap:8px;
-  min-height:36px;            /* ความสูงมาตรฐานแต่ละบรรทัด */
+.mfu-approve .info-grid{
+  display:grid; grid-template-columns:1fr 1fr; gap:10px 18px;
 }
-
-/* แถวลายเซ็นของทั้งสองกล่องใช้ความสูงเดียวกัน */
-.mfu-box .sig-row{
-  min-height:56px;
+.mfu-approve .info-grid > div{
+  background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:8px 10px;
 }
+.mfu-approve .label{ color:#475569; font-weight:600; margin-right:6px; white-space:nowrap; }
+.mfu-approve .value{ color:#0f172a; }
 
-/* เส้นประ/วงเล็บ/เส้นเติม เหมือนเดิม (ถ้ายังไม่มีให้ใส่ด้วย) */
-.mfu-box .fill{
-  flex:1;
-  border-bottom:1px dotted #444;
-  height:1.15em;
-  transform:translateY(-2px);
+/* 2 คอลัมน์ (เลขาฯ/หัวหน้า) */
+.mfu-approve .cols{ display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+.mfu-approve .col-box{
+  background:#fff; border:1px solid #e5e7eb; border-radius:12px;
+  padding:14px; min-height:220px;
+  box-shadow:inset 0 0 0 1px rgba(0,0,0,0.02);
 }
-.mfu-box .fill.full{ width:100%; }
-.mfu-box .paren{ margin:0 4px; }
+.mfu-approve .col-box.locked{ background:#f5f7fb; }
+.mfu-approve .col-head{ font-weight:700; text-align:center; margin-bottom:10px; font-size:16px; color:#0f172a; }
+.mfu-approve .col-head .no{ margin-right:4px; }
 
-/* Equipment  */
-/* ===== Equipment approve preview (ใน Swal) ===== */
-.swal2-popup.swal-equip-approve{
-  max-width: 1100px !important;
-  width: auto !important;
-  padding: 26px !important;
+.mfu-approve .check{ display:flex; align-items:center; gap:8px; margin:6px 0; color:#0f172a; }
+.mfu-approve input[type="checkbox"]{ width:16px; height:16px; }
+
+.mfu-approve .help{ font-size:12px; color:#64748b; margin:4px 0 6px; }
+
+/* textarea */
+.mfu-approve .textarea-wrap{ display:flex; align-items:flex-start; gap:8px; margin-top:4px; }
+.mfu-approve .textarea-wrap textarea{
+  flex:1; min-height:78px; border:1px solid #cbd5e1; border-radius:10px;
+  padding:8px 10px; font:inherit; background:#fff; resize:vertical;
 }
+.mfu-approve .locked .textarea-wrap textarea{ background:#f1f5f9; }
+.mfu-approve .edit-icon{ opacity:.35; margin-top:6px; }
 
-.eqp-preview{
-  font-family:'THSarabunNew','Sarabun','Noto Sans Thai', system-ui, sans-serif;
-  color:#111;
+/* ลายเซ็น */
+.mfu-approve .sig-box{ margin-top:10px; text-align:center; color:#334155; }
+.mfu-approve .sig-line{ margin:12px 0 4px; }
+.mfu-approve .sig-note{ font-size:12px; opacity:.85; }
+.mfu-approve .sig-date{ margin-top:6px; font-size:12px; }
+
+/* ผู้อนุมัติ (ลายเซ็นรูปภาพ + ชื่อ) */
+.mfu-approve .approver{
+  display:flex; align-items:center; justify-content:flex-end; gap:10px;
+  margin:8px 0 2px;
 }
+.mfu-approve .sig-image img{ max-height:40px; display:block; }
+.mfu-approve .approver-name{ font-weight:700; color:#111827; }
 
-/* Head + meta */
-.eqp-head{ text-align:center; margin-bottom: 8px; }
-.eqp-head .t1{ font-weight:700; font-size:20px; }
-.eqp-head .t2{ font-size:14px; margin-top:2px; }
-
-.eqp-meta{ display:flex; justify-content:flex-end; margin: 8px 0 12px; }
-
-.eqp-meta .right{ text-align:right; line-height:1.5; }
-
-/* Paragraph (ประโยคเดียว) */
-.eqp-par{
-  font-size: 16px;
-  line-height: 1.75;         /* ↑ จาก 1.7 */
-  text-indent: 2em;
-  word-break: break-word;
-  margin: 12px 0 18px;       /* ↑ จาก 8 0 12 */
-}
-
-/* (ใช้ถ้ายังมีโครงเก่า eqp-user อยู่) */
-.eqp-user{ font-size:16px; line-height:1.6; margin:10px 0 12px; }
-.eqp-user > div{ margin:2px 0; }
-
-/* Table */
-.eqp-table{
-  width:100%;
-  border-collapse: collapse;
-  table-layout: fixed;
-  font-size: 15px;
-  margin: 14px 0 22px;
-}
-.eqp-table thead th{
-  background:#213555;
-  color:#fff;
-  border:1px solid #e6e9f2;
-  padding:10px 14px;
-  text-align:center;
-  font-weight:700;
-}
-.eqp-table tbody td{
-  border:1px solid #e6e9f2;
-  padding:10px 14px;
-}
-
-.eqp-table th,
-.eqp-table td{
-  white-space: normal !important;
-  word-break: break-word !important;       /* คำไทยยาวๆ */
-  overflow-wrap: anywhere !important;      /* กรณีไม่มีเว้นวรรค */
-  vertical-align: top;                     /* ให้หัวตารางกับข้อมูลชิดบน */
+/* บังคับสีปุ่มยืนยัน */
+.swal2-popup .swal2-actions .swal2-styled.btn-violet {
+  background-color: #695CF7 !important;
 }
 
 
-
-.eqp-table td.c{ text-align:center; }
-.eqp-table td.l{
-  text-align:left;
-  overflow: visible !important;
-  text-overflow: clip !important;
+/* มือถือ: 1 คอลัมน์ */
+@media (max-width: 700px){
+  .mfu-approve .info-grid{ grid-template-columns:1fr; }
+  .mfu-approve .cols{ grid-template-columns:1fr; }
 }
-.eqp-table thead th:nth-child(1){ width: 18mm; } /* ลำดับ */
-.eqp-table thead th:nth-child(3){ width: 22mm; } /* จำนวน */
-.eqp-table thead th:nth-child(4){ width: 60mm; } /* หมายเหตุ (กว้างขึ้น) */
-
-/* Boxes (ความคิดเห็น/ผลการปฏิบัติงาน) */
-.eqp-boxes{
-  display:grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;                 /* ↑ ระยะห่างระหว่างกล่อง */
-  margin-top: 18px;          /* ↑ ระยะจากตาราง */
-}
-.eqp-boxes .box{ border:1px solid #333; padding:12px 14px; min-height:176px; }
-.eqp-boxes .title{
-  font-weight:700;
-  text-align:center;
-  padding-bottom:6px;      /* ระยะก่อนเส้น */
-  margin-bottom:10px;      /* ระยะหลังเส้น */
-  border-bottom:1px solid #9aa3b2;
-}
-.eqp-boxes .line{ margin: 10px 0; } /* ↑ */
-.eqp-boxes .box .date{
-  text-align:center;       /* ตรงกลาง */
-}
-
-/* Signature block */
-.eqp-sign{
-  margin:16px 0 6px;
-  display:flex;
-  flex-direction:column;
-  align-items:flex-end;          /* ชิดขวา */
-  text-align:right;
-}
-
-.eqp-sign .sig{
-  text-align: right;          /* ให้ข้อความภายในชิดขวาด้วย */
-  line-height: 1.6;
-}
-
-.eqp-sign .sig-line{
-  display:grid;
-  grid-template-columns:auto 240px auto; /* ปรับความกว้างช่องชื่อได้ */
-  align-items:center;
-  column-gap:8px;                          /* ระยะระหว่างคำ */
-}
-
-.eqp-sign .sig-line .line{
-  height:1.2em;
-  border-bottom:1px dotted #666;
-  display:flex;
-  align-items:flex-end;
-  justify-content:center;        /* ให้ชื่ออยู่กลางเส้น */
-}
-.eqp-sign .sig-line .name{ padding:0 6px; background:transparent; }
-.eqp-sign .date{ margin-top:6px; }
-
-/* ==== เส้นจุดแบบเต็มบรรทัด + แถวลงชื่อ บรรทัดเดียว (สำหรับพรีวิว) ==== */
-.eqp-boxes .dotrow{
-  height: 1.2em;
-  border-bottom: 1px dotted #666;
-  margin: 10px 0;
-}
-.eqp-boxes .sign-inline{
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  column-gap: 8px;
-  align-items: center;
-  margin-top: 6px;
-}
-.eqp-boxes .sign-inline .dotfill{
-  height: 1.2em;
-  border-bottom: 1px dotted #666;
-}
-.eqp-boxes .date{
-  text-align: center;
-  margin-top: 8px;
-}
-
-/* === Center the date under the signature line (Swal preview) === */
-.swal2-popup .eqp-sign{
-  /* ใช้ grid 3 คอลัมน์: label | เส้นเซ็น(240px) | บทบาท */
-  display: grid !important;
-  grid-template-columns: auto 240px auto !important;
-  column-gap: 8px !important;
-  align-items: center !important;
-  justify-content: end !important;   /* ทั้งบล็อกชิดขวาตามเดิม */
-  text-align: unset !important;       /* ไม่ต้อง right-align ทั้งบล็อก */
-}
-.swal2-popup .eqp-sign .sig-line{
-  /* ทำให้ลูก ๆ ของ sig-line กลายเป็น grid item ของ .eqp-sign */
-  display: contents !important;
-}
-.swal2-popup .eqp-sign .date{
-  grid-column: 2 !important;          /* ให้อยู่คอลัมน์กลาง (ตรงกับเส้นเซ็น) */
-  justify-self: center !important;    /* จัดกลางตามความกว้าง 240px */
-  margin-top: 6px;
-}
-
-.mfu-box #head_other_reason{
-  border: none !important;
-  background: transparent !important;
-  padding: 0 !important;
-  min-width: 0 !important;
-  box-shadow: none !important;
-}
-
-.swal2-popup.swal-form-approve .mfu-form .mfu-list li.tight b{
-  min-width: 60px !important;   /* จะเอา 80–140 ก็ปรับได้ */
-}
-
-
-
-
 </style>

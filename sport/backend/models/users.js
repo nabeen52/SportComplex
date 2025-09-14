@@ -3,21 +3,15 @@ const mongoose = require('mongoose');
 mongoose.connect('mongodb://root:password@mongo:27017/SportComplex?authSource=admin')
 
 const userSchema = new mongoose.Schema({
-    // username: String,
-    // password: String,
-    // email: String,
-
-    // role: String,
-    // name: String,
-    // user_id: String,
-    // email: String,
-
-    user_id: String,      // <-- สำคัญ! ต้องมี user_id
+    user_id: String,
     name: String,
+    thaiName: String,
     email: String,
     role: String,
-
-    photo: String,        // (optional)
-    picture: String       // <- ใช้ 'picture' เหมือน Google
+    photo: String,
+    picture: String,
+    signaturePath: String,   // path ไฟล์ลายเซ็น
+    phone: String            // ✅ ใหม่: เบอร์โทร
 });
+
 module.exports = mongoose.model('User', userSchema);

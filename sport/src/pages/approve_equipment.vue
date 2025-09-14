@@ -28,7 +28,7 @@
       <!-- ✅ Topbar (responsive, ไม่ทับ, ไม่มีปุ่ม ×) -->
       <header class="topbar">
         <button class="menu-toggle" @click="toggleSidebar">☰</button>
-        
+
         <div class="topbar-actions">
           <div style="position: relative; display: inline-block;">
             <div v-if="showNotifications" class="notification-backdrop" @click="closeNotifications"></div>
@@ -48,7 +48,6 @@
                 <li v-if="notifications.length === 0" class="no-noti">ไม่มีแจ้งเตือน</li>
               </ul>
             </div>
-
           </div>
           <router-link to="/profile_staff"><i class="pi pi-user"></i></router-link>
         </div>
@@ -56,22 +55,20 @@
 
       <!-- แถบประกาศ -->
       <transition name="slide-down">
-  <div class="announcement-bar" v-if="showAnnouncementBar">
-    <span class="announcement-icon">
-      <i class="pi pi-megaphone"></i>
-    </span>
-    <span class="announcement-bar-text">
-      {{ announcement }}
-    </span>
-    <button class="close-announcement-btn" @click="showAnnouncementBar = false" aria-label="ปิดประกาศ">
-      <span class="close-icon">
-        <i class="pi pi-times"></i>
-      </span>
-    </button>
-  </div>
-</transition>
-
-      
+        <div class="announcement-bar" v-if="showAnnouncementBar">
+          <span class="announcement-icon">
+            <i class="pi pi-megaphone"></i>
+          </span>
+          <span class="announcement-bar-text">
+            {{ announcement }}
+          </span>
+          <button class="close-announcement-btn" @click="showAnnouncementBar = false" aria-label="ปิดประกาศ">
+            <span class="close-icon">
+              <i class="pi pi-times"></i>
+            </span>
+          </button>
+        </div>
+      </transition>
 
       <div class="histbody">
         <h1 style="display: flex; justify-content: center;">อนุมัติการยืม/รับคืนอุปกรณ์</h1>
@@ -79,104 +76,130 @@
         <div class="table-container">
           <table class="equipment-table">
             <thead>
-  <tr>
-    <th>วันที่ทำรายการ</th>
-    <th>รายการอุปกรณ์</th>
-    <th>จำนวน</th>
-    <th>การกระทำ</th>
-    <th>รายละเอียด</th>
-  </tr>
-</thead>
-<tbody>
-  <template v-for="group in groupedEquipments" :key="group.booking_id">
-    <tr>
-      <!-- วันที่ทำรายการ (เอาวันที่แรกใน group หรือเลือกตามที่ต้องการ) -->
-      <td>{{ formatDate(group.items[0].date) }}</td>
-      <!-- รวมชื่ออุปกรณ์ทั้งหมดใน group นี้ -->
-      <td>
-        <span v-for="(item, idx) in group.items" :key="item.id">
-          {{ item.name }}<span v-if="idx < group.items.length - 1">, </span>
-        </span>
-      </td>
-      <!-- รวมจำนวนทั้งหมด (หรือจะแยกตามชื่อก็ได้) -->
-      <td>
-        <span v-for="(item, idx) in group.items" :key="item.id">
-          {{ item.quantity }}<span v-if="idx < group.items.length - 1">, </span>
-        </span>
-      </td>
-      <td>
-        <!-- แสดงปุ่มเหมือนเดิม (ไม่ต้องแก้) -->
-        <template v-if="group.items.every(item => item.status?.toLowerCase() === 'pending')">
-  <div>
-    <button
-      class="approve-btn"
-      @click="approveGroup(group)"
-      :disabled="processingGroups.has(group.booking_id)"  
-      style="margin-right:10px;"
-    >
-      อนุมัติ
-    </button>
-    <button
-      class="cancel-btn"
-      @click="cancelGroup(group)"
-      :disabled="processingGroups.has(group.booking_id)"  
-    >
-      ไม่อนุมัติ
-    </button>
+              <tr>
+                <th>วันที่ทำรายการ</th>
+                <th>รายการอุปกรณ์</th>
+                <th>จำนวน</th>
+                <th>การดำเนินการ</th>
+                <th>รายละเอียด</th>
+              </tr>
+            </thead>
+            <tbody>
+              <template v-for="group in groupedEquipments" :key="group.booking_id">
+                <tr>
+                  <!-- วันที่ทำรายการ
+                       - กลุ่มยืมหลายวัน (approved + มีผู้อนุมัติ): แสดง 'เวลาอนุมัติ'
+                       - อื่น ๆ: ใช้วันที่ของ item แรกเหมือนเดิม -->
+                  <td v-if="group.kind === 'multi-approved'">
+                    {{ formatDateTimeThai(firstItem(group).approvedAt) }}
+                  </td>
+                  <td v-else>
+                    {{ formatDate(group.items[0].date) }}
+                  </td>
 
-    <!-- ✅ ข้อความแจ้งกำลังประมวลผล -->
-    <span
-      v-if="processingGroups.has(group.booking_id)"
-      style="margin-left:8px;font-size:.9rem;color:#555;"
-    >
-      กำลังดำเนินการ...
-    </span>
-  </div>
-</template>
+                  <!-- รวมชื่ออุปกรณ์ในกลุ่ม -->
+                  <td>
+                    <span v-for="(item, idx) in group.items" :key="item.id">
+                      {{ item.name }}<span v-if="idx < group.items.length - 1">, </span>
+                    </span>
+                  </td>
 
+                  <!-- รวมจำนวน -->
+                  <td>
+                    <span v-for="(item, idx) in group.items" :key="item.id">
+                      {{ item.quantity }}<span v-if="idx < group.items.length - 1">, </span>
+                    </span>
+                  </td>
 
+                  <!-- การกระทำ -->
+                  <td>
+                    <!-- ✅ กรณียืมหลายวัน (approved + มี approvedAt/By/ById): ปุ่ม 'ส่งมอบ' -->
+                    <template v-if="group.kind === 'multi-approved'">
+                      <button
+                        class="approve-btn"
+                        @click="handoverGroup(group)"
+                        :disabled="processingGroups.has(group.booking_id)"
+                        style="margin-right:10px;"
+                      >
+                        ส่งมอบ
+                      </button>
+                      <span
+                        v-if="processingGroups.has(group.booking_id)"
+                        style="margin-left:8px;font-size:.9rem;color:#555;"
+                      >
+                        กำลังดำเนินการ...
+                      </span>
+                    </template>
 
-        <template v-else-if="group.items.every(item => item.status?.toLowerCase() === 'approved')">
-          <span class="status-bg status-approved">ถูกอนุมัติ</span>
-        </template>
-        <template v-else-if="group.items.every(item => item.status?.toLowerCase() === 'disapproved')">
-          <span class="status-bg status-disapproved">ไม่ถูกอนุมัติ</span>
-        </template>
+                    <!-- ของเดิม: pending ทั้งกลุ่ม -->
+                    <template v-else-if="group.items.every(item => (item.status || '').toLowerCase() === 'pending')">
+                      <div>
+                        <button
+                          class="approve-btn"
+                          @click="approveGroup(group)"
+                          :disabled="processingGroups.has(group.booking_id)"
+                          style="margin-right:10px;"
+                        >
+                          อนุมัติ
+                        </button>
+                        <button
+                          class="cancel-btn"
+                          @click="cancelGroup(group)"
+                          :disabled="processingGroups.has(group.booking_id)"
+                        >
+                          ไม่อนุมัติ
+                        </button>
+                        <span
+                          v-if="processingGroups.has(group.booking_id)"
+                          style="margin-left:8px;font-size:.9rem;color:#555;"
+                        >
+                          กำลังดำเนินการ...
+                        </span>
+                      </div>
+                    </template>
 
-        <template v-else-if="group.items.some(item => item.status?.toLowerCase() === 'return-pending')">
-  <div>
-    <button
-      class="return-btn"
-      @click="returnGroup(group)"
-      :disabled="processingGroups.has(group.booking_id)"
-    >
-      รับคืนอุปกรณ์
-    </button>
+                    <!-- ของเดิม: approved ทั้งกลุ่ม -->
+                    <template v-else-if="group.items.every(item => (item.status || '').toLowerCase() === 'approved')">
+                      <span class="status-bg status-approved">ถูกอนุมัติ</span>
+                    </template>
 
-    <!-- ✅ ข้อความกำลังดำเนินการ -->
-    <span
-      v-if="processingGroups.has(group.booking_id)"
-      style="margin-left:8px;font-size:.9rem;color:#555;"
-    >
-      กำลังดำเนินการ...
-    </span>
-  </div>
-</template>
+                    <!-- ของเดิม: disapproved ทั้งกลุ่ม -->
+                    <template v-else-if="group.items.every(item => (item.status || '').toLowerCase() === 'disapproved')">
+                      <span class="status-bg status-disapproved">ไม่ถูกอนุมัติ</span>
+                    </template>
 
+                    <!-- ของเดิม: มี return-pending บางรายการ -->
+                    <template v-else-if="group.items.some(item => (item.status || '').toLowerCase() === 'return-pending')">
+                      <div>
+                        <button
+                          class="return-btn"
+                          @click="returnGroup(group)"
+                          :disabled="processingGroups.has(group.booking_id)"
+                        >
+                          รับคืนอุปกรณ์
+                        </button>
+                        <span
+                          v-if="processingGroups.has(group.booking_id)"
+                          style="margin-left:8px;font-size:.9rem;color:#555;"
+                        >
+                          กำลังดำเนินการ...
+                        </span>
+                      </div>
+                    </template>
 
-        <template v-else-if="group.items.some(item => item.status?.toLowerCase() === 'returned')">
-          <span class="status-bg status-returned">รับคืนอุปกรณ์แล้ว</span>
-        </template>
+                    <!-- ของเดิม: มี returned แล้ว -->
+                    <template v-else-if="group.items.some(item => (item.status || '').toLowerCase() === 'returned')">
+                      <span class="status-bg status-returned">รับคืนอุปกรณ์แล้ว</span>
+                    </template>
+                  </td>
 
-      </td>
-      <td>
-        <button class="remark-btn" @click="detailGroup(group)">รายละเอียด</button>
-      </td>
-    </tr>
-  </template>
-</tbody>
-
-
+                  <!-- รายละเอียด -->
+                  <td>
+                    <button class="remark-btn" @click="detailGroup(group)">รายละเอียด</button>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
           </table>
         </div>
       </div>
@@ -184,7 +207,7 @@
       <footer class="foot">
         <div class="footer-left">
           <p>
-            Sport Complex – Mae Fah Luang University |
+            Sport Complex – Mae Fah Luง University |
             Tel: 0-5391-7820 and 0-5391-7821 | Facebook:
             <a href="https://www.facebook.com/mfusportcomplex" target="_blank">MFU Sports Complex Center</a>
             |
@@ -198,12 +221,293 @@
   </div>
 </template>
 
+
 <script>
 import Swal from 'sweetalert2'
 import axios from 'axios'
 const API_BASE = import.meta.env.VITE_API_BASE
 
 axios.defaults.withCredentials = true
+
+// ===== PDF constants (ให้เท่ากับหน้า approve_field) =====
+const A4_WIDTH_PX   = 794;   // A4 ที่ 96dpi
+const PDF_MARGIN_MM = 10;    // <<== ปรับให้เท่ากับ approve_field (เช่น 10 หรือ 12)
+const WRAPPER_PADDING_PX = 0; // ใช้ 0 เพื่อไม่ซ้ำซ้อนกับ margin ของ jsPDF
+
+
+// ===== helpers (อยู่นอก export default) =====
+
+async function ensureHtml2pdf() {
+  if (typeof window !== 'undefined' && window.html2pdf) return window.html2pdf;
+  try {
+    const mod = await import('html2pdf.js');
+    return mod?.default || mod;
+  } catch (_) { /* fallback */ }
+  await new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+    s.onload = resolve; s.onerror = reject;
+    document.head.appendChild(s);
+  });
+  return window.html2pdf;
+}
+
+
+function _escapeHtml(s = '') {
+  return String(s).replace(/[&<>"']/g, m => (
+    { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[m]
+  ));
+}
+function _formatThaiDate(d = new Date()) {
+  return d.toLocaleDateString('th-TH', { day:'2-digit', month:'2-digit', year:'numeric' });
+}
+
+function buildEquipmentHandoverPDFHTML(ctx) {
+  const esc = s => String(s ?? '-')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+
+  const todayStr = new Intl.DateTimeFormat('th-TH-u-nu-latn', {
+    timeZone: 'Asia/Bangkok', day:'2-digit', month:'2-digit', year:'numeric'
+  }).format(new Date());
+
+  // วันที่ฝั่ง "ผู้รับคืน" (ช่องขวา)
+  const receiverDateStr = ctx.handoverReceiverDate
+    ? new Intl.DateTimeFormat('th-TH-u-nu-latn', {
+        timeZone: 'Asia/Bangkok', day:'2-digit', month:'2-digit', year:'numeric'
+      }).format(new Date(ctx.handoverReceiverDate))
+    : '........../........../..........';
+
+  const splitRange = (s) => {
+    if (!s) return ['-', '-'];
+    const p = String(s).split(' - ');
+    return [p[0] || '-', p[1] || '-'];
+  };
+  const [sinceStr, uptoStr] = splitRange(ctx.dateRange);
+
+  const rows = (ctx.rows || []).map((r,i)=>`
+    <tr>
+      <td class="c">${r.idx ?? (i+1)}</td>
+      <td class="l">${esc(r.name)}</td>
+      <td class="c">${esc(r.quantity)}</td>
+      <td class="l">${esc(r.remark || '-')}</td>
+    </tr>`).join('');
+
+  // กล่องหมายเหตุ ใช้คลาส eqp-remark เผื่อสไตล์เพิ่มเติมภายหลัง
+  // const remarkBox = (text) => `
+  //   <div class="eqp-remark"
+  //        style="grid-column:1/-1; white-space:pre-wrap; min-height:96px; padding:8px 10px;
+  //               border:1px solid #cfd5e6; border-radius:8px; font-size:15px; line-height:1.5;">
+  //     ${esc(text || '')}
+  //   </div>`;
+
+  // พื้นที่ข้อความล้วน (ไม่มีกรอบ) สำหรับ PDF
+  const remarkBox = (text) => `
+    <div class="eqp-remark"
+         style="grid-column:1/-1; white-space:pre-wrap; min-height:96px;
+                margin:6px 0 10px; font-size:15px; line-height:1.5;">
+      ${esc(text || '')}
+    </div>`;
+
+  return `
+  <div class="eqp-preview" style="font-family:'THSarabunNew','Sarabun','Noto Sans Thai',system-ui,sans-serif; color:#111;">
+    <div class="eqp-head" style="text-align:center; margin-bottom:48px;">
+      <div class="t1" style="font-weight:700; font-size:20px;">แบบฟอร์มการยืมอุปกรณ์/วัสดุ/ครุภัณฑ์ ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง</div>
+      <div class="t2" style="font-size:14px; margin-top:2px;">โทร 0-5391-7820 และ 0-5391-7821 | E-mail: sport-complex@mfu.ac.th</div>
+    </div>
+
+    <div class="eqp-meta" style="display:flex; justify-content:flex-end; margin:18px 0 12px;">
+      <div class="right" style="text-align:right; line-height:1.55;">
+        <div>ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง</div>
+        <div>วันที่ทำรายการ ${esc(ctx.dateBorrow)}</div>
+        <div>เวลาที่ทำรายการ ${esc(ctx.timeBorrow)}</div>
+      </div>
+    </div>
+
+    <div class="date" style="margin-top:30px">วันที่ ${todayStr}</div>
+    <div style="margin-top:20px">ส่วนที่1 สำหรับผู้ขอใช้บริการ</div>
+
+    <section class="eqp-section eqp-section--par">
+      <div class="eqp-par" style="font-size:16px; line-height:1.75; text-indent:2em; word-break:break-word; margin:12px 0 18px;">
+        ข้าพเจ้า ${esc(ctx.requester)}
+        รหัสนักศึกษา/รหัสพนักงาน ${esc(ctx.requesterId)}
+        ${ctx.tel ? 'โทร ' + esc(ctx.tel) : ''}
+        มีความประสงค์ขอยืมอุปกรณ์/วัสดุ/ครุภัณฑ์ ของศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง
+        เพื่อใช้ในงาน ${esc(ctx.reason)} สถานที่ใช้งาน ${esc(ctx.location)}
+        ระหว่างวันที่ ${esc(sinceStr)} ถึงวันที่ ${esc(uptoStr)}
+        
+      </div>
+    </section>
+
+    <section class="eqp-section eqp-section--table">
+      <table class="eqp-table" style="width:100%; border-collapse:collapse; table-layout:fixed; font-size:15px; margin:14px 0 22px;">
+        <thead>
+          <tr>
+            <th style="width:72px;background:#213555; color:#fff; border:1px solid #e6e9f2; padding:10px 14px; text-align:center; font-weight:700;">ลำดับ</th>
+            <th style="background:#213555; color:#fff; border:1px solid #e6e9f2; padding:10px 14px; text-align:center; font-weight:700;">รายการ</th>
+            <th style="width:100px;background:#213555; color:#fff; border:1px solid #e6e9f2; padding:10px 14px; text-align:center; font-weight:700;">จำนวน</th>
+            <th style="width:260px;background:#213555; color:#fff; border:1px solid #e6e9f2; padding:10px 14px; text-align:center; font-weight:700;">หมายเหตุ</th>
+          </tr>
+        </thead>
+        <tbody style="white-space:normal; word-break:break-word; overflow-wrap:anywhere;">
+          ${rows}
+        </tbody>
+      </table>
+    </section>
+
+    <div class="eqp-bottom">
+      <!-- ลงชื่อผู้ยืม (จัดวันที่ให้อยู่ใต้เส้นเซ็นคอลัมน์กลาง) -->
+      <div class="eqp-sign"
+           style="margin:16px 0 6px; display:grid; grid-template-columns:auto 240px auto; column-gap:8px;
+                  align-items:center; justify-content:end;">
+        <span class="lab">ลงชื่อ</span>
+        <span class="line" style="height:1.2em; border-bottom:1px dotted #666; display:flex; align-items:flex-end; justify-content:center;">
+          <span class="name" style="padding:0 6px;">${esc(ctx.requester)}</span>
+        </span>
+        <span class="role">ผู้ยืม</span>
+        <div class="date" style="grid-column:2; justify-self:center; margin-top:6px;">วันที่ ${todayStr}</div>
+      </div>
+
+      <!-- กล่องซ้าย/ขวา ใช้ Grid 3 คอลัมน์: label | เส้นเซ็น | role และให้ 'วันที่' อยู่คอลัมน์กลาง -->
+      <div class="eqp-boxes" style="display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:16px; margin-top:18px;">
+        <!-- ผู้ส่งมอบ -->
+        <div class="box" style="border:1px solid #333; padding:12px 14px; min-height:176px; display:grid; grid-template-columns:auto 1fr auto; column-gap:8px;">
+          <div class="title" style="grid-column:1/-1; font-weight:700; text-align:center; padding-bottom:6px; margin-bottom:10px; border-bottom:1px solid #9aa3b2;">
+            ผลการดำเนินการ/ผลการปฏิบัติงาน
+          </div>
+          ${remarkBox(ctx.handoverRemarkSender)}
+          <!-- แถวลายเซ็น (วางลูก 3 ชิ้นให้ตรง 3 คอลัมน์) -->
+          <span class="lab">ลงชื่อ</span>
+          <span class="dotfill" style="height:1.2em; border-bottom:1px dotted #666; display:flex; align-items:flex-end; justify-content:center;">
+            <span class="filltext" style="background:#fff; padding:0 4px; line-height:1;">${esc(ctx.staffThaiName || '')}</span>
+          </span>
+          <span class="role">ผู้ส่งมอบ</span>
+          <!-- วันที่อยู่คอลัมน์กลาง -->
+          <div class="date" style="grid-column:2; justify-self:center; margin-top:8px;">วันที่ ${todayStr}</div>
+        </div>
+
+        <!-- ผู้รับคืน -->
+        <div class="box" style="border:1px solid #333; padding:12px 14px; min-height:176px; display:grid; grid-template-columns:auto 1fr auto; column-gap:8px;">
+          <div class="title" style="grid-column:1/-1; font-weight:700; text-align:center; padding-bottom:6px; margin-bottom:10px; border-bottom:1px solid #9aa3b2;">
+            ผลการดำเนินการ/ผลการปฏิบัติงาน
+          </div>
+          ${remarkBox(ctx.handoverRemarkReceiver)}
+          <span class="lab">ลงชื่อ</span>
+          <span class="dotfill" style="height:1.2em; border-bottom:1px dotted #666; display:flex; align-items:flex-end; justify-content:center;">
+            <span class="filltext" style="background:#fff; padding:0 4px; line-height:1;">
+              ${esc(ctx.handoverReceiverThaiName || ctx.receiverThaiName || '')}
+            </span>
+          </span>
+          <span class="role">ผู้รับคืน</span>
+          <div class="date" style="grid-column:2; justify-self:center; margin-top:8px;">วันที่ ${receiverDateStr}</div>
+        </div>
+      </div>
+
+      <div style="margin-top:20px">
+        *หมายเหตุ หากอุปกรณ์/วัสดุ/ครุภัณฑ์ เกิดการชำรุดเสียหายในระหว่างที่ผู้ยืมเป็นผู้รับผิดชอบ
+        ผู้ยืมจะต้องชดใช้ค่าเสียหายที่เกิดขึ้นทั้งหมด
+      </div>
+    </div>
+  </div>`;
+}
+
+
+
+const INLINE_EQP_CSS = `
+  .eqp-preview{ font-family:'THSarabunNew','Sarabun','Noto Sans Thai',system-ui,sans-serif; color:#111; }
+  .eqp-head{ text-align:center; margin-bottom:48px; }
+  .eqp-head .t1{ font-weight:700; font-size:20px; }
+  .eqp-head .t2{ font-size:14px; margin-top:2px; }
+  .eqp-meta{ display:flex; justify-content:flex-end; margin:18px 0 12px; }
+  .eqp-meta .right{ text-align:right; line-height:1.55; }
+  .eqp-par{ font-size:16px; line-height:1.75; text-indent:2em; word-break:break-word; margin:12px 0 18px; }
+
+  .eqp-table{ width:100%; border-collapse:collapse; table-layout:fixed; font-size:15px; margin:14px 0 22px; }
+  .eqp-table thead th{
+    background:#213555; color:#fff; border:1px solid #e6e9f2; padding:10px 14px; text-align:center; font-weight:700;
+  }
+  .eqp-table tbody td{ border:1px solid #e6e9f2; padding:10px 14px; vertical-align:top; }
+  .eqp-table td.c{ text-align:center; }
+  .eqp-table td.l{ text-align:left; }
+  .eqp-table th, .eqp-table td{ white-space:normal; word-break:break-word; overflow-wrap:anywhere; }
+
+  .eqp-sign{ margin:16px 0 6px; display:flex; flex-direction:column; align-items:flex-end; text-align:right; }
+  .eqp-sign .sig-line{ display:grid; grid-template-columns:auto 240px auto; align-items:center; column-gap:8px; }
+  .eqp-sign .sig-line .line{ height:1.2em; border-bottom:1px dotted #666; display:flex; align-items:flex-end; justify-content:center; }
+  .eqp-sign .sig-line .name{ padding:0 6px; background:transparent; }
+  .eqp-sign .date{ margin-top:6px; }
+
+  .eqp-boxes{ display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:16px; margin-top:18px; }
+  .eqp-boxes .box{ border:1px solid #333; padding:12px 14px; min-height:176px; }
+  .eqp-boxes .title{ font-weight:700; text-align:center; padding-bottom:6px; margin-bottom:10px; border-bottom:1px solid #9aa3b2; }
+  .eqp-boxes .sign-inline{ display:grid; grid-template-columns:auto 1fr auto; column-gap:8px; align-items:center; margin-top:6px; }
+  .eqp-boxes .dotfill{ height:1.2em; border-bottom:1px dotted #666; display:flex; align-items:flex-end; justify-content:center; }
+  .eqp-boxes .date{ text-align:center; margin-top:8px; }
+
+  .eqp-textarea{
+    width:100%; min-height:96px; padding:8px 10px; border:1px solid #cfd5e6; border-radius:8px; font-size:15px; line-height:1.5;
+    resize:vertical; outline:none; background:#fff;
+  }
+`;
+
+
+async function _htmlToPdfBlob(html, filename = 'handover.pdf') {
+  // รอ font โหลดครบก่อนแคปเจอร์
+  if (document.fonts && document.fonts.ready) {
+    try { await document.fonts.ready; } catch(_) {}
+  }
+
+  // สร้าง wrapper ที่ "ไม่ใส่ padding" แล้วให้ jsPDF เป็นตัวกำหนดระยะขอบเพียงตัวเดียว
+  const wrapper = document.createElement('div');
+  wrapper.style.cssText = [
+    'position:fixed','top:0','left:0','opacity:0','pointer-events:none',
+    'background:#fff',
+    `width:${A4_WIDTH_PX}px`,
+    `padding:${WRAPPER_PADDING_PX}px`,
+    'z-index:-1'
+  ].join(';');
+
+  wrapper.innerHTML = `
+    <style>${INLINE_EQP_CSS}</style>
+    <div id="print-root" style="background:#fff">${html}</div>
+  `;
+  document.body.appendChild(wrapper);
+
+  const html2pdf = await ensureHtml2pdf();
+
+  const opt = {
+    // ให้ขอบกระดาษใช้ค่าเดียวกับ approve_field
+    margin: [PDF_MARGIN_MM, PDF_MARGIN_MM, PDF_MARGIN_MM, PDF_MARGIN_MM],
+    filename,
+    image: { type: 'jpeg', quality: 0.98 },
+    html2canvas: {
+      scale: 2,
+      useCORS: true,
+      backgroundColor: '#ffffff',
+      windowWidth: A4_WIDTH_PX,   // บังคับสเกลให้เท่ากันทุกหน้า
+    },
+    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+    pagebreak: { mode: ['css','legacy'] },
+  };
+
+  const worker = html2pdf().set(opt).from(wrapper.querySelector('#print-root'));
+  await worker.toPdf();
+  const blob = await worker.outputPdf('blob');
+
+  document.body.removeChild(wrapper);
+  return blob;
+}
+
+
+
+async function _uploadPdfBlob(blob, filename) {
+  const fd = new FormData();
+  fd.append('file', new File([blob], filename, { type: 'application/pdf' }));
+  const up = await axios.post(`${API_BASE}/api/upload`, fd, {   // ✅ ใส่ API_BASE
+    headers: { 'Content-Type': 'multipart/form-data' }
+  });
+  return up.data?.fileUrl || up.data?.url;
+}
 
 export default {
   data() {
@@ -227,53 +531,83 @@ export default {
   },
  computed: {
   groupedEquipments() {
-    function isEmpty(val) {
-      return val === undefined || val === null || val === "" || val === "null";
-    }
+    const isEmpty = (v) => v === undefined || v === null || v === "" || v === "null";
+    const toLower = (s) => (s || "").toLowerCase();
 
-    // กรองเฉพาะยืมวันเดียว
-    let groups = this.equipmentGroups.filter(group =>
+    // เช็กว่าถูกส่งมอบแล้วหรือยัง
+    const isHandedOver = (it) =>
+      !isEmpty(it.handoverById) ||
+      !isEmpty(it.handoverBy) ||
+      !isEmpty(it.handoverAt) ||
+      !isEmpty(it.handoverRemarkSender);
+
+    // ----- single-day เดิม -----
+    let singleGroups = (this.equipmentGroups || []).filter(group =>
       group.items.every(item =>
         (!item.agency || item.agency === "") &&
         isEmpty(item.since) && isEmpty(item.uptodate)
       )
     );
-
-    // *** ซ่อนทั้งกลุ่มถ้ามี returned หรือ disapproved ใน group.items ***
-    groups = groups.filter(group =>
-      !group.items.some(item =>
-        ["returned", "disapproved"].includes((item.status || "").toLowerCase())
-      )
+    singleGroups = singleGroups.filter(group =>
+      !group.items.some(item => ["returned","disapproved"].includes(toLower(item.status)))
     );
-
-    // ส่วน return-pending เดิม
-    const bookingIdsWithReturnPending = new Set();
-    groups.forEach(group => {
-      if (group.items.some(item => (item.status || '').toLowerCase() === 'return-pending')) {
-        bookingIdsWithReturnPending.add(group.booking_id);
+    const idsWithReturnPending = new Set();
+    singleGroups.forEach(g => {
+      if (g.items.some(it => toLower(it.status) === "return-pending")) {
+        idsWithReturnPending.add(g.booking_id);
       }
     });
-
-    groups = groups.map(group => {
-      if (bookingIdsWithReturnPending.has(group.booking_id)) {
-        const filteredItems = group.items.filter(item => (item.status || '').toLowerCase() === 'return-pending');
-        return {
-          booking_id: group.booking_id,
-          items: filteredItems
-        };
+    singleGroups = singleGroups.map(g => {
+      if (idsWithReturnPending.has(g.booking_id)) {
+        return { booking_id: g.booking_id, items: g.items.filter(it => toLower(it.status) === "return-pending"), kind: "single" };
       }
-      return group;
-    }).filter(group => group.items.length > 0);
+      return { booking_id: g.booking_id, items: g.items, kind: "single" };
+    }).filter(g => g.items.length > 0);
 
-    // ฟิลเตอร์สถานะ (ถ้ามี)
+    // ----- multi-day ที่ 'approved' และยังไม่ถูกส่งมอบ (ปุ่ม "ส่งมอบ") -----
+    const multiApproved = (this.equipmentGroups || []).map(g => {
+      const items = (g.items || []).filter(it => {
+        const isEquip = toLower(it.type) !== "field";
+        const approved = toLower(it.status) === "approved";
+        const multiDay = !isEmpty(it.since) && !isEmpty(it.uptodate);
+        const hasApprover = !isEmpty(it.approvedAt) && !isEmpty(it.approvedBy) && !isEmpty(it.approvedById);
+        const notHandedOver = !isHandedOver(it);
+        return isEquip && approved && multiDay && hasApprover && notHandedOver;
+      });
+      return { booking_id: g.booking_id, items, kind: "multi-approved" };
+    }).filter(g => g.items.length > 0)
+      .sort((a, b) => {
+        const A = new Date(a.items[0]?.approvedAt || 0).getTime();
+        const B = new Date(b.items[0]?.approvedAt || 0).getTime();
+        return B - A;
+      });
+
+    // ===== ✅ ใหม่: multi-day ที่ 'return-pending' (ปุ่ม "รับคืนอุปกรณ์") =====
+    const multiReturnPending = (this.equipmentGroups || []).map(g => {
+      const items = (g.items || []).filter(it => {
+        const isEquip = toLower(it.type) !== "field";
+        const multiDay = !isEmpty(it.since) && !isEmpty(it.uptodate);
+        const retPending = toLower(it.status) === "return-pending";
+        return isEquip && multiDay && retPending;
+      });
+      return { booking_id: g.booking_id, items, kind: "multi-return-pending" };
+    }).filter(g => g.items.length > 0)
+      .sort((a, b) => {
+        const A = new Date(a.items[0]?.updatedAt || a.items[0]?.uptodate || 0).getTime();
+        const B = new Date(b.items[0]?.updatedAt || b.items[0]?.uptodate || 0).getTime();
+        return B - A;
+      });
+
+    // รวมลำดับการโชว์: ส่งมอบ -> รอรับคืน (หลายวัน) -> เคส single
+    let combined = [...multiApproved, ...multiReturnPending, ...singleGroups];
+
     if (this.filterStatus) {
-      groups = groups.filter(group =>
-        group.items.every(item => (item.status || '').toLowerCase() === this.filterStatus)
+      combined = combined.filter(group =>
+        group.items.every(item => toLower(item.status) === this.filterStatus)
       );
     }
-
-    return groups;
-  }
+    return combined;
+  },
 },
 
 
@@ -281,6 +615,216 @@ export default {
 
 
   methods: {
+
+    firstItem(group){
+  return (group && group.items && group.items[0]) ? group.items[0] : {};
+},
+formatDateTimeThai(dateStr){
+  if(!dateStr) return '-';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return '-';
+  const datePart = d.toLocaleDateString('th-TH', { year:'numeric', month:'2-digit', day:'2-digit' });
+  const timePart = d.toLocaleTimeString('th-TH', { hour:'2-digit', minute:'2-digit', hour12:false });
+  return `${datePart} ${timePart} น.`;
+},
+
+// ใน <script> ภายใต้ methods: (เพิ่มเมธอดใหม่)
+// ใน <script> ภายใต้ methods:
+async _buildEquipmentCtxFromGroup(group){
+  const bookingId = group.booking_id || group.items?.[0]?.booking_id || null;
+
+  // รวมจำนวนตามชื่ออุปกรณ์
+  const mergedQty = new Map();
+  (group.items || []).forEach(it => {
+    const name = it?.name || '-';
+    const q = Number(it?.quantity ?? 0) || 0;
+    mergedQty.set(name, (mergedQty.get(name) || 0) + q);
+  });
+
+  let requester='-', requesterId='-', dateBorrow='-', timeBorrow='-', dateRange='-';
+  let agency='-', reason='-', location='-', tel='';   // << ตั้งค่าเริ่มต้นว่างไว้ ไม่ให้แสดง "โทร -"
+  const remarkMap = {};
+
+  // helper เลือกค่าตามคีย์ที่มีจริง
+  const pick = (obj, keys=[]) => {
+    if (!obj) return '';
+    for (const k of keys) {
+      const v = obj[k];
+      if (v !== undefined && v !== null && String(v).trim()) return String(v).trim();
+    }
+    return '';
+  };
+  const pickFromList = (list, keys=[]) => {
+    for (const row of (list || [])) {
+      const v = pick(row, keys);
+      if (v) return v;
+    }
+    return '';
+  };
+
+  if (bookingId){
+    // 1) history → ชื่อผู้ยืม/รหัส/วันเวลา/ช่วงวัน (เอาเรคอร์ดล่าสุดของ booking นี้)
+    const resH = await axios.get(`${API_BASE}/api/history`, { params: { booking_id: bookingId } });
+    let list = Array.isArray(resH.data) ? resH.data : [];
+    list = list
+      .filter(h => String(h?.booking_id || '') === String(bookingId))
+      .filter(h => (h?.type || '').toLowerCase() === 'equipment')
+      .sort((a,b) => new Date(b.updatedAt || b.createdAt || b.date || 0) - new Date(a.updatedAt || a.createdAt || a.date || 0));
+
+    const recUser = list.find(h => h?.username_form && String(h.username_form).trim());
+    if (recUser) requester = String(recUser.username_form).trim();
+
+    const recId = list.find(h => h?.id_form && String(h.id_form).trim());
+    if (recId) requesterId = String(recId.id_form).trim();
+
+    const recDate = list[0];
+    if (recDate) {
+      if (recDate.createdAt) {
+        dateBorrow = this.formatDate(recDate.createdAt);
+        const dt = new Date(recDate.createdAt);
+        if (!isNaN(dt)) {
+          timeBorrow = dt.toLocaleTimeString('th-TH', { hour:'2-digit', minute:'2-digit', hour12:false }) + ' น.';
+        }
+      } else if (recDate.date) {
+        dateBorrow = this.formatDate(recDate.date);
+      }
+      const since = recDate?.since ? this.formatDate(recDate.since) : '-';
+      const upto  = recDate?.uptodate ? this.formatDate(recDate.uptodate) : '-';
+      dateRange = `${since} - ${upto}`;
+    }
+
+    // 2) booking_equipment → หน่วยงาน/เหตุผล/สถานที่/หมายเหตุรายการ
+    const resB = await axios.get(`${API_BASE}/api/booking_equipment?id=${bookingId}`);
+    const be = Array.isArray(resB.data) ? resB.data[0] : resB.data;
+    if (be){
+      agency   = pick(be, ['agency'])              || agency;
+      reason   = pick(be, ['reason','purpose'])    || reason;
+      location = pick(be, ['location'])            || location;
+
+      if (Array.isArray(be.items)){
+        be.items.forEach(i => { remarkMap[i.item_name] = i.remark || ''; });
+      }
+    }
+
+    // 3) TEL: หาได้จากทั้ง booking_equipment และ history ด้วยหลายชื่อคีย์
+    const telKeys = ['tel','phone','telephone','tel_form','telphone','contact_phone','contactTel','contact'];
+    const telFromBe   = pick(be, telKeys);
+    const telFromHist = pickFromList(list, telKeys);
+    tel = telFromBe || telFromHist || '';
+
+    // เติม fallback อื่น ๆ จาก history ถ้ายังว่าง
+    if (!agency   || agency   === '-') agency   = pickFromList(list, ['agency','department','org','organization']) || agency;
+    if (!reason   || reason   === '-') reason   = pickFromList(list, ['reasons','reason','purpose'])              || reason;
+    if (!location || location === '-') location = pickFromList(list, ['location','place','place_use'])            || location;
+  }
+
+  const rows = Array.from(mergedQty.entries()).map(([name, qty], idx) => ({
+    idx: idx + 1,
+    name,
+    quantity: qty,
+    remark: remarkMap[name] || ''
+  }));
+
+  return { requester, requesterId, tel, agency, reason, location, dateBorrow, timeBorrow, dateRange, rows };
+},
+
+
+
+
+
+
+
+
+
+
+async handoverGroup(group) {
+  const ctx = await this._buildEquipmentCtxFromGroup(group);
+
+  // ชื่อไทยของ staff ที่ล็อกอิน (ผู้ส่งมอบ)
+  const staffThaiName =
+    (localStorage.getItem('thaiName') || '').trim() ||
+    (this.usersMap[this.userId] || '').trim() ||
+    '-';
+  ctx.staffThaiName = staffThaiName;
+
+  // พรีวิวฟอร์ม
+  const htmlPreview = buildEquipmentApprovePreviewHTML(ctx);
+
+  const ask = await Swal.fire({
+    title: 'ยืนยันการส่งมอบอุปกรณ์',
+    html: htmlPreview,
+    width: 1100,
+    focusConfirm: false,
+    showCancelButton: true,
+    confirmButtonText: 'ส่งมอบ',
+    cancelButtonText: 'ยกเลิก',
+    confirmButtonColor: '#2baf2b',
+    cancelButtonColor: '#999',
+    customClass: { popup: 'swal-equip-approve' },
+    preConfirm: () => {
+      const remark1 = document.getElementById('handoverRemark1')?.value?.trim() || '';
+      const remark2 = document.getElementById('handoverRemark2')?.value?.trim() || '';
+      return { remarkSender: remark1, remarkReceiver: remark2 };
+    }
+  });
+  if (!ask.isConfirmed) return;
+
+  // สร้าง PDF จากข้อมูลที่กรอก
+  const remarkSender = ask.value.remarkSender || '';
+  const remarkReceiver = ask.value.remarkReceiver || '';
+
+  const pdfCtx = {
+    ...ctx,
+    handoverRemarkSender: remarkSender,
+    handoverRemarkReceiver: remarkReceiver,
+    booking_id: group.booking_id, 
+  };
+  const pdfHtml = buildEquipmentHandoverPDFHTML(pdfCtx);
+  const pdfName = `handover_${(group.booking_id || 'single')}_${Date.now()}.pdf`;
+
+  try {
+    this.processingGroups.add(group.booking_id);
+
+    // gen + upload
+    const pdfBlob = await _htmlToPdfBlob(pdfHtml, pdfName);
+    const pdfUrl  = await _uploadPdfBlob(pdfBlob, pdfName);
+
+    // payload บันทึกส่งมอบ
+    const payload = {
+      staff_id: this.userId,
+      remark_sender: remarkSender,
+      remark_receiver: remarkReceiver,
+      thai_name: staffThaiName,
+      bookingPdfUrl: pdfUrl,       // ✅ แทนที่ไฟล์ PDF เดิม
+      fileName: pdfName,
+      fileType: 'application/pdf'
+    };
+
+    if (group.booking_id && !String(group.booking_id).startsWith('single_')) {
+      const targetId = group.items?.[0]?.id;
+      await axios.patch(
+        `${API_BASE}/api/history/${targetId}/handover`,  // ✅ ใส่ API_BASE
+        { ...payload, booking_id: group.booking_id }
+      );
+    } else {
+      await Promise.all((group.items || []).map(it =>
+        axios.patch(`${API_BASE}/api/history/${it.id}/handover`, payload) // ✅ ใส่ API_BASE
+      ));
+    }
+
+    await Swal.fire({ icon: 'success', title: 'ส่งมอบเรียบร้อย', timer: 1400, showConfirmButton: false });
+    this.fetchAllEquipments?.();
+
+  } catch (err) {
+    console.error(err);
+    Swal.fire('Error', 'ส่งมอบไม่สำเร็จ', 'error');
+  } finally {
+    this.processingGroups.delete(group.booking_id);
+  }
+},
+
+
+
     toggleSidebar() {
       this.isSidebarClosed = !this.isSidebarClosed
     },
@@ -314,19 +858,29 @@ export default {
       this.showNotifications = false
     },
     async fetchUsers() {
-      try {
-        const res = await axios.get(`${API_BASE}/api/users`);
-        this.usersMap = {};
-        res.data.forEach(u => {
-          this.usersMap[u.user_id || u._id] =
-            (u.firstname && u.lastname)
-              ? `${u.firstname} ${u.lastname}`
-              : (u.name || u.user_id || u._id);
-        });
-      } catch (err) {
-        this.usersMap = {};
+  try {
+    const res = await axios.get(`${API_BASE}/api/users`);
+    this.usersMap = {};
+    res.data.forEach(u => {
+      const id = u.user_id || u._id;
+      const thai = (u.thaiName || '').trim();
+      const enFull = [u.firstname, u.lastname].filter(Boolean).join(' ').trim();
+      const fallback = (u.name || id || '').trim();
+
+      // ✅ ใช้ชื่อไทยก่อน แล้วค่อยอังกฤษ จากนั้นค่อย fallback
+      const display = thai || enFull || fallback;
+      this.usersMap[id] = display;
+
+      // ✅ เก็บชื่อของ staff คนปัจจุบันไว้ใน localStorage (กันกรณี usersMap ยังไม่โหลด)
+      if (String(id) === String(this.userId)) {
+        localStorage.setItem('thaiName', display);
       }
-    },
+    });
+  } catch (err) {
+    this.usersMap = {};
+  }
+},
+
     formatDate(dateStr) {
   if (!dateStr) return '-'
   const d = new Date(dateStr)
@@ -642,11 +1196,142 @@ export default {
 
 
     async returnGroup(group) {
-  // ✅ กันกดย้ำ
+  // กันกดย้ำ
   if (this.processingGroups.has(group.booking_id)) return;
   this.processingGroups.add(group.booking_id);
 
   const staffId = localStorage.getItem('user_id');
+
+  // ==== เคสยืมหลายวันที่ "รอรับคืน" (multi-return-pending) ====
+  if (group.kind === 'multi-return-pending') {
+    try {
+      // เตรียม context สำหรับพรีวิว/พิมพ์เอกสาร
+      const ctx = await this._buildEquipmentCtxFromGroup(group);
+
+      // ชื่อไทยผู้รับคืน + เวลา ISO ที่รับคืน
+      const receiverThaiName =
+        (localStorage.getItem('thaiName') || '').trim() ||
+        (this.usersMap[this.userId] || '').trim() || '-';
+      const receiverDateISO = new Date().toISOString();
+
+      ctx.receiverThaiName = receiverThaiName;
+
+      // ดึงข้อมูล "ผู้ส่งมอบ" ที่เคยบันทึกไว้
+      const any = (group.items || []);
+      ctx.handoverRemarkSender =
+        any.find(it => (it.handoverRemarkSender || '').trim())?.handoverRemarkSender || '';
+      ctx.handoverSenderName =
+        any.find(it => (it.handoverBy || '').trim())?.handoverBy || '';
+      ctx.handoverAt =
+        any.find(it => it.handoverAt)?.handoverAt || null;
+
+      // พรีวิว: ซ้ายอ่านอย่างเดียว/ขวาพิมพ์ได้ (ไม่มีช่อง damage แล้ว)
+      const htmlPreview = buildEquipmentReturnPreviewHTML({
+        ...ctx,
+        booking_id: group.booking_id,
+      });
+
+      const ask = await Swal.fire({
+        title: 'ยืนยันการรับคืนอุปกรณ์',
+        html: htmlPreview,
+        width: 1100,
+        focusConfirm: false,
+        showCancelButton: true,
+        confirmButtonText: 'รับคืน',
+        cancelButtonText: 'ยกเลิก',
+        confirmButtonColor: '#03a9f4',
+        cancelButtonColor: '#999',
+        customClass: { popup: 'swal-equip-approve' },
+        preConfirm: () => {
+          const receiverRemark =
+            document.getElementById('returnRemarkReceiver')?.value?.trim() || '';
+          const status =
+            document.querySelector('input[name="equipStatus"]:checked')?.value || 'good';
+          // ✅ ไม่บังคับกรอกข้อความเมื่อเลือก "ไม่สมบูรณ์"
+          return { status, finalRemark: receiverRemark };
+        }
+      });
+      if (!ask.isConfirmed) {
+        this.processingGroups.delete(group.booking_id);
+        return;
+      }
+
+      // since/uptodate (ใช้จากรายการแรกที่มี)
+      let since = null, uptodate = null;
+      for (const item of group.items) {
+        if (item.since && item.uptodate) { since = item.since; uptodate = item.uptodate; break; }
+      }
+
+      // === ทำ PDF (ช่องขวาจะใส่ชื่อ/วันที่ผู้รับคืน) ===
+      const receiverRemark = ask.value.finalRemark || '';
+      const pdfCtx = {
+        ...ctx,
+        handoverRemarkSender: ctx.handoverRemarkSender || '',
+        handoverRemarkReceiver: receiverRemark,
+        booking_id: group.booking_id,
+        // ชื่อใต้เส้นจุดของ "ผู้ส่งมอบ" (จากครั้งส่งมอบเดิม)
+        staffThaiName: ctx.handoverSenderName || (this.usersMap[this.userId] || ''),
+        // ฝั่งผู้รับคืน
+        handoverReceiverThaiName: receiverThaiName,
+        handoverReceiverDate: receiverDateISO,
+      };
+      const pdfName = `handover_${(group.booking_id || 'single')}_${Date.now()}_returned.pdf`;
+      const pdfHtml = buildEquipmentHandoverPDFHTML(pdfCtx);
+      const pdfBlob = await _htmlToPdfBlob(pdfHtml, pdfName);
+      const pdfUrl  = await _uploadPdfBlob(pdfBlob, pdfName);
+
+      // ยิง PATCH คืนอุปกรณ์ให้ทุก item ในกลุ่ม พร้อมแนบลิงก์ PDF + ฟิลด์ใหม่
+      await Promise.all(
+        group.items.map(item =>
+          axios.patch(`${API_BASE}/api/history/${item.id}/return`, {
+            staff_id: staffId,
+            status: ask.value.status,      // 'good' | 'bad'
+            remark: receiverRemark,        // หมายเหตุผู้รับคืน
+            attachment: item.attachment || item.returnPhoto || item.fileData,
+            fileName: item.fileName,
+            booking_id: item.booking_id || null,
+
+            // ไฟล์ PDF ที่เพิ่งสร้าง
+            bookingPdfUrl: pdfUrl,
+            pdfFileName: pdfName,
+            fileType: 'application/pdf',
+
+            // ฟิลด์ฝั่งผู้รับคืน
+            handoverReceiverThaiName: receiverThaiName,
+            handoverReceiverDate: receiverDateISO,
+
+            ...(since ? { since } : {}),
+            ...(uptodate ? { uptodate } : {}),
+          })
+        )
+      );
+
+      // อัปเดต UI
+      group.items.forEach(item => {
+        item.status = 'Returned';
+        if (since) item.since = since;
+        if (uptodate) item.uptodate = uptodate;
+      });
+
+      await Swal.fire({
+        title: 'สำเร็จ',
+        text: 'รับคืนอุปกรณ์เรียบร้อย',
+        icon: 'success',
+        timer: 1500,
+        showConfirmButton: false
+      });
+
+      this.fetchPendingEquipments?.();
+    } catch (err) {
+      console.error(err);
+      Swal.fire('Error', 'คืนอุปกรณ์ไม่สำเร็จ', 'error');
+    } finally {
+      this.processingGroups.delete(group.booking_id);
+    }
+    return; // ✅ จบเคสหลายวัน
+  }
+
+  // ==== เคสอื่น (single-day/ของเดิม) ====
   const itemWithPhoto = group.items.find(item => !!item.attachment || !!item.returnPhoto || !!item.fileData);
   const imgSrc =
     (itemWithPhoto && itemWithPhoto.returnPhoto) ||
@@ -664,8 +1349,7 @@ export default {
           onclick="window.__showFullPhoto && window.__showFullPhoto()"
         />
         <div style="font-size:0.9em;color:#888;margin-top:0.4em;">คลิกที่รูปเพื่อดูแบบเต็มจอ</div>
-      </div>
-    `;
+      </div>`;
   } else {
     photoHtml = `<div style="text-align:center;color:#bbb;margin-bottom:12px;">ไม่มีรูปคืนอุปกรณ์แนบมา</div>`;
   }
@@ -679,19 +1363,13 @@ export default {
         คุณต้องการคืนอุปกรณ์ทั้งหมดนี้หรือไม่?<br>
         <span style="font-size:0.9em;color:#666;">(กรุณาเลือกสถานะและกรอกหมายเหตุ ถ้าหากอุปกรณ์ไม่สมบูรณ์)</span>
       </div>
-      <div style="display: flex; justify-content: center; align-items: center; margin-bottom: 8px;">
-        <label style="margin-right: 2em;">
-          <input type="radio" name="equipStatus" value="good" checked> สมบูรณ์
-        </label>
-        <label>
-          <input type="radio" name="equipStatus" value="bad"> ไม่สมบูรณ์
-        </label>
+      <div style="display:flex;justify-content:center;align-items:center;margin-bottom:8px;">
+        <label style="margin-right:2em;"><input type="radio" name="equipStatus" value="good" checked> สมบูรณ์</label>
+        <label><input type="radio" name="equipStatus" value="bad"> ไม่สมบูรณ์</label>
       </div>
-      <div id="remarkBox"
-           style="margin-top:1em; display:none; justify-content:center; align-items:center; width:100%;">
+      <div id="remarkBox" style="margin-top:1em; display:none; justify-content:center; align-items:center; width:100%;">
         <input id="remarkInput" class="swal2-input" placeholder="กรุณากรอกหมายเหตุ" />
-      </div>
-    `,
+      </div>`,
     icon: 'question',
     showCancelButton: true,
     confirmButtonText: 'คืนอุปกรณ์',
@@ -711,19 +1389,13 @@ export default {
         if (imgSrc) {
           const imgWin = window.open("", "_blank");
           imgWin.document.write(`
-            <html>
-              <head>
-                <title>รูปคืนอุปกรณ์</title>
-                <style>
-                  body { background:#111;margin:0;display:flex;align-items:center;justify-content:center;height:100vh;}
-                  img { max-width:100vw;max-height:100vh;object-fit:contain;border-radius:16px;box-shadow:0 8px 30px #0008;}
-                </style>
-              </head>
-              <body onclick="window.close()">
-                <img src="${imgSrc}" alt="รูปคืนอุปกรณ์" />
-              </body>
-            </html>
-          `);
+            <html><head><title>รูปคืนอุปกรณ์</title>
+              <style>
+                body { background:#111;margin:0;display:flex;align-items:center;justify-content:center;height:100vh;}
+                img { max-width:100vw;max-height:100vh;object-fit:contain;border-radius:16px;box-shadow:0 8px 30px #0008;}
+              </style></head>
+              <body onclick="window.close()"><img src="${imgSrc}" alt="รูปคืนอุปกรณ์" /></body>
+            </html>`);
         }
       };
       const radios = document.getElementsByName('equipStatus');
@@ -734,9 +1406,7 @@ export default {
         });
       });
     },
-    willClose: () => {
-      window.__showFullPhoto = undefined;
-    }
+    willClose: () => { window.__showFullPhoto = undefined; }
   });
 
   if (!result) {
@@ -744,15 +1414,10 @@ export default {
     return;
   }
 
-  // หา since กับ uptodate จาก item ที่มี (ถ้ามีมากกว่าหนึ่ง ใช้ตัวแรกที่เจอ)
-  let since = null;
-  let uptodate = null;
+  // since/uptodate สำหรับ single/เดิม
+  let since = null, uptodate = null;
   for (const item of group.items) {
-    if (item.since && item.uptodate) {
-      since = item.since;
-      uptodate = item.uptodate;
-      break;
-    }
+    if (item.since && item.uptodate) { since = item.since; uptodate = item.uptodate; break; }
   }
 
   try {
@@ -766,7 +1431,7 @@ export default {
           fileName: item.fileName,
           booking_id: item.booking_id || null,
           ...(since ? { since } : {}),
-          ...(uptodate ? { uptodate } : {})
+          ...(uptodate ? { uptodate } : {}),
         })
       )
     );
@@ -779,20 +1444,23 @@ export default {
 
     Swal.fire({
       title: 'สำเร็จ',
-      text: `คุณได้คืนอุปกรณ์กลุ่มนี้แล้ว`,
+      text: 'คุณได้คืนอุปกรณ์กลุ่มนี้แล้ว',
       icon: 'success',
       timer: 1500,
       showConfirmButton: false
     });
-
     this.fetchPendingEquipments();
   } catch (err) {
+    console.error(err);
     Swal.fire('Error', 'คืนอุปกรณ์ไม่สำเร็จ', 'error');
   } finally {
-    // ✅ ปลดล็อกกลุ่มนี้ไม่ว่าจะสำเร็จหรือล้มเหลว
     this.processingGroups.delete(group.booking_id);
   }
 },
+
+
+
+
 
 
 
@@ -800,25 +1468,39 @@ export default {
   try {
     const res = await axios.get(`${API_BASE}/api/history`);
     const allList = res.data
-  .filter(h => h.type !== 'field')
-  .map(h => ({
-    id: h._id?.$oid || h._id,
-    name: h.name || "-",
-    quantity: h.quantity || "-",
-    user_id: h.user_id || "-",
-    requester: h.requester || "-",
-    date: h.date || "-",
-    booking_id: h.booking_id || 'single_' + (h._id?.$oid || h._id),
-    status: (h.status || "").toLowerCase(),
-    agency: h.agency ?? "",          // เพิ่ม!
-    since: h.since ?? null,          // เพิ่ม!
-    uptodate: h.uptodate ?? null,    // เพิ่ม!
-    updatedAt: h.updatedAt || h.updated_at || h.date || null,
-    attachment: h.attachment || h.returnPhoto || null,
-    fileName: h.fileName || null,
-    type: h.type
-  }));
+      .filter(h => h.type !== 'field')
+      .map(h => ({
+        id: h._id?.$oid || h._id,
+        name: h.name || "-",
+        quantity: h.quantity || "-",
+        user_id: h.user_id || "-",
+        requester: h.requester || "-",
+        date: h.date || "-",
+        booking_id: h.booking_id || 'single_' + (h._id?.$oid || h._id),
+        status: (h.status || "").toLowerCase(),
+        agency: h.agency ?? "",
+        since: h.since ?? null,
+        uptodate: h.uptodate ?? null,
+        updatedAt: h.updatedAt || h.updated_at || h.date || null,
+        attachment: h.attachment || h.returnPhoto || null,
+        fileName: h.fileName || null,
+        type: h.type,
 
+        approvedBy: h.approvedBy || h.approved_by || h.approvedStaffName || "",
+        approvedById: h.approvedById || h.approved_by_id || h.approvedStaffId || "",
+        approvedAt: h.approvedAt || h.approved_at || h.approvedDate || "",
+
+        // ⬇️ ฟิลด์การส่งมอบ (เดิม)
+        handoverById: h.handoverById || "",
+        handoverBy: h.handoverBy || "",
+        handoverAt: h.handoverAt || null,
+        handoverRemarkSender: h.handoverRemarkSender || "",
+
+        // ⬇️ ใหม่: ข้อมูลฝั่ง "ผู้รับคืน" (ช่องขวา)
+        handoverRemarkReceiver: h.handoverRemarkReceiver || "",
+        handoverReceiverThaiName: h.handoverReceiverThaiName || "",
+        handoverReceiverDate: h.handoverReceiverDate || null,
+      }));
 
     // group by booking_id
     const groups = {};
@@ -837,6 +1519,7 @@ export default {
     console.error('โหลดข้อมูล booking ไม่สำเร็จ:', err);
   }
 },
+
     async fetchNotifications() {
   try {
     const cutoff = Date.now() - (7 * 24 * 60 * 60 * 1000); // ✅ เก็บแค่ 7 วันล่าสุด
@@ -919,6 +1602,258 @@ export default {
   window.removeEventListener('resize', this.checkMobile);
   },
 }
+
+// ====== HTML พรีวิวแบบเดียวกับหน้า approve_field (อุปกรณ์) ======
+
+function buildEquipmentApprovePreviewHTML(ctx) {
+  const esc = s => String(s ?? '-')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+
+  const todayStr = new Intl.DateTimeFormat('th-TH-u-nu-latn', {
+    timeZone: 'Asia/Bangkok', day:'2-digit', month:'2-digit', year:'numeric'
+  }).format(new Date());
+
+  const splitRange = (s) => {
+    if (!s) return ['-', '-'];
+    const p = String(s).split(' - ');
+    return [p[0] || '-', p[1] || '-'];
+  };
+  const [sinceStr, uptoStr] = splitRange(ctx.dateRange);
+
+  const rows = (ctx.rows || []).map((r,i)=>`
+    <tr>
+      <td class="c">${r.idx ?? (i+1)}</td>
+      <td class="l">${esc(r.name)}</td>
+      <td class="c">${esc(r.quantity)}</td>
+      <td class="l">${esc(r.remark || '-')}</td>
+    </tr>`).join('');
+
+  return `
+  <div class="eqp-preview">
+    <div class="eqp-head">
+      <div class="t1">แบบฟอร์มการยืมอุปกรณ์/วัสดุ/ครุภัณฑ์ ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง</div>
+      <div class="t2">โทร 0-5391-7820 และ 0-5391-7821 | E-mail: sport-complex@mfu.ac.th</div>
+    </div>
+
+    <div class="eqp-meta">
+      <div class="right">
+        <div>ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง</div>
+        <div>วันที่ทำรายการ ${esc(ctx.dateBorrow)}</div>
+        <div>เวลาที่ทำรายการ ${esc(ctx.timeBorrow)}</div>
+      </div>
+    </div>
+
+    <div class="date" style="margin-top:30px">วันที่ ${todayStr}</div>
+    <div style="margin-top:20px">ส่วนที่1 สำหรับผู้ขอใช้บริการ</div>
+
+    <section class="eqp-section eqp-section--par">
+      <div class="eqp-par">
+        ข้าพเจ้า ${esc(ctx.requester)}
+       รหัสนักศึกษา/รหัสพนักงาน ${esc(ctx.requesterId)}
+        ${ctx.tel ? 'โทร ' + esc(ctx.tel) : ''}
+        มีความประสงค์ขอยืมอุปกรณ์/วัสดุ/ครุภัณฑ์ ของศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง
+        เพื่อใช้ในงาน ${esc(ctx.reason)} สถานที่ใช้งาน ${esc(ctx.location)}
+        ระหว่างวันที่ ${esc(sinceStr)} ถึงวันที่ ${esc(uptoStr)}
+      </div>
+    </section>
+
+    <section class="eqp-section eqp-section--table">
+      <table class="eqp-table">
+        <thead>
+          <tr>
+            <th style="width:72px">ลำดับ</th>
+            <th>รายการ</th>
+            <th style="width:100px">จำนวน</th>
+            <th style="width:260px">หมายเหตุ</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </section>
+
+    <div class="eqp-bottom">
+      <div class="eqp-sign">
+        <div class="sig sig-line">
+          <span class="lab">ลงชื่อ</span>
+          <span class="line"><span class="name">${esc(ctx.requester)}</span></span>
+          <span class="role">ผู้ยืม</span>
+        </div>
+        <div class="date">วันที่ ${todayStr}</div>
+      </div>
+
+      <div class="eqp-boxes">
+        <!-- กล่องซ้าย ผู้ส่งมอบ -->
+        <div class="box">
+          <div class="title">ผลการดำเนินการ/ผลการปฏิบัติงาน</div>
+          <textarea id="handoverRemark1"
+                    class="eqp-textarea"
+                    rows="4"
+                    placeholder="พิมพ์ผลการดำเนินการ/ผลการปฏิบัติงาน (ผู้ส่งมอบ) ที่นี่..."></textarea>
+
+          <div class="sign-inline" style="margin-top:8px;">
+            <span class="lab">ลงชื่อ</span>
+            <span class="dotfill"><span class="filltext">${esc(ctx.staffThaiName || '')}</span></span>
+            <span class="role">ผู้ส่งมอบ</span>
+          </div>
+          <div class="date">วันที่ ${todayStr}</div>
+        </div>
+
+        <!-- กล่องขวา ผู้รับคืน (พิมพ์ไม่ได้) -->
+        <div class="box">
+          <div class="title">ผลการดำเนินการ/ผลการปฏิบัติงาน</div>
+          <textarea id="handoverRemark2"
+                    class="eqp-textarea"
+                    rows="4"
+                    placeholder="พิมพ์ผลการดำเนินการ/ผลการปฏิบัติงาน (ผู้รับคืน) ที่นี่..."
+                    readonly></textarea>
+
+          <div class="sign-inline" style="margin-top:8px;">
+            <span class="lab">ลงชื่อ</span>
+            <span class="dotfill"></span>
+            <span class="role">ผู้รับคืน</span>
+          </div>
+          <div class="date">วันที่........../........../..........</div>
+        </div>
+      </div>
+
+      <div style="margin-top:20px">
+        *หมายเหตุ หากอุปกรณ์/วัสดุ/ครุภัณฑ์ เกิดการชำรุดเสียหายในระหว่างที่ผู้ยืมเป็นผู้รับผิดชอบ
+        ผู้ยืมจะต้องชดใช้ค่าเสียหายที่เกิดขึ้นทั้งหมด
+      </div>
+    </div>
+  </div>`;
+}
+
+function buildEquipmentReturnPreviewHTML(ctx) {
+  const esc = s => String(s ?? '-')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+
+  const todayStr = new Intl.DateTimeFormat('th-TH-u-nu-latn', {
+    timeZone: 'Asia/Bangkok', day:'2-digit', month:'2-digit', year:'numeric'
+  }).format(new Date());
+
+  const handoverDateStr = ctx.handoverAt
+    ? new Intl.DateTimeFormat('th-TH-u-nu-latn', {
+        timeZone: 'Asia/Bangkok', day:'2-digit', month:'2-digit', year:'numeric'
+      }).format(new Date(ctx.handoverAt))
+    : '........../........../..........';
+
+  const splitRange = (s) => {
+    if (!s) return ['-', '-'];
+    const p = String(s).split(' - ');
+    return [p[0] || '-', p[1] || '-'];
+  };
+  const [sinceStr, uptoStr] = splitRange(ctx.dateRange);
+
+  const rows = (ctx.rows || []).map((r,i)=>`
+    <tr>
+      <td class="c">${r.idx ?? (i+1)}</td>
+      <td class="l">${esc(r.name)}</td>
+      <td class="c">${esc(r.quantity)}</td>
+      <td class="l">${esc(r.remark || '-')}</td>
+    </tr>`).join('');
+
+  return `
+  <div class="eqp-preview">
+    <div class="eqp-head">
+      <div class="t1">แบบฟอร์มการยืมอุปกรณ์/วัสดุ/ครุภัณฑ์ ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง</div>
+      <div class="t2">โทร 0-5391-7820 และ 0-5391-7821 | E-mail: sport-complex@mfu.ac.th</div>
+    </div>
+
+    <div class="eqp-meta">
+      <div class="right">
+        <div>ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง</div>
+        <div>วันที่ทำรายการ ${esc(ctx.dateBorrow)}</div>
+        <div>เวลาที่ทำรายการ ${esc(ctx.timeBorrow)}</div>
+      </div>
+    </div>
+
+    <div class="date" style="margin-top:30px">วันที่ ${todayStr}</div>
+    <div style="margin-top:20px">ส่วนที่1 สำหรับผู้ขอใช้บริการ</div>
+
+    <section class="eqp-section eqp-section--par">
+      <div class="eqp-par">
+        ข้าพเจ้า ${esc(ctx.requester)}
+        รหัสนักศึกษา/รหัสพนักงาน ${esc(ctx.requesterId)}
+        ${ctx.tel ? 'โทร ' + esc(ctx.tel) : ''}
+        มีความประสงค์ขอยืมอุปกรณ์/วัสดุ/ครุภัณฑ์ ของศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง
+        เพื่อใช้ในงาน ${esc(ctx.reason)} สถานที่ใช้งาน ${esc(ctx.location)}
+        ระหว่างวันที่ ${esc(sinceStr)} ถึงวันที่ ${esc(uptoStr)}
+        
+      </div>
+    </section>
+
+    <section class="eqp-section eqp-section--table">
+      <table class="eqp-table">
+        <thead>
+          <tr>
+            <th style="width:72px">ลำดับ</th>
+            <th>รายการ</th>
+            <th style="width:100px">จำนวน</th>
+            <th style="width:260px">หมายเหตุ</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </section>
+
+    <div class="eqp-bottom">
+      <!-- ลงชื่อผู้ยืม -->
+      <div class="eqp-sign">
+        <div class="sig sig-line">
+          <span class="lab">ลงชื่อ</span>
+          <span class="line"><span class="name">${esc(ctx.requester)}</span></span>
+          <span class="role">ผู้ยืม</span>
+        </div>
+        <div class="date">วันที่ ${todayStr}</div>
+      </div>
+
+      <div class="eqp-boxes">
+        <!-- ซ้าย: ผู้ส่งมอบ (อ่านอย่างเดียว) -->
+        <div class="box">
+          <div class="title">ผลการดำเนินการ/ผลการปฏิบัติงาน (ผู้ส่งมอบ)</div>
+          <div class="eqp-textarea" style="white-space:pre-wrap;background:#f5f6fa;color:#333;cursor:not-allowed;">
+            ${esc(ctx.handoverRemarkSender || '')}
+          </div>
+          <div class="sign-inline" style="margin-top:8px;">
+            <span class="lab">ลงชื่อ</span>
+            <span class="dotfill"><span class="filltext">${esc(ctx.handoverSenderName || '')}</span></span>
+            <span class="role">ผู้ส่งมอบ</span>
+          </div>
+          <div class="date">วันที่ ${handoverDateStr}</div>
+        </div>
+
+        <!-- ขวา: ผู้รับคืน (พิมพ์ได้) -->
+        <div class="box">
+          <div class="title">ผลการดำเนินการ/ผลการปฏิบัติงาน (ผู้รับคืน)</div>
+          <textarea id="returnRemarkReceiver"
+                    class="eqp-textarea"
+                    rows="4"
+                    placeholder="พิมพ์ผลการดำเนินการ/ปัญหาขณะรับคืน ฯลฯ..."></textarea>
+          <div class="sign-inline" style="margin-top:8px;">
+            <span class="lab">ลงชื่อ</span>
+            <span class="dotfill"><span class="filltext">${esc(ctx.receiverThaiName || '')}</span></span>
+            <span class="role">ผู้รับคืน</span>
+          </div>
+          <div class="date">วันที่ ${todayStr}</div>
+        </div>
+      </div>
+
+      <!-- ตัวเลือกสถานะความสมบูรณ์ (ไม่มีช่องกรอกรายละเอียดแล้ว) -->
+      <div id="returnStatusBox" style="margin-top:14px; text-align:center;">
+        <label style="margin-right:2em;">
+          <input type="radio" name="equipStatus" value="good" checked> สมบูรณ์
+        </label>
+        <label>
+          <input type="radio" name="equipStatus" value="bad"> ไม่สมบูรณ์
+        </label>
+      </div>
+    </div>
+  </div>`;
+}
+
 </script>
 
 
@@ -1388,6 +2323,102 @@ export default {
     min-width: 0 !important;
   }
 }
+
+
+/* แสดง form ในปุ่มส่งมอบ */
+/* ==== SweetAlert preivew ของ "ส่งมอบ" ให้เหมือน approve_field ==== */
+.swal2-popup.swal-equip-approve{
+  max-width:1100px !important;
+  width:auto !important;
+  padding:26px !important;
+}
+
+/* โครงฟอร์มอุปกรณ์ */
+.eqp-preview{ font-family:'THSarabunNew','Sarabun','Noto Sans Thai', system-ui, sans-serif; color:#111; }
+.eqp-head{ text-align:center; margin-bottom:18px; }
+.eqp-head .t1{ font-weight:700; font-size:20px; }
+.eqp-head .t2{ font-size:14px; margin-top:2px; }
+.eqp-meta{ display:flex; justify-content:flex-end; margin:18px 0 12px; }
+.eqp-meta .right{ text-align:right; line-height:1.55; }
+
+.eqp-par{ font-size:16px; line-height:1.75; text-indent:2em; word-break:break-word; margin:12px 0 18px; }
+
+/* ตาราง */
+.eqp-table{ width:100%; border-collapse:collapse; table-layout:fixed; font-size:15px; margin:14px 0 22px; }
+.eqp-table thead th{
+  background:#213555; color:#fff; border:1px solid #e6e9f2; padding:10px 14px; text-align:center; font-weight:700;
+  position:sticky; top:0; z-index:1;
+}
+.eqp-table tbody td{ border:1px solid #e6e9f2; padding:10px 14px; vertical-align:top; }
+.eqp-table td.c{ text-align:center; }
+.eqp-table td.l{ text-align:left; overflow:visible !important; text-overflow:clip !important; }
+.eqp-table th, .eqp-table td{ white-space:normal !important; word-break:break-word !important; overflow-wrap:anywhere !important; }
+
+/* ลายเซ็น + กล่อง */
+.eqp-sign{ margin:16px 0 6px; display:flex; flex-direction:column; align-items:flex-end; text-align:right; }
+.eqp-sign .sig-line{ display:grid; grid-template-columns:auto 240px auto; align-items:center; column-gap:8px; }
+.eqp-sign .sig-line .line{ height:1.2em; border-bottom:1px dotted #666; display:flex; align-items:flex-end; justify-content:center; }
+.eqp-sign .sig-line .name{ padding:0 6px; background:transparent; }
+.eqp-sign .date{ margin-top:6px; }
+
+.eqp-boxes{ display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:16px; margin-top:18px; }
+.eqp-boxes .box{ border:1px solid #333; padding:12px 14px; min-height:176px; }
+.eqp-boxes .title{ font-weight:700; text-align:center; padding-bottom:6px; margin-bottom:10px; border-bottom:1px solid #9aa3b2; }
+.eqp-boxes .dotrow{ height:1.2em; border-bottom:1px dotted #666; margin:10px 0; }
+.eqp-boxes .sign-inline{ display:grid; grid-template-columns:auto 1fr auto; column-gap:8px; align-items:center; margin-top:6px; }
+.eqp-boxes .dotfill{ height:1.2em; border-bottom:1px dotted #666; }
+.eqp-boxes .date{ text-align:center; margin-top:8px; }
+
+.eqp-textarea{
+  width:100%;
+  min-height:96px;
+  padding:8px 10px;
+  border:1px solid #cfd5e6;
+  border-radius:8px;
+  font-size:15px;
+  line-height:1.5;
+  resize:vertical;
+  outline:none;
+  background:#fff;
+}
+.eqp-textarea:focus{
+  border-color:#213555;
+  box-shadow:0 0 0 2px rgba(33,53,85,.12);
+}
+
+/* พื้นหลังเทา+ห้ามพิมพ์ของ textarea ขวา */
+.eqp-textarea[readonly]{
+  background:#f5f6fa;
+  color:#666;
+  cursor:not-allowed;
+}
+
+/* ข้อความชื่อที่แสดงบนเส้นจุด */
+.eqp-boxes .dotfill .filltext{
+  display:inline-block;
+  padding:0 4px;
+}
+
+.eqp-boxes .sign-inline .dotfill{
+  display: flex;               /* เปลี่ยนจากค่าเดิมให้เป็น flex */
+  align-items: flex-end;       /* ชิดเส้นล่าง */
+  justify-content: center;     /* ⬅️ จัดกลางแนวนอน */
+}
+
+.eqp-boxes .sign-inline .dotfill .filltext{
+  background: #fff;            /* กลบรอยเส้นปะใต้ตัวอักษรให้ชัด */
+  padding: 0 4px;
+  line-height: 1;
+}
+
+.swal-equip-approve .eqp-boxes .eqp-textarea{
+  height: 140px !important;     /* ปรับเลขได้ตามต้องการ */
+  min-height: 140px !important;
+  resize: none;                  /* กันไม่ให้ลากแล้วสูงไม่เท่ากัน */
+}
+
+
+
 
 
 </style>

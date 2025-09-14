@@ -410,10 +410,6 @@ async function loadBookingInfo () {
                 <td>${esc(info.value.username_form || info.value.requester || '-')}</td>
               </tr>
               <tr>
-                <th>จองแทนผู้ใช้</th>
-                <td>${esc(info.value.proxyStudentName || '-')}</td>
-              </tr>
-              <tr>
                 <th>วันที่</th>
                 <td>${esc(formatDateOnly(info.value.since))} - ${esc(formatDateOnly(info.value.uptodate))}</td>
               </tr>

@@ -430,31 +430,45 @@ getGroupCreatedAt(group) {
 },
 
     buildReturnPayload(bookingId) {
-  // ดึงรายการทั้งหมดของ booking นี้ (เลือกตัวที่อนุมัติไว้ก่อน)
-  const items = (this.histories || []).filter(h => String(h.booking_id) === String(bookingId));
-  const src = items.find(i => (i.status || '').toLowerCase() === 'approved') || items[0] || {};
+  const items = (this.histories || [])
+    .filter(h => String(h.booking_id) === String(bookingId));
 
-  // ระวังคีย์สะกดต่างกันบ้าง เช่น proxyStudentId/ID
+  // ⬅ เลือกตัวที่มีข้อมูล handover ก่อน ถ้าไม่มีค่อย fallback ไปตัวที่ Approved หรือชิ้นแรก
+  const withHandover = items.find(i =>
+    i.handoverById || i.handoverBy || i.handoverAt ||
+    i.handoverRemarkSender || i.handoverRemarkReceiver
+  );
+  const approved = items.find(i => (i.status || '').toLowerCase() === 'approved');
+  const src = withHandover || approved || items[0] || {};
+
   const payload = {};
   const FIELDS = [
-    'user_id', 'booking_id', 'type', 'zone', 'name',
-    'since', 'uptodate', 'date', 'quantity',
-    'requester', 'username_form',
-    'proxyStudentName', 'proxyStudentId', 'proxyStudentID',
-    'id_form', 'agency',
-    'approvedBy', 'approvedById',
-    'bookingPdfUrl', 'booking_pdf_url'
+    'user_id','booking_id','type','zone','name',
+    'since','uptodate','date','quantity',
+    'requester','username_form',
+    'proxyStudentName','proxyStudentId','proxyStudentID',
+    'id_form','agency',
+    'approvedBy','approvedById',
+    'bookingPdfUrl','booking_pdf_url',
+
+    // ✅ เพิ่ม 5 ฟิลด์ที่ต้องการ
+    'handoverById','handoverBy','handoverAt','handoverRemarkSender','handoverRemarkReceiver'
   ];
+
   FIELDS.forEach(k => {
     if (src[k] !== undefined && src[k] !== null && src[k] !== '') payload[k] = src[k];
   });
 
-  // บังคับบางค่าให้มี
+  // บังคับให้ key ทั้ง 5 ออกไปเสมอ (ถึงจะว่าง)
+  ['handoverById','handoverBy','handoverAt','handoverRemarkSender','handoverRemarkReceiver']
+    .forEach(k => { if (!(k in payload)) payload[k] = src[k] ?? ''; });
+
   if (!payload.type) payload.type = src.type || 'equipment';
-  payload.status = 'Return-pending';     // เผื่อฝั่งแบ็กเอนด์อยากใช้ค่า status จาก client
+  payload.status = 'Return-pending';
 
   return payload;
 },
+
     setStatusWidthToReturnPending() {
       this.$nextTick(() => {
         const root = this.$el || document;
@@ -861,6 +875,12 @@ getGroupCreatedAt(group) {
           remark: h.remark || '-',           // ใช้ remark ที่จะเอาไปโชว์ใน Detail
           approvedBy: h.approvedBy || '-',
           disapprovedBy: h.disapprovedBy,
+
+          handoverById:          h.handoverById          || h.handover_by_id          || '',
+          handoverBy:            h.handoverBy            || h.handover_by             || h.handoverStaffName || '',
+          handoverAt:            h.handoverAt            || h.handover_at             || '',
+          handoverRemarkSender:  h.handoverRemarkSender  || h.handover_remark_sender  || '',
+          handoverRemarkReceiver:h.handoverRemarkReceiver|| h.handover_remark_receiver|| '',
         };
       });
     },
@@ -988,7 +1008,7 @@ const dateCell =
                   <td>${esc(it.name)}</td>
                   <td>
                     <div><b>Name:</b> ${esc(it.username_form || '-')}</div>
-                    <div><b>Book for:</b> ${esc(it.proxyStudentName || '-')}</div>
+                     <!-- <div><b>Book for:</b> ${esc(it.proxyStudentName || '-')}</div> -->
                   </td>
                   <td class="td-center">${esc(dateCell)}</td>
                   <td class="td-center">${esc(timeRange)}</td>

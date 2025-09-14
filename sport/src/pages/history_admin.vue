@@ -12,7 +12,7 @@
         <router-link to="/edit_equipment" active-class="active"><i class="pi pi-clipboard"></i> แก้ไขอุปกรณ์ </router-link>
         <router-link to="/booking_field_admin" active-class="active"><i class="pi pi-map-marker"></i> จองสนาม</router-link>
         <router-link to="/approve_field" active-class="active"><i class="pi pi-verified"></i> อนุมัติ</router-link>
-        <router-link to="/return_admin" active-class="active"><i class="pi pi-box"></i> รับคืนอุปกรณ์ </router-link>
+        <!-- <router-link to="/return_admin" active-class="active"><i class="pi pi-box"></i> รับคืนอุปกรณ์ </router-link> -->
         <router-link to="/members" active-class="active"><i class="pi pi-user-edit"></i> พนักงาน/ผู้ดูแล </router-link>
         <router-link to="/history_admin" active-class="active"><i class="pi pi-history"></i> ระบบประวัติการทำรายการ</router-link>
       </nav>
@@ -1061,8 +1061,8 @@ if (group.type === 'field') {
           <tr><th>สนาม</th><td>${esc(it.name)}</td></tr>
           <tr><th>ผู้ขอใช้</th><td>${esc(requesterCell)}</td></tr>
           <tr><th>รหัสนักศึกษา/พนักงาน</th><td>${esc(it.id_form || '-')}</td></tr>
-          <tr><th>จองให้ผู้ใช้</th><td>${esc(it.proxyStudentName || '-')}</td></tr>
-          <tr><th>รหัสนักศึกษา/พนักงาน (ของผู้ที่ถูกจองแทน)</th><td>${esc(it.proxyStudentId || '-')}</td></tr>
+         <!-- <tr><th>จองให้ผู้ใช้</th><td>${esc(it.proxyStudentName || '-')}</td></tr> -->
+         <!-- <tr><th>รหัสนักศึกษา/พนักงาน (ของผู้ที่ถูกจองแทน)</th><td>${esc(it.proxyStudentId || '-')}</td></tr> -->
           <tr><th>วันที่จอง</th><td>${dateCell}</td></tr> <!-- ✅ ใช้ช่วง since - uptodate -->
           <tr><th>เวลาที่จอง</th><td>${esc(this.addThaiMinuteSuffix(it.time))}</td></tr>
           <tr><th>สถานะ</th><td>${esc(prettyStatus)}</td></tr>

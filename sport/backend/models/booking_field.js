@@ -40,6 +40,12 @@ const bookingFieldSchema = new mongoose.Schema({
     receiver: String,
     need_equipment: String,
 
+    restroom: {
+        type: String,
+        enum: ['yes', 'no', ''],
+        default: ''
+    },
+
     uploadFiles: [String],
     booking_id: String,
     utilityRequest: { type: String, default: "no" },   // <--- เพิ่ม
@@ -49,6 +55,8 @@ const bookingFieldSchema = new mongoose.Schema({
 
     username_form: String,
     id_form: String,
+
+
 
 });
 
