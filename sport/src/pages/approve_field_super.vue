@@ -145,6 +145,7 @@ export default {
       polling: null,
       userMap: {},
       userSigMap: {},
+      userEmailById: {},
       isMobile: window.innerWidth <= 600,
       grouped: [],
       lastSeenTimestamp: 0,
@@ -178,39 +179,26 @@ export default {
   methods: {
 
     // ========== บังคับ A4 หน้าเดียว ==========
-async  _makeA4OnePageBlob(element) {
+// ========== บังคับ A4 หน้าเดียว + แก้ textarea เป็นข้อความก่อนแคปเจอร์ ==========
+async _makeA4OnePageBlob(element) {
   // รอฟอนต์ (กันเด้งตัวอักษร)
-  if (document.fonts && document.fonts.ready) {
-    try { await document.fonts.ready; } catch {}
-  }
+  if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch {} }
 
   const MARGIN_MM = 10;
 
   // เก็บ style เดิมไว้คืนค่า
   const orig = {
-    width: element.style.width,
-    margin: element.style.margin,
-    padding: element.style.padding,
-    boxSizing: element.style.boxSizing,
-    transform: element.style.transform,
-    transformOrigin: element.style.transformOrigin,
-    position: element.style.position,
-    left: element.style.left,
-    top: element.style.top,
-    display: element.style.display,
+    width: element.style.width, margin: element.style.margin, padding: element.style.padding,
+    boxSizing: element.style.boxSizing, transform: element.style.transform,
+    transformOrigin: element.style.transformOrigin, position: element.style.position,
+    left: element.style.left, top: element.style.top, display: element.style.display,
   };
 
   // สร้าง wrapper กว้าง A4
   const wrapper = document.createElement('div');
-  Object.assign(wrapper.style, {
-    width: '210mm',
-    background: '#fff',
-    display: 'block',
-    padding: '0',
-    margin: '0',
-  });
+  Object.assign(wrapper.style, { width: '210mm', background: '#fff', display: 'block', padding: '0', margin: '0' });
 
-  // ปรับ element ให้กว้าง 190mm และมี margin รอบด้าน 10mm
+  // ปรับ element ให้พอดี A4 (ขอบ 10mm)
   element.style.width = '190mm';
   element.style.margin = '10mm auto';
   element.style.padding = '0';
@@ -218,65 +206,116 @@ async  _makeA4OnePageBlob(element) {
   element.style.transform = 'none';
   element.style.transformOrigin = 'top left';
   element.style.position = 'static';
-  element.style.display = 'block';
+  element.style.display  = 'block';
 
-  // เปิดโหมดพิมพ์: ใส่คลาส pdf-print ชั่วคราว
+  // เปิดโหมดพิมพ์
   const hadPrintClass = element.classList.contains('pdf-print');
   element.classList.add('pdf-print');
 
   // ย้ายเข้า wrapper ชั่วคราว
   const parent = element.parentNode;
-  const next = element.nextSibling;
+  const next   = element.nextSibling;
   parent.insertBefore(wrapper, element);
   wrapper.appendChild(element);
+
+  // ---------- สำคัญ: ทำให้ข้อความในฟอร์ม “กลายเป็นตัวหนังสือ” ชั่วคราว ----------
+  const revertList = [];
+  const materializeControls = () => {
+    // ให้ textarea สูงเท่าเนื้อหา
+    element.querySelectorAll('textarea').forEach(ta => {
+      ta.style.height = 'auto';
+      ta.style.height = ta.scrollHeight + 'px';
+    });
+
+    // แทนที่ textarea และ input[type=text|search|email|number|tel|url] ด้วย div.span
+    const selectors = [
+      'textarea',
+      'input[type="text"]','input[type="search"]','input[type="email"]',
+      'input[type="number"]','input[type="tel"]','input[type="url"]'
+    ].join(',');
+
+    element.querySelectorAll(selectors).forEach(ctrl => {
+      const val = (ctrl.value ?? '').toString();
+      // ถ้าไม่มีค่าและไม่ได้อยู่ในพื้นที่ที่ต้องพิมพ์ ก็ข้าม
+      if (!val && ctrl.tagName !== 'TEXTAREA') return;
+
+      const repl = document.createElement('div');
+      repl.className = 'pdf-ta-repl';
+      repl.textContent = val;                           // เก็บ \n ไว้ แล้วคุมด้วย CSS pre-wrap
+      const cs = window.getComputedStyle(ctrl);
+
+      // ก๊อปปี้สไตล์หลัก ๆ ให้ดูใกล้เคียง
+      Object.assign(repl.style, {
+        whiteSpace: 'pre-wrap',
+        wordBreak:  'break-word',
+        lineHeight: cs.lineHeight,
+        font:       cs.font,
+        fontSize:   cs.fontSize,
+        fontFamily: cs.fontFamily,
+        color:      '#111',
+        display:    (cs.display === 'inline') ? 'inline-block' : 'block',
+        padding:    cs.padding,
+        margin:     cs.margin,
+        width:      cs.width,
+        minHeight:  cs.height,
+        border:     '0',
+      });
+
+      ctrl.style.display = 'none';
+      ctrl.parentNode.insertBefore(repl, ctrl.nextSibling);
+
+      // เก็บไว้คืนค่า
+      revertList.push(() => {
+        repl.remove();
+        ctrl.style.display = '';
+      });
+    });
+  };
+
+  materializeControls();
 
   // ให้ layout คงที่ก่อนแคปเจอร์
   await new Promise(r => requestAnimationFrame(r));
 
   // DOM -> canvas
   const worker = html2pdf().set({
-    html2canvas: { scale: 3, useCORS: true, backgroundColor: '#ffffff' }
+    html2canvas: {
+      scale: 3,
+      useCORS: true,
+      backgroundColor: '#ffffff',
+      letterRendering: true     // ช่วยไม่ให้ตัวอักษร “ขาด” บางตัว
+    }
   }).from(wrapper).toCanvas();
 
-  const canvas = await worker.get('canvas');
+  const canvas  = await worker.get('canvas');
   const imgData = canvas.toDataURL('image/jpeg', 0.98);
 
-  // วางรูปลง A4 ให้พอดีขอบ 10mm
-  const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+  // วางรูปลง A4
+  const pdf   = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
   const pageW = pdf.internal.pageSize.getWidth();
   const pageH = pdf.internal.pageSize.getHeight();
-  const maxW = pageW - MARGIN_MM * 2;
-  const maxH = pageH - MARGIN_MM * 2;
-
+  const maxW  = pageW - MARGIN_MM * 2;
+  const maxH  = pageH - MARGIN_MM * 2;
   const imgRatio = canvas.width / canvas.height;
   const boxRatio = maxW / maxH;
-
   let drawW, drawH;
-  if (imgRatio > boxRatio) {
-    drawW = maxW;
-    drawH = drawW / imgRatio;
-  } else {
-    drawH = maxH;
-    drawW = drawH * imgRatio;
-  }
-
-  const x = (pageW - drawW) / 2;
-  const y = (pageH - drawH) / 2;
+  if (imgRatio > boxRatio) { drawW = maxW; drawH = drawW / imgRatio; }
+  else { drawH = maxH; drawW = drawH * imgRatio; }
+  const x = (pageW - drawW) / 2, y = (pageH - drawH) / 2;
 
   pdf.addImage(imgData, 'JPEG', x, y, drawW, drawH);
   const pdfBlob = pdf.output('blob');
 
-  // คืน DOM + style เดิม
+  // ---------- คืน DOM / สไตล์เดิม ----------
+  revertList.forEach(fn => { try { fn(); } catch {} });
   if (next) parent.insertBefore(element, next); else parent.appendChild(element);
   wrapper.remove();
-
-  // ปิดโหมดพิมพ์ ถ้าเดิมไม่มี
   if (!hadPrintClass) element.classList.remove('pdf-print');
-
   Object.assign(element.style, orig);
 
   return pdfBlob;
 },
+
 
 // เรียกจาก SweetAlert preview -> สร้าง/ดาวน์โหลด PDF 1 หน้า
 async _downloadApprovePreviewPdf(group) {
@@ -686,13 +725,12 @@ async approveGroup(group) {
     headSignUrl = this.resolveSignUrl(me?.signaturePath || me?.signature_url || headSignUrl);
   } catch (_) {}
 
-  // ====== (เฉพาะ field) เปิดพรีวิวเพื่อให้หัวหน้าติ๊กตัวเลือก ======
+  // ====== เปิดพรีวิว (เฉพาะ field) เพื่อเลือก/กรอกก่อนอนุมัติ ======
   let uploadedUrl = '';
-  let uploadedName = '';
   if (groupType === 'field') {
     const it = group.items?.[0] || {};
 
-    // 👇 ลายเซ็น "ผู้ยื่นคำขอ" จาก user_id / id_form
+    // ลายเซ็นผู้ยื่นคำขอจาก user_id / id_form
     const reqKey     = it.user_id || it.id_form || '';
     const reqSignUrl = this.resolveSignUrl(this.userSigMap?.[reqKey] || '');
 
@@ -702,7 +740,7 @@ async approveGroup(group) {
       this.resolveSignUrl(it.secSignUrl || it.signaturePath_admin || it.signaturePath || it.signature_url || ''),
       headThaiName,
       headSignUrl,
-      reqSignUrl // 👈 ส่งลายเซ็นผู้ยื่นคำขอเข้าไปในพรีวิว
+      reqSignUrl
     );
 
     const result = await Swal.fire({
@@ -716,38 +754,63 @@ async approveGroup(group) {
       confirmButtonColor: "#695CF7",
       customClass: { popup: "swal-form-approve", title: "swal-center-title", confirmButton: "btn-violet" },
 
-      // ✅ บังคับติ๊ก "เห็นชอบ" ก่อน
+      // ===== แก้จุดนี้: คุม textarea "อื่นๆ" ให้ไม่เกิน 3 บรรทัด =====
       didOpen: () => {
         const p = Swal.getPopup();
 
-        // ล็อกช่องของเลขาฯ และเปิดของหัวหน้า (ถ้ามี element เหล่านี้)
-        ['sec_to_head','sec_for_consider','sec_other_chk','sec_other_reason']
-          .forEach(id => { const el = p.querySelector('#'+id); if (el) el.disabled = true; });
+        // เปิดใช้งาน element ฝั่งหัวหน้า
         ['head_to_vice','head_for_consider','head_other_chk','head_other_reason']
           .forEach(id => { const el = p.querySelector('#'+id); if (el) el.disabled = false; });
 
-        // ซิงค์ "อื่นๆ" ของหัวหน้า
         const chkOther = p.querySelector('#head_other_chk');
         const boxOther = p.querySelector('#head_other_reason');
-        const syncOther = () => {
+
+        // ตัดข้อความให้เหลือไม่เกิน 3 บรรทัด (นับจาก '\n')
+        const capTo3Lines = () => {
           if (!boxOther) return;
-          boxOther.disabled = !chkOther?.checked;
-          if (!chkOther?.checked) boxOther.value = "";
+          let v = (boxOther.value || '').replace(/\r/g,'');
+          const parts = v.split('\n');
+          if (parts.length > 3) {
+            boxOther.value = parts.slice(0, 3).join('\n');
+          }
         };
-        chkOther?.addEventListener('change', syncOther); syncOther();
+
+        // Auto-grow แต่ไม่เกิน 3 บรรทัด + คุม overflow
+        const autoGrow = () => {
+          if (!boxOther) return;
+          boxOther.style.height = 'auto';
+          const cs   = window.getComputedStyle(boxOther);
+          const lh   = parseFloat(cs.lineHeight) || 22;
+          const maxH = lh * 3;                       // สูงสุด 3 บรรทัด
+          const h    = Math.min(boxOther.scrollHeight, maxH);
+          boxOther.style.height = h + 'px';
+          boxOther.style.overflowY = (boxOther.scrollHeight > maxH) ? 'auto' : 'hidden';
+        };
+
+        // Auto-check เมื่อโฟกัส/คลิก/พิมพ์ + จำกัด 110 ตัว
+        const ensureChecked = () => { if (chkOther && !chkOther.checked) chkOther.checked = true; };
+        boxOther?.addEventListener('focus', ensureChecked);
+        boxOther?.addEventListener('click', ensureChecked);
+        boxOther?.addEventListener('input', () => {
+          if (boxOther.value.length > 110) boxOther.value = boxOther.value.slice(0,110);
+          capTo3Lines();
+          ensureChecked();
+          autoGrow();
+        });
+
+        // ตั้งค่าความสูงเริ่มต้น
+        capTo3Lines();
+        autoGrow();
 
         // คุมปุ่มยืนยันด้วย "เห็นชอบ"
         const okChk = p.querySelector('#head_to_vice');
-        const syncConfirm = () => {
-          if (okChk?.checked) Swal.enableConfirmButton();
-          else Swal.disableConfirmButton();
-        };
-        Swal.disableConfirmButton();      // ปิดปุ่มไว้ก่อน
+        const syncConfirm = () => okChk?.checked ? Swal.enableConfirmButton() : Swal.disableConfirmButton();
+        Swal.disableConfirmButton();
         okChk?.addEventListener('change', syncConfirm);
         syncConfirm();
       },
 
-      // กันการกด Enter/confirm โดยยังไม่ติ๊ก
+      // ===== แก้จุดนี้: ตัดเหลือ 3 บรรทัดก่อนส่งจริง =====
       preConfirm: () => {
         const p = Swal.getPopup();
         const q = (id) => p.querySelector('#'+id);
@@ -757,11 +820,13 @@ async approveGroup(group) {
           return false;
         }
 
-        const otherChecked = !!q('head_other_chk')?.checked;
-        const otherText    = otherChecked ? (q('head_other_reason')?.value || '').trim() : '';
-        this.head_reason_supervisor = otherText;
+        const cap3 = s => (s || '').replace(/\r/g,'').split('\n').slice(0,3).join('\n');
+        const rawOther = cap3(q('head_other_reason')?.value || '').slice(0,110).trim();
+        const otherChecked = (q('head_other_chk')?.checked) || rawOther !== '';
+
+        this.head_reason_supervisor = rawOther;
         this.head_choice_supervisor = {
-          to_vice_supervisor:       true, // ติ๊กแล้วแน่นอน
+          to_vice_supervisor:       true,
           for_consider_supervisor:  !!q('head_for_consider')?.checked,
           other_checked_supervisor:  otherChecked
         };
@@ -770,17 +835,15 @@ async approveGroup(group) {
     });
     if (!result.isConfirmed) return;
 
-    // ====== ✅ สร้าง PDF จากพรีวิวแล้วอัปโหลดไฟล์ ======
+    // ====== สร้าง PDF จากพรีวิว แล้วอัปโหลดไฟล์ (ถ้าทำได้) ======
     try {
       const p = Swal.getPopup();
       const formEl = p?.querySelector('.mfu-form');
       if (formEl) {
         const blob = await this._makeA4OnePageBlob(formEl);
         const bid  = group?.booking_id || it.booking_id || 'booking';
-        uploadedName = `field_form_${bid}.pdf`;
-
         const fd = new FormData();
-        fd.append('file', blob, uploadedName);
+        fd.append('file', blob, `field_form_${bid}.pdf`);
 
         const up = await axios.post(`${API_BASE}/api/upload`, fd, {
           headers: { 'Content-Type': 'multipart/form-data' }
@@ -798,7 +861,7 @@ async approveGroup(group) {
 
   const seen = new Set();
   const uniqItems = [];
-  for (const it of group.items || []) {
+  for (const it of (group.items || [])) {
     const key = String(it.id ?? it._id ?? "");
     if (key && !seen.has(key)) { seen.add(key); uniqItems.push(it); }
   }
@@ -812,6 +875,7 @@ async approveGroup(group) {
       ? `${API_BASE}/api/history/${item.id}/approve_field_super`
       : `${API_BASE}/api/history/${item.id}/approve_equipment`;
 
+    // ✅ ส่งเฉพาะ bookingPdfUrl (ถ้ามี) ไม่แตะ attachment/fileName
     const payload = isFieldItem
       ? {
           admin_id: adminUserId,
@@ -831,12 +895,7 @@ async approveGroup(group) {
             other_checked_supervisor: this.head_choice_supervisor?.other_checked_supervisor || false
           },
 
-          // ✅ แนบ URL ไฟล์ที่อัปโหลด (ถ้ามี)
-          ...(uploadedUrl ? {
-            bookingPdfUrl: uploadedUrl,
-            fileName: uploadedName,
-            attachment: [uploadedUrl]
-          } : {})
+          ...(uploadedUrl ? { bookingPdfUrl: uploadedUrl } : {})
         }
       : { staff_id: adminUserId, status: 'approved', approvedAt: approveDate };
 
@@ -867,10 +926,6 @@ async approveGroup(group) {
     Swal.fire("ผิดพลาด", `${msg}${status ? ` (รหัส ${status})` : ""}`, "error");
   }
 },
-
-
-
-
 
 async cancelGroup(group) {
   // กล่องยืนยัน + ช่องกรอกหมายเหตุ (บังคับกรอก)
@@ -1204,29 +1259,66 @@ async detailGroup(group) {
     <div class="swal-detail-wrap">
       ${innerHtml}
       <div class="swal-detail-actions">
-        ${showPdf ? `<button id="pdf-btn" type="button">ดูไฟล์ PDF</button>` : ``}
+        ${showPdf ? `<button id="pdf-btn" type="button">ดูฟอร์ม PDF</button>` : ``}
         ${showAttach ? `<button id="attach-btn" type="button">ดูไฟล์แนบ</button>` : ``}
       </div>
     </div>
   `;
 
-  const isSameDay = (a, b) => {
-    const A = this.parseToDate(a), B = this.parseToDate(b);
-    if (!A || !B) return true;
-    return A.getFullYear() === B.getFullYear() &&
-           A.getMonth() === B.getMonth() &&
-           A.getDate() === B.getDate();
-  };
-  const isMultiDayEquipment = (it) => {
-    if (String(it.type || group.type).toLowerCase() !== 'equipment') return false;
-    return !!it.since && !!it.uptodate && !isSameDay(it.since, it.uptodate);
+  // ---------- helpers ภายใน ----------
+  const pickUserId = (obj = {}) => String(obj.user_id || obj._user_id || '').trim();
+
+  const buildEmailMap = async () => {
+    try {
+      const res = await axios.get(`${API_BASE}/api/users`);
+      const users = Array.isArray(res.data) ? res.data : [];
+      return users.reduce((acc, u) => {
+        const uid = String(u.user_id || '').trim();
+        const em  = String(u.email   || '').trim();
+        if (uid && em) acc[uid] = em;
+        return acc;
+      }, {});
+    } catch (_) { return {}; }
   };
 
+  const fetchHistoryList = async (bookingId) => {
+    if (!bookingId) return [];
+    try {
+      const res = await axios.get(`${API_BASE}/api/history`, { params: { booking_id: bookingId } });
+      const list = Array.isArray(res.data) ? res.data : [];
+      return list
+        .filter(h => String(h?.booking_id || '') === String(bookingId))
+        .sort((a,b) => new Date(b.updatedAt || b.createdAt || b.date || 0) - new Date(a.updatedAt || a.createdAt || a.date || 0));
+    } catch (_) { return []; }
+  };
+
+  const getEmailViaUsers = (uid, emailMap) => {
+    const k = String(uid || '').trim();
+    return (k && emailMap[k]) ? emailMap[k] : '';
+  };
+  // ------------------------------------
+
+  // โหลด email map ครั้งเดียวสำหรับการเปิด dialog นี้
+  const emailMap = await buildEmailMap();
+
+  // ===== FIELD =====
   if (group.type === 'field') {
-    const it = group.items[0] || {};
+    const it = group.items?.[0] || {};
     const zone = (it.zone && it.zone !== '-' && it.zone !== '') ? it.zone : '-';
     const requesterBase = this.userMap[it.user_id] || it.requester || it.user_id || '-';
-    const requester = it.username_form || requesterBase;
+    const requester     = it.username_form || requesterBase;
+    const bookingId     = group.booking_id || it.booking_id || '';
+
+    // หา user_id จาก item; ถ้าไม่มี ค่อยไปดูใน history ของ booking เดียวกัน
+    let uid = pickUserId(it);
+    let histList = [];
+    if (!uid && bookingId) {
+      histList = await fetchHistoryList(bookingId);
+      const rowWithUid = histList.find(h => pickUserId(h));
+      uid = pickUserId(rowWithUid || {});
+    }
+
+    const email = getEmailViaUsers(uid, emailMap) || '-';
 
     const table = `
       <table class="swal-detail-table">
@@ -1234,26 +1326,23 @@ async detailGroup(group) {
           <tr><th>ชื่อสนาม</th><td>${esc(it.name || '-')}</td></tr>
           <tr><th>โซน</th><td>${esc(zone)}</td></tr>
           <tr><th>ชื่อผู้ขอใช้</th><td>${esc(requester)}</td></tr>
-          <tr><th>รหัสนักศึกษา/พนักงาน</th><td>${esc(it.id_form || '-')}</td></tr>
-          <!-- แถวใหม่ -->
-         <!-- <tr><th>จองแทนผู้ใช้</th><td>${esc(it.proxyStudentName || '-')}</td></tr>
-          <tr><th>รหัสนักศึกษา/พนักงาน (ของผู้ที่ถูกจองแทน)</th><td>${esc(it.proxyStudentId || '-')}</td></tr> -->
-          <!-- /แถวใหม่ -->
-          <tr><th>วันที่ทำรายการ</th>
-  <td><span class="nowrap">${it.date ? esc(this.formatDate(it.date)) : '-'}</span></td>
-</tr>
-<tr>
-  <th>ช่วงวันที่ขอใช้</th>
-  <td>
-    <span class="nowrap">
-      ${esc(it.since ? this.formatDate(it.since) : '-')} - ${esc(it.uptodate ? this.formatDate(it.uptodate) : '-')}
-    </span>
-  </td>
-</tr>
-<tr><th>ช่วงเวลา</th>
-  <td><span class="nowrap">${esc(this.formatTimeRangeTH(it.startTime, it.endTime))}</span></td>
-</tr>
-
+          <tr><th>อีเมล</th><td>${esc(email)}</td></tr>
+          <tr>
+            <th>วันที่ทำรายการ</th>
+            <td><span class="nowrap">${it.date ? esc(this.formatDate(it.date)) : '-'}</span></td>
+          </tr>
+          <tr>
+            <th>ช่วงวันที่ขอใช้</th>
+            <td>
+              <span class="nowrap">
+                ${esc(it.since ? this.formatDate(it.since) : '-')} - ${esc(it.uptodate ? this.formatDate(it.uptodate) : '-')}
+              </span>
+            </td>
+          </tr>
+          <tr>
+            <th>ช่วงเวลา</th>
+            <td><span class="nowrap">${esc(this.formatTimeRangeTH(it.startTime, it.endTime))}</span></td>
+          </tr>
         </tbody>
       </table>
     `;
@@ -1265,32 +1354,20 @@ async detailGroup(group) {
       confirmButtonColor: '#3085d6',
       customClass: { popup: 'swal-wide' },
       didOpen: () => {
-        const btnPdf = document.getElementById('pdf-btn');
-        if (btnPdf) btnPdf.addEventListener('click', () => this.openBookingPdf(group));
-        const btnAttach = document.getElementById('attach-btn');
-        if (btnAttach) btnAttach.addEventListener('click', () => this.viewAttachment(group));
-      }
+  const btnPdf = document.getElementById('pdf-btn');
+  if (btnPdf) btnPdf.addEventListener('click', () => this.openBookingPdf(group), { once: true });
+  const btnAttach = document.getElementById('attach-btn');
+  if (btnAttach) btnAttach.addEventListener('click', () => this.viewAttachment(group), { once: true });
+}
+
     });
+    return;
+  }
 
-  } else {
-  const esc = (s) => String(s ?? '-')
-    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
-    .replace(/>/g,'&gt;').replace(/"/g,'&quot;')
-    .replace(/'/g,'&#39;');
-
-  const tableWrap = (innerHtml, showPdf, showAttach) => `
-    <div class="swal-detail-wrap">
-      ${innerHtml}
-      <div class="swal-detail-actions">
-        ${showPdf ? `<button id="pdf-btn" type="button">ดูไฟล์ PDF</button>` : ``}
-        ${showAttach ? `<button id="attach-btn" type="button">ดูไฟล์แนบ</button>` : ``}
-      </div>
-    </div>
-  `;
-
+  // ===== EQUIPMENT =====
   const bookingId = group.booking_id || group.items?.[0]?.booking_id || null;
 
-  // รวมจำนวนต่อ "ชื่ออุปกรณ์"
+  // รวมจำนวนต่อชื่ออุปกรณ์
   const merged = new Map();
   (group.items || []).forEach(it => {
     const name = it?.name || '-';
@@ -1299,85 +1376,69 @@ async detailGroup(group) {
   });
 
   // ค่าแสดงผล
-  let requester   = '-'; // ผู้ขอใช้ (จาก username_form)
-  let requesterId = '-'; // ไอดีผู้ขอใช้ (จาก id_form)
-  let dateBorrow  = '-';
-  let dateRange   = '-';
+  let requester = '-', requesterId = '-', requesterEmail = '-', dateBorrow = '-', dateRange = '-';
 
+  // หา user_id และรายละเอียดอื่นจาก history
+  let uid = pickUserId(group.items?.[0] || {});
+  let list = [];
   if (bookingId) {
-    try {
-      const res = await axios.get(`${API_BASE}/api/history`, { params: { booking_id: bookingId } });
-      let list = Array.isArray(res.data) ? res.data : [];
-      list = list
-        .filter(h => String(h?.booking_id || '') === String(bookingId))
-        .filter(h => (h?.type || '').toLowerCase() === 'equipment')
-        .sort((a,b) => new Date(b.updatedAt || b.createdAt || b.date || 0) - new Date(a.updatedAt || a.createdAt || a.date || 0));
+    list = await fetchHistoryList(bookingId);
 
-      // ผู้ขอใช้
-      const recUser = list.find(h => h?.username_form && String(h.username_form).trim());
-      if (recUser) requester = String(recUser.username_form).trim();
+    if (!uid) {
+      const rowWithUid = list.find(h => pickUserId(h));
+      uid = pickUserId(rowWithUid || {});
+    }
 
-      // รหัสนักศึกษา/พนักงาน
-      const recId = list.find(h => h?.id_form && String(h.id_form).trim());
-      if (recId) requesterId = String(recId.id_form).trim();
+    const anyRows = list.filter(h => (h?.type || '').toLowerCase() === 'equipment');
+    const rows = anyRows.length ? anyRows : list;
 
-      // วันที่ขอยืม + ช่วงวันที่ใช้
-      // วันที่ขอยืม + ช่วงวันที่ใช้  -> ใช้ createdAt เป็นหลัก
-const recDate = list.find(h => h?.createdAt || h?.date || h?.since || h?.uptodate) || list[0];
-if (recDate) {
-  // วันที่ขอยืมจาก createdAt (ถ้าไม่มี ค่อย fallback ไป date)
-  dateBorrow = recDate?.createdAt
-    ? this.formatDate(recDate.createdAt)
-    : (recDate?.date ? this.formatDate(recDate.date) : '-');
+    const recUser = rows.find(h => h?.username_form && String(h.username_form).trim());
+    if (recUser) requester = String(recUser.username_form).trim();
 
-  const since = recDate?.since ? this.formatDate(recDate.since) : '-';
-  const upto  = recDate?.uptodate ? this.formatDate(recDate.uptodate) : '-';
-  dateRange   = `${since} - ${upto}`;
-}
+    const recId = rows.find(h => h?.id_form && String(h.id_form).trim());
+    if (recId) requesterId = String(recId.id_form).trim();
 
-    } catch (e) {
-      // ใช้ค่า default ถ้าดึงไม่สำเร็จ
+    const recDate = rows.find(h => h?.createdAt || h?.date || h?.since || h?.uptodate) || rows[0];
+    if (recDate) {
+      dateBorrow = recDate?.createdAt
+        ? this.formatDate(recDate.createdAt)
+        : (recDate?.date ? this.formatDate(recDate.date) : '-');
+      const since = recDate?.since ? this.formatDate(recDate.since) : '-';
+      const upto  = recDate?.uptodate ? this.formatDate(recDate.uptodate) : '-';
+      dateRange   = `${since} - ${upto}`;
     }
   }
+  requesterEmail = getEmailViaUsers(uid, emailMap) || '-';
 
-  const rowsData = Array.from(merged.entries()).map(([name, qty], idx) => ({
-    idx: idx + 1,
-    name,
-    quantity: qty,
-    requester,
-    requesterId,
-    dateBorrow,
-    dateRange
-  }));
-
-  const rowsHtml = rowsData.map(r => `
-  <tr>
-    <td class="c">${r.idx}</td>
-    <td class="col-name">${esc(r.name)}</td>
-    <td class="c col-qty">${esc(r.quantity)}</td>
-    <td class="c col-id nowrap">${esc(r.requesterId)}</td>
-    <td class="col-requester">${esc(r.requester)}</td>
-    <td class="c nowrap">${esc(r.dateBorrow)}</td>
-    <td class="c nowrap col-period" title="${esc(r.dateRange)}">${esc(r.dateRange)}</td>
-  </tr>
-`).join('');
+  const rowsHtml = Array.from(merged.entries()).map(([name, qty], idx) => `
+    <tr>
+      <td class="c">${idx + 1}</td>
+      <td class="col-name">${esc(name)}</td>
+      <td class="c col-qty">${esc(qty)}</td>
+      <td class="c col-id nowrap">${esc(requesterEmail)}</td>
+      <td class="col-requester">${esc(requester)}</td>
+      <td class="c nowrap">${esc(dateBorrow)}</td>
+      <td class="c nowrap col-period" title="${esc(dateRange)}">${esc(dateRange)}</td>
+    </tr>
+  `).join('');
 
   const table = `
-  <table class="swal-detail-table items">
-    <thead>
-      <tr>
-        <th style="width:64px">ลำดับ</th>
-        <th class="col-name">รายการ</th>
-        <th class="col-qty">จำนวน</th>
-        <th class="col-id">รหัสนักศึกษา/พนักงาน</th>
-        <th class="col-requester">ผู้ขอใช้</th>
-        <th style="width:120px">วันที่ทำรายการ</th>
-        <th class="col-period">วันที่ขอยืม</th>
-      </tr>
-    </thead>
-    <tbody>${rowsHtml}</tbody>
-  </table>
-`;
+    <table class="swal-detail-table items">
+      <thead>
+        <tr>
+          <th style="width:64px">ลำดับ</th>
+          <th class="col-name">รายการ</th>
+          <th class="col-qty">จำนวน</th>
+          <th class="col-id">อีเมล</th>
+          <th class="col-requester">ผู้ขอใช้</th>
+          <th style="width:120px">วันที่ทำรายการ</th>
+          <th class="col-period">วันที่ขอยืม</th>
+        </tr>
+      </thead>
+      <tbody>${rowsHtml}</tbody>
+    </table>
+  `;
+
   Swal.fire({
     title: 'รายละเอียดอุปกรณ์',
     html: tableWrap(table, true, true),
@@ -1392,13 +1453,13 @@ if (recDate) {
       if (btnAttach) btnAttach.addEventListener('click', () => this.viewAttachment(group));
     }
   });
-}
-
 },
 
 
 
+
 // --- ใหม่: เปิดไฟล์ PDF ในแท็บใหม่ ---
+// --- เปิดไฟล์ PDF ในแท็บใหม่ แค่ครั้งเดียว ---
 async openBookingPdf(target) {
   const bookingId  = typeof target === 'string' ? target : (target?.booking_id || '');
   const typeFilter = typeof target === 'object' ? (target?.type || '') : '';
@@ -1409,7 +1470,6 @@ async openBookingPdf(target) {
   }
 
   try {
-    // ดึง history แล้วคัด URL ของไฟล์ (เหมือนเดิม)
     const resHist = await axios.get(`${API_BASE}/api/history`, { params: { booking_id: bookingId } });
     let list = Array.isArray(resHist.data) ? resHist.data : [];
     list = list.filter(h => String(h?.booking_id || '') === String(bookingId));
@@ -1418,28 +1478,29 @@ async openBookingPdf(target) {
 
     const picked = this.pickPdfUrl(list);
     const rawUrl = this.normalizePdfUrl(picked);
-
     if (!rawUrl) {
       Swal.fire('ผิดพลาด','ไม่พบ URL ของไฟล์ PDF สำหรับรายการนี้','error');
       return;
     }
 
-    // เปิดแท็บใหม่ (ไม่ดาวน์โหลด)
-    let opened = window.open(rawUrl, '_blank', 'noopener');
-    if (!opened) {
-      // เผื่อโดนบล็อก/โปรโตคอลไม่แมตช์ ลองสลับ http/https อีกที
-      if (/^https:\/\//i.test(rawUrl)) {
-        opened = window.open('http://' + rawUrl.slice('https://'.length), '_blank', 'noopener');
-      } else if (/^http:\/\//i.test(rawUrl)) {
-        opened = window.open('https://' + rawUrl.slice('http://'.length), '_blank', 'noopener');
-      }
-    }
-    
+    // ใช้โปรโตคอลเดียวกับหน้าเว็บ เพื่อเลี่ยง mixed-content
+    const u = new URL(rawUrl, window.location.origin);
+    u.protocol = window.location.protocol;
+
+    // เปิดด้วย anchor (เลี่ยงปัญหา window.open คืนค่า null เมื่อใช้ noopener)
+    const a = document.createElement('a');
+    a.href = u.href;
+    a.target = '_blank';
+    a.rel = 'noopener';      // หรือ 'noreferrer'
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
   } catch (err) {
     console.error('openBookingPdf error:', err);
     Swal.fire('ผิดพลาด','ไม่สามารถเปิดไฟล์ได้','error');
   }
 },
+
 
      // ==== PDF DOWNLOAD BUTTON ====
   async  exportPdf(item) {
@@ -2096,6 +2157,18 @@ function buildFieldFormPreviewV2(
            /^\d{1,2}:\d{2}:\d{2}$/.test(s) ? `${s.slice(0,5)} น.` : `${s} น.`;
   };
 
+  const fmtTimeFromDateLike = (v) => {
+    if (!v) return '-';
+    const s = String(v).trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return '-'; // ไม่มีเวลา
+    const d = new Date(s);
+    if (isNaN(d)) return '-';
+    return d.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', hour12: false }) + ' น.';
+  };
+
+  // เวลา ณ ตอนสร้างพรีวิว (ใช้กับหัวหน้า)
+  const nowTHTime = new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', hour12: false }) + ' น.';
+
   const tStart = b?.since_time || b?.startTime || '';
   const tEnd   = b?.until_thetime || b?.endTime   || '';
 
@@ -2138,134 +2211,187 @@ function buildFieldFormPreviewV2(
   return `
   <div class="mfu-form">
     <style>
-      .mfu-form{
-        font-family:'THSarabunNew','Sarabun','Noto Sans Thai',system-ui,sans-serif;
-        color:#111; line-height:1.35;
-        -webkit-font-smoothing: antialiased; text-rendering: geometricPrecision;
-      }
-      .mfu-head{text-align:center;margin-bottom:10px;}
-      .mfu-title{font-size:22px;font-weight:700;}
-      .mfu-sub{font-size:14px;margin-top:4px;}
-      .mfu-meta{display:flex;gap:18px;flex-wrap:wrap;font-size:16px;margin:10px 0 4px;}
-
-      .mfu-sec{margin-top:14px;font-size:16px;display:block;}
-      .mfu-sec h4{margin:0;padding:0 0 10px;line-height:1.35;font-weight:700;}
-      .mfu-spacer{height:8px;display:block;}
-
-      .mfu-yn{margin:4px 0 6px;display:flex;gap:18px;}
-      .mfu-yn .choice{display:inline-flex;align-items:center;gap:6px;font-size:16px;color:#374151;}
-      .mfu-yn .dot{font-weight:700;font-size:18px;line-height:1;color:#9ca3af;}
-      .mfu-yn .choice.on{color:#111;font-weight:700;}
-      .mfu-yn .choice.on .dot{color:currentColor;}
-
-      .mfu-list{list-style:none; margin:4px 0 0; padding:0;}
-      .mfu-list li{padding:6px 0; border-bottom:1px dashed #e5e7eb;}
-      .mfu-list li:last-child{border-bottom:0;}
-      .mfu-list b{display:inline-block; min-width:210px; white-space:nowrap; color:#111;}
-
-      .mfu-list-loc li:first-child b{ min-width:130px; }
-      .mfu-list-util b{ width:165px; min-width:166px; }
-      .mfu-list li:first-child b{ min-width:60px; }
-
-      @media (max-width:720px){
-        .mfu-list li:first-child b{ min-width:110px; }
-      }
-
-      .mfu-par{text-indent:2em;margin-top:6px;}
-      .mfu-boxes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:12px;}
-      @media (max-width:720px){.mfu-boxes{grid-template-columns:1fr;}}
-      .mfu-box{border:1px solid #d1d5db;border-radius:12px;background:#fff;padding:12px 14px;min-height:200px;position:relative;}
-      .mfu-box.locked input[disabled],
-      .mfu-box.locked textarea[disabled]{background:#fff !important;color:#111 !important;opacity:1 !important;}
-      .mfu-box h5{margin:0 0 8px;font-size:16px;font-weight:700;text-align:center;}
-      .mfu-box .row{display:flex;align-items:center;gap:8px;margin:10px 0;}
-      .mfu-input{flex:1;min-width:0;padding:6px 8px;border:1px solid #cbd5e1;border-radius:6px;font:inherit;background:#fff;}
-      .row.center{justify-content:center;}
-      .paren{opacity:.85;}
-      .mfu-box .sig-row{ position:relative; min-height:64px; display:grid; }
-      .mfu-box .sigimg{ position:absolute; top:8px; left:0; right:0; margin-left:auto; margin-right:auto; max-height:52px; width:auto; opacity:.95; pointer-events:none; }
-
-      /* โหมดพิมพ์ */
-      .mfu-form.pdf-print #sec_other_reason,
-      .mfu-form.pdf-print #head_other_reason{
-        border: 0 !important; outline: 0 !important; box-shadow: none !important;
-        background: transparent !important; display: inline !important; width: auto !important; min-width: 0 !important;
-        height: auto !important; padding: 0 !important; margin-left: 6px !important; line-height: 1.35 !important;
-        vertical-align: baseline !important; -webkit-text-fill-color: #111 !important; color: #111 !important;
-        white-space: normal; word-break: break-word;
-      }
-      .mfu-form.pdf-print .mfu-box .row{ align-items: baseline !important; }
-
-      /* ช่อง "อื่นๆ" ของเลขาฯ */
-      #sec_other_reason{
-        border: 0 !important; outline: 0 !important; box-shadow: none !important; background: transparent !important;
-        display: inline !important; width: auto !important; min-width: 0 !important; height: auto !important;
-        padding: 0 !important; margin-left: 6px !important; line-height: 1.35 !important; vertical-align: baseline !important;
-        -webkit-text-fill-color: #111 !important; color: #111 !important; white-space: normal; word-break: break-word;
-      }
-
-      /* —— ลายเซ็นผู้ขอใช้งาน (จัดกลาง + เส้นประ) —— */
-      /* —— ลายเซ็นผู้ขอใช้งาน (ชิดขวา + ติดเส้นประ) —— */
-.mfu-sign{
-  /* ปรับเลขนี้ได้ถ้าต้องการ */
-  --sig-max: 360px;       /* ความกว้างสูงสุดของบรรทัดลายเซ็น */
-  --sig-gap: 10px;        /* ช่องว่างระหว่าง "ลงชื่อ" กับเส้นประ */
-  --sig-label-w: 54px;    /* ความกว้างคำว่า "ลงชื่อ" (ปรับตามฟอนต์) */
-
-  margin-top:8px;
-  display:flex;
-  flex-direction:column;
-  align-items:flex-end;        /* ทั้งบล็อกชิดขวา */
-}
-.mfu-sign .sig-canvas{
-  position:relative;
-  height:56px;
-  max-width:var(--sig-max);
-  width:100%;
-  margin:0 0 6px auto;         /* ชิดขวา */
-}
-.mfu-sign .sig-canvas .sigimg{
-  position:absolute;
-  left:50%;
-  transform:translateX(-50%);
-  bottom:-2px;                 /* ดันให้แนบเส้นประ */
-  max-height:46px;
-  width:auto;
-  opacity:.95;
-  pointer-events:none;
+      /* ============ MFU Field Form (buildFieldFormPreviewV2) ============ */
+.mfu-form{
+  font-family:'THSarabunNew','Sarabun','Noto Sans Thai',system-ui,sans-serif;
+  color:#111; line-height:1.35;
+  -webkit-font-smoothing:antialiased; text-rendering:geometricPrecision;
+  --other-text-yfix:3px; /* ปรับ baseline ของข้อความ “อื่นๆ” ให้เสมอ */
 }
 
-/* บรรทัด "ลงชื่อ ......" */
-.mfu-sign .sigline{
-  display:flex;
-  align-items:center;
-  gap:var(--sig-gap);
-  max-width:var(--sig-max);
-  width:100%;
-  margin:0 0 6px auto;         /* ชิดขวา */
+/* Header */
+.mfu-head{ text-align:center; margin-bottom:10px; }
+.mfu-title{ font-size:22px; font-weight:700; }
+.mfu-sub{ font-size:14px; margin-top:4px; }
+
+/* Meta line */
+.mfu-meta{ display:flex; gap:18px; flex-wrap:wrap; font-size:16px; margin:10px 0 4px; }
+
+/* Section blocks */
+.mfu-sec{ margin-top:14px; font-size:16px; display:block; }
+.mfu-sec h4{ margin:0; padding:0 0 10px; line-height:1.35; font-weight:700; }
+.mfu-spacer{ height:8px; display:block; }
+.mfu-par{ text-indent:2em; margin-top:6px; }
+
+/* Bullet lists (ข้อ 1–3) */
+.mfu-list{ list-style:none; margin:4px 0 0; padding:0; }
+.mfu-list li{ padding:6px 0; border-bottom:1px dashed #e5e7eb; }
+.mfu-list li:last-child{ border-bottom:0; }
+.mfu-list b{ display:inline-block; min-width:210px; white-space:nowrap; color:#111; }
+
+.mfu-list-loc li:first-child b{ min-width:130px; }
+.mfu-list-util b{ width:165px; min-width:166px; }
+.mfu-list li:first-child b{ min-width:60px; }
+
+@media (max-width:720px){
+  .mfu-list li:first-child b{ min-width:110px; }
 }
-.mfu-sign .sigline .label{
-  width:var(--sig-label-w);    /* ทำให้ความกว้าง label คงที่ */
+
+/* Yes/No dots */
+.mfu-yn{ margin:4px 0 6px; display:flex; gap:18px; }
+.mfu-yn .choice{ display:inline-flex; align-items:center; gap:6px; font-size:16px; color:#374151; }
+.mfu-yn .dot{ font-weight:700; font-size:18px; line-height:1; color:#9ca3af; }
+.mfu-yn .choice.on{ color:#111; font-weight:700; }
+.mfu-yn .choice.on .dot{ color:currentColor; }
+
+/* === Two columns (เลขานุการ / หัวหน้า) === */
+.mfu-boxes{
+  display:grid; grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:12px; margin-top:12px;
+}
+@media (max-width:720px){ .mfu-boxes{ grid-template-columns:1fr; } }
+
+.mfu-box{
+  border:1px solid #d1d5db; border-radius:12px; background:#fff;
+  padding:12px 14px; min-height:200px; position:relative;
+
+  /* ให้เนื้อหาด้านบน ส่วนลายเซ็นกองอยู่ล่าง */
+  display:flex; flex-direction:column;
+}
+.mfu-box .sign-block{ margin-top:auto; padding-top:8px; }
+
+.mfu-box.locked input[disabled],
+.mfu-box.locked textarea[disabled]{ background:#fff !important; color:#111 !important; opacity:1 !important; }
+
+.mfu-box h5{ margin:0 0 8px; font-size:16px; font-weight:700; text-align:center; }
+
+/* แถวทั่วไปในกล่อง */
+.mfu-box .row{
+  display:flex; align-items:center; gap:8px; margin:10px 0; flex-wrap:nowrap;
+}
+
+/* ===== “อื่นๆ” ให้เสมอบรรทัดกับติ๊กถูก ===== */
+.mfu-box .row label.chk{
+  display:inline-flex;
+  align-items:baseline;
+  gap:6px;
   white-space:nowrap;
 }
-.mfu-sign .sigline .dots{
-  flex:1;
-  height:0;
-  border-bottom:1.5px dotted #9ca3af;
+
+/* กล่องเลขาฯ: อื่นๆ จัด inline กับติ๊ก */
+.mfu-box .row .other-inline{
+  display:flex; align-items:baseline; gap:6px; flex:1; min-width:0; white-space:nowrap;
+}
+.mfu-box .row .other-inline > span{ line-height:1.35; }
+.mfu-box .row .other-inline #sec_other_reason{
+  position:relative; top:var(--other-text-yfix);
+  display:inline-block; flex:1; min-width:0;
+  white-space:normal; word-break:break-word;
 }
 
-/* 3 บรรทัดหลังให้อยู่ "กึ่งกลางของพื้นที่เส้นประ" */
-.mfu-sign .name,
-.mfu-sign .role,
-.mfu-sign .date{
-  width:var(--sig-max);
-  max-width:100%;
-  margin-left:auto;                           /* ตำแหน่งเดียวกับบรรทัดลายเซ็น */
-  padding-left:calc(var(--sig-label-w) + var(--sig-gap)); /* เว้นซ้ายเท่ากับพื้นที่คำว่า "ลงชื่อ" */
-  text-align:center;                          /* จัดกลางภายในพื้นที่เส้นประ */
+/* แถว “อื่นๆ” ของหัวหน้า: ให้ชิดบน รองรับหลายบรรทัด */
+.mfu-box .row.other-row{ align-items:baseline; }
+
+/* Input / Textarea */
+.mfu-input{ flex:1; min-width:0; padding:6px 8px; border:1px solid #cbd5e1; border-radius:6px; font:inherit; background:#fff; }
+.mfu-input.autogrow{ overflow:hidden; resize:none; line-height:1.35; min-height:36px; }
+
+/* Common helpers */
+.row.center{ justify-content:center; }
+.paren{ opacity:.85; }
+
+/* Signature in box */
+.mfu-box .sig-row{ position:relative; min-height:64px; display:grid; }
+.mfu-box .sigimg{ position:absolute; top:8px; left:0; right:0; margin-left:auto; margin-right:auto; max-height:52px; width:auto; opacity:.95; pointer-events:none; }
+
+/* ====== บังคับขนาดตัวอักษร “อื่นๆ” ให้เท่ากัน (ทั้งแสดงผลและตอนทำ PDF) ====== */
+#sec_other_reason,
+#head_other_reason,
+.mfu-form.pdf-print #sec_other_reason,
+.mfu-form.pdf-print #head_other_reason,
+.pdf-ta-repl{
+  font-size:16px !important;
+  line-height:1.6 !important;
+  -webkit-text-fill-color:#111 !important;
+  color:#111 !important;
 }
 
+/* โหมดแคปเจอร์ PDF: เปลี่ยน textarea ให้ดูเหมือนข้อความปกติ */
+.mfu-form.pdf-print #sec_other_reason,
+.mfu-form.pdf-print #head_other_reason{
+  border:0 !important; outline:0 !important; box-shadow:none !important;
+  background:transparent !important; display:inline !important;
+  width:auto !important; min-width:0 !important; height:auto !important;
+  padding:0 !important; margin-left:6px !important; line-height:1.35 !important;
+  vertical-align:baseline !important; white-space:normal; word-break:break-word;
+}
+.mfu-form.pdf-print .mfu-box .row{ align-items:baseline !important; }
 
+/* กล่อง “อื่นๆ” ของเลขาฯ (โหมดปกติ) */
+#sec_other_reason{
+  border:0 !important; outline:0 !important; box-shadow:none !important;
+  background:transparent !important; display:inline !important;
+  width:auto !important; min-width:0 !important; height:auto !important;
+  padding:0 !important; margin-left:6px !important; line-height:1.35 !important;
+  vertical-align:baseline !important; white-space:normal; word-break:break-word;
+}
+
+/* === เพิ่มใหม่: จำกัด "อื่นๆ" ของหัวหน้าให้ไม่เกิน 3 บรรทัด === */
+#head_other_reason{
+  max-height: calc(1.6em * 3);     /* สูงสุด 3 บรรทัด (ตาม line-height 1.6) */
+  overflow-y: auto !important;     /* เกินแล้วสกรอลล์ */
+  resize: none !important;         /* ไม่ให้ลากยืด */
+}
+
+/* ===== ลายเซ็นผู้ขอใช้งาน (ชิดขวา + เส้นประ) ===== */
+.mfu-sign{
+  --sig-max:360px; --sig-gap:10px; --sig-label-w:54px;
+  margin-top:8px; display:flex; flex-direction:column; align-items:flex-end;
+}
+.mfu-sign .sig-canvas{ position:relative; height:56px; max-width:var(--sig-max); width:100%; margin:0 0 6px auto; }
+.mfu-sign .sig-canvas .sigimg{ position:absolute; left:50%; transform:translateX(-50%); bottom:-2px; max-height:46px; width:auto; opacity:.95; pointer-events:none; }
+.mfu-sign .sigline{ display:flex; align-items:center; gap:var(--sig-gap); max-width:var(--sig-max); width:100%; margin:0 0 6px auto; }
+.mfu-sign .sigline .label{ width:var(--sig-label-w); white-space:nowrap; }
+.mfu-sign .sigline .dots{ flex:1; height:0; border-bottom:1.5px dotted #9ca3af; }
+.mfu-sign .name,.mfu-sign .role,.mfu-sign .date{
+  width:var(--sig-max); max-width:100%; margin-left:auto;
+  padding-left:calc(var(--sig-label-w) + var(--sig-gap)); text-align:center;
+}
+
+/* ตัวแทน textarea/input ที่ถูกแทนก่อนแคปเจอร์ */
+.pdf-ta-repl{
+  white-space:pre-wrap;
+  word-break:break-word;
+  line-height:1.35;
+  font:inherit;
+  color:#111;
+}
+
+/* หมายเหตุใต้ข้อ 3.2 */
+.mfu-note{
+  font-size:13px;
+  color:#111;
+  margin:10px 0 0 0;
+}
+
+/* utilities */
+.nobr{ white-space:nowrap; word-break:keep-all; }
+.mfu-form.pdf-print .nobr{ white-space:nowrap !important; }
+
+/* --- FIX: จับกลุ่มลายเซ็นให้อยู่ก้นกล่องเสมอ (สองคอลัมน์เท่ากัน) --- */
+.mfu-box{ display:flex; flex-direction:column; }           /* มีอยู่แล้วก็ซ้ำได้ */
+.mfu-box .row.sig-row{ margin-top:auto !important; }       /* ดันบล็อกลายเซ็นลงล่าง */
+.mfu-box .row.sig-row ~ .row{ margin-top:6px; }            /* ระยะห่างใต้รูปเซ็นเล็กน้อย */
     </style>
 
     <div class="mfu-head">
@@ -2295,7 +2421,7 @@ function buildFieldFormPreviewV2(
       <h4>1. ขออนุมัติใช้สถานที่</h4>
       <ul class="mfu-list" style="margin-left: 31px;">
         <li class="no-sep"><b>อาคาร:</b> ${d(b?.name)}</li>
-        <li><b>ตำแหน่งพื้นที่/ห้องที่ต้องการใช้:</b> ${dash(b?.zone)}</li>
+        <li><b>พื้นที่/ห้อง:</b> ${dash(b?.zone)}</li>
       </ul>
     </div>
 
@@ -2310,6 +2436,9 @@ function buildFieldFormPreviewV2(
         <li class="no-sep"><b>2.1 ไฟฟ้าส่องสว่าง:</b> ตั้งแต่ ${fmtTime(b?.turnon_lights)} - ${fmtTime(b?.turnoff_lights)}</li>
         <li><b>2.2 สุขา:</b> ${restroomText}</li>
       </ul>
+      <div class="mfu-note">
+            *ต้องได้รับการอนุมัติจากรองอธิการบดีผู้กำกับดูแล และสำเนาเอกสารถึงฝ่ายอนุรักษ์พลังงาน
+      </div>
     </div>
 
     <!-- 3) รายการประกอบอาคาร -->
@@ -2320,23 +2449,31 @@ function buildFieldFormPreviewV2(
         <span class="choice ${f.nOn ? 'on' : ''}"><span class="dot">${f.nOn ? '●' : '○'}</span> ไม่เลือก</span>
       </div>
       <ul class="mfu-list" style="margin-left: 31px;">
-        <li class="no-sep"><b>3.1 ดึงอัฒจันทร์ภายในอาคารเฉลิมพระเกียรติฯ:</b> ${dash(b?.amphitheater)}</li>
-        <li><b>3.2 อุปกรณ์กีฬา (โปรดระบุ):</b> ${d(b?.need_equipment)}</li>
+        <li class="no-sep">
+          <b>3.1 ดึงอัฒจันทร์ภายในอาคารเฉลิมพระเกียรติฯ:</b> ${dash(b?.amphitheater)}
+        </li>
+        <li>
+          <div><b>3.2 อุปกรณ์กีฬา (โปรดระบุ):</b> ${d(b?.need_equipment)}</div>
+        </li>
       </ul>
+      <div class="mfu-note">
+        ทั้งนี้ต้องแนบเอกสารโครงการหรือกิจกรรมที่ได้รับการอนุมัติแล้วพร้อมกำหนดการจัดกิจกรรมหากเป็นการเรียนการสอน <br>
+        ต้องแนบตารางการเรียนการสอน (Class schedule) พร้อมทั้งรายชื่อนักศึกษา
+      </div>
     </div>
 
-    <!-- ลายเซ็นผู้ขอ + วันที่ (อยู่กึ่งกลาง) -->
+    <!-- ผู้ขอใช้ -->
     <div class="mfu-sign">
       <div class="sig-canvas">
         ${reqSignUrl ? `<img class="sigimg" src="${reqSignUrl}" alt="signature">` : ``}
       </div>
-      <div class="sigline">
-        <div class="label">ลงชื่อ</div>
-        <div class="dots"></div>
-      </div>
+      <div class="sigline"><div class="label">ลงชื่อ</div><div class="dots"></div></div>
       <div class="name">( ${d(b?.username_form || b?.requester)} )</div>
       <div class="role">ผู้รับผิดชอบ</div>
-      <div class="date">วันที่ ${fmtDate(b?.createdAt || b?.date)}</div>
+      <div class="date">
+         ${fmtDate(b?.createdAt || b?.date)}
+        <span class="time"> ${fmtTimeFromDateLike(b?.createdAt || b?.date)}</span>
+      </div>
     </div>
 
     <div class="mfu-boxes">
@@ -2347,17 +2484,24 @@ function buildFieldFormPreviewV2(
           <label class="chk" style="padding-left: 30px"><span>เรียน หัวหน้าศูนย์กีฬาฯ</span></label>
         </div>
         <div class="row">
-          <label class="chk">
+          <label class="chk other-inline">
             <input type="checkbox" id="sec_other_chk" ${sec_other_chk ? 'checked' : ''} disabled>
-            <span>อื่นๆ :</span>
+            <span class="nobr">อื่นๆ&nbsp;:</span>
+            <span id="sec_other_reason" class="text">${sec_other_reason || ''}</span>
           </label>
-          <span id="sec_other_reason">${sec_other_reason || ''}</span>
         </div>
+
         <div class="row sig-row">
           ${secSignUrl ? `<img class="sigimg" src="${secSignUrl}" alt="signature">` : ``}
         </div>
         <div class="row"><span class="paren">(</span><span style="flex:1;text-align:center;">${d(secThaiName)}</span><span class="paren">)</span></div>
-        <div class="row center"><span>วันที่</span><span class="date">${fmtDate(b?.approvedAt || b?.createdAt || b?.date)}</span></div>
+        <div class="row center">
+          <span></span>
+          <span class="date">
+            ${fmtDate(b?.approvedAt || b?.createdAt || b?.date)}
+            <span class="time"> ${fmtTimeFromDateLike(b?.approvedAt || b?.createdAt || b?.date)}</span>
+          </span>
+        </div>
       </div>
 
       <!-- กล่อง 2: หัวหน้า -->
@@ -2366,23 +2510,36 @@ function buildFieldFormPreviewV2(
         <div class="row">
           <label class="chk"><input type="checkbox" id="head_to_vice"><span>เห็นชอบ</span></label>
         </div>
-        <div class="row">
-          <label class="chk"><input type="checkbox" id="head_other_chk"><span>อื่นๆ :</span></label>
-          <input type="text" id="head_other_reason" class="mfu-input" placeholder="โปรดระบุ" disabled />
+
+        <!-- อื่นๆ : textarea (จำกัด 3 บรรทัดด้วย CSS + คุมใน didOpen จาก approveGroup) -->
+        <div class="row other-row">
+          <label class="chk">
+            <input type="checkbox" id="head_other_chk">
+            <span class="nobr">อื่นๆ&nbsp;:</span>
+          </label>
+          <textarea id="head_other_reason"
+                    class="mfu-input autogrow"
+                    rows="1"
+                    maxlength="110"
+                    placeholder="โปรดระบุ"></textarea>
         </div>
+
         <div class="row sig-row">
           ${headSignUrl ? `<img class="sigimg" src="${headSignUrl}" alt="signature">` : ``}
         </div>
         <div class="row"><span class="paren">(</span><span style="flex:1;text-align:center;">${d(headThaiName)}</span><span class="paren">)</span></div>
-        <div class="row center"><span>วันที่</span><span class="date">${todayTH}</span></div>
+        <div class="row center">
+          <span></span>
+          <span class="date">
+            ${todayTH}
+            <span class="time"> ${nowTHTime}</span>
+          </span>
+        </div>
       </div>
+
     </div>
   </div>`;
 }
-
-
-
-
 
 </script>
 

@@ -128,21 +128,32 @@
 
 
   <!-- ข้อ 1 -->
-  <div class="form-row bold" style="margin-left: 0;">
-    <span>1. ขออนุมัติใช้สถานที่</span>
-  </div>
+<div class="form-row bold" style="margin-left: 0;">
+  <span>1. ขออนุมัติใช้สถานที่</span>
+</div>
 
-  <div class="form-row block-row" style="margin-left: 80px;">
-    <span>อาคาร :</span>
-    <span class="line-field block-text">{{ info.building }}</span>
-  </div>
-
-  <div class="form-row block-row" style="margin-left: 80px;">
-    <span>ตำแหน่งพื้นที่/ห้องที่ต้องการใช้ :</span>
-    <span class="line-field block-text">
+<table class="util-table util-colon-align" style="margin-left:80px;">
+  <colgroup>
+    <col class="c-label" />
+    <col class="c-colon" />
+    <col />
+  </colgroup>
+  <tr>
+    <td class="util-label">อาคาร</td>
+    <td class="colon">:</td>
+    <td class="restroom-text">
+      {{ info.building && info.building.trim() !== '' ? info.building : '-' }}
+    </td>
+  </tr>
+  <tr>
+    <td class="util-label">พื้นที่/ห้อง</td>
+    <td class="colon">:</td>
+    <td class="restroom-text">
       {{ info.zone && info.zone.trim() !== '' ? info.zone : '-' }}
-    </span>
-  </div>
+    </td>
+  </tr>
+</table>
+
 
 <!-- ข้อ 2 -->
 <!-- ข้อ 2 -->
@@ -256,7 +267,7 @@
   <div class="sig-under">
     <div class="sig-name" style="padding-bottom: 8px;">( {{ info.proxyStudentName || info.username_form || '-' }} )</div>
     <div class="sig-role" style="padding-bottom: 8px;">ผู้รับผิดชอบ</div>
-    <div class="sig-date">วันที่ {{ todayTH }}</div>
+    <div class="sig-date">{{ nowTH }}</div>
   </div>
 </div>
 
@@ -378,8 +389,6 @@
     </div>
   </div>
 </template>
-
-
 <script setup>
 import { ref, onMounted, onBeforeUnmount, nextTick  } from 'vue'
 import { useRouter } from 'vue-router'
@@ -409,6 +418,18 @@ let polling = null
 
 const signatureUrl = ref('')  // URL รูปลายเซ็นของผู้ยื่น
 
+const REQUIRED_APPROVAL_ROLES = ['admin', 'super'];
+
+function buildInitialStep(existingStep) {
+  if (Array.isArray(existingStep) && existingStep.length > 0) {
+    return existingStep.map(s => ({
+      role: String(s?.role || '').toLowerCase(),
+      action: (typeof s?.action === 'boolean') ? s.action : null
+    })).filter(s => s.role); // กัน null/ค่าว่าง
+  }
+  return REQUIRED_APPROVAL_ROLES.map(r => ({ role: r, action: null }));
+}
+
 // แปลง path เป็น URL สมบูรณ์ (เหมือนหน้า approve_field)
 function toAbsUrl(p) {
   if (!p) return ''
@@ -430,7 +451,20 @@ function getTodayTH() {
 
 todayTH.value = getTodayTH()
 
+// === Time stamp (วัน/เดือน/ปี พ.ศ. + เวลา) ===
+const nowTH = ref('')
 
+function getNowTH() {
+  const now = new Date()
+  const dd = String(now.getDate()).padStart(2, '0')
+  const mm = String(now.getMonth() + 1).padStart(2, '0')
+  const yyyyTH = String(now.getFullYear() + 543)
+  const HH = String(now.getHours()).padStart(2, '0')
+  const MM = String(now.getMinutes()).padStart(2, '0')
+  return `${dd}/${mm}/${yyyyTH} ${HH}:${MM} น.`
+}
+
+nowTH.value = getNowTH()
 
 function pruneOldNotifications() {
   const cutoff = Date.now() - (7 * 24 * 60 * 60 * 1000) // 7 วัน
@@ -830,6 +864,8 @@ function normTime(t) {
 
 async function handleNext() {
   try {
+    nowTH.value = getNowTH()   // อัปเดตไทม์แสตมป์ก่อนสร้าง PDF
+
     const bookingId = localStorage.getItem('bookingId')
     if (!bookingId) { Swal.fire('ไม่พบ bookingId'); return }
 
@@ -840,9 +876,9 @@ async function handleNext() {
     })()
     let bookingData = preferFilled(info.value || {}, draft || {})
 
-    // ✅ normalize radio/เวลา (เพิ่ม restroom ตรงนี้)
+    // ✅ normalize radio/เวลา (รวม restroom)
     bookingData.utilityRequest  = normalizeYesNo(bookingData.utilityRequest)
-    bookingData.restroom        = normalizeYesNo(bookingData.restroom)   // << เพิ่ม
+    bookingData.restroom        = normalizeYesNo(bookingData.restroom)
     bookingData.facilityRequest = normalizeYesNo(bookingData.facilityRequest)
     bookingData.turnon_air      = normTime(bookingData.turnon_air)
     bookingData.turnoff_air     = normTime(bookingData.turnoff_air)
@@ -851,18 +887,12 @@ async function handleNext() {
     bookingData.since_time      = normTime(bookingData.since_time)
     bookingData.until_thetime   = normTime(bookingData.until_thetime)
 
-    // 1) ทำ PDF 1 หน้าแล้วโหลดให้ผู้ใช้ (เหมือนเดิม)
+    // === (ใหม่) สร้าง/ดึง step approvals ===
+    // ลำดับความสำคัญ: draft.step > info.value.step > ค่าเริ่มต้น
+    const stepArray = buildInitialStep(draft?.step || info.value?.step)
+
+    // 1) ทำ PDF 1 หน้า
     const pdfBlob = await htmlToPdfBlob('pdf-section')
-
-  // ===== ปิดการดาวน์โหลดอัตโนมัติไว้ก่อน (เผื่อเปิดใช้ภายหลัง) =====
-    // const url = window.URL.createObjectURL(pdfBlob)
-    // const link = document.createElement('a')
-    // link.href = url
-    // link.download = pdfFilename
-    // document.body.appendChild(link)
-    // link.click()
-    // setTimeout(() => { window.URL.revokeObjectURL(url); link.remove() }, 80)
-
 
     // 2) อัปโหลด PDF -> ได้ URL
     const pdfUrl = await uploadPdfBlob(pdfBlob)
@@ -872,7 +902,7 @@ async function handleNext() {
     const uploadedNow = hasTemp ? await uploadTempFilesAndGetUrls() : []
 
     // 4) รวมไฟล์แนบทั้งหมดเป็น URL/ชื่อไฟล์
-    const multerFiles   = Array.isArray(bookingData.files) ? bookingData.files : []
+    const multerFiles    = Array.isArray(bookingData.files) ? bookingData.files : []
     const allAttachments = [
       ...multerFiles.map(f => f.fileUrl || f.url).filter(Boolean),
       ...uploadedNow.map(f => f.url),
@@ -882,7 +912,7 @@ async function handleNext() {
       ...uploadedNow.map(f => f.fileName || 'ไฟล์แนบ'),
     ]
 
-    // 5) payload (เพิ่ม restroom ลงไปด้วย)
+    // 5) payload (เพิ่ม field 'step')
     const payload = {
       user_id: bookingData.user_id,
       name: bookingData.building,
@@ -905,9 +935,12 @@ async function handleNext() {
       username_form: bookingData.username_form || localStorage.getItem('username_form') || '',
       id_form:       bookingData.id_form       || localStorage.getItem('id_form')       || '',
 
+      // --- เพิ่มเพื่อเก็บสถานะอนุมัติราย role ---
+      step: stepArray,   // <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+
       // ----- เพิ่ม restroom -----
       utilityRequest:  bookingData.utilityRequest || '',
-      restroom:        bookingData.restroom || '',         // <<<< สำคัญ
+      restroom:        bookingData.restroom || '',
       facilityRequest: bookingData.facilityRequest || '',
 
       // รายละเอียดสาธารณูปโภค/รายการประกอบอาคาร
@@ -953,6 +986,7 @@ async function handleNext() {
 
 
 
+
 function formatTimeTH(timeStr) {
   if (!timeStr || typeof timeStr !== 'string') return '-'
   let t = timeStr.trim().slice(0, 5)
@@ -960,7 +994,6 @@ function formatTimeTH(timeStr) {
   return t + ' น.'
 }
 </script>
-
 <style scoped>
 .headStepper {
   position: sticky;

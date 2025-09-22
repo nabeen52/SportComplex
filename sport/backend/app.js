@@ -72,13 +72,10 @@ const transporter = nodemailer.createTransport({
     }
 });
 
-const returnsDir = path.join(__dirname, 'uploads', 'returns');
+const returnsDir = path.join(__dirname, 'public', 'uploads', 'returns');
 fs.mkdirSync(returnsDir, { recursive: true });
 
-const uploadReturn = multer({
-    storage: multer.memoryStorage(),
-    limits: { fileSize: 10 * 1024 * 1024 } // 10MB
-});
+const uploadReturn = multer({ storage: multer.memoryStorage() });
 
 const uploadDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadDir)) {
@@ -115,11 +112,48 @@ async function getStaffEmails() {
     return staff.map(s => s.email);
 }
 
-// ดึงอีเมล admin ทุกคน
+// ★ ดึงอีเมล staff/admin/super
+async function getStaffEmails() {
+    const staff = await User.find({ role: 'staff', email: { $exists: true, $ne: "" } });
+    return staff.map(s => s.email);
+}
 async function getAdminEmails() {
     const admins = await User.find({ role: 'admin', email: { $exists: true, $ne: "" } });
     return admins.map(s => s.email);
 }
+async function getSuperEmails() {
+    const supers = await User.find({ role: 'super', email: { $exists: true, $ne: "" } });
+    return supers.map(s => s.email);
+}
+
+// ★ ตัวช่วยส่งเมลหลายคน + แปลงรายการเป็น HTML
+// ใช้ค่าจาก ENV เป็นหลัก (ถ้าไม่ตั้ง MAIL_FROM จะ default = ชื่อ + MAIL_USER)
+const FROM_ADDR =
+    process.env.MAIL_FROM && process.env.MAIL_FROM.includes('<')
+        ? process.env.MAIL_FROM
+        : `"MFU Sport Complex" <${process.env.MAIL_FROM || process.env.MAIL_USER}>`;
+
+const listToHtml = (items = []) =>
+    `<ul>${(items || []).map(it => `<li>${it.name || '-'} (จำนวน: ${it.quantity ?? '-'})</li>`).join('')}</ul>`;
+
+async function sendBulk(toList, subject, html) {
+    try {
+        const to = Array.isArray(toList) ? toList.filter(Boolean) : [toList];
+        if (!to.length) return;
+        await transporter.sendMail({ from: FROM_ADDR, to, subject, html });
+    } catch (e) {
+        console.error('[sendBulk mail error]', e.message);
+    }
+}
+
+// ★ ชื่อแสดงผลผู้ใช้จาก user_id (ถ้าไม่มี thaiName ใช้ name/email)
+async function getUserDisplayNameById(user_id) {
+    try {
+        const u = await User.findOne({ user_id });
+        return u?.thaiName || u?.name || u?.email || user_id || '';
+    } catch (_) { return user_id || ''; }
+}
+
 // แจ้งเตือน admin ทุกคนเมื่อมีรายการยืมอุปกรณ์ "หลายวัน"
 async function notifyAdminNewBorrow({ requester, items, booking_id }) {
     const adminEmails = await getAdminEmails();
@@ -367,6 +401,188 @@ async function saveGoogleProfilePic(picUrl, userId) {
         return null;
     }
 }
+
+// STEPPER
+// role ชุด fallback
+const FALLBACK_ROLE_SETS = {
+    field: ['admin', 'super'],
+    equipment: ['admin', 'staff'], // multi-day ใช้ชุดนี้
+};
+
+const toArr = (v) => Array.isArray(v) ? v : (v ? [v] : []);
+
+function isEmptyLike(v) {
+    const s = (v ?? '').toString().trim().toLowerCase();
+    return !s || s === 'null' || s === 'undefined';
+}
+function isEquipmentOneDay(ctx = {}) {
+    const t = String(ctx.type || 'equipment').toLowerCase();
+    if (t !== 'equipment') return false;
+    return isEmptyLike(ctx.since) && isEmptyLike(ctx.uptodate);
+}
+
+function clampOneDayStaffOnly(step, ctx) {
+    const arr = Array.isArray(step) ? step : [];
+    if (String(ctx?.type || '').toLowerCase() !== 'equipment') return arr;
+    if (!isEquipmentOneDay(ctx)) return arr;
+    const keep = arr.filter(s => String(s?.role || '').toLowerCase() === 'staff');
+    // ถ้าไม่มี staff เลย ให้สร้างเปล่าไว้ 1 แถว
+    return keep.length ? keep : [{ role: 'staff', approve: null }];
+}
+
+// ตรวจว่าเป็น “หลายวัน” หรือไม่ (ต้องมีทั้ง since และ uptodate ที่ไม่ว่าง)
+function isMultiDayEquipment(type, since, uptodate) {
+    const t = String(type || '').toLowerCase();
+    if (t !== 'equipment') return false;
+    const s = String(since || '').trim();
+    const u = String(uptodate || '').trim();
+    return !!(s && u);
+}
+
+// ดึงชุด role ตามชนิด + ระยะเวลา (วันเดียว/หลายวัน)
+function getRequiredRolesFor(type, ctx) {
+    const t = String(type || 'field').toLowerCase();
+    if (t === 'equipment' && isEquipmentOneDay(ctx)) return ['staff']; // ← บังคับ
+
+    if (History.ROLE_SETS && History.ROLE_SETS[t]) return History.ROLE_SETS[t];
+    if (Array.isArray(History.ALLOWED_STEP_ROLES)) return History.ALLOWED_STEP_ROLES;
+    const FALLBACK_ROLE_SETS = { field: ['admin', 'super'], equipment: ['admin', 'staff'] };
+    return FALLBACK_ROLE_SETS[t] || ['admin'];
+}
+
+// ===== สรุปสถานะรวมจาก step (ใช้ approve) — อิง type + hasPeriod =====
+function deriveStatusFromStep(stepArray, type, ctx) {
+    const t = String(type || 'field').toLowerCase();
+    const steps = Array.isArray(stepArray) ? stepArray : [];
+
+    // ใครกดไม่อนุมัติ -> disapproved
+    if (steps.some(s => s?.approve === false)) return 'disapproved';
+
+    const map = new Map(steps.map(s => [String(s.role).toLowerCase(), s.approve]));
+
+    if (t === 'equipment') {
+        // ✅ one-day: ให้คง pending จนกว่าจัดการที่ flow ส่งมอบ/รับคืน
+        if (isEquipmentOneDay(ctx)) return 'pending';
+
+        // multi-day: admin ผ่านก็ approved
+        if (map.get('admin') === true) return 'approved';
+        return 'pending';
+    }
+
+    // field: ต้องครบทุก role ที่จำเป็น
+    const reqRoles = getRequiredRolesFor(t, ctx);
+    const allApproved = reqRoles.every(r => map.get(r) === true);
+    return allApproved ? 'approved' : 'pending';
+}
+
+// ===== แปลง step จาก FE ให้เป็นรูปมาตรฐาน + เติม role ที่ขาด — อิง type + hasPeriod =====
+function normalizeIncomingStep(stepArray, type, ctx) {
+    const t = String(type || 'field').toLowerCase();
+
+    // ⛔ บังคับกรณี one-day equipment → staff อย่างเดียว
+    if (t === 'equipment' && isEquipmentOneDay(ctx)) {
+        return [{ role: 'staff', approve: null }];
+    }
+
+    // (ของเดิม) ถ้าจะใช้ helper บนโมเดล ก็ใช้ได้กับเคสอื่นเท่านั้น
+    if (typeof History.normalizeStepForType === 'function') {
+        return History.normalizeStepForType(t, stepArray);
+    }
+    if (typeof History.withDefaultStep === 'function') {
+        return History.withDefaultStep(stepArray);
+    }
+
+    // สร้างตาม role ที่จำเป็น
+    const reqRoles = getRequiredRolesFor(type, ctx);
+    const map = new Map();
+
+    if (Array.isArray(stepArray)) {
+        for (const s of stepArray) {
+            const role = String(s?.role || '').toLowerCase().trim();
+            if (!reqRoles.includes(role)) continue;      // ตัด role เกิน (เช่น admin ใน one-day)
+            const approve = (typeof s?.approve === 'boolean')
+                ? s.approve
+                : (typeof s?.action === 'boolean' ? s.action : null);
+            map.set(role, { role, approve });
+        }
+    }
+    for (const r of reqRoles) {
+        if (!map.has(r)) map.set(r, { role: r, approve: null });
+    }
+    return Array.from(map.values());
+}
+
+function getRequiredRolesForDoc(doc) {
+    return getRequiredRolesFor(doc.type, doc);
+}
+
+// ===== อัปเดตผลของ role หนึ่ง (approve true/false) — ดู type + เอกสารวันเดียว/หลายวัน =====
+async function updateHistoryStep(
+    { id, role, approve, action, actorName = '', remark = '' },
+    { syncStatus = true } = {}
+) {
+    const h = await History.findById(id);
+    if (!h) throw new Error('History not found');
+
+    const r = String(role || '').toLowerCase().trim();
+
+    // ตรวจ role ที่อนุญาตตามชนิด/บริบทเอกสาร
+    const reqRoles = getRequiredRolesForDoc(h);
+    if (!reqRoles.includes(r)) throw new Error('Invalid role');
+
+    // ทำให้ step เป็นรูปมาตรฐานก่อน
+    let step = normalizeIncomingStep(h.step, h.type, h);
+    const effApprove = (typeof approve === 'boolean') ? approve
+        : (typeof action === 'boolean') ? action : null;
+
+    const idx = step.findIndex(s => String(s.role || '').toLowerCase() === r);
+    if (idx >= 0) step[idx].approve = effApprove;
+    else step.push({ role: r, approve: effApprove });
+
+    // ⛔ เคสอุปกรณ์ "วันเดียว": ล้างทุก role อื่นให้เหลือ staff เท่านั้น
+    step = clampOneDayStaffOnly(step, h);
+    h.step = step;
+
+    // สถานะ
+    if (String(h.type).toLowerCase() === 'equipment') {
+        if (!isEquipmentOneDay(h)) {
+            if (r === 'admin' && effApprove === true) h.status = 'approved';
+            if (effApprove === false) h.status = 'disapproved';
+        }
+        // ถ้า one-day: ไม่ดันสถานะที่นี่ ปล่อยให้ route ภายนอกเซ็ต (เช่น approve_equipment)
+    } else if (syncStatus) {
+        h.status = deriveStatusFromStep(step, h.type, h);
+    }
+
+    await h.save();
+    return h;
+}
+
+
+// ====== Return photo upload (unchanged) ======
+const returnsStorage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        const dir = path.join(__dirname, '../public/uploads/return-photos');
+        fs.mkdirSync(dir, { recursive: true });
+        cb(null, dir);
+    },
+    filename: (req, file, cb) => {
+        const id = req.params.id || 'unknown';
+        const ts = Date.now();
+        const ext = (path.extname(file.originalname || '') || '.jpg').toLowerCase();
+        cb(null, `return_${id}_${ts}${ext}`);
+    }
+});
+const uploadReturnPhoto = multer({ storage: returnsStorage }).single('returnPhoto');
+
+function buildPublicUrl(req, relPath) {
+    const base = `${req.protocol}://${req.get('host')}`;
+    return relPath.startsWith('/') ? `${base}${relPath}` : `${base}/${relPath}`;
+}
+
+app.use('/uploads', require('express').static(path.join(__dirname, 'public', 'uploads')));
+
+
 app.set('trust proxy', 1);
 const allowedOrigins = [
     'http://localhost:5173',
@@ -1187,279 +1403,191 @@ app.patch('/api/users/update_id', async (req, res) => {
     }
 });
 // ==================== History (Borrow/Return/Approve/Disapprove) ====================
-// POST /api/history
+// ================== POST /api/history ==================
+
+// ============ CREATE HISTORY ============
+// ============ CREATE HISTORY ============
 app.post('/api/history', async (req, res) => {
     try {
-        // ---------- helpers ----------
-        const toDate = (v) => {
-            if (!v) return null;
-            const d = new Date(v);
-            return isNaN(d) ? null : d;
+        const body = req.body || {};
+        const type = String(body.type || 'field').toLowerCase();
+
+        // helpers (เฉพาะใน route นี้กัน error ตัวแปรไม่เจอ)
+        const toArr = (v) => Array.isArray(v) ? v : (v ? [v] : []);
+        const isEmptyLike = (v) => {
+            const s = (v ?? '').toString().trim().toLowerCase();
+            return !s || s === 'null' || s === 'undefined';
         };
-        const str = (v, d = '') => (v == null ? d : String(v).trim());
-        const num = (v, d = 0) => {
-            const n = Number(v);
-            return Number.isFinite(n) ? n : d;
-        };
-        const asArray = (v) => {
-            if (v == null) return [];
-            return Array.isArray(v) ? v : [v];
-        };
-        const toBool = (v) => {
-            if (typeof v === 'boolean') return v;
-            const s = str(v).toLowerCase();
-            if (!s) return false;
-            return ['1', 'true', 'yes', 'y', 'ใช่'].includes(s);
-        };
+        const keepStaffOnly = [{ role: 'staff', approve: null }];
 
-        // ---------- normalize input ----------
-        const user_id = str(req.body.user_id);
-        const name = str(req.body.name);
-        const zone = str(req.body.zone);
-        const username_form = str(req.body.username_form);
-        const id_form = str(req.body.id_form);
-        const booking_id = str(req.body.booking_id);
-        const agencyName = str(req.body.agency);
-        const proxyStudentName = str(req.body.proxyStudentName);
-        const proxyStudentId = str(req.body.proxyStudentId);
+        // one-day (equipment) → บังคับให้มีแค่ role 'staff'
+        const step =
+            (type === 'equipment' && isEquipmentOneDay(body))
+                ? keepStaffOnly
+                : normalizeIncomingStep(body.step, type, body); // สำหรับเคสอื่น ๆ
 
-        const startTime = str(req.body.startTime || req.body.start_time);
-        const endTime = str(req.body.endTime || req.body.end_time);
+        // status เริ่มต้น
+        const status = body.status || deriveStatusFromStep(step, type, body) || 'pending';
 
-        const sinceDate = toDate(req.body.since);
-        const uptodateDate = toDate(req.body.uptodate);
-        const createdDate = toDate(req.body.date) || new Date();
-
-        // ---------- NEW: ฟิลด์ที่อยากให้บันทึกเพิ่ม ----------
-        const aw = str(req.body.aw);
-        // map โทรศัพท์จากหลายชื่อ (number/phone -> tel)
-        const tel = str(req.body.tel ?? req.body.number ?? req.body.phone ?? '');
-        // map เหตุผลจากหลายชื่อ (reasons/reason)
-        const reasons = str(req.body.reasons ?? req.body.reason ?? '');
-
-        const utilityRequest = req.body.utilityRequest;
-        const facilityRequest = req.body.facilityRequest;
-        const restroom = req.body.restroom;
-
-        const turnon_air = str(req.body.turnon_air);
-        const turnoff_air = str(req.body.turnoff_air);
-        const turnon_lights = str(req.body.turnon_lights);
-        const turnoff_lights = str(req.body.turnoff_lights);
-        const other = str(req.body.other);
-        const amphitheater = str(req.body.amphitheater);
-        const need_equipment = str(req.body.need_equipment);
-        const participants = str(req.body.participants);
-        const requesterName = str(req.body.requester);
-        const no_receive = toBool(req.body.no_receive);
-        const date_receive = toDate(req.body.date_receive);
-        const receiver = str(req.body.receiver);
-        const singleFileUrl = str(req.body.fileUrl);
-
-        // ---------- type inference / auto-fix (เอนทางอุปกรณ์) ----------
-        const rawType = str(req.body.type).toLowerCase();
-        const hasQty = req.body.quantity !== undefined && Number.isFinite(Number(req.body.quantity));
-        // สัญญาณว่าเป็นสนาม: มี start/end time หรือมีชื่อกิจกรรม (name_active)
-        const fieldSignals = !!(startTime || endTime || str(req.body.name_active));
-
-        let type = ['field', 'equipment'].includes(rawType) ? rawType : null;
-        if (!type) {
-            if (hasQty) type = 'equipment';
-            else if (fieldSignals) type = 'field';
-            else type = 'equipment'; // default ไปทางอุปกรณ์
-        }
-
-        // default quantity: field = 1, equipment = number(v)
-        let quantity = type === 'field' ? 1 : num(req.body.quantity, 0);
-
-        // ---------- basic required ----------
-        if (!user_id || !name || !quantity || !str(req.body.status)) {
-            return res.status(400).json({
-                success: false,
-                message: 'ข้อมูลไม่ครบ (user_id, name, quantity, status)'
-            });
-        }
-        const status = str(req.body.status);
-
-        // ---------- normalize attachments ----------
-        let attachment = asArray(req.body.attachment);
-        if (singleFileUrl) attachment.push(singleFileUrl);
-        const fileName = asArray(req.body.fileName);
-        const fileType = asArray(req.body.fileType);
-
-        // booking PDF fields
-        const bookingPdf = req.body.bookingPdf ?? null;
-        const bookingPdfUrl = str(req.body.bookingPdfUrl || req.body.booking_pdf_url);
-
-        // ===== ป้องกัน duplicate =====
-        const duplicateCond = {
-            user_id,
-            name,
-            status: 'pending',
+        // สร้างเอกสาร
+        const doc = await History.create({
+            // --- core fields ---
+            user_id: body.user_id,
             type,
-            since: sinceDate || null,
-            uptodate: uptodateDate || null,
-            zone,
-            startTime,
-            endTime,
-            booking_id,
-            username_form,
-            id_form
-        };
-        const exist = await History.findOne(duplicateCond);
-        if (exist) {
-            return res.status(409).json({
-                success: false,
-                message: 'พบรายการที่ยังไม่อนุมัติอยู่แล้ว',
-                duplicate: exist
-            });
-        }
-
-        // ===== บันทึกตาม type =====
-        if (type === 'field') {
-            const newHistory = new History({
-                user_id,
-                name,
-                name_active: str(req.body.name_active),
-                zone,
-                since: sinceDate,
-                uptodate: uptodateDate,
-                startTime,
-                endTime,
-                status,
-                type: 'field',
-                attachment: attachment.length ? attachment : null,
-                fileName: fileName.length ? fileName : null,
-                fileType: fileType.length ? fileType : null,
-                agency: agencyName,
-                booking_id,
-                date: createdDate,
-                proxyStudentName,
-                proxyStudentId,
-                bookingPdf: bookingPdf || null,
-                bookingPdfUrl: bookingPdfUrl || null,
-                username_form,
-                id_form,
-
-                // fields ที่ persist เพิ่ม
-                aw,
-                tel,
-                reasons,
-                utilityRequest,
-                facilityRequest,
-                restroom,
-                turnon_air,
-                turnoff_air,
-                turnon_lights,
-                turnoff_lights,
-                other,
-                amphitheater,
-                need_equipment,
-                participants,
-                requester: requesterName,
-                no_receive,
-                date_receive,
-                receiver,
-                fileUrl: singleFileUrl || undefined
-            });
-            await newHistory.save();
-
-            if (agencyName) {
-                const existField = await Information.findOne({ unit: agencyName, type: 'field' });
-                if (!existField) await Information.create({ unit: agencyName, usage: 0, type: 'field' });
-                const existEquip = await Information.findOne({ unit: agencyName, type: 'equipment' });
-                if (!existEquip) await Information.create({ unit: agencyName, usage: 0, type: 'equipment' });
-            }
-
-            try {
-                const user = await User.findOne({ user_id });
-                const requester = user?.name || user?.email || user_id;
-                await notifyAdminNewFieldBooking({
-                    requester,
-                    building: name,
-                    activity: str(req.body.name_active),
-                    since: sinceDate ? sinceDate.toISOString().slice(0, 10) : '',
-                    uptodate: uptodateDate ? uptodateDate.toISOString().slice(0, 10) : '',
-                    zone,
-                    booking_id: booking_id || newHistory._id
-                });
-            } catch (mailErr) {
-                console.error('[Send field-booking notify mail error]', mailErr.message);
-            }
-
-            return res.send({ success: true, history: newHistory });
-        }
-
-        // ===== equipment =====
-        const newHistory = new History({
-            user_id,
-            name,
-            quantity: num(req.body.quantity, 0),
             status,
-            date: createdDate,
-            since: sinceDate || null,
-            uptodate: uptodateDate || null,
-            type: 'equipment',
-            attachment: attachment.length ? attachment : null,
-            fileName: fileName.length ? fileName : null,
-            fileType: fileType.length ? fileType : null,
-            agency: agencyName,
-            booking_id,
-            bookingPdf: bookingPdf || null,
-            bookingPdfUrl: bookingPdfUrl || null,
-            username_form,
-            id_form,
+            name: body.name,
+            name_active: body.name_active,
+            zone: body.zone,
 
-            // fields ที่ persist เพิ่ม
-            aw,
-            tel,            // ★ รับมาจาก tel/number/phone
-            reasons,        // ★ รับมาจาก reasons/reason
-            utilityRequest,
-            facilityRequest,
-            restroom,
-            turnon_air,
-            turnoff_air,
-            turnon_lights,
-            turnoff_lights,
-            other,
-            amphitheater,
-            need_equipment,
-            participants,
-            requester: requesterName,
-            no_receive,
-            date_receive,
-            receiver,
-            fileUrl: singleFileUrl || undefined
+            since: isEmptyLike(body.since) ? null : body.since,
+            uptodate: isEmptyLike(body.uptodate) ? null : body.uptodate,
+            startTime: body.startTime || '',
+            endTime: body.endTime || '',
+            quantity: body.quantity,
+            date: body.date ? new Date(body.date) : new Date(),
+
+            // --- booking / files ---
+            agency: body.agency || '',
+            booking_id: body.booking_id || null,
+            attachment: toArr(body.attachment),
+            fileName: toArr(body.fileName),
+            fileType: toArr(body.fileType),
+            fileUrl: body.fileUrl || '',
+            bookingPdfUrl: body.bookingPdfUrl || '',
+            bookingPdf: body.bookingPdf || null,
+
+            // --- user form ---
+            proxyStudentName: body.proxyStudentName || '',
+            proxyStudentId: body.proxyStudentId || '',
+            username_form: body.username_form || '',
+            id_form: body.id_form || '',
+
+            // --- field-only extras (ถ้าเป็น equipment ปล่อยว่างได้) ---
+            utilityRequest: body.utilityRequest || '',
+            facilityRequest: body.facilityRequest || '',
+            turnon_air: body.turnon_air || '',
+            turnoff_air: body.turnoff_air || '',
+            turnon_lights: body.turnon_lights || '',
+            turnoff_lights: body.turnoff_lights || '',
+            amphitheater: body.amphitheater || '',
+            need_equipment: body.need_equipment || '',
+            other: body.other || '',
+            aw: body.aw || '',
+            tel: body.tel || '',
+            reasons: body.reasons || '',
+            participants: body.participants || '',
+            requester: body.requester || '',
+            no_receive: body.no_receive || '',
+            date_receive: body.date_receive || null,
+            receiver: body.receiver || '',
+            restroom: body.restroom || '',
+
+            // --- equipment receive scheduling ---
+            receive_date: body.receive_date || null,
+            receive_time: body.receive_time || '',
+            createdAt_old: body.createdAt_old || null,
+
+            // --- secretary/admin meta (flow สนาม) ---
+            reason_admin: body.reason_admin || '',
+            secretary_choice: {
+                to_head: !!(body.secretary_choice?.to_head),
+                for_consider: !!(body.secretary_choice?.for_consider),
+                other_checked: !!(body.secretary_choice?.other_checked),
+            },
+            thaiName_admin: body.thaiName_admin || '',
+            signaturePath_admin: body.signaturePath_admin || '',
+
+            // --- supervisor meta (flow สนาม) ---
+            superApprovedBy: body.superApprovedBy || '',
+            superApprovedById: body.superApprovedById || '',
+            superApprovedAt: body.superApprovedAt || null,
+            to_vice_supervisor: !!body.to_vice_supervisor,
+            for_consider_supervisor: !!body.for_consider_supervisor,
+            other_checked_supervisor: !!body.other_checked_supervisor,
+            reason_supervisor: body.reason_supervisor || '',
+            thaiName_supervisor: body.thaiName_supervisor || '',
+            signaturePath_supervisor: body.signaturePath_supervisor || '',
+            approvedAt_supervisor: body.approvedAt_supervisor || null,
+            head_choice_supervisor: {
+                to_vice_supervisor: !!(body.head_choice_supervisor?.to_vice_supervisor),
+                for_consider_supervisor: !!(body.head_choice_supervisor?.for_consider_supervisor),
+                other_checked_supervisor: !!(body.head_choice_supervisor?.other_checked_supervisor),
+            },
+
+            // --- handover meta (flow อุปกรณ์) ---
+            handoverById: body.handoverById || '',
+            handoverBy: body.handoverBy || '',
+            handoverAt: body.handoverAt || null,
+            handoverRemarkSender: body.handoverRemarkSender || '',
+            handoverRemarkReceiver: body.handoverRemarkReceiver || '',
+            handoverReceiverThaiName: body.handoverReceiverThaiName || '',
+            handoverReceiverDate: body.handoverReceiverDate || null,
+            condition: body.condition || '',
+            returnPhoto: body.returnPhoto || null,
+
+            // --- step ---
+            step,
         });
-        await newHistory.save();
 
-        if (newHistory.agency && newHistory.agency.trim() !== '') {
-            await Information.findOneAndUpdate(
-                { unit: newHistory.agency, type: 'equipment' },
-                { $setOnInsert: { usage: 0 } },
-                { upsert: true }
-            );
-        }
+        // กันกรณีมี middleware เติม role อื่นเข้ามา: ยืมวันเดียว (equipment) → รีเซ็ตให้เหลือ staff เท่านั้น
+        if (type === 'equipment' && isEquipmentOneDay(body)) {
+            const hasOnlyStaff =
+                Array.isArray(doc.step) &&
+                doc.step.length === 1 &&
+                String(doc.step[0]?.role).toLowerCase() === 'staff';
 
-        if (status === 'pending') {
-            const isOneDay =
-                !sinceDate || !uptodateDate || sinceDate.toDateString() === uptodateDate?.toDateString();
-            const user = await User.findOne({ user_id });
-            const requester = user?.name || user?.email || user_id;
-
-            const itemData = [{ name, quantity: num(req.body.quantity, 0) }];
-            if (isOneDay) {
-                await notifyStaffNewBorrow({ requester, items: itemData, booking_id });
-            } else {
-                await notifyAdminNewBorrow({ requester, items: itemData, booking_id });
+            if (!hasOnlyStaff) {
+                await History.updateOne({ _id: doc._id }, { $set: { step: keepStaffOnly } });
+                doc.step = keepStaffOnly;
             }
         }
 
-        return res.send({ success: true, history: newHistory });
+        return res.status(201).json(doc);
     } catch (err) {
         console.error('POST /api/history error:', err);
-        res.status(500).send({ success: false, message: err.message });
+        return res.status(400).json({ message: err.message || 'Create history failed' });
     }
 });
+
+
+
+
+
+
+
+// ================== PATCH /api/history/:id/step ==================
+// body: { role?: string, approve?: true|false|null, action?: true|false|null, remark?: string, syncStatus?: boolean }
+app.patch('/api/history/:id/step', async (req, res) => {
+    try {
+        const id = req.params.id;
+
+        // รองรับทั้ง approve (ใหม่) และ action (เก่า)
+        const approve = (typeof req.body.approve === 'boolean')
+            ? req.body.approve
+            : (typeof req.body.action === 'boolean' ? req.body.action : null);
+
+        const remark = typeof req.body.remark === 'string' ? req.body.remark : '';
+        const syncStatus = req.body.syncStatus !== false; // default true
+
+        const actorRole = String(req.body.role || (req.user?.role || '')).toLowerCase();
+        const actorName = (req.user?.name || req.user?.email || req.user?.user_id || '').toString();
+
+        const updated = await updateHistoryStep({
+            id,
+            role: actorRole,
+            approve,        // ✅ ใช้ approve
+            actorName,
+            remark
+        }, { syncStatus });
+
+        res.json(updated);
+    } catch (err) {
+        console.error('PATCH /api/history/:id/step error:', err);
+        res.status(400).json({ message: err.message || 'Update step failed' });
+    }
+});
+
+
 
 
 app.get('/api/history', async (req, res) => {
@@ -1527,322 +1655,338 @@ app.delete('/api/history/:id', async (req, res) => {
 // == Return equipment (keep ALL original fields) ==
 app.patch('/api/history/:id/return', async (req, res) => {
     try {
-        const staffId = req.body.staff_id;
-        const condition = req.body.status || 'good';
-        const remark = (req.body.remark || '').trim();
+        const id = req.params.id;
 
-        // ⬇️ รองรับหลายชื่อฟิลด์จาก FE สำหรับไฟล์ PDF ที่แนบตอน "รับคืน"
-        const pdfUrl = (req.body.bookingPdfUrl || req.body.booking_pdf_url || '').toString().trim();
-        const pdfNameRaw = Array.isArray(req.body.pdfFileName) ? req.body.pdfFileName[0] : req.body.pdfFileName;
-        const fileNameRaw = Array.isArray(req.body.fileName) ? req.body.fileName[0] : req.body.fileName;
-        const pdfFileName = (pdfNameRaw || fileNameRaw || 'equipment_return.pdf').toString().trim();
-        const fileTypeRaw = Array.isArray(req.body.fileType) ? req.body.fileType[0] : req.body.fileType;
-        const pdfFileType = (fileTypeRaw || 'application/pdf').toString().trim();
+        // ===== payload จาก FE =====
+        const staffId = String(req.body.staff_id || '').trim();
+        const condition = String(req.body.condition || req.body.status || 'good').toLowerCase();
+        const remark = String(req.body.remark || '').trim();
 
-        // ⬇️ ใหม่: รับข้อมูลฝั่ง "ผู้รับคืน"
-        const receiverThaiRaw =
-            (req.body.handoverReceiverThaiName ||
-                req.body.receiverThaiName || // alias เผื่อฝั่ง FE
-                '').toString().trim();
+        // ฝั่งผู้รับคืน
+        const receiverThaiName = String(req.body.handoverReceiverThaiName || req.body.receiverThaiName || '').trim();
+        const receiverDateStr = String(req.body.handoverReceiverDate || req.body.receiverDate || '').trim();
 
-        const receiverDateRaw =
-            (req.body.handoverReceiverDate ||
-                req.body.receiverDate || // alias เผื่อฝั่ง FE
-                '').toString().trim();
+        // PDF (เก็บเฉพาะช่อง PDF, ไม่ยุ่งกับ attachment เดิม)
+        const pdfUrl = String(req.body.bookingPdfUrl || req.body.booking_pdf_url || '').trim();
+        const pdfFileName =
+            (Array.isArray(req.body.pdfFileName) ? req.body.pdfFileName[0] : req.body.pdfFileName) ||
+            (Array.isArray(req.body.fileName) ? req.body.fileName[0] : req.body.fileName) ||
+            'equipment_return.pdf';
+        const pdfFileType =
+            (Array.isArray(req.body.fileType) ? req.body.fileType[0] : req.body.fileType) ||
+            'application/pdf';
 
-        const staff = staffId ? await User.findOne({ user_id: staffId }) : null;
-        const old = await History.findById(req.params.id);
-        if (!old) return res.status(404).send({ message: 'Not found' });
+        // ===== โหลดเอกสาร =====
+        const doc = await History.findById(id);
+        if (!doc) return res.status(404).json({ message: 'Not found' });
 
-        // 1) คืนสต็อกเฉพาะรายการ "อุปกรณ์"
-        if (old.type === 'equipment' && old.name && old.quantity) {
+        // idempotent: ถ้า returned แล้วให้จบ (กันบวกสต็อกซ้ำ)
+        if ((doc.status || '').toLowerCase() === 'returned') {
+            return res.status(200).json(doc);
+        }
+
+        // ===== บวกสต็อกคืน (เฉพาะอุปกรณ์) =====
+        if ((doc.type || '').toLowerCase() === 'equipment' && doc.name && doc.quantity) {
             await Equipment.updateOne(
-                { name: (old.name || '').trim() },
-                { $inc: { quantity: Math.abs(old.quantity) } }
+                { name: (doc.name || '').trim() },
+                { $inc: { quantity: Math.abs(Number(doc.quantity) || 0) } }
             );
         }
 
-        // 2) อัปเดตสถานะ + เมตา
-        old.status = 'returned';
-        old.returnedById = staffId || old.returnedById || '';
-        old.returnedBy = (staff && staff.name) ? staff.name : (staffId || old.returnedBy || '');
-        old.returnedAt = new Date();
-        old.condition = condition;                // ต้องมีใน schema
-        if (remark) old.remark = remark;
-
-        // (ออปชัน) อัปเดตช่วงวัน ถ้า FE ส่งมา
-        if (req.body.since) old.since = req.body.since;
-        if (req.body.uptodate) old.uptodate = req.body.uptodate;
-
-        // ถ้าส่งรูปคืนมาใหม่ ให้ทับ (คงค่าเดิมถ้าไม่ส่ง)
-        if (req.body.returnPhoto) old.returnPhoto = req.body.returnPhoto;
-
-        // 3) เก็บ “คำอธิบายผู้รับคืน”
-        if (typeof req.body.handoverRemarkReceiver === 'string') {
-            old.handoverRemarkReceiver = req.body.handoverRemarkReceiver.trim();
-        } else if (remark && pdfUrl) {
-            // ถ้าไม่ได้ส่งมาก็ fallback จาก remark (เฉพาะกรณีที่มี PDF แนบ)
-            old.handoverRemarkReceiver = remark;
+        // ชื่อผู้รับคืน (staff)
+        let returnedBy = staffId;
+        if (staffId) {
+            const staff = await User.findOne({ user_id: staffId });
+            returnedBy = (staff && (staff.thaiName || staff.name)) || staffId;
         }
 
-        // 3.1) ใหม่: ชื่อไทยและวันที่ของ "ผู้รับคืน"
-        if (receiverThaiRaw) old.handoverReceiverThaiName = receiverThaiRaw;
-        if (receiverDateRaw) {
-            const d = new Date(receiverDateRaw);
-            old.handoverReceiverDate = isNaN(d) ? new Date() : d;
-        } else if (!old.handoverReceiverDate) {
-            // ถ้า FE ไม่ส่งมาเลย ให้ใช้เวลาปัจจุบันเป็นค่าเริ่มต้น
-            old.handoverReceiverDate = new Date();
-        }
+        const now = new Date();
+        const receiverDate = receiverDateStr
+            ? (isNaN(new Date(receiverDateStr)) ? now : new Date(receiverDateStr))
+            : now;
 
-        // 4) ถ้ามี PDF ใหม่จากฝั่งรับคืน -> set เป็นล่าสุด + แนบเข้า attachments แบบกันซ้ำ
-        if (pdfUrl) {
-            old.bookingPdfUrl = pdfUrl;  // ตัวหลักที่ UI ใช้อ่านล่าสุด
+        // ===== เตรียม $set (ไม่แตะ attachment/fileName/fileType เดิม) =====
+        const set = {
+            status: 'returned',             // << บังคับเป็น returned
+            condition,                      // 'good' | 'bad'
+            returnedById: staffId || doc.returnedById || '',
+            returnedBy: returnedBy || doc.returnedBy || '',
+            returnedAt: now,
 
-            // attachment
-            if (!old.attachment) {
-                old.attachment = [pdfUrl];
-            } else if (Array.isArray(old.attachment)) {
-                if (!old.attachment.includes(pdfUrl)) old.attachment.push(pdfUrl);
-            } else if (typeof old.attachment === 'string') {
-                old.attachment = old.attachment.trim()
-                    ? (old.attachment === pdfUrl ? [old.attachment] : [old.attachment, pdfUrl])
-                    : [pdfUrl];
-            }
+            // 🟢 หมายเหตุฝั่งผู้รับคืน
+            ...(remark ? { handoverRemarkReceiver: remark, remark } : {}),
 
-            // fileName
-            if (!old.fileName) {
-                old.fileName = [pdfFileName];
-            } else if (Array.isArray(old.fileName)) {
-                if (!old.fileName.includes(pdfFileName)) old.fileName.push(pdfFileName);
-            } else if (typeof old.fileName === 'string') {
-                old.fileName = old.fileName.trim()
-                    ? (old.fileName === pdfFileName ? [old.fileName] : [old.fileName, pdfFileName])
-                    : [pdfFileName];
-            }
+            // หลายวัน (ถ้า FE ส่งมาให้ย้ำกลับ)
+            ...(req.body.since ? { since: req.body.since } : {}),
+            ...(req.body.uptodate ? { uptodate: req.body.uptodate } : {}),
 
-            // fileType
-            if (!old.fileType) {
-                old.fileType = [pdfFileType];
-            } else if (Array.isArray(old.fileType)) {
-                if (!old.fileType.includes(pdfFileType)) old.fileType.push(pdfFileType);
-            } else if (typeof old.fileType === 'string') {
-                old.fileType = old.fileType.trim()
-                    ? (old.fileType === pdfFileType ? [old.fileType] : [old.fileType, pdfFileType])
-                    : [pdfFileType];
-            }
-        }
+            // single-day (ถ้า FE ส่งรูปใหม่มา)
+            ...(req.body.returnPhoto ? { returnPhoto: req.body.returnPhoto } : {}),
 
-        await old.save();
+            // ผู้รับคืน
+            ...(receiverThaiName ? { handoverReceiverThaiName: receiverThaiName } : {}),
+            handoverReceiverDate: receiverDate,
 
-        // 5) ส่งอีเมลแจ้งผู้ใช้ว่าคืนของสำเร็จ
+            // เก็บเฉพาะช่อง PDF ล่าสุด
+            ...(pdfUrl ? { bookingPdfUrl: pdfUrl, pdfFileName, pdfFileType } : {}),
+
+            // ✅ step ให้มีเฉพาะ staff และ approve แล้ว
+            step: [{
+                role: 'staff',
+                approve: true,
+                approvedAt: now,
+                updatedAt: now,
+                ...(staffId ? { staffId } : {})
+            }],
+
+            updatedAt: now
+        };
+
+        const saved = await History.findByIdAndUpdate(id, { $set: set }, { new: true });
+
+        // ===== แจ้งผู้ยืม (ถ้ามีอีเมล) =====
         try {
-            const user = await User.findOne({ user_id: old.user_id });
+            const user = await User.findOne({ user_id: saved.user_id });
             if (user?.email) {
                 await sendReturnSuccessEmail({
                     to: user.email,
-                    name: user.name || user.email || old.user_id,
-                    equipment: old.name,
-                    quantity: old.quantity
+                    name: user.thaiName || user.name || user.email || saved.user_id,
+                    equipment: saved.name,
+                    quantity: saved.quantity
                 });
             }
         } catch (mailErr) {
-            console.error('send return mail error:', mailErr.message);
+            console.error('[send return mail error]', mailErr.message);
         }
 
-        res.send(old);
+        return res.json(saved);
     } catch (err) {
-        res.status(500).send({ message: err.message });
+        console.error('request /return error:', err);
+        return res.status(500).json({ message: err.message || 'Server error' });
     }
 });
 
 
-app.patch('/api/history/:id/request-return', uploadReturn.single('attachment'), async (req, res) => {
+
+// === สร้างคำขอคืน: สร้างเอกสารใหม่ (ไม่แก้ของเดิม) ===
+app.patch('/api/history/:id/request-return', uploadReturn.single('returnPhoto'), async (req, res) => {
     try {
         const oldRecord = await History.findById(req.params.id);
         if (!oldRecord) return res.status(404).json({ message: 'Not found' });
 
-        // ---- รับไฟล์แนบจาก multipart/base64 ----
+        // ต้องเป็นอุปกรณ์เท่านั้น
+        const t = String(oldRecord.type || '').toLowerCase();
+        if (t !== 'equipment') {
+            return res.status(400).json({ message: 'ไม่ใช่รายการอุปกรณ์' });
+        }
+
+        // ---- รับรูปคืนจาก multipart หรือ base64 ----
         let buffer, ext = 'jpg', mimeType = 'image/jpeg';
-        if (req.file) {
+
+        if (req.file && req.file.buffer) {
             buffer = req.file.buffer;
             mimeType = req.file.mimetype || 'image/jpeg';
             ext = mime.extension(mimeType) || 'jpg';
-        } else if (
-            req.body &&
-            req.body.attachment &&
-            /^data:image\/(png|jpe?g);base64,/i.test(req.body.attachment)
-        ) {
-            const m = req.body.attachment.match(/^data:image\/(png|jpe?g);base64,/i);
+        } else if (req.body && typeof req.body.returnPhoto === 'string' &&
+            /^data:image\/(png|jpe?g);base64,/i.test(req.body.returnPhoto)) {
+            const m = req.body.returnPhoto.match(/^data:image\/(png|jpe?g);base64,/i);
             ext = (m && m[1] === 'jpeg') ? 'jpg' : (m && m[1]) || 'jpg';
             mimeType = `image/${ext === 'jpg' ? 'jpeg' : ext}`;
-            buffer = Buffer.from(req.body.attachment.split(',')[1], 'base64');
+            buffer = Buffer.from(req.body.returnPhoto.split(',')[1], 'base64');
         } else {
-            return res.status(400).json({ error: 'No attachment provided' });
+            return res.status(400).json({ error: 'No return photo provided' });
         }
 
-        // ---- บันทึกรูปไปที่ /uploads/returns ----
+        // ---- เซฟไฟล์ลง /public/uploads/returns ----
+        await fs.promises.mkdir(returnsDir, { recursive: true });
         const fname = `return_${oldRecord.booking_id || oldRecord._id}_${Date.now()}.${ext}`;
         const fpath = path.join(returnsDir, fname);
         await fs.promises.writeFile(fpath, buffer);
         const fileUrl = `${req.protocol}://${req.get('host')}/uploads/returns/${fname}`;
 
-        // ---- helper รวมค่า: ถ้า front ส่งมาก็ใช้ของ front, ถ้าไม่ส่งใช้ของเดิม ----
-        const merged = (key, def = '') => (req.body[key] ?? oldRecord[key] ?? def);
+        // ---- helper ----
+        const toArr = (v) => Array.isArray(v) ? v.filter(Boolean) : (v ? [v] : []);
+        const pick = (k, def = '') => (req.body[k] ?? oldRecord[k] ?? def);
 
-        // ---- ฟิลด์ handover (คัดลอก/ผสาน) ----
-        const handoverById = (req.body.handoverById ?? req.body.staff_id ?? oldRecord.handoverById ?? '');
-        const handoverBy = (req.body.handoverBy ?? req.body.handover_by ?? oldRecord.handoverBy ?? '');
-        const handoverAt = req.body.handoverAt
-            ? new Date(req.body.handoverAt)
-            : (oldRecord.handoverAt || null);
-        const handoverRemarkSender = (
-            req.body.handoverRemarkSender ??
-            req.body.handover_remark_sender ??
-            oldRecord.handoverRemarkSender ??
-            ''
-        );
-        const handoverRemarkReceiver = (
-            req.body.handoverRemarkReceiver ??
-            req.body.handover_remark_receiver ??
-            oldRecord.handoverRemarkReceiver ??
-            ''
-        );
+        // คงไฟล์เดิม (ถ้ามี)
+        const oldAttachment = toArr(oldRecord.attachment);
+        const oldFileName = toArr(oldRecord.fileName);
+        const oldFileType = toArr(oldRecord.fileType);
 
-        // ---- สร้างเอกสาร return-pending ใหม่ (copy meta ทั้งหมดที่จำเป็น) ----
-        const returnRequest = new History({
-            // ค่าหลัก
+        // createdAt เดิม (รับจาก FE เป็น createdAt_old ได้ หรือคงของเดิม)
+        let createdAtOld = null;
+        if (req.body.createdAt_old) {
+            const d = new Date(req.body.createdAt_old);
+            if (!isNaN(d)) createdAtOld = d;
+        } else if (oldRecord.createdAt) {
+            createdAtOld = new Date(oldRecord.createdAt);
+        }
+
+        // ฟิลด์ handover (ถ้ามี)
+        const handoverById = req.body.handoverById ?? req.body.staff_id ?? oldRecord.handoverById ?? '';
+        const handoverBy = req.body.handoverBy ?? req.body.handover_by ?? oldRecord.handoverBy ?? '';
+        const handoverRemarkSender = req.body.handoverRemarkSender ?? req.body.handover_remark_sender ?? oldRecord.handoverRemarkSender ?? '';
+        const handoverRemarkReceiver = req.body.handoverRemarkReceiver ?? req.body.handover_remark_receiver ?? oldRecord.handoverRemarkReceiver ?? '';
+        const handoverAt = req.body.handoverAt ? new Date(req.body.handoverAt) : (oldRecord.handoverAt || null);
+
+        // ---- เตรียมเอกสารใหม่ (บังคับสถานะ + step ตามโจทย์) ----
+        const now = new Date();
+        const docData = {
             user_id: oldRecord.user_id,
-            name: oldRecord.name,
-            type: oldRecord.type,
-            quantity: oldRecord.quantity,
-            status: 'return-pending',
-            date: new Date(),
             booking_id: oldRecord.booking_id || null,
+            type: 'equipment',
+            name: oldRecord.name,
+            quantity: oldRecord.quantity,
 
-            // แนบไฟล์รูปคืน (array เสมอ)
-            attachment: [fileUrl],
-            fileName: [fname],
-            fileType: [mimeType],
+            date: now,
+            since: oldRecord.since || null,
+            uptodate: oldRecord.uptodate || null,
+            startTime: oldRecord.startTime || '',
+            endTime: oldRecord.endTime || '',
+
+            // <<<< สำคัญ
+            status: 'return-pending',
+            step: [{ role: 'staff', approve: null }],   // มีแค่ staff เท่านั้น
+
+            // คงไฟล์เดิม
+            ...(oldAttachment.length ? { attachment: oldAttachment } : {}),
+            ...(oldFileName.length ? { fileName: oldFileName } : {}),
+            ...(oldFileType.length ? { fileType: oldFileType } : {}),
+
+            // เก็บรูปคืนที่เพิ่งถ่าย
             returnPhoto: fileUrl,
 
-            // ค่าที่ต้องการ "ติดไปด้วย"
-            zone: merged('zone', oldRecord.zone || ''),
-            agency: merged('agency', oldRecord.agency || ''),
-            username_form: merged('username_form', oldRecord.username_form || ''),
-            id_form: merged('id_form', oldRecord.id_form || ''),
-            proxyStudentName: merged('proxyStudentName', oldRecord.proxyStudentName || ''),
-            proxyStudentId: merged('proxyStudentId', oldRecord.proxyStudentId || ''),
-            bookingPdf: merged('bookingPdf', oldRecord.bookingPdf || null),
-            bookingPdfUrl: merged('bookingPdfUrl', oldRecord.bookingPdfUrl || null),
-            name_active: merged('name_active', oldRecord.name_active || ''),
-            startTime: merged('startTime', oldRecord.startTime || ''),
-            endTime: merged('endTime', oldRecord.endTime || ''),
-            remark: merged('remark', oldRecord.remark || ''),
+            createdAt_old: createdAtOld,
 
-            // ช่วงวันที่ยืม
-            since: oldRecord.since || '',
-            uptodate: oldRecord.uptodate || '',
+            zone: pick('zone'),
+            agency: pick('agency'),
+            username_form: pick('username_form'),
+            id_form: pick('id_form'),
+            proxyStudentName: pick('proxyStudentName'),
+            proxyStudentId: pick('proxyStudentId'),
+            bookingPdf: pick('bookingPdf', null),
+            bookingPdfUrl: pick('bookingPdfUrl', null),
+            name_active: pick('name_active'),
+            remark: pick('remark', ''),
 
-            // คนอนุมัติเดิม
+            // ผู้อนุมัติเดิม (ไว้ดูย้อนหลัง)
             approvedBy: oldRecord.approvedBy || '',
             approvedById: oldRecord.approvedById || '',
 
-            // ✅ ข้อมูลการส่งมอบ (handover)
+            // ข้อมูลการส่งมอบ (ถ้ามี)
             handoverById,
             handoverBy,
             handoverAt,
             handoverRemarkSender,
             handoverRemarkReceiver,
 
-            // timestamps อื่น ๆ
-            updatedAt: new Date()
-        });
+            // ข้าม middleware ของ Mongoose -> ใส่ timestamps เอง
+            createdAt: now,
+            updatedAt: now
+        };
 
-        await returnRequest.save();
+        // ⬇ ใช้ insertOne เพื่อ "ข้าม" pre-save hooks ที่อาจเปลี่ยน status/step
+        const ins = await History.collection.insertOne(docData);
+        const newDoc = await History.findById(ins.insertedId);
 
-        // ---- แจ้งผู้อนุมัติเดิมให้ยืนยันการคืน ----
+        // แจ้ง staff ทั้งหมดให้ตรวจรับคืน
         try {
-            const approverId = oldRecord.approvedById;
-            const borrower = await User.findOne({ user_id: oldRecord.user_id });
-            if (approverId) {
-                await notifyApproverReturnPending({
-                    approverId,
-                    userName: borrower?.name || borrower?.email || borrower?.user_id || '',
-                    equipment: oldRecord.name,
-                    quantity: oldRecord.quantity,
-                    booking_id: oldRecord.booking_id || ''
-                });
+            const staffEmails = await getStaffEmails();
+            if (staffEmails.length) {
+                const borrower = await User.findOne({ user_id: oldRecord.user_id });
+                const userName = borrower?.thaiName || borrower?.name || borrower?.email || borrower?.user_id || '';
+                const itemsHtml = listToHtml([{ name: oldRecord.name, quantity: oldRecord.quantity }]);
+                await sendBulk(
+                    staffEmails,
+                    'แจ้งเตือน: มีรายการคืนอุปกรณ์รอการยืนยัน',
+                    `
+            <div>
+              <h2>มีรายการคืนอุปกรณ์รอการยืนยัน</h2>
+              <p><b>ชื่อผู้คืน:</b> ${userName}</p>
+              ${itemsHtml}
+              <p><b>Booking ID:</b> ${oldRecord.booking_id || ''}</p>
+              <p><b>หลักฐานภาพถ่าย:</b> <a href="${newDoc.returnPhoto}" target="_blank" rel="noopener">เปิดดูรูป</a></p>
+              <hr><p style="font-size:0.95em;color:#888;">Sport Complex – MFU</p>
+            </div>
+          `
+                );
             }
         } catch (mailErr) {
-            console.error('[Send return-pending notify mail error]', mailErr.message);
+            console.error('[notify staff on return-pending] error:', mailErr.message);
         }
 
-        return res.json({ success: true, doc: returnRequest });
+        return res.status(201).json({ success: true, doc: newDoc });
     } catch (err) {
         console.error('request-return error:', err);
         res.status(500).json({ error: 'Server error' });
     }
 });
 
+
+
+// ================== PATCH /api/history/:id/handover ==================
 app.patch('/api/history/:id/handover', async (req, res) => {
     try {
         const body = req.body || {};
 
-        // รองรับทั้งชื่อเก่า/ใหม่จาก FE
-        const handoverById = body.handoverById || body.staff_id || '';
-        const handoverByName = body.handoverByName || body.thai_name || '';
-        const handoverAt = body.handoverAt; // optional ISO
-        const remarkSender = body.remarkSender || body.remark_sender || '';
-        const remarkReceiver = body.remarkReceiver || body.remark_receiver || '';
-        const booking_id = body.booking_id;
+        const handoverById = (body.handoverById || body.staff_id || '').toString().trim();
+        const handoverByName = (body.handoverByName || body.thai_name || '').toString().trim();
+        const handoverAt = body.handoverAt;
+        const remarkSender = (body.remarkSender || body.remark_sender || '').toString().trim();
+        const remarkReceiver = (body.remarkReceiver || body.remark_receiver || '').toString().trim();
+        const booking_id = body.booking_id ? String(body.booking_id) : null;
 
-        // PDF (อัปโหลดจาก FE แล้วส่ง URL มากลับมา)
-        const bookingPdfUrl = body.bookingPdfUrl || '';   // ✅ ใช้ตัวนี้แทนของเดิม
-        const fileName = body.fileName;
-        const fileType = body.fileType || 'application/pdf';
+        const bookingPdfUrl = (body.bookingPdfUrl || '').toString().trim();
 
-        // หาชื่อไทยจากตาราง users ถ้าไม่ได้ส่งชื่อมา
-        let finalName = (handoverByName || '').trim();
+        let finalName = handoverByName;
         if (!finalName && handoverById) {
             const u = await User.findOne({ user_id: handoverById }).lean();
             finalName =
                 (u?.thaiName && String(u.thaiName).trim()) ||
                 (u?.name && String(u.name).trim()) ||
-                String(handoverById);
+                handoverById;
         }
 
-        // เอกสารที่จะอัปเดต
         const setDoc = {
             handoverById: handoverById || '',
             handoverBy: finalName || '',
             handoverAt: handoverAt ? new Date(handoverAt) : new Date(),
-            ...(remarkSender ? { handoverRemarkSender: String(remarkSender).trim() } : {}),
-            ...(remarkReceiver ? { handoverRemarkReceiver: String(remarkReceiver).trim() } : {}),
-
-            // ✅ แทนที่ PDF เดิม
-            ...(bookingPdfUrl ? { bookingPdfUrl: bookingPdfUrl, bookingPdf: bookingPdfUrl } : {}),
-            ...(fileName ? { fileName: Array.isArray(fileName) ? fileName : [fileName] } : {}),
-            ...(fileType ? { fileType: Array.isArray(fileType) ? fileType : [fileType] } : {}),
+            ...(remarkSender ? { handoverRemarkSender: remarkSender } : {}),
+            ...(remarkReceiver ? { handoverRemarkReceiver: remarkReceiver } : {}),
+            ...(bookingPdfUrl ? {
+                bookingPdfUrl: bookingPdfUrl,
+                bookingPdf: bookingPdfUrl,
+                booking_pdf_url: bookingPdfUrl,
+            } : {}),
         };
 
         let matched = 0, modified = 0, docs = [];
 
         if (booking_id) {
-            // อัปเดตทั้งกลุ่ม booking ที่เป็นอุปกรณ์ และยังสถานะอนุมัติอยู่
             const result = await History.updateMany(
-                { type: 'equipment', booking_id: String(booking_id), status: { $in: ['approved', 'Approved'] } },
+                { type: 'equipment', booking_id, status: { $in: ['approved', 'Approved'] } },
                 { $set: setDoc }
             );
             matched = result.matchedCount ?? result.nMatched ?? 0;
             modified = result.modifiedCount ?? result.nModified ?? 0;
 
-            docs = await History.find(
-                { type: 'equipment', booking_id: String(booking_id) },
-                { _id: 1, name: 1, booking_id: 1 }
-            ).lean();
+            const affected = await History.find({ type: 'equipment', booking_id }, { _id: 1, name: 1, quantity: 1, user_id: 1 }).lean();
+            docs = affected;
+
+            // ✅ step: staff ส่งมอบแล้ว (approve=true) — ครบชุด roles ของ equipment
+            for (const h of affected) {
+                try {
+                    await updateHistoryStep(
+                        { id: h._id, role: 'staff', approve: true, actorName: finalName },
+                        { syncStatus: true } // สถานะรวมยังคง approved
+                    );
+                } catch (e) {
+                    console.error(`update step staff handover ${h._id} error:`, e.message);
+                }
+            }
+
+            // แจ้งผู้ยืม (คงโค้ดส่งเมลเดิมของคุณไว้)
         } else {
-            // อัปเดตรายการเดียว
             const updated = await History.findByIdAndUpdate(
                 req.params.id,
                 { $set: setDoc },
@@ -1850,7 +1994,19 @@ app.patch('/api/history/:id/handover', async (req, res) => {
             );
             if (!updated) return res.status(404).json({ message: 'Not found' });
             matched = modified = 1;
-            docs = [{ _id: updated._id, name: updated.name, booking_id: updated.booking_id }];
+            docs = [{ _id: updated._id, name: updated.name, quantity: updated.quantity, booking_id: updated.booking_id }];
+
+            // ✅ step: staff ส่งมอบแล้ว (approve=true) สำหรับรายการเดียว
+            try {
+                await updateHistoryStep(
+                    { id: updated._id, role: 'staff', approve: true, actorName: finalName },
+                    { syncStatus: true }
+                );
+            } catch (e) {
+                console.error(`update step staff handover single ${updated._id} error:`, e.message);
+            }
+
+            // แจ้งผู้ยืม (คงโค้ดส่งเมลเดิมของคุณไว้)
         }
 
         res.json({
@@ -1864,6 +2020,8 @@ app.patch('/api/history/:id/handover', async (req, res) => {
         res.status(500).json({ message: err.message });
     }
 });
+
+
 
 app.get('/api/history/file/:id', async (req, res) => {
     try {
@@ -2007,6 +2165,325 @@ app.post('/api/history/singleday', async (req, res) => {
     }
 })
 
+// === CANCEL (single item) ===
+app.post('/api/history/:id/cancel', async (req, res) => {
+    try {
+        const id = req.params.id;
+
+        const actorRole = (req.user?.role || '').toLowerCase();
+        const canceledBy = String(req.body.canceled_by || '').toLowerCase();
+        const isUserCancel = canceledBy === 'user' || actorRole === 'user';
+
+        // รับเหตุผล/หมายเหตุจาก FE (รองรับทั้ง remark และ reason)
+        const remarkText = (typeof req.body.remark === 'string'
+            ? req.body.remark
+            : (typeof req.body.reason === 'string' ? req.body.reason : '')
+        ).trim();
+
+        const before = await History.findById(id);
+        if (!before) return res.status(404).json({ message: 'Not found' });
+
+        // ===== FIELD =====
+        if (before.type === 'field') {
+            const adminId = req.user?.user_id || req.body.admin_id || '';
+            const admin = await User.findOne({ user_id: adminId });
+            const adminName = admin ? admin.name : adminId;
+
+            const setObj = {
+                status: 'cancel',
+                canceledBy: adminName,
+                canceledById: adminId,
+                canceledAt: new Date(),
+            };
+            // เก็บ remark (และ reason สำรองระบบเก่า) ก็ต่อเมื่อผู้ใช้พิมพ์มา
+            if (remarkText) {
+                setObj.remark = remarkText;
+                setObj.reason = remarkText;
+            }
+
+            const updated = await History.findByIdAndUpdate(id, setObj, { new: true });
+
+            // ===== ส่งเมลเหมือนเดิม =====
+            try {
+                const requesterDisp = await getUserDisplayNameById(updated.user_id);
+                const when = `
+    <p><b>วันที่:</b> ${(updated.since || '')} ถึง ${(updated.uptodate || '')}</p>
+    <p><b>เวลา:</b> ${(updated.startTime || '-')} ถึง ${(updated.endTime || '-')}</p>
+  `;
+
+                const wasSecApproved = isUserCancel && (before?.status === 'pending') && !!before?.approvedById;
+
+                if (wasSecApproved) {
+                    const [superEmails, adminEmails] = await Promise.all([getSuperEmails(), getAdminEmails()]);
+                    const toList = [...new Set([...(superEmails || []), ...(adminEmails || [])])];
+
+                    await sendBulk(
+                        toList,
+                        `แจ้งเตือน: คำขอใช้สนามของ ${requesterDisp} ถูกยกเลิกแล้ว (หลังเลขาฯ อนุมัติ)`,
+                        `
+      <div>
+        <h2>คำขอใช้สนามที่รออนุมัติถูกยกเลิกแล้ว</h2>
+        <p><b>ผู้ยกเลิก:</b> ${requesterDisp}</p>
+        <p><b>สนาม:</b> ${updated.name || '-'}</p>
+        <p><b>กิจกรรม:</b> ${updated.name_active || '-'}</p>
+        ${when}
+        <p style="margin-top:10px;">หมายเหตุ: เลขาฯ อนุมัติแล้ว แต่ผู้ใช้ยกเลิกก่อนหัวหน้าศูนย์กีฬาอนุมัติ</p>
+        <hr><p style="font-size:0.95em;color:#888;">Sport Complex – MFU</p>
+      </div>
+      `
+                    );
+                } else if (isUserCancel) {
+                    const adminEmails = await getAdminEmails();
+                    await sendBulk(
+                        adminEmails,
+                        `แจ้งเตือน: คำขอใช้สนามของ ${requesterDisp} ถูกยกเลิกแล้ว`,
+                        `
+      <div>
+        <h2>คำขอใช้สนามถูกยกเลิกแล้ว</h2>
+        <p><b>ผู้ยกเลิก:</b> ${requesterDisp}</p>
+        <p><b>สนาม:</b> ${updated.name || '-'}</p>
+        <p><b>กิจกรรม:</b> ${updated.name_active || '-'}</p>
+        ${when}
+        <hr><p style="font-size:0.95em;color:#888;">Sport Complex – MFU</p>
+      </div>
+      `
+                    );
+                }
+            } catch (mailErr) {
+                console.error('cancel_field notify error:', mailErr.message);
+            }
+
+            return res.json({ success: true, data: updated });
+        }
+
+        // ===== EQUIPMENT (ยกเลิกเดี่ยว) =====
+        const setObj = {
+            status: 'cancel',
+            canceledAt: new Date(),
+            ...(req.user?.user_id ? { canceledById: req.user.user_id } : {}),
+        };
+        // เก็บ remark (และ reason) ที่ผู้ใช้พิมพ์มา
+        if (remarkText || req.body.remark !== undefined || req.body.reason !== undefined) {
+            setObj.remark = remarkText;          // เก็บหลัก
+            setObj.reason = remarkText;          // สำรองให้โค้ดเดิมที่ยังอ่าน reason
+        }
+
+        const updated = await History.findByIdAndUpdate(id, setObj, { new: true });
+
+        // ==== ส่งเมลตามกติกาเดิม ====
+        try {
+            const wasApproved = String(before.status).toLowerCase() === 'approved';
+            const single = isSingleDay(before);
+            const borrowerName = await getUserDisplayNameById(before.user_id);
+            const borrower = await User.findOne({ user_id: before.user_id });
+            const itemsHtml = listToHtml([{ name: before.name, quantity: before.quantity }]);
+
+            if (single && isUserCancel) {
+                const staffEmails = await getStaffEmails();
+                await sendBulk(
+                    staffEmails,
+                    `แจ้งเตือน: คำขอยืมอุปกรณ์ของ ${borrowerName} ถูกยกเลิกแล้ว (ยืมวันเดียว)`,
+                    `
+            <div>
+              <h2>คำขอยืมอุปกรณ์ถูกยกเลิกแล้ว</h2>
+              <p><b>ผู้ยกเลิก:</b> ${borrowerName}</p>
+              ${itemsHtml}
+              <hr><p style="font-size:0.95em;color:#888;">Sport Complex – MFU</p>
+            </div>
+          `
+                );
+            }
+
+            if (!single && isUserCancel && !wasApproved) {
+                const adminEmails = await getAdminEmails();
+                await sendBulk(
+                    adminEmails,
+                    `แจ้งเตือน: คำขอยืมอุปกรณ์ของ ${borrowerName} ถูกยกเลิกแล้ว (ยืมหลายวัน)`,
+                    `
+            <div>
+              <h2>คำขอยืมอุปกรณ์ถูกยกเลิกแล้ว</h2>
+              <p><b>ผู้ยกเลิก:</b> ${borrowerName}</p>
+              ${itemsHtml}
+              <hr><p style="font-size:0.95em;color:#888;">Sport Complex – MFU</p>
+            </div>
+          `
+                );
+            }
+
+            if (!single && isUserCancel && wasApproved) {
+                const staffEmails = await getStaffEmails();
+                await sendBulk(
+                    staffEmails,
+                    `แจ้งเตือน: คำขอยืมอุปกรณ์ของ ${borrowerName} ที่รอการส่งมอบถูกยกเลิกแล้ว`,
+                    `
+            <div>
+              <h2>คำขอยืมอุปกรณ์ที่รอการส่งมอบถูกยกเลิกแล้ว</h2>
+              <p><b>ผู้ยกเลิก:</b> ${borrowerName}</p>
+              ${itemsHtml}
+              <p style="margin-top:10px;">สถานะเดิม: อนุมัติแล้ว (รอการส่งมอบ)</p>
+              <hr><p style="font-size:0.95em;color:#888;">Sport Complex – MFU</p>
+            </div>
+          `
+                );
+            }
+
+            if (borrower?.email && isUserCancel) {
+                await sendBulk(
+                    borrower.email,
+                    'แจ้งเตือน: ระบบได้ยกเลิกรายการยืมอุปกรณ์ของคุณแล้ว',
+                    `
+            <div>
+              <h2>ยกเลิกรายการยืมอุปกรณ์สำเร็จ</h2>
+              <p><b>ผู้ยกเลิก:</b> ${borrowerName}</p>
+              ${itemsHtml}
+              <hr><p style="font-size:0.95em;color:#888;">Sport Complex – MFU</p>
+            </div>
+          `
+                );
+            }
+        } catch (mailErr) {
+            console.error('cancel(equipment) mail error:', mailErr.message);
+        }
+
+        return res.json({ success: true, data: updated });
+    } catch (err) {
+        console.error('POST /api/history/:id/cancel error:', err);
+        res.status(500).json({ message: err.message });
+    }
+});
+
+
+// === CANCEL (whole booking) ===
+app.post('/api/history/booking/:bookingId/cancel', async (req, res) => {
+    try {
+        const bookingId = String(req.params.bookingId || '').trim();
+        if (!bookingId) return res.status(400).json({ message: 'bookingId required' });
+
+        const actorRole = (req.user?.role || '').toLowerCase();
+        const canceledBy = String(req.body.canceled_by || '').toLowerCase();
+        const isUserCancel = canceledBy === 'user' || actorRole === 'user';
+
+        // รับ remark/reason จาก FE เพื่อบันทึกลงทุกแถวใน booking เดียวกัน
+        const remarkText = (typeof req.body.remark === 'string'
+            ? req.body.remark
+            : (typeof req.body.reason === 'string' ? req.body.reason : '')
+        ).trim();
+
+        // ดึงเฉพาะอุปกรณ์ที่ยัง Pending/Approved (ไม่สนตัวพิมพ์)
+        const statusInPA = { $in: [/^pending$/i, /^approved$/i] };
+
+        const docs = await History.find({
+            type: 'equipment',
+            booking_id: bookingId,
+            status: statusInPA
+        }).lean();
+
+        if (!docs.length) {
+            return res.status(404).json({ message: 'no pending/approved items in this booking' });
+        }
+
+        const wasApproved = docs.some(d => String(d.status).toLowerCase() === 'approved');
+        const single = isSingleDay(docs[0]);
+        const borrower = await User.findOne({ user_id: docs[0].user_id });
+        const borrowerName = await getUserDisplayNameById(docs[0].user_id);
+
+        // อัปเดตสถานะทั้งหมด + เก็บ remark/reason
+        const setObj = {
+            status: 'cancel',
+            canceledAt: new Date(),
+            ...(req.user?.user_id ? { canceledById: req.user.user_id } : {}),
+        };
+        if (remarkText || req.body.remark !== undefined || req.body.reason !== undefined) {
+            setObj.remark = remarkText;
+            setObj.reason = remarkText;
+        }
+
+        await History.updateMany(
+            { type: 'equipment', booking_id: bookingId, status: statusInPA },
+            { $set: setObj }
+        );
+
+        const items = docs.map(d => ({ name: d.name, quantity: d.quantity }));
+        const itemsHtml = listToHtml(items);
+
+        // ==== ส่งเมลตามกติกาเดิม ====
+        try {
+            if (single && isUserCancel) {
+                const staffEmails = await getStaffEmails();
+                await sendBulk(
+                    staffEmails,
+                    `แจ้งเตือน: คำขอยืมอุปกรณ์ของ ${borrowerName} ถูกยกเลิกแล้ว (ยืมวันเดียว)`,
+                    `
+            <div>
+              <h2>คำขอยืมอุปกรณ์ถูกยกเลิก</h2>
+              <p><b>ผู้ยกเลิก:</b> ${borrowerName}</p>
+              ${itemsHtml}
+              <hr><p style="font-size:0.95em;color:#888;">Sport Complex – MFU</p>
+            </div>
+          `
+                );
+            }
+
+            if (!single && isUserCancel && !wasApproved) {
+                const adminEmails = await getAdminEmails();
+                await sendBulk(
+                    adminEmails,
+                    `แจ้งเตือน: คำขอยืมอุปกรณ์ของ ${borrowerName} ถูกยกเลิกแล้ว (ยืมหลายวัน)`,
+                    `
+            <div>
+              <h2>คำขอยืมอุปกรณ์ถูกยกเลิก</h2>
+              <p><b>ผู้ยกเลิก:</b> ${borrowerName}</p>
+              ${itemsHtml}
+              <hr><p style="font-size:0.95em;color:#888;">Sport Complex – MFU</p>
+            </div>
+          `
+                );
+            }
+
+            if (!single && isUserCancel && wasApproved) {
+                const staffEmails = await getStaffEmails();
+                await sendBulk(
+                    staffEmails,
+                    `แจ้งเตือน: คำขอยืมอุปกรณ์ของ ${borrowerName} ที่รอการส่งมอบถูกยกเลิกแล้ว`,
+                    `
+            <div>
+              <h2>คำขอยืมอุปกรณ์ที่รอการส่งมอบถูกยกเลิก</h2>
+              <p><b>ผู้ยกเลิก:</b> ${borrowerName}</p>
+              ${itemsHtml}
+              <p style="margin-top:10px;">สถานะเดิม: มีบางรายการอนุมัติแล้ว (รอการส่งมอบ)</p>
+              <hr><p style="font-size:0.95em;color:#888;">Sport Complex – MFU</p>
+            </div>
+          `
+                );
+            }
+
+            if (borrower?.email && isUserCancel) {
+                await sendBulk(
+                    borrower.email,
+                    'แจ้งเตือน: ระบบได้ยกเลิกรายการยืมอุปกรณ์ของคุณแล้ว',
+                    `
+            <div>
+              <h2>ยกเลิกรายการยืมอุปกรณ์สำเร็จ</h2>
+              <p><b>ผู้ยกเลิก:</b> ${borrowerName}</p>
+              ${itemsHtml}
+              <hr><p style="font-size:0.95em;color:#888;">Sport Complex – MFU</p>
+            </div>
+          `
+                );
+            }
+        } catch (mailErr) {
+            console.error('booking-cancel mail error:', mailErr.message);
+        }
+
+        return res.json({ success: true, canceled: docs.length });
+    } catch (err) {
+        console.error('POST /api/history/booking/:bookingId/cancel error:', err);
+        res.status(500).json({ message: err.message });
+    }
+});
+
+
+
 // API: ดึงรายการอุปกรณ์ที่รอคืน (return-pending)
 app.get('/api/equipments/return-pending', async (req, res) => {
     try {
@@ -2050,14 +2527,22 @@ app.get('/api/equipments/return-pending', async (req, res) => {
     }
 });
 // === Helper: เช็คว่ายืมวันเดียวหรือหลายวัน ===
+// helper แยกวันเดียว/หลายวัน
+// === Helper: เช็คว่ายืมวันเดียวหรือหลายวัน (เวอร์ชันแก้บั๊ก) ===
 function isSingleDay(history) {
-    // เอา key ที่ใช้จริงใน schema ด้วย (since/uptodate หรือ start_date/end_date)
-    const s = history.since || history.start_date || (history.date ? history.date.toISOString().slice(0, 10) : '');
-    const u = history.uptodate || history.end_date;
-    if (!s) return true;     // ถ้าไม่มีวัน เรียกว่ายืมวันเดียวไปก่อน
-    if (!u) return true;     // ถ้าไม่มีวันคืน ก็ถือว่าวันเดียว
-    return s === u;
+    const ymd = (v) => {
+        if (!v) return '';
+        const d = v instanceof Date ? v : new Date(v);
+        if (isNaN(d)) return '';
+        return d.toISOString().slice(0, 10);
+    };
+    // รองรับเคสเก่า ๆ ที่เคยใช้ชื่อฟิลด์ไม่ตรงกัน
+    const s = ymd(history.since || history.start_date || history.date);
+    const u = ymd(history.uptodate || history.end_date || history.date);
+    // ถ้าไม่มีอย่างใดอย่างหนึ่ง ถือว่า "วันเดียว" เพื่อไม่บล็อค flow
+    return !s || !u || s === u;
 }
+
 app.get('/api/equipments/pending', async (req, res) => {
     try {
         const items = await History.find({ type: 'equipment', status: 'pending' });
@@ -2081,44 +2566,152 @@ app.get('/api/equipments/approve-list', async (req, res) => {
     }
 });
 
+// PATCH /api/equipments/:id/status
 app.patch('/api/equipments/:id/status', async (req, res) => {
     try {
         const { status } = req.body;
+
+        // อ่านเอกสารเดิมก่อน
+        const before = await History.findById(req.params.id);
+        if (!before) return res.status(404).send({ message: 'Not found' });
+
+        // อัปเดตสถานะ
         const updated = await History.findByIdAndUpdate(
             req.params.id,
             { status: status },
             { new: true }
         );
+
+        // ถ้าไม่ใช่การ “ยกเลิก” ก็จบ
+        const isCancelStatus = ['cancel', 'canceled', 'cancelled'].includes(String(status).toLowerCase());
+        if (!isCancelStatus) {
+            return res.send(updated);
+        }
+
+        // ===== กติกาเมลยกเลิก =====
+        const wasApproved = String(before.status).toLowerCase() === 'approved';
+        const single = isSingleDay(before);
+        const borrowerName = await getUserDisplayNameById(before.user_id);
+        const borrower = await User.findOne({ user_id: before.user_id });
+        const items = [{ name: before.name, quantity: before.quantity }];
+        const itemsHtml = listToHtml(items);
+        const bookingIdForMail = before.booking_id || '';
+
+        // ระบุ “ใครเป็นคนกดยกเลิก”: ต้องเป็น user เท่านั้นจึงยิงเมลตามที่สเปคขอ
+        const actorRole = (req.user?.role || '').toLowerCase();
+        const canceledBy = String(req.body.canceled_by || '').toLowerCase(); // FE ส่ง 'user' มาได้
+        const isUserCancel = canceledBy === 'user' || actorRole === 'user';
+
+        // (A) ยืม "วันเดียว" ผู้ใช้กดยกเลิก -> แจ้ง staff ทุกคน
+        if (single && isUserCancel) {
+            const staffEmails = await getStaffEmails();
+            await sendBulk(
+                staffEmails,
+                `แจ้งเตือน: คำขอยืมอุปกรณ์ของ ${borrowerName} ถูกยกเลิกแล้ว (ยืมวันเดียว)`,
+                `
+        <div>
+          <h2>คำขอยืมอุปกรณ์ของ ${borrowerName} ถูกยกเลิกแล้ว</h2>
+          ${itemsHtml}
+          <p><b>Booking ID:</b> ${bookingIdForMail}</p>
+          <hr><p style="font-size:0.95em;color:#888;">Sport Complex – MFU</p>
+        </div>
+        `
+            );
+        }
+
+        // (B) ยืม "หลายวัน" ผู้ใช้กดยกเลิก (ยังไม่ approved) -> แจ้ง admin ทุกคน
+        if (!single && isUserCancel && !wasApproved) {
+            const adminEmails = await getAdminEmails();
+            await sendBulk(
+                adminEmails,
+                `แจ้งเตือน: คำขอยืมอุปกรณ์ของ ${borrowerName} ถูกยกเลิกแล้ว (ยืมหลายวัน)`,
+                `
+        <div>
+          <h2>คำขอยืมอุปกรณ์ของ ${borrowerName} ถูกยกเลิกแล้ว</h2>
+          ${itemsHtml}
+          <p><b>Booking ID:</b> ${bookingIdForMail}</p>
+          <hr><p style="font-size:0.95em;color:#888;">Sport Complex – MFU</p>
+        </div>
+        `
+            );
+        }
+
+        // (C) ยืม "หลายวัน" ถูกอนุมัติแล้ว (รอส่งมอบ) แต่ผู้ใช้กดยกเลิก -> แจ้ง staff ทุกคน
+        if (!single && isUserCancel && wasApproved) {
+            const staffEmails = await getStaffEmails();
+            await sendBulk(
+                staffEmails,
+                `แจ้งเตือน: คำขอยืมอุปกรณ์ของ ${borrowerName} ที่รอการส่งมอบถูกยกเลิกแล้ว`,
+                `
+        <div>
+          <h2>คำขอยืมอุปกรณ์ที่รอการส่งมอบถูกยกเลิกแล้ว</h2>
+          <p><b>ผู้ยกเลิก:</b> ${borrowerName}</p>
+          ${itemsHtml}
+          <p><b>Booking ID:</b> ${bookingIdForMail}</p>
+          <p style="margin-top:10px;">สถานะเดิม: อนุมัติแล้ว (รอการส่งมอบ)</p>
+          <hr><p style="font-size:0.95em;color:#888;">Sport Complex – MFU</p>
+        </div>
+        `
+            );
+        }
+
+        // (ออปชัน) แจ้งผู้ใช้ด้วยว่าระบบยกเลิกเสร็จแล้ว
+        if (borrower?.email && isUserCancel) {
+            await sendBulk(
+                borrower.email,
+                'แจ้งเตือน: ระบบได้ยกเลิกรายการยืมอุปกรณ์ของคุณแล้ว',
+                `
+        <div>
+          <h2>ยกเลิกรายการยืมอุปกรณ์สำเร็จ</h2>
+          ${itemsHtml}
+          <p><b>Booking ID:</b> ${bookingIdForMail}</p>
+          <hr><p style="font-size:0.95em;color:#888;">Sport Complex – MFU</p>
+        </div>
+        `
+            );
+        }
+
         res.send(updated);
     } catch (err) {
         res.status(500).send({ message: err.message });
     }
 });
 
+
+
+// ================== PATCH /api/history/:id/disapprove_equipment ==================
 app.patch('/api/history/:id/disapprove_equipment', async (req, res) => {
     try {
         const staffId = req.body.staff_id;
-        const remark = (req.body.remark || '').trim(); // ✅ รับ remark
+        const remark = (req.body.remark || '').trim();
 
         const staff = await User.findOne({ user_id: staffId });
         const staffName = staff ? staff.name : staffId;
 
-        const updateDoc = {
-            status: 'disapproved',
-            disapprovedBy: staffName,
-            disapprovedById: staffId,
-            disapprovedAt: new Date(),
-        };
-        if (remark) updateDoc.remark = remark; // ✅ บันทึกหมายเหตุ
-
         const updated = await History.findByIdAndUpdate(
             req.params.id,
-            updateDoc,
+            {
+                status: 'disapproved',
+                disapprovedBy: staffName,
+                disapprovedById: staffId,
+                disapprovedAt: new Date(),
+                ...(remark ? { remark } : {})
+            },
             { new: true }
         );
 
-        // ======== ส่งอีเมลแจ้ง user ว่าไม่ได้รับอนุมัติ (เหมือนเดิม) ========
         if (updated) {
+            // ✅ step: admin ไม่อนุมัติ (approve=false) สำหรับ equipment
+            try {
+                await updateHistoryStep(
+                    { id: updated._id, role: 'admin', approve: false, actorName: staffName, remark },
+                    { syncStatus: true } // สถานะรวมจะเป็น disapproved
+                );
+            } catch (e) {
+                console.error('update step (disapprove_equipment) error:', e.message);
+            }
+
+            // ส่งเมลแจ้งผู้ใช้ (คงโค้ดเดิมของคุณ)
             try {
                 const user = await User.findOne({ user_id: updated.user_id });
                 if (user && user.email) {
@@ -2127,7 +2720,6 @@ app.patch('/api/history/:id/disapprove_equipment', async (req, res) => {
                         name: user.name || user.email || updated.user_id,
                         equipment: updated.name,
                         quantity: updated.quantity
-                        // ถ้าต้องการใส่ remark ในอีเมล ให้เพิ่มใน template ของเมลด้วย
                     });
                 }
             } catch (mailErr) {
@@ -2137,9 +2729,11 @@ app.patch('/api/history/:id/disapprove_equipment', async (req, res) => {
 
         res.send(updated);
     } catch (err) {
+        console.error('PATCH /api/history/:id/disapprove_equipment error:', err);
         res.status(500).send({ message: err.message });
     }
 });
+
 // ========== Approve/Disapprove Field ==========
 app.get('/api/history/approve_field', async (req, res) => {
     try {
@@ -2176,15 +2770,14 @@ app.get('/api/history/approve_field', async (req, res) => {
 });
 
 // Cancel field booking (admin/staff ยกเลิก)
+// PATCH /api/history/:id/cancel_field
+// PATCH /api/history/:id/cancel_field
 app.patch('/api/history/:id/cancel_field', async (req, res) => {
-    console.log("cancel_field payload", req.body);
-
     try {
-        const adminId = req.body.admin_id || ""; // ถ้าส่ง admin_id มาด้วย
+        const adminId = req.body.admin_id || "";
         const admin = await User.findOne({ user_id: adminId });
         const adminName = admin ? admin.name : adminId;
 
-        // ====== เพิ่มบรรทัดนี้ ======
         const oldHistory = await History.findById(req.params.id);
         const remark = (req.body.remark || '').trim();
 
@@ -2201,206 +2794,221 @@ app.patch('/api/history/:id/cancel_field', async (req, res) => {
         );
         if (!updated) return res.status(404).send({ message: "ไม่พบรายการ" });
 
-        // ========= ส่งอีเมลแจ้ง user ว่าถูกยกเลิก =========
         try {
-            // เช็คเฉพาะกรณีที่เดิมเป็น approved แล้วถูก cancel (ถ้าต้องการแจ้งทุกครั้ง ให้ลบบรรทัด if)
-            if (oldHistory.status === 'approved') {
-                const user = await User.findOne({ user_id: updated.user_id });
-                if (user && user.email) {
-                    await sendCancelFieldEmail({
-                        to: user.email,
-                        name: user.name || user.email || updated.user_id,
-                        field: updated.name,
-                        activity: updated.name_active,
-                        since: updated.since,
-                        uptodate: updated.uptodate,
-                        startTime: updated.startTime,
-                        endTime: updated.endTime
-                    });
-                }
+            const actorRole = (req.user?.role || '').toLowerCase();
+            const canceledBy = String(req.body.canceled_by || '').toLowerCase();
+            const isUserCancel = canceledBy === 'user' || actorRole === 'user';
+            const requesterDisp = await getUserDisplayNameById(updated.user_id);
+            const when = `
+    <p><b>วันที่:</b> ${(updated.since || '')} ถึง ${(updated.uptodate || '')}</p>
+    <p><b>เวลา:</b> ${(updated.startTime || '-')} ถึง ${(updated.endTime || '-')}</p>
+  `;
+
+            // ใช้ oldHistory (อ่านมาก่อน cancel) เพื่อเช็คว่าเลขาฯ อนุมัติไว้แล้วหรือยัง
+            const wasSecApproved = isUserCancel && (oldHistory?.status === 'pending') && !!oldHistory?.approvedById;
+
+            if (wasSecApproved) {
+                // ✅ เลขาฯ อนุมัติแล้ว แต่ผู้ใช้ยกเลิก -> แจ้ง super + admin
+                const [superEmails, adminEmails] = await Promise.all([getSuperEmails(), getAdminEmails()]);
+                const toList = [...new Set([...(superEmails || []), ...(adminEmails || [])])];
+
+                await sendBulk(
+                    toList,
+                    `แจ้งเตือน: คำขอใช้สนามของ ${requesterDisp} ถูกยกเลิกแล้ว (หลังเลขาฯ อนุมัติ)`,
+                    `
+      <div>
+        <h2>คำขอใช้สนามที่รออนุมัติถูกยกเลิกแล้ว</h2>
+        <p><b>ผู้ยกเลิก:</b> ${requesterDisp}</p>
+        <p><b>สนาม:</b> ${updated.name || '-'}</p>
+        <p><b>กิจกรรม:</b> ${updated.name_active || '-'}</p>
+        ${when}
+        
+        <p style="margin-top:10px;">หมายเหตุ: เลขาฯ อนุมัติแล้ว แต่ผู้ใช้ยกเลิกก่อนหัวหน้าศูนย์กีฬาอนุมัติ</p>
+        <hr><p style="font-size:0.95em;color:#888;">Sport Complex – MFU</p>
+      </div>
+      `
+                );
+            } else if (isUserCancel) {
+                // เดิม: ผู้ใช้ยกเลิก (ยังไม่ผ่านเลขาฯ) -> แจ้ง admin อย่างเดียว
+                const adminEmails = await getAdminEmails();
+                await sendBulk(
+                    adminEmails,
+                    `แจ้งเตือน: คำขอใช้สนามของ ${requesterDisp} ถูกยกเลิกแล้ว`,
+                    `
+      <div>
+        <h2>คำขอใช้สนามถูกยกเลิกแล้ว</h2>
+        <p><b>ผู้ยกเลิก:</b> ${requesterDisp}</p>
+        <p><b>สนาม:</b> ${updated.name || '-'}</p>
+        <p><b>กิจกรรม:</b> ${updated.name_active || '-'}</p>
+        ${when}
+        <hr><p style="font-size:0.95em;color:#888;">Sport Complex – MFU</p>
+      </div>
+      `
+                );
             }
         } catch (mailErr) {
-            console.error('ส่งเมลแจ้ง cancel field ไม่สำเร็จ:', mailErr.message);
+            console.error('cancel_field notify error:', mailErr.message);
         }
-        // ========================================
+
 
         res.send(updated);
     } catch (err) {
         res.status(500).send({ message: err.message });
     }
 });
+
+
+
 // --------- PATCH APPROVE ------------
-// --------- PATCH APPROVE (FIXED: deduct only once) ------------
+// ================== PATCH /api/history/:id/approve_equipment ==================
 app.patch('/api/history/:id/approve_equipment', async (req, res) => {
     try {
-        const staffId = req.body.staff_id;
-        if (!staffId) {
-            return res.status(400).json({ success: false, message: "ต้องระบุ staff_id (user_id ของ admin/staff)" });
+        // 0) ผู้กดอนุมัติ (รองรับทั้ง admin_id / staff_id)
+        const actorId = req.body.admin_id || req.body.staff_id;
+        if (!actorId) {
+            return res.status(400).json({ success: false, message: 'ต้องระบุ admin_id หรือ staff_id' });
         }
+        const actor = await User.findOne({ user_id: String(actorId) });
+        const actorName =
+            (actor?.thaiName && String(actor.thaiName)) ||
+            (actor?.name && String(actor.name)) ||
+            (actor?.email && String(actor.email)) ||
+            String(actorId);
 
-        // ชื่อผู้อนุมัติ
-        const staff = await User.findOne({ user_id: staffId });
-        const staffName =
-            (staff?.name && String(staff.name)) ||
-            (staff?.email && String(staff.email)) ||
-            String(staffId);
-
-        // เอกสารเป้าหมาย
-        const old = await History.findById(req.params.id);
-        if (!old) return res.status(404).send({ message: 'Not found' });
-        if (old.type !== 'equipment') {
+        // 1) โหลดเอกสารต้นทาง + ตรวจว่าเป็นอุปกรณ์
+        const seed = await History.findById(req.params.id);
+        if (!seed) return res.status(404).json({ success: false, message: 'not found' });
+        if (String(seed.type).toLowerCase() !== 'equipment') {
             return res.status(400).json({ success: false, message: 'ไม่ใช่รายการอุปกรณ์' });
         }
 
-        // === 1) เลือก "เฉพาะ pending" ที่จะอนุมัติในครั้งนี้ ===
-        let pendingQuery;
-        if (old.booking_id) {
-            pendingQuery = {
-                booking_id: String(old.booking_id),
-                type: 'equipment',
-                status: 'pending'
-            };
-        } else {
-            pendingQuery = { _id: old._id, type: 'equipment', status: 'pending' };
-        }
+        // ระบุว่าเป็น “วันเดียว” ไหม
+        const isOneDay = isEquipmentOneDay(seed);
 
-        // ดึงรายการที่ยัง pending (จะใช้คำนวนหักสต็อก/แนบไฟล์)
+        // กลุ่มรายการ pending ใน booking เดียวกัน (ถ้ามี)
+        const pendingQuery = seed.booking_id
+            ? { type: 'equipment', booking_id: String(seed.booking_id), status: { $in: ['pending', 'Pending'] } }
+            : { _id: seed._id, type: 'equipment', status: { $in: ['pending', 'Pending'] } };
+
         const pendingItems = await History.find(pendingQuery).lean();
-
-        // ถ้าไม่มีอะไรต้องอนุมัติแล้ว (เช่น เผลอกดซ้ำ) -> ส่ง 409 ให้ frontend ถือว่าสำเร็จแบบ idempotent
         if (!pendingItems.length) {
             return res.status(409).json({ success: true, message: 'already-approved-or-no-pending' });
         }
 
         const now = new Date();
 
-        // ===== รองรับ URL ของ PDF ที่ FE ส่งมา (หลายชื่อฟิลด์) =====
-        const pdfUrlRaw =
-            (req.body.bookingPdfUrl ||
-                req.body.booking_pdf_url ||
-                req.body.fileUrl ||
-                req.body.attachment ||
-                '')
-                .toString()
-                .trim();
+        // 2) เซ็ต approved + เก็บ PDF ถ้ามี
+        const pdfUrl =
+            [req.body.bookingPdfUrl, req.body.booking_pdf_url, req.body.fileUrl]
+                .map(v => (typeof v === 'string' ? v.trim() : ''))
+                .find(Boolean) || '';
 
-        // รองรับทั้ง string/array สำหรับชื่อไฟล์/ชนิดไฟล์
-        const fnameRaw = Array.isArray(req.body.fileName) ? req.body.fileName[0] : req.body.fileName;
-        const fileName = (typeof fnameRaw === 'string' && fnameRaw.trim()) ? fnameRaw.trim() : 'equipment.pdf';
-
-        const ftypeRaw = Array.isArray(req.body.fileType) ? req.body.fileType[0] : req.body.fileType;
-        const fileType = (typeof ftypeRaw === 'string' && ftypeRaw.trim()) ? ftypeRaw.trim() : 'application/pdf';
-
-        // === 2) อัปเดตสถานะเฉพาะ pending -> approved + (ถ้ามี) บันทึก PDF ลง bookingPdfUrl ===
-        const setDoc = {
+        const baseSet = {
             status: 'approved',
-            approvedBy: staffName,
-            approvedById: String(staffId),
-            approvedAt: now
+            approvedBy: actorName,
+            approvedById: String(actorId),
+            approvedAt: now,
+            ...(pdfUrl ? { bookingPdfUrl: pdfUrl, booking_pdf_url: pdfUrl } : {}),
         };
-        if (pdfUrlRaw) {
-            setDoc.bookingPdfUrl = pdfUrlRaw;     // ฟิลด์หลัก
-            setDoc.booking_pdf_url = pdfUrlRaw;   // alias สำหรับโค้ดเก่า
-        }
+        await History.updateMany(pendingQuery, { $set: baseSet });
 
-        await History.updateMany(
-            pendingQuery,
-            { $set: setDoc }
-        );
+        // 2.1 แนบไฟล์ (optional)
+        const attachments = Array.isArray(req.body.attachment)
+            ? req.body.attachment.filter(u => typeof u === 'string' && u.trim())
+            : (typeof req.body.attachment === 'string' && req.body.attachment.trim()
+                ? [req.body.attachment.trim()]
+                : []);
+        const fileNames = Array.isArray(req.body.fileName) ? req.body.fileName : [];
+        const fileTypes = Array.isArray(req.body.fileType) ? req.body.fileType : [];
 
-        // === 2.1) ถ้ามี pdfUrlRaw ให้แนบเข้า attachment/fileName/fileType แบบปลอดภัย (ชนิดฟิลด์อาจต่างกัน) ===
-        if (pdfUrlRaw) {
-            for (const h of pendingItems) {
-                const doc = await History.findById(h._id);
+        if (attachments.length || fileNames.length || fileTypes.length) {
+            for (const it of pendingItems) {
+                const doc = await History.findById(it._id);
                 if (!doc) continue;
-
                 let changed = false;
 
-                // attachment
-                if (!doc.attachment) {
-                    doc.attachment = [pdfUrlRaw];
-                    changed = true;
-                } else if (Array.isArray(doc.attachment)) {
-                    if (!doc.attachment.includes(pdfUrlRaw)) {
-                        doc.attachment.push(pdfUrlRaw);
-                        changed = true;
-                    }
-                } else if (typeof doc.attachment === 'string') {
-                    if (!doc.attachment.trim()) {
-                        doc.attachment = [pdfUrlRaw];
-                        changed = true;
-                    } else if (doc.attachment !== pdfUrlRaw) {
-                        doc.attachment = [doc.attachment, pdfUrlRaw];
-                        changed = true;
+                if (attachments.length) {
+                    doc.attachment = Array.isArray(doc.attachment) ? doc.attachment : (doc.attachment ? [doc.attachment] : []);
+                    for (const u of attachments) if (!doc.attachment.includes(u)) { doc.attachment.push(u); changed = true; }
+                }
+                if (fileNames.length) {
+                    doc.fileName = Array.isArray(doc.fileName) ? doc.fileName : (doc.fileName ? [doc.fileName] : []);
+                    for (const n of fileNames) {
+                        const name = (typeof n === 'string' ? n.trim() : '');
+                        if (name && !doc.fileName.includes(name)) { doc.fileName.push(name); changed = true; }
                     }
                 }
-
-                // fileName
-                if (!doc.fileName) {
-                    doc.fileName = [fileName];
-                    changed = true;
-                } else if (Array.isArray(doc.fileName)) {
-                    if (!doc.fileName.includes(fileName)) {
-                        doc.fileName.push(fileName);
-                        changed = true;
-                    }
-                } else if (typeof doc.fileName === 'string') {
-                    if (!doc.fileName.trim()) {
-                        doc.fileName = [fileName];
-                        changed = true;
-                    } else if (doc.fileName !== fileName) {
-                        doc.fileName = [doc.fileName, fileName];
-                        changed = true;
+                if (fileTypes.length) {
+                    doc.fileType = Array.isArray(doc.fileType) ? doc.fileType : (doc.fileType ? [doc.fileType] : []);
+                    for (const t of fileTypes) {
+                        const typ = (typeof t === 'string' ? t.trim() : '');
+                        if (typ && !doc.fileType.includes(typ)) { doc.fileType.push(typ); changed = true; }
                     }
                 }
-
-                // fileType
-                if (!doc.fileType) {
-                    doc.fileType = [fileType];
-                    changed = true;
-                } else if (Array.isArray(doc.fileType)) {
-                    if (!doc.fileType.includes(fileType)) {
-                        doc.fileType.push(fileType);
-                        changed = true;
-                    }
-                } else if (typeof doc.fileType === 'string') {
-                    if (!doc.fileType.trim()) {
-                        doc.fileType = [fileType];
-                        changed = true;
-                    } else if (doc.fileType !== fileType) {
-                        doc.fileType = [doc.fileType, fileType];
-                        changed = true;
-                    }
-                }
-
                 if (changed) await doc.save();
             }
         }
 
-        // === 3) คำนวนยอดหักสต็อก "เฉพาะที่เพิ่งอนุมัติ" ===
-        const usageUpdateMap = {}; // { 'ชื่ออุปกรณ์': จำนวนอนุมัติ }
-        for (const h of pendingItems) {
-            const equipName = (h.name || '').trim();
-            const qty = Math.abs(Number(h.quantity) || 0);
-            if (!equipName || !qty) continue;
-            usageUpdateMap[equipName] = (usageUpdateMap[equipName] || 0) + qty;
+        // 3) อัปเดต step
+        const ids = pendingItems.map(x => x._id);
+
+        if (isOneDay) {
+            // ✅ วันเดียว → บังคับ step ให้เหลือเฉพาะ staff และอนุมัติ = true
+            await History.updateMany(
+                { _id: { $in: ids } },
+                {
+                    $pull: { step: { role: 'admin' } }, // กัน admin ติดมาจาก hook/ของเก่า
+                }
+            );
+            await History.updateMany(
+                { _id: { $in: ids } },
+                {
+                    $set: {
+                        step: [
+                            { role: 'staff', approve: true, createdAt: now, updatedAt: now }
+                        ]
+                    }
+                }
+            );
+        } else {
+            // หลายวัน → ให้ admin เป็นคนอนุมัติใน step
+            for (const it of ids) {
+                try {
+                    await updateHistoryStep(
+                        { id: it, role: 'admin', approve: true, actorName },
+                        { syncStatus: false }
+                    );
+                } catch (e) {
+                    console.error('update step (approve_equipment) error:', e.message);
+                }
+            }
         }
 
-        // หักสต็อก + อัปเดต usageByMonthYear เฉพาะยอดของรอบนี้
+        // 3.1 ย้ำสถานะ approved ให้ชัวร์
+        await History.updateMany(
+            { _id: { $in: ids } },
+            { $set: { status: 'approved' } }
+        );
+
+        // 4) หักสต็อก/บันทึก usage
+        const usageMap = {};
+        for (const it of pendingItems) {
+            const nm = (it.name || '').trim();
+            const qty = Math.abs(Number(it.quantity) || 0);
+            if (!nm || !qty) continue;
+            usageMap[nm] = (usageMap[nm] || 0) + qty;
+        }
         const year = now.getFullYear();
         const month = now.getMonth() + 1;
 
-        for (const [equipName, usageQty] of Object.entries(usageUpdateMap)) {
+        for (const [equipName, usageQty] of Object.entries(usageMap)) {
             const equipment = await Equipment.findOne({ name: equipName });
             if (!equipment) continue;
 
             equipment.usageByMonthYear = equipment.usageByMonthYear || [];
             const found = equipment.usageByMonthYear.find(x => x.year === year && x.month === month);
-            if (found) {
-                found.usage += usageQty;
-            } else {
-                equipment.usageByMonthYear.push({ year, month, usage: usageQty });
-            }
+            if (found) found.usage += usageQty;
+            else equipment.usageByMonthYear.push({ year, month, usage: usageQty });
 
             equipment.quantity = (Number(equipment.quantity) || 0) - usageQty;
             if (equipment.quantity < 0) equipment.quantity = 0;
@@ -2410,55 +3018,76 @@ app.patch('/api/history/:id/approve_equipment', async (req, res) => {
             await equipment.save();
         }
 
-        // === 4) ส่งเมลให้ผู้ใช้สรุปเฉพาะรายการที่อนุมัติในรอบนี้ ===
+        // 5) ส่งเมล (คงเดิม)
         try {
-            const userId = pendingItems[0].user_id;
-            let user = await User.findOne({ user_id: userId });
-            if (!user) user = await User.findById(userId).catch(() => null);
+            const borrowerId = pendingItems[0]?.user_id;
+            let borrower = await User.findOne({ user_id: borrowerId });
+            if (!borrower) borrower = await User.findById(borrowerId).catch(() => null);
 
-            if (user?.email) {
-                let listHtml = '<ul style="font-size:1.1em">';
-                pendingItems.forEach((h, idx) => {
-                    listHtml += `<li>${idx + 1}. ${h.name || '-'} (จำนวน: ${h.quantity || '-'})</li>`;
-                });
-                listHtml += '</ul>';
+            const itemsHtml = listToHtml(pendingItems);
+            const bookingIdForMail = pendingItems[0]?.booking_id || '';
 
-                await transporter.sendMail({
-                    from: '"MFU Sport Complex" <your.email@gmail.com>',
-                    to: user.email,
-                    subject: 'แจ้งเตือน: อนุมัติการยืมอุปกรณ์',
-                    html: `
+            if (borrower?.email) {
+                await sendBulk(
+                    borrower.email,
+                    'แจ้งเตือน: อนุมัติคำขอยืมอุปกรณ์แล้ว (รอการส่งมอบ)',
+                    `
             <div>
-              <h2>รายการยืมอุปกรณ์ของคุณได้รับการอนุมัติแล้ว</h2>
-              <p><b>ชื่อผู้ยืม:</b> ${user.firstname || user.name || user.email || ''}</p>
-              ${listHtml}
-              <p>กรุณาติดต่อรับอุปกรณ์ที่ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง</p>
-              <hr>
-              <p style="font-size: 0.95em; color: #888;">Sport Complex – MFU</p>
+              <h2>อนุมัติคำขอยืมอุปกรณ์ของคุณแล้ว</h2>
+              <p><b>ชื่อผู้ยืม:</b> ${borrower?.thaiName || borrower?.name || borrower?.email || borrower?.user_id || ''}</p>
+              ${itemsHtml}
+              <p><b>Booking ID:</b> ${bookingIdForMail}</p>
+              <p style="margin-top:10px;">สถานะปัจจุบัน: <b>รอการส่งมอบ</b></p>
+              <hr><p style="font-size:0.95em;color:#888;">Sport Complex – MFU</p>
             </div>
           `
-                });
+                );
+            }
+
+            const staffEmails = await getStaffEmails();
+            if (staffEmails.length) {
+                const borrowerName = borrower?.thaiName || borrower?.name || borrower?.email || borrower?.user_id || borrowerId || '';
+                await sendBulk(
+                    staffEmails,
+                    'แจ้งเตือน: มีรายการอุปกรณ์รอการส่งมอบ',
+                    `
+            <div>
+              <h2>มีรายการอุปกรณ์รอการส่งมอบ</h2>
+              <p><b>ผู้ยืม:</b> ${borrowerName}</p>
+              ${itemsHtml}
+              <p><b>Booking ID:</b> ${bookingIdForMail}</p>
+              <p style="margin-top:10px;">สถานะ: <b>รอการส่งมอบ</b></p>
+              <hr><p style="font-size:0.95em;color:#888;">Sport Complex – MFU</p>
+            </div>
+          `
+                );
             }
         } catch (mailErr) {
-            console.error('send approve mail error:', mailErr.message);
+            console.error('approve_equipment notify mail error:', mailErr.message);
         }
 
-        // === 5) ส่งกลับเฉพาะสิ่งที่อนุมัติจริงในรอบนี้ ===
+        // 6) ตอบกลับ
         return res.send({
             success: true,
-            approved_by: { user_id: String(staffId), name: staffName },
+            approved_by: { user_id: String(actorId), name: actorName },
             approved_count: pendingItems.length,
-            deducted: usageUpdateMap,
-            ...(pdfUrlRaw ? { bookingPdfUrl: pdfUrlRaw } : {})
+            ...(pdfUrl ? { bookingPdfUrl: pdfUrl } : {})
         });
-
     } catch (err) {
         console.error('approve_equipment error:', err);
         res.status(500).send({ message: err.message });
     }
 });
 
+
+
+
+
+
+
+
 // Approve field booking
+// ================== PATCH /api/history/:id/approve_field ==================
 app.patch('/api/history/:id/approve_field', async (req, res) => {
     try {
         const { id } = req.params;
@@ -2466,7 +3095,7 @@ app.patch('/api/history/:id/approve_field', async (req, res) => {
         const adminId = req.body.admin_id;
         const admin = await User.findOne({ user_id: adminId });
         const adminName = admin
-            ? (admin.name || `${admin.firstname || ''} ${admin.lastname || ''}`.trim())
+            ? (admin.name || `${admin?.firstname || ''} ${admin?.lastname || ''}`.trim())
             : adminId;
 
         const reasonAdmin = typeof req.body.reason_admin === 'string'
@@ -2492,46 +3121,75 @@ app.patch('/api/history/:id/approve_field', async (req, res) => {
             admin?.signaturePath_admin || admin?.signaturePath ||
             admin?.signature_path || admin?.signatureUrl || '';
 
-        // ⬇️ รับ URL PDF ใหม่ (รองรับชื่อเก่า ๆ ด้วย)
         const bodyPdfUrl = (req.body.bookingPdfUrl || req.body.booking_pdf_url || '').trim();
 
-        // อนุมัติเฉพาะที่ยัง pending
+        // เฉพาะ field ที่ยัง pending
         const cond = { _id: id, type: 'field', status: 'pending' };
 
         const updateSet = {
-            status: 'pending',  // แนะนำให้เซ็ตสถานะให้ถูกต้อง
+            status: 'pending', // คง pending จนกว่า super จะกด
             approvedBy: adminName,
             approvedById: adminId,
             approvedAt: req.body.approvedAt ? new Date(req.body.approvedAt) : new Date(),
             ...(reasonAdmin ? { reason_admin: reasonAdmin } : {}),
             secretary_choice: secretaryChoice,
-
             thaiName_admin: fallbackThai,
             signaturePath_admin: fallbackSig,
-
             updatedAt: new Date(),
         };
-
-        // ⬇️ ทับค่าลิงก์ PDF เดิมด้วยตัวล่าสุด
         if (bodyPdfUrl) {
             updateSet.bookingPdfUrl = bodyPdfUrl;
-
-            // (ทางเลือก) เก็บเข้า attachment เป็นประวัติด้วยและกันซ้ำ
-            // ถ้าไม่อยากเก็บประวัติ ให้ลบ block นี้ออกได้
-            var updateOps = {
-                $set: updateSet,
-                $addToSet: { attachment: bodyPdfUrl }
-            };
-        } else {
-            var updateOps = { $set: updateSet };
+            updateSet.booking_pdf_url = bodyPdfUrl;
         }
 
-        const updated = await History.findOneAndUpdate(cond, updateOps, { new: true });
+        let updated = await History.findOneAndUpdate(cond, { $set: updateSet }, { new: true });
         if (!updated) return res.status(404).send({ message: 'not found or not pending' });
+
+        // ✅ step: admin อนุมัติ (approve=true)
+        try {
+            await updateHistoryStep(
+                {
+                    id,
+                    role: 'admin',
+                    approve: true,
+                    actorName: adminName,
+                    remark: reasonAdmin || ''
+                },
+                { syncStatus: true } // จะยังเป็น 'pending' เพราะ super ยังไม่ครบ
+            );
+            updated = await History.findById(id);
+        } catch (e) {
+            console.error('update step (approve_field) error:', e.message);
+        }
+
+        // แจ้ง super ต่อ…
+        try {
+            if (updated) {
+                const superEmails = await getSuperEmails();
+                if (superEmails.length) {
+                    await sendBulk(
+                        superEmails,
+                        'แจ้งเตือน: มีรายการขอใช้สนามรออนุมัติ (ถึงหัวหน้าศูนย์กีฬา)',
+                        `
+            <div>
+              <h2>มีรายการขอใช้สนามรออนุมัติ</h2>
+              <p><b>ผู้ขอ:</b> ${await getUserDisplayNameById(updated.user_id)}</p>
+              <p><b>สนาม:</b> ${updated.name || '-'}</p>
+              <p><b>กิจกรรม:</b> ${updated.name_active || '-'}</p>
+              <p><b>วันที่:</b> ${(updated.since || '')} ถึง ${(updated.uptodate || '')}</p>
+              <p><b>เวลา:</b> ${(updated.startTime || '-')} ถึง ${(updated.endTime || '-')}</p>
+              <p><b>โซน:</b> ${updated.zone || '-'}</p>
+            </div>`
+                    );
+                }
+            }
+        } catch (mailErr) {
+            console.error('notify super (approve_field) error:', mailErr.message);
+        }
 
         return res.send(updated);
     } catch (err) {
-        console.error(err);
+        console.error('PATCH /api/history/:id/approve_field error:', err);
         return res.status(500).send({ message: err.message });
     }
 });
@@ -2539,61 +3197,74 @@ app.patch('/api/history/:id/approve_field', async (req, res) => {
 
 
 
+
+// ================== PATCH /api/history/:id/disapprove_field ==================
 app.patch('/api/history/:id/disapprove_field', async (req, res) => {
     try {
         const adminId = req.body.admin_id;
-        const remark = (req.body.remark || '').trim();  // ✅ รับหมายเหตุ
+        const remark = (req.body.remark || '').trim();
 
         const admin = await User.findOne({ user_id: adminId });
-        const adminName = admin ? admin.name : adminId;
+        const adminName = admin ? (admin.name || `${admin?.firstname || ''} ${admin?.lastname || ''}`.trim()) : adminId;
 
-        const updateDoc = {
-            status: 'disapproved',
-            disapprovedBy: adminName,
-            disapprovedById: adminId,
-            disapprovedAt: new Date(),                     // ✅ บันทึกเวลาไม่อนุมัติ
-        };
-        if (remark) updateDoc.remark = remark;           // ✅ บันทึกหมายเหตุ
-
-        const updated = await History.findByIdAndUpdate(
+        let updated = await History.findByIdAndUpdate(
             req.params.id,
-            updateDoc,
+            {
+                status: 'disapproved',
+                disapprovedBy: adminName,
+                disapprovedById: adminId,
+                disapprovedAt: new Date(),
+                ...(remark ? { remark } : {}),
+                updatedAt: new Date(),
+            },
             { new: true }
         );
-        // (ออปชัน) ส่งอีเมลแจ้งผู้ใช้เหมือนโค้ดเดิมของคุณ
-        if (updated) {
-            try {
-                const user = await User.findOne({ user_id: updated.user_id });
-                if (user && user.email) {
-                    await sendDisapproveFieldEmail({
-                        to: user.email,
-                        name: user.name || user.email || updated.user_id,
-                        field: updated.name,
-                        activity: updated.name_active,
-                        since: updated.since,
-                        uptodate: updated.uptodate,
-                        startTime: updated.startTime,
-                        endTime: updated.endTime
-                        // ถ้าจะใส่ remark ในเนื้อเมล ให้ไปเพิ่มในเทมเพลตฟังก์ชันได้เลย
-                    });
-                }
-            } catch (mailErr) {
-                console.error('ส่งเมลแจ้ง disapprove field ไม่สำเร็จ:', mailErr.message);
+        if (!updated) return res.status(404).send({ message: 'not found' });
+
+        // ✅ step: admin ไม่อนุมัติ (approve=false)
+        try {
+            await updateHistoryStep(
+                { id: req.params.id, role: 'admin', approve: false, actorName: adminName, remark: remark || '' },
+                { syncStatus: true } // สถานะรวมจะเป็น disapproved
+            );
+            updated = await History.findById(req.params.id);
+        } catch (e) {
+            console.error('update step (disapprove_field) error:', e.message);
+        }
+
+        // ส่งอีเมลผู้ใช้ (เดิม)
+        try {
+            const user = await User.findOne({ user_id: updated.user_id });
+            if (user && user.email) {
+                await sendDisapproveFieldEmail({
+                    to: user.email,
+                    name: user.name || user.email || updated.user_id,
+                    field: updated.name,
+                    activity: updated.name_active,
+                    since: updated.since,
+                    uptodate: updated.uptodate,
+                    startTime: updated.startTime,
+                    endTime: updated.endTime
+                });
             }
+        } catch (mailErr) {
+            console.error('ส่งเมลแจ้ง disapprove field ไม่สำเร็จ:', mailErr.message);
         }
 
         res.send(updated);
     } catch (err) {
+        console.error('PATCH /api/history/:id/disapprove_field error:', err);
         res.status(500).send({ message: err.message });
     }
 });
 
+
 // == APPROVE (หัวหน้าศูนย์กีฬา) ==
+// ================== PATCH /api/history/:id/approve_field_super ==================
 app.patch('/api/history/:id/approve_field_super', async (req, res) => {
     try {
         const { id } = req.params;
 
-        // ตรวจสิทธิ์ผู้กดอนุมัติ
         const superId = req.body.admin_id;
         const superUser = await User.findOne({ user_id: superId });
         if (!superUser) return res.status(403).send({ message: 'forbidden' });
@@ -2603,101 +3274,63 @@ app.patch('/api/history/:id/approve_field_super', async (req, res) => {
             `${superUser.firstname || ''} ${superUser.lastname || ''}`.trim() ||
             superId;
 
-        // ต้องเป็น field, ยัง pending, และ "ผ่านเลขาฯ" มาแล้ว
+        // ต้องเป็น field, ยัง pending และผ่าน admin มาแล้ว
         const cond = {
             _id: id,
             type: 'field',
             status: 'pending',
             approvedById: { $exists: true, $ne: '' },
-            approvedAt: { $exists: true }
+            approvedAt: { $exists: true },
         };
 
-        // ✅ รับ URL PDF ใหม่จากหลายชื่อฟิลด์ (รวม fileUrl)
         const fileUrl = (req.body.bookingPdfUrl || req.body.booking_pdf_url || req.body.fileUrl || '').trim();
-        const fileName = req.body.fileName;
+
+        delete req.body.attachment;
+        delete req.body.fileName;
 
         const updateSet = {
             status: 'approved',
-
-            // meta ของหัวหน้า
             superApprovedBy: superName,
             superApprovedById: superId,
             superApprovedAt: new Date(),
-
-            // กล่องเลือก/เหตุผล/ลายเซ็นของหัวหน้า
             to_vice_supervisor: !!req.body.to_vice_supervisor,
             for_consider_supervisor: !!req.body.for_consider_supervisor,
             other_checked_supervisor: !!req.body.other_checked_supervisor,
             reason_supervisor: req.body.reason_supervisor || '',
-
             thaiName_supervisor: req.body.thaiName_supervisor || '',
             signaturePath_supervisor: req.body.signaturePath_supervisor || '',
             approvedAt_supervisor: req.body.approvedAt_supervisor
                 ? new Date(req.body.approvedAt_supervisor)
                 : new Date(),
-
-            // (เผื่ออยากเก็บแบบ object ไว้โชว์ใน UI)
             head_choice_supervisor: {
                 to_vice_supervisor: !!(req.body.head_choice_supervisor?.to_vice_supervisor ?? req.body.to_vice_supervisor),
                 for_consider_supervisor: !!(req.body.head_choice_supervisor?.for_consider_supervisor ?? req.body.for_consider_supervisor),
                 other_checked_supervisor: !!(req.body.head_choice_supervisor?.other_checked_supervisor ?? req.body.other_checked_supervisor),
             },
-
             updatedAt: new Date(),
         };
-
-        // ✅ บันทึก URL ของไฟล์ (ทั้งฟิลด์หลักและสำรองให้โค้ดเก่าใช้ได้)
         if (fileUrl) {
-            updateSet.bookingPdfUrl = fileUrl;   // ฟิลด์หลัก
-            updateSet.booking_pdf_url = fileUrl; // alias
-            // แนบเข้า attachment เพื่อให้การอ่านย้อนหลังยังใช้งานได้
-            updateSet.attachment = Array.isArray(req.body.attachment) && req.body.attachment.length
-                ? req.body.attachment
-                : [fileUrl];
-
-            // เก็บชื่อไฟล์เป็น array ให้สอดคล้องกับ attachment
-            if (fileName) {
-                updateSet.fileName = Array.isArray(fileName) ? fileName : [fileName];
-            }
+            updateSet.bookingPdfUrl = fileUrl;
+            updateSet.booking_pdf_url = fileUrl;
         }
 
-        const updated = await History.findOneAndUpdate(
-            cond,
-            { $set: updateSet },
-            { new: true, runValidators: true }
-        );
-
+        let updated = await History.findOneAndUpdate(cond, { $set: updateSet }, { new: true, runValidators: true });
         if (!updated) {
             return res.status(404).send({ message: 'not found, not pending, or not secretary-approved' });
         }
 
-        // ===== side-effects หลังอนุมัติจริง =====
-        let totalHours = 0;
-        if (updated.since && updated.uptodate && updated.startTime && updated.endTime) {
-            totalHours = calcTotalHours(updated.since, updated.uptodate, updated.startTime, updated.endTime);
-        }
-
-        if (updated.agency && String(updated.agency).trim() !== '') {
-            const dt = new Date(updated.approvedAt || Date.now()); // ใช้เวลาที่เลขาฯ approve ครั้งแรก
-            await Information.findOneAndUpdate(
-                { unit: new RegExp('^' + String(updated.agency).trim() + '$', 'i'), type: 'field' },
-                {
-                    $push: {
-                        usageByMonthYear: {
-                            year: dt.getFullYear(),
-                            month: dt.getMonth() + 1,
-                            usage: 1,
-                            hours: totalHours,
-                            fieldName: updated.name || ''
-                        }
-                    },
-                    $inc: { usage: 1 }
-                },
-                { upsert: true, new: true }
+        // ✅ step: super อนุมัติ (approve=true)
+        try {
+            await updateHistoryStep(
+                { id, role: 'super', approve: true, actorName: superName, remark: req.body.reason_supervisor || '' },
+                { syncStatus: true } // ครบ admin+super -> approved
             );
+            updated = await History.findById(id);
+        } catch (e) {
+            console.error('update step (approve_field_super) error:', e.message);
         }
 
-        // ส่งอีเมลแจ้งผู้ใช้
+        // side-effects/ส่งอีเมล (เดิม) …
         try {
             const user = await User.findOne({ user_id: updated.user_id });
             if (user?.email) {
@@ -2709,7 +3342,7 @@ app.patch('/api/history/:id/approve_field_super', async (req, res) => {
                     since: updated.since,
                     uptodate: updated.uptodate,
                     startTime: updated.startTime,
-                    endTime: updated.endTime
+                    endTime: updated.endTime,
                 });
             }
         } catch (mailErr) {
@@ -2722,6 +3355,8 @@ app.patch('/api/history/:id/approve_field_super', async (req, res) => {
         return res.status(500).send({ message: err.message });
     }
 });
+
+
 
 
 
@@ -3161,6 +3796,174 @@ app.post('/api/members/update-privileged', upload.single('signature'), async (re
 
 
 // ==================== Dashboard/Information ====================
+// ===== Helper: ปลอดภัยเวลาอ่านฟิลด์ว่าง/ไม่ตรง schema =====
+const toStr = v => (v == null ? '' : String(v));
+const pickFirst = (...vals) => vals.find(x => toStr(x).trim() !== '') || '';
+
+// ===== GET: รายชื่อหน่วยงานแบบไม่ซ้ำ =====
+// อิงจาก collection 'information' ของคุณที่สร้างจากหลายจุดในระบบ (มีทั้ง type: 'field' / 'equipment')
+// เราจะ group ตาม 'unit' (ไม่สน type) แล้วดึงข้อมูลติดต่อ (code/phone/email) ที่ไม่ว่างตัวใดตัวหนึ่งออกมา
+app.get('/api/information/agencies', async (req, res) => {
+    try {
+        const InformationCol = mongoose.connection.collection('information');
+
+        const pipeline = [
+            {
+                $addFields: {
+                    unitNorm: { $toLower: { $ifNull: ['$unit', ''] } },
+                    codeNorm: { $ifNull: ['$code', ''] },
+                    phoneNorm: { $ifNull: ['$phone', ''] },
+                    emailNorm: { $ifNull: ['$email', ''] },
+
+                    // เวลาที่แถวนี้ "ถูกสร้างครั้งแรก"
+                    // ถ้าไม่มี createdAt ให้ fallback เป็นวันที่จาก ObjectId
+                    firstSeen: {
+                        $ifNull: [
+                            '$createdAt',
+                            { $toDate: '$_id' }
+                        ]
+                    }
+                }
+            },
+            { $match: { unitNorm: { $ne: '' } } },
+
+            // จัดเรียงก่อน group เพื่อให้ $first ได้ “ตัวที่เก่าสุด” ของหน่วยงานนั้น
+            { $sort: { unitNorm: 1, firstSeen: 1, _id: 1 } },
+
+            // group ตามหน่วยงาน เลือก “ตัวแรกสุด” = หน่วยงานถูกพบครั้งแรกเมื่อไหร่
+            {
+                $group: {
+                    _id: '$unitNorm',
+                    unit: { $first: '$unit' },
+                    code: { $first: '$codeNorm' },
+                    phone: { $first: '$phoneNorm' },
+                    email: { $first: '$emailNorm' },
+                    firstSeen: { $first: '$firstSeen' },
+                    firstId: { $first: '$_id' } // ไว้ใช้เป็นตัวกันชนกรณีเวลาเท่ากัน
+                }
+            },
+
+            // *** ห้าม sort ตามชื่อ *** ให้ sort ตามเวลาที่ถูกพบครั้งแรกแทน
+            { $sort: { firstSeen: 1, firstId: 1 } }
+        ];
+
+        const rows = await InformationCol.aggregate(pipeline).toArray();
+
+        const items = rows.map((r) => ({
+            _id: r.firstId,
+            agencyName: r.unit || '',
+            code: r.code || '',
+            phone: r.phone || '',
+            email: r.email || ''
+        }));
+
+        res.json(items);
+    } catch (err) {
+        console.error('GET /api/information/agencies error:', err);
+        res.status(500).json({ message: 'server error' });
+    }
+});
+
+
+// ===== POST: เพิ่มหน่วยงานใหม่ =====
+// จะสร้างเอกสาร 2 แถว (type: 'field' และ 'equipment') ให้หน่วยงานนั้น
+app.post('/api/information', async (req, res) => {
+    try {
+        const agency = toStr(req.body.agency || req.body.agencyName).trim();
+        const code = toStr(req.body.code).trim();
+        const phone = toStr(req.body.phone).trim();
+        const email = toStr(req.body.email).trim();
+
+        if (!agency) return res.status(400).json({ message: 'agency (ชื่อหน่วยงาน) is required' });
+
+        // ป้องกันสร้างซ้ำแบบตรงๆ (ถ้ามีอยู่แล้วใน type ใด type หนึ่ง)
+        const exists = await Information.findOne({ unit: new RegExp('^' + agency + '$', 'i') });
+        if (exists) {
+            // อนุญาตก็ได้ แต่แจ้งเตือนว่าเคยมี จะยังสร้างอีกชุดให้ครบคู่ type
+            // ถ้าอยากบังคับไม่ให้ซ้ำเลย ให้ return 409 ตรงนี้
+            // return res.status(409).json({ message: 'หน่วยงานนี้มีอยู่แล้ว' });
+        }
+
+        const baseDoc = { unit: agency, code, phone, email, usage: 0, usageByMonthYear: [] };
+        const docs = await Information.insertMany([
+            { ...baseDoc, type: 'field', createdAt: new Date() },
+            { ...baseDoc, type: 'equipment', createdAt: new Date() }
+        ]);
+
+        res.status(201).json({ success: true, items: docs });
+    } catch (err) {
+        console.error('POST /api/information error:', err);
+        res.status(500).json({ message: err.message });
+    }
+});
+
+// ===== DELETE: ลบทั้งชุดหน่วยงานตามชื่อ (case-insensitive) =====
+app.delete('/api/information/agencies/by-name/:name', async (req, res) => {
+    try {
+        const name = toStr(req.params.name).trim();
+        if (!name) return res.status(400).json({ message: 'name is required' });
+
+        const regex = new RegExp('^' + name + '$', 'i');
+        const result = await Information.deleteMany({ unit: regex });
+        res.json({ success: true, deletedCount: result.deletedCount });
+    } catch (err) {
+        console.error('DELETE /api/information/agencies/by-name error:', err);
+        res.status(500).json({ message: err.message });
+    }
+});
+
+// ===== DELETE: ลบเอกสารเดียวตาม _id (fallback) =====
+app.delete('/api/information/:id', async (req, res) => {
+    try {
+        const id = req.params.id;
+        const result = await Information.deleteOne({ _id: new mongoose.Types.ObjectId(id) });
+        if (!result.deletedCount) return res.status(404).json({ message: 'Not found' });
+        res.json({ success: true });
+    } catch (err) {
+        console.error('DELETE /api/information/:id error:', err);
+        res.status(500).json({ message: err.message });
+    }
+});
+// ===== PUT: เปลี่ยนชื่อหน่วยงานทั้งชุด (case-insensitive) =====
+app.put('/api/information/agencies/by-name/:name', async (req, res) => {
+    try {
+        const oldName = String(req.params.name || '').trim();
+        const newName = String(req.body.agency || req.body.agencyName || req.body.unit || '').trim();
+        if (!oldName || !newName) return res.status(400).json({ message: 'old/new name required' });
+
+        const result = await Information.updateMany(
+            { unit: new RegExp('^' + oldName + '$', 'i') },
+            { $set: { unit: newName, updatedAt: new Date() } }
+        );
+        res.json({
+            success: true,
+            matchedCount: result.matchedCount ?? result.n,
+            modifiedCount: result.modifiedCount ?? result.nModified
+        });
+    } catch (e) {
+        res.status(500).json({ message: e.message });
+    }
+});
+
+// ===== PUT: เปลี่ยนชื่อหน่วยงานทีละรายการตาม _id (fallback) =====
+app.put('/api/information/:id', async (req, res) => {
+    try {
+        const id = req.params.id;
+        const newName = String(req.body.agency || req.body.agencyName || req.body.unit || '').trim();
+        if (!newName) return res.status(400).json({ message: 'unit (new name) is required' });
+
+        const result = await Information.updateOne(
+            { _id: new mongoose.Types.ObjectId(id) },
+            { $set: { unit: newName, updatedAt: new Date() } }
+        );
+        const matched = result.matchedCount ?? result.n ?? 0;
+        if (!matched) return res.status(404).json({ message: 'Not found' });
+        res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ message: e.message });
+    }
+});
+
 app.get('/api/information', async (req, res) => {
     try {
         const filter = {};

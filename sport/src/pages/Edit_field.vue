@@ -166,6 +166,7 @@ export default {
         { to: "/booking_field_admin", label: "จองสนาม", icon: "pi pi-map-marker" },
         { to: "/approve_field", label: "อนุมัติ", icon: "pi pi-verified" },
         // { to: "/return_admin", label: "รับคืนอุปกรณ์", icon: "pi pi-box" },
+        { to: "/agency_admin", label: "หน่วยงาน", icon: "pi pi-briefcase" },
         { to: "/members", label: "พนักงาน/ผู้ดูแล", icon: "pi pi-user-edit" },
         { to: "/history_admin", label: "ระบบประวัติการทำรายการ", icon: "pi pi-history" }
       ],

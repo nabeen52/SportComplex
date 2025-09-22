@@ -71,7 +71,7 @@
         <h1 style="display: flex; justify-content: center;">ยืนยันข้อมูล</h1>
         <div id="pdf-section"> 
         <div class="form-header">
-          <h3>แบบฟอร์มการยืมอุปกรณ์/วัสดุ/ครุภัณฑ์ ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง</h3>
+          <h3>แบบฟอร์มการยืมอุปกรณ์ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง</h3>
           <p><b>โทร: 0-5391-7820 และ 0-5391-7821 | E-mail: sport-complex@mfu.ac.th</b></p>
         </div>
 
@@ -108,11 +108,12 @@
 
         <!-- =================== ข้อมูลผู้ขอ/รายละเอียด =================== -->
         <div class="form-row" style="padding-top: 30px; flex-direction: column; align-items: flex-start;">
-          <span style="margin-bottom: 0;">
-           <b>วันที่ </b> {{ booking && booking.start_date ? (new Date(booking.start_date)).toLocaleDateString('th-TH') : (new Date()).toLocaleDateString('th-TH') }}
-          </span>
+         <span style="margin-bottom: 0;">
+  <b>วันที่ </b> {{ todayThai }}
+</span>
+
           <span style="font-weight: bold; margin-top: 8px;">
-            ส่วนที่1 สำหรับผู้ขอใช้บริการ
+            ส่วนที่ 1 สำหรับผู้ขอใช้บริการ
           </span>
         </div>
 
@@ -123,7 +124,7 @@
           รหัสนักศึกษา {{ booking && booking.id_form || "-" }}
            {{ booking && booking.agency || "-" }}
           โทร {{ booking && booking.number || "-" }}
-          มีความประสงค์ขอยืมอุปกรณ์/วัสดุ/ครุภัณฑ์ ของศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง เพื่อใช้ในงาน {{ booking && booking.reason || "-" }}
+          มีความประสงค์ขอยืมอุปกรณ์ของศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง เพื่อใช้ในงาน {{ booking && booking.reason || "-" }}
           สถานที่ใช้งาน {{ booking && booking.location || "-" }}
           ระหว่างวันที่ {{ booking && booking.start_date ? (new Date(booking.start_date)).toLocaleDateString('th-TH') : "-" }}
           ถึงวันที่ {{ booking && booking.end_date ? (new Date(booking.end_date)).toLocaleDateString('th-TH') : "-" }}
@@ -165,8 +166,9 @@
       <span class="sigX-name">{{ booking && booking.username_form || "-" }}</span>
       <!-- ใช้วันที่วันนี้แทนจุด -->
       <span class="sigX-date">
-        <span class="dots">วันที่ {{ todayThai }}</span>
-      </span>
+  <span class="dots">{{ nowThai }}</span>
+</span>
+
     </span>
 
     <span class="sigX-right">ผู้ยืม</span>
@@ -220,7 +222,7 @@
           </table>
         </div>
         <div style="margin-top: 15px;"></div>
-<p class="note-block"> <b> *หมายเหตุ หากอุปกรณ์/วัสดุ/ครุภัณฑ์ เกิดการชำรุดเสียหายในระหว่างที่ผู้ยืมเป็นผู้รับผิดชอบ ผู้ยืมจะต้องชดใช้ค่าเสียหายที่เกิดขึ้นทั้งหมด</b>
+<p class="note-block"> <b> *หมายเหตุ หากอุปกรณ์เกิดการชำรุดเสียหายในระหว่างที่ผู้ยืมเป็นผู้รับผิดชอบ ผู้ยืมจะต้องชดใช้ค่าเสียหายที่เกิดขึ้นทั้งหมด</b>
  
 </p>
        
@@ -262,7 +264,6 @@
 </div>
 </template>
 
-
 <script setup>
 import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
@@ -287,11 +288,39 @@ const unreadCount = ref(0)
 const userId = localStorage.getItem('user_id') || ''
 const tempFiles = ref([])
 
+// ✅ roles สำหรับ flow ยืมอุปกรณ์ (admin อนุมัติ / staff ส่งมอบ)
+const EQUIP_APPROVAL_ROLES = ['admin', 'staff'];
+
+/** ✅ สร้างค่าเริ่มต้นของ step ให้ครบทุก role */
+const buildInitialEquipmentStep = () =>
+  EQUIP_APPROVAL_ROLES.map(r => ({ role: r, approve: null }));
+
+
+
 /* >>> ใช้วันที่วันนี้ (ไทย) สำหรับลายเซ็นผู้ยืม */
 const todayThai = ref(new Date().toLocaleDateString('th-TH'))
 
 const lastSeenTimestamp = ref(parseInt(localStorage.getItem('lastSeenTimestamp') || '0'))
 let polling = null
+/* >>> ไทม์แสตมป์ (วัน/เดือน/ปี เวลา) ภาษาไทย สำหรับลายเซ็น */
+const nowThai = ref(formatThaiTimestamp(new Date()))
+
+function formatThaiTimestamp(d) {
+  const date = d.toLocaleDateString('th-TH')
+  const time = d.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })
+  return `${date} ${time} น.`
+}
+
+/* อัปเดตทุกนาที เผื่อผู้ใช้เปิดหน้านานๆ */
+let nowTicker = null
+onMounted(() => {
+  nowTicker = setInterval(() => {
+    nowThai.value = formatThaiTimestamp(new Date())
+  }, 60 * 1000)
+})
+onBeforeUnmount(() => {
+  if (nowTicker) clearInterval(nowTicker)
+})
 
 function pruneOldNotifications() {
   const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000
@@ -597,7 +626,8 @@ async function handleNext() {
     return;
   }
 
-  const bookingIdFromServer = booking.value.booking_id || booking.value._id || booking.value.id || '';
+  const bookingIdFromServer =
+    booking.value.booking_id || booking.value._id || booking.value.id || '';
   if (!bookingIdFromServer) {
     alert('ไม่พบ booking_id กรุณากรอกข้อมูลใหม่อีกครั้ง');
     return;
@@ -605,54 +635,55 @@ async function handleNext() {
 
   isLoading.value = true;
   try {
-    // 1) สร้าง PDF เป็น Blob
+    // 1) ทำ PDF เป็น Blob
     const pdfBlob = await htmlToPdfBlob('pdf-section');
 
-    // 2) ดาวน์โหลดให้ผู้ใช้ (optional UI)
-    // const link = document.createElement('a');
-    // link.href = URL.createObjectURL(pdfBlob);
-    // link.download = PDF_FILENAME;
-    // document.body.appendChild(link);
-    // link.click();
-    // link.remove();
-
-    // 3) อัปโหลด PDF เก็บ URL
+    // 2) อัปโหลด PDF → ได้ URL
     const pdfUrl = await uploadPdfBlob(pdfBlob);
 
-    // 4) อัปโหลดไฟล์แนบชั่วคราวทั้งหมด (จากหน้า 1)
-    const uploaded = await uploadTempFiles(); // [{fileName,mimeType,fileUrl}]
+    // 3) อัปโหลดไฟล์แนบชั่วคราว (ถ้ามี)
+    const uploaded = await uploadTempFiles();
 
-    // 5) บันทึก history (แนบ URL) — ★ ใส่ type: 'equipment' และ reasons
+    // 4) บันทึกเข้า history (หนึ่งแถวต่อหนึ่งรายการอุปกรณ์)
+    //    ✅ ส่งค่า `step` เริ่มต้น: [{ role:'admin', approve:null }, { role:'staff', approve:null }]
     for (const item of equipmentList.value) {
       await axios.post(`${API_BASE}/api/history`, {
-        type: 'equipment',                              // ★ บอกชัดว่าเป็นอุปกรณ์
+        type: 'equipment',
         booking_id: bookingIdFromServer,
         user_id: booking.value.user_id,
+
         username_form: booking.value.username_form || '',
         id_form: booking.value.id_form || '',
-        number: (booking.value.number ?? '').toString().trim(), // ★ ส่งเบอร์ (จะ map เป็น tel ที่ฝั่ง BE)
+        number: (booking.value.number ?? '').toString().trim(),
 
         name: item.name,
         quantity: item.quantity,
         status: 'pending',
         agency: booking.value.agency || booking.value.school_of || '',
+
         attachment: uploaded.map(u => u.fileUrl || u.fileId).filter(Boolean),
         fileName: uploaded.map(u => u.fileName),
         fileType: uploaded.map(u => u.mimeType),
 
-        reasons: booking.value.reason || '',            // ★ ใช้ reasons (BE รองรับทั้ง reason/reasons อยู่แล้ว)
+        reasons: booking.value.reason || '',
         since: booking.value.start_date || '',
         uptodate: booking.value.end_date || '',
 
+        // วันเวลาที่กำหนดให้มารับของ
         receive_date: booking.value.receive_date || '',
         receive_time: booking.value.receive_time || '',
 
-        bookingPdfUrl: pdfUrl
+        bookingPdfUrl: pdfUrl,
+
+        // ✅ สำคัญ: บันทึก step ลง DB
+        step: buildInitialEquipmentStep(),
       });
     }
 
-    // 6) เคลียร์รถเข็น/ไฟล์ชั่วคราว แล้วไปหน้าสำเร็จ
-    await axios.delete(`${API_BASE}/api/cart`, { data: { user_id: booking.value.user_id } });
+    // 5) เคลียร์รถเข็น/ไฟล์ชั่วคราว แล้วไปหน้าสำเร็จ
+    await axios.delete(`${API_BASE}/api/cart`, {
+      data: { user_id: booking.value.user_id },
+    });
     window._equipTempFiles = [];
     localStorage.removeItem('equipmentFormData');
     localStorage.setItem('equipment_booking_id', bookingIdFromServer);
@@ -1173,10 +1204,11 @@ async function handleNext() {
 }
 
 /* วันที่อยู่ “ใต้ชื่อ” กึ่งกลาง และไม่แตกบรรทัด */
+/* นิดเดียว: เลื่อนซ้าย ~8px */
 .sigX-date{
   position: absolute;
   top: 100%;
-  left: 50%;
+  left: calc(50% - 20px);   /* เดิม 50% -> ขยับซ้าย 8px */
   transform: translateX(-50%);
   margin-top: 10px;
   display: inline-flex;

@@ -283,11 +283,11 @@
     type="text"
     :class="inputClass('id_form')"
     v-model="id_form"
-    placeholder="กรอกรหัสนักศึกษา/พนักงาน"
+    placeholder="กรอกรหัสพนักงาน"
     inputmode="numeric"
     pattern="\d*"
     @input="onIdFormInput"
-    maxlength="13"
+    maxlength="8"
   />
 </div>
 
@@ -319,7 +319,7 @@
               </div>
               <div class="form-row" v-if="hasZone && formData.zone">
                 <label>
-                  ระบุตำแหน่งพื้นที่/ห้องที่ต้องการใช้
+                  พื้นที่/ห้อง
                   <span v-if="showValidate && missingFields.zone" class="required-star">*</span>
                 </label>
                 <input type="text" class="custom-input" :value="formData.zone" readonly />
@@ -1472,21 +1472,61 @@ async function handleSubmit() {
 
 
 function handleClear() {
+  // ลบ session ที่เคยเซฟไว้
   sessionStorage.removeItem('form_field_save')
+
+  // เก็บค่าเฉพาะที่ต้อง "คงไว้"
   const keepBuilding = formData.value.building
   const keepZone = formData.value.zone
-  const keepRequester = formData.value.requester
-  const keepProxyUserId = proxyUserId.value
+
+  // รีเซ็ตตัวเลือกวันที่/ช่วงวันที่ทั้งหมด
+  dpDate.value  = null
+  dpStart.value = null
+  dpEnd.value   = null
+  dpRange.value = null
+
+  // รีเซ็ตฟอร์มทุกช่องให้ว่าง ยกเว้น building/zone
   formData.value = {
-    aw: '', date: '', tel: '', name_activity: '', reasons: '',
-    since: '', uptodate: '', since_time: '', until_thetime: '', participants: '',
-    requester: keepRequester,
-    building: keepBuilding,
-    zone: keepZone,
-    selectedUtility: '', turnon_air: '', turnoff_air: '', turnon_lights: '',
-    turnoff_lights: '', other: '', amphitheater: '', need_equipment: ''
+    aw: '', date: '', tel: '',
+    name_activity: '', reasons: '',
+    since: '', uptodate: '',
+    since_time: '', until_thetime: '',
+    participants: '',
+    requester: '',                  // เคยคงไว้ ตอนนี้ล้าง
+    building: keepBuilding,         // ✅ คงไว้
+    zone: keepZone,                 // ✅ คงไว้
+    selectedUtility: '',
+    turnon_air: '', turnoff_air: '',
+    turnon_lights: '', turnoff_lights: '',
+    other: '',
+    amphitheater: '',
+    need_equipment: '',
+    utilityRequest: 'no',           // กลับสู่ค่าเริ่มต้น
+    facilityRequest: 'no',          // กลับสู่ค่าเริ่มต้น
+    restroom: ''                    // กลับสู่ค่าเริ่มต้น
   }
-  proxyUserId.value = keepProxyUserId
+
+  // ล้างหน่วยงาน + กล่องค้นหา + dropdown state
+  agencyInput.value = ''
+  customAgency.value = ''
+  otherAgencyDetail.value = ''
+  agencySearch.value = ''
+  agencyDropdownOpen.value = false
+  isAgencyEditing.value = false
+
+  // ล้างข้อมูลจองแทน (แต่คง proxyUserId ไว้เพื่อไม่ให้หลุดสิทธิ์ผู้ใช้)
+  isProxyBooking.value = false
+  proxyStudentName.value = ''
+  proxyStudentId.value = ''
+  // proxyUserId.value = proxyUserId.value  // ไม่แตะต้อง
+
+  // ล้าง “ชื่อผู้ขอใช้สถานที่ / รหัสพนักงาน” และเคลียร์ใน localStorage ด้วย
+  username_form.value = ''
+  id_form.value = ''
+  localStorage.removeItem('username_form')
+  localStorage.removeItem('id_form')
+
+  // ล้างไฟล์แนบทั้งหมด + เคลียร์ input file
   selectedFiles.value = []
   window._tempSelectedFiles = []
   fileError.value = false
@@ -1494,7 +1534,19 @@ function handleClear() {
     const fileInput = document.getElementById('fileUploadInput')
     if (fileInput) fileInput.value = ''
   }, 0)
+
+  // รีเซ็ตสถานะ validate & แจ้งเตือนเบอร์ & ชนเวลา
+  missingFields.value = {}
+  showValidate.value = false
+  telError.value = false
+  hasTimeConflict.value = false
+  conflictDays.value = []
+  bookedMap.value = {} // เคลียร์แผนที่การจองที่โหลดไว้ก่อนหน้า
+
+  // เซฟสถานะว่างกลับเข้า session (กันกรณีกด back/refresh)
+  saveFormToSession()
 }
+
 onBeforeRouteLeave((to, from, next) => {
   if (to.path !== '/form_field' && to.path !== '/form_field3') {
     selectedFiles.value = []

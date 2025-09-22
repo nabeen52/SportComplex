@@ -14,6 +14,7 @@
         <router-link to="/booking_field_admin" active-class="active"><i class="pi pi-map-marker"></i> จองสนาม</router-link>
         <router-link to="/approve_field" active-class="active"><i class="pi pi-verified"></i> อนุมัติ</router-link>
         <!-- <router-link to="/return_admin" active-class="active"><i class="pi pi-box"></i> รับคืนอุปกรณ์ </router-link> -->
+          <router-link to="/agency_admin" active-class="active"><i class="pi pi-briefcase"></i> หน่วยงาน </router-link>
         <router-link to="/members" active-class="active"><i class="pi pi-user-edit"></i> พนักงาน/ผู้ดูแล </router-link>
         <router-link to="/history_admin" active-class="active"><i class="pi pi-history"></i> ระบบประวัติการทำรายการ</router-link>
       </nav>
@@ -171,7 +172,7 @@
 <div class="form-row" v-if="agencyInput === 'อื่นๆ'">
   <label>
     โปรดระบุหน่วยงาน
-    <span v-if="touched && (showError && !customAgency)" style="color:red">*</span>
+    <span v-if="showValidate && missingFields.agencyOther" class="required-star">*</span>
   </label>
   <input
     type="text"
@@ -179,7 +180,7 @@
     v-model="customAgency"
     placeholder="กรอกชื่อหน่วยงาน"
     :readonly="isFormLocked"
-    :class="{ 'is-invalid': touched && showError && !customAgency }"
+    :class="{ 'is-invalid': showValidate && missingFields.agencyOther }"
   />
 </div>
 <div class="form-row" v-if="agencyInput === 'อื่นๆ'">
@@ -224,135 +225,80 @@
               </div>
 
 
-              <div class="form-row date-range-row">
-                <label>
-                  ช่วงวันที่
-                  <span v-if="showValidate && (missingFields.since || missingFields.uptodate)" class="required-star">*</span>
-                </label>
-                <div class="date-range-group" style="gap:8px; width:100%">
-                  <VueDatePicker
-                    v-model="dpStart"
-                    :format="formatBE"
-                    :enable-time-picker="false"
-                    
-                    :state="!(showValidate && missingFields.since)"
-                    placeholder="วัน/เดือน/ปี"
-                    locale="th"
-                    :hide-input-icon="true"
-                    style="width:48%"
-                  />
-                  <span>-</span>
-                  <VueDatePicker
-                    v-model="dpEnd"
-                    :format="formatBE"
-                    :enable-time-picker="false"
-                    
-                    :state="!(showValidate && missingFields.uptodate)"
-                    placeholder="วัน/เดือน/ปี"
-                    locale="th"
-                    :hide-input-icon="true"
-                    style="width:48%"
-                  />
-                </div>
-                
-              </div>
+              <!-- ====== ช่วงวันที่ (Hotel-style: อินพุตเดียวแบบช่วง) ====== -->
+<div class="form-row date-range-row">
+  <label>
+    ช่วงวันที่
+    <span v-if="showValidate && (missingFields.since || missingFields.uptodate)" class="required-star">*</span>
+  </label>
+
+  <VueDatePicker
+  v-model="dpRange"
+  range
+  :multi-calendars="false"
+  :auto-apply="true"
+  :partial-range="false"
+  :format="formatRangeBE"
+  :state="!(showValidate && (missingFields.since || missingFields.uptodate))"
+  placeholder="วัน/เดือน/ปี"
+  locale="th"
+  :hide-input-icon="true"
+  class="dp-like-custom"
+/>
+</div>
+
                             <div class="form-row time-range-row">
-                <label>
-                  ช่วงเวลา
-                  <span v-if="showValidate && (missingFields.since_time || missingFields.until_thetime)" class="required-star">*</span>
-                </label>
-                <div class="time-range-group">
-                  <input
-                    type="time"
-                    :class="inputClass('since_time')"
-                    v-model="formData.since_time"
-                  />
-                  <span>-</span>
-                  <input
-                    type="time"
-                    :class="inputClass('until_thetime')"
-                    v-model="formData.until_thetime"
-                    :min="minUntilTime"
-                  />
-                </div>
-              </div>
+  <label>
+    ช่วงเวลา
+    <span v-if="showValidate && (missingFields.since_time || missingFields.until_thetime)" class="required-star">*</span>
+  </label>
+  <div class="time-range-group">
+    <input type="time" :class="inputClass('since_time')" v-model="formData.since_time" />
+    <span>-</span>
+    <input type="time" :class="inputClass('until_thetime')" v-model="formData.until_thetime" :min="minUntilTime" />
+  </div>
+
+  <!-- ⛔ แจ้งเตือนเวลาชน -->
+  <div v-if="hasTimeConflict" class="input-error-message" style="margin-top:6px;">
+    ช่วงเวลานี้มีการจองแล้วในวันที่:
+    {{ conflictDays.map(d => dayjs(d).format('DD/MM/YYYY')).join(', ') }}
+  </div>
+</div>
+
 
             
               <!-- เพิ่มใน <form> ตำแหน่งใกล้ๆ requester/proxyUserId -->
-<!-- ชื่อผู้ขอใช้สถานที่ / รหัสนักศึกษา/พนักงาน -->
+<!-- ชื่อผู้ขอใช้สถานที่ / รหัสพนักงาน -->
 <div class="form-row">
   <label>
-  ชื่อผู้ขอใช้สถานที่
-  <span v-if="showValidate && missingFields.username_form" class="required-star">*</span>
-</label>
-<input
-  type="text"
-  :class="inputClass('username_form')"
-  v-model="username_form"
-  placeholder="กรอกชื่อผู้ขอใช้สถานที่"
-/>
-
-  <!-- ✅ จองแทนผู้อื่น: อยู่ใต้ช่องนี้เลย ไม่กินแถวของ grid -->
-  <label class="proxy-inline" style="margin-top:6px;">
-    <input
-      id="proxyToggle"
-      type="checkbox"
-      v-model="isProxyBooking"
-      class="proxy-toggle"
-    />
-    จองแทนผู้อื่น
-  </label>
-</div>
-
-<div class="form-row">
-  <label>
-  รหัสนักศึกษา/พนักงาน
-  <span v-if="showValidate && missingFields.id_form" class="required-star">*</span>
-</label>
-<input
-  type="text"
-  :class="inputClass('id_form')"
-  v-model="id_form"
-  placeholder="กรอกรหัสนักศึกษา/พนักงาน"
-  inputmode="numeric"
-  pattern="\d*"
-  @input="onIdFormInput"
-  maxlength="13"
-/>
-</div>
-
-
-<!-- เฉพาะถ้า isProxyBooking === true -->
-<div class="form-row" v-if="isProxyBooking">
-  <label>
-    ชื่อของผู้ที่จองแทน
-    <span v-if="showValidate && missingFields.proxyStudentName" class="required-star">*</span>
+    ชื่อผู้ขอใช้สถานที่
+    <span v-if="showValidate && missingFields.username_form" class="required-star">*</span>
   </label>
   <input
     type="text"
-    class="custom-input"
-    :class="{ 'input-error': showValidate && missingFields.proxyStudentName }"
-    v-model="proxyStudentName"
-    placeholder="กรอกชื่อของผู้ที่คุณจองแทน"
+    :class="inputClass('username_form')"
+    v-model="username_form"
+    placeholder="กรอกชื่อผู้ขอใช้สถานที่"
   />
 </div>
 
-<div class="form-row" v-if="isProxyBooking">
+<div class="form-row">
   <label>
-    รหัสนักศึกษาของผู้ที่จองแทน
-    <span v-if="showValidate && missingFields.proxyStudentId" class="required-star">*</span>
+    รหัสพนักงาน
+    <span v-if="showValidate && missingFields.id_form" class="required-star">*</span>
   </label>
   <input
-  type="text"
-  class="custom-input"
-  :class="{ 'input-error': showValidate && missingFields.proxyStudentId }"
-  v-model="proxyStudentId"
-  placeholder="กรอกรหัสนักศึกษาของผู้ที่คุณจองแทน"
-  inputmode="numeric"
-  pattern="\d*"
-  @input="onProxyIdInput"
-/>
+    type="text"
+    :class="inputClass('id_form')"
+    v-model="id_form"
+    placeholder="กรอกรหัสพนักงาน"
+    inputmode="numeric"
+    pattern="\d*"
+    @input="onIdFormInput"
+    maxlength="8"
+  />
 </div>
+
 
 <!-- จำนวนผู้เข้าร่วม (อยู่ท้าย) -->
 <div class="form-row">
@@ -379,55 +325,83 @@
                 </label>
                 <input type="text" class="custom-input building-readonly" :value="formData.building || 'ยังไม่ได้เลือกอาคาร'" readonly />
               </div>
-              <div class="form-row" v-if="hasZone && formData.zone && zones.some(z => z.name === formData.zone)">
+              <div class="form-row" v-if="hasZone && formData.zone">
                 <label>
-                  ระบุตำแหน่งพื้นที่/ห้องที่ต้องการใช้
+                  พื้นที่/ห้อง
                   <span v-if="showValidate && missingFields.zone" class="required-star">*</span>
                 </label>
                 <input type="text" class="custom-input" :value="formData.zone" readonly />
               </div>
-               <!-- ============== 2. ขอใช้ระบบสาธารณูปโภค ============= -->
-              <div class="form-section-title">2.ขอใช้ระบบสาธารณูปโภค</div>
-              <div class="form-row" style="grid-column: span 2;">
-                <div>
-                  <label>
-                    <input type="radio" name="utility-request" value="yes" v-model="formData.utilityRequest" /> ต้องการ
-                  </label>
-                  <label>
-                    <input type="radio" name="utility-request" value="no" v-model="formData.utilityRequest" /> ไม่ต้องการ
-                  </label>
-                </div>
-                <!-- แจ้งเตือนถ้าเลือก "ต้องการ" แล้วไม่กรอกช่องใดเลย -->
-                <span
-                  v-if="formData.utilityRequest === 'yes' && showValidate && missingFields.utilityGroup"
-                  class="input-error-message"
-                  style="margin-left:12px;"
-                >
-                  กรุณากรอกข้อมูลอย่างน้อย 1 ช่องในหัวข้อนี้
-                </span>
-              </div>
-              <template v-if="formData.utilityRequest === 'yes'">
-                <div class="form-row">
-                  <label>เปิดเครื่องปรับอากาศตั้งแต่เวลา</label>
-                  <input type="time" :class="inputClass('turnon_air')" v-model="formData.turnon_air" />
-                </div>
-                <div class="form-row">
-                  <label>ถึงเวลา</label>
-                  <input type="time" :class="inputClass('turnoff_air')" v-model="formData.turnoff_air" />
-                </div>
-                <div class="form-row">
-                  <label>ไฟฟ้าส่องสว่างตั้งแต่เวลา</label>
-                  <input type="time" :class="inputClass('turnon_lights')" v-model="formData.turnon_lights" />
-                </div>
-                <div class="form-row">
-                  <label>ถึงเวลา</label>
-                  <input type="time" :class="inputClass('turnoff_lights')" v-model="formData.turnoff_lights" />
-                </div>
-                <div class="form-row">
-                  <label>อื่นๆ</label>
-                  <input type="text" class="custom-input" v-model="formData.other" />
-                </div>
-              </template>
+              <!-- ============== 2. ขอใช้ระบบสาธารณูปโภค (ตามรูป) ============= -->
+<div class="form-section-title">2.ขอใช้ระบบสาธารณูปโภค</div>
+
+<!-- แถว: ต้องการ/ไม่ต้องการ -->
+<div class="form-row" style="grid-column: span 2;">
+  <div>
+    <label>
+      <input type="radio" name="utility-request" value="yes" v-model="formData.utilityRequest" />
+      ต้องการ
+    </label>
+    <label>
+      <input type="radio" name="utility-request" value="no" v-model="formData.utilityRequest" />
+      ไม่ต้องการ
+    </label>
+  </div>
+</div>
+
+<!-- แถว: ห้องสุขา (อยู่ใต้ปุ่ม ต้องการ/ไม่ต้องการ) -->
+<template v-if="formData.utilityRequest === 'yes'">
+  <div class="form-row" style="grid-column: span 2;">
+    <label>
+      ห้องสุขา
+      <span v-if="showValidate && missingFields.restroomChoice" class="required-star">*</span>
+    </label>
+
+    <div class="radio-inline" style="margin-top:4px;">
+      <label>
+        <input type="radio" value="yes" v-model="formData.restroom" />
+        ต้องการ
+      </label>
+      <label>
+        <input type="radio" value="no" v-model="formData.restroom" />
+        ไม่ต้องการ
+      </label>
+    </div>
+
+    <!-- ข้อความเตือนถ้ายังไม่เลือก -->
+    <div v-if="showValidate && missingFields.restroomChoice" class="input-error-message" style="margin-top:6px;">
+      กรุณาเลือก “ต้องการ” หรือ “ไม่ต้องการ” ห้องสุขา
+    </div>
+  </div>
+
+  <!-- แถว: ไฟฟ้าส่องสว่าง ตั้งแต่เวลา - ถึงเวลา -->
+  <div class="form-row" style="grid-column: span 2;">
+    <label>ไฟฟ้าส่องสว่าง</label>
+    <div class="inline-range">
+      <input
+        type="time"
+        :class="inputClass('turnon_lights')"
+        v-model="formData.turnon_lights"
+      />
+      <span class="range-dash">-</span>
+      <input
+        type="time"
+        :class="inputClass('turnoff_lights')"
+        v-model="formData.turnoff_lights"
+        :min="formData.turnon_lights || ''"
+      />
+    </div>
+  </div>
+
+  <!-- แจ้งเตือนกรณีไม่กรอกอะไรเลยในหัวข้อ 2 -->
+  <div
+    class="form-row"
+    style="grid-column: span 2;"
+    v-if="showValidate && missingFields.utilityGroup"
+  >
+    <span class="input-error-message">กรุณากรอกอย่างน้อย 1 รายการในหัวข้อนี้</span>
+  </div>
+</template>
 
               <!-- ============== 3. ขอใช้รายการประกอบอาคาร ============= -->
               <div class="form-section-title">3.ขออนุมัติรายการประกอบอาคาร</div>
@@ -536,7 +510,8 @@
             </div>
             <div class="button-wrapper">
               <button type="button" class="clear-btn" @click="handleClear">ล้างฟอร์ม</button>
-              <button id="btnNext" type="submit">Next</button>
+              <!-- <button id="btnNext" type="submit" :disabled="hasTimeConflict">Next</button> -->
+               <button id="btnNext" type="submit">Next</button>
             </div>
           </form>
         </div>
@@ -559,7 +534,7 @@
 </template>
 
 <script setup>
-import { ref, watch, computed, onMounted, onBeforeUnmount, onActivated } from 'vue'
+import { ref, watch, computed, onMounted, onBeforeUnmount, onActivated, nextTick } from 'vue'
 import { useRouter, useRoute, onBeforeRouteLeave } from 'vue-router'
 import axios from 'axios'
 import Swal from 'sweetalert2'
@@ -568,6 +543,12 @@ import '@vuepic/vue-datepicker/dist/main.css'
 import dayjs from 'dayjs'
 
 const API_BASE = import.meta.env.VITE_API_BASE
+
+const agencyInputEl = ref(null)
+
+// ใช้ป้าย “ทุกโซน” ให้ชนทุกโซนในอาคาร เหมือนหน้า form_field
+const ALL_ZONES_LABEL = 'ทุกโซน'
+
 
 // Router
 const router = useRouter()
@@ -613,6 +594,114 @@ const dpDate = ref(null)       // วันที่ (ฟิลด์: formData.
 const dpStart = ref(null)      // ช่วงวันที่เริ่ม (ฟิลด์: since)
 const dpEnd = ref(null)        // ช่วงวันที่สิ้นสุด (ฟิลด์: uptodate)
 
+// เพิ่มตัวแปรที่ขาด
+const bookedMap = ref({})
+const hasTimeConflict = ref(false)
+const conflictDays = ref([])
+
+
+const dpRange = ref(null)
+
+function formatRangeBE(value) {
+  if (!value) return ''
+  if (Array.isArray(value)) {
+    const [s, e] = value
+    if (!s && !e) return ''
+    if (s && e) return `${formatBE(s)} - ${formatBE(e)}`
+    return s ? formatBE(s) : ''
+  }
+  return ''
+}
+
+function tToMin(t) {
+  if (!t) return null
+  const [h, m] = t.split(':').map(Number)
+  return h * 60 + m
+}
+
+function addDays(d, n) {
+  const x = new Date(d)
+  x.setDate(x.getDate() + n)
+  return x
+}
+
+function buildBookedMap(rows) {
+  const map = {}
+  for (const r of rows) {
+    const s = new Date(r.since)
+    const e = new Date(r.uptodate)
+    const st = tToMin(r.startTime || '00:00')
+    const et = tToMin(r.endTime   || '23:59')
+    for (let d = new Date(s); d <= e; d = addDays(d, 1)) {
+      const key = dayjs(d).format('YYYY-MM-DD')
+      ;(map[key] ||= []).push([st, et])
+    }
+  }
+  for (const k of Object.keys(map)) map[k].sort((a,b)=>a[0]-b[0])
+  return map
+}
+
+async function fetchBooked() {
+  try {
+    // ต้องมีอาคาร และถ้ามีโซน ต้องเลือกโซนก่อน
+    if (!formData.value.building || (hasZone.value && !formData.value.zone)) {
+      bookedMap.value = {}
+      hasTimeConflict.value = false
+      conflictDays.value = []
+      return
+    }
+
+    // ช่วงวันที่ fallback เผื่อยังไม่เลือก
+    const from = dpStart.value ? toISO(dpStart.value) : toISO(new Date())
+    const to   = dpEnd.value   ? toISO(dpEnd.value)   : toISO(addDays(new Date(), 180))
+
+    // ดึงทุกโซนของอาคารมาก่อน แล้วค่อยกรองเอง
+    const params = new URLSearchParams({ name: formData.value.building, from, to })
+    const res = await axios.get(`${API_BASE}/api/history/booked?${params.toString()}`)
+    let rows = Array.isArray(res.data) ? res.data : []
+
+    if (hasZone.value) {
+  const z = formData.value.zone
+  if (z && z !== ALL_ZONES_LABEL) {
+    rows = rows.filter(r => (r.zone === z) || (r.zone === ALL_ZONES_LABEL))
+  }
+  // เลือก "ทุกโซน" → ไม่ต้องกรอง
+}
+
+
+    bookedMap.value = buildBookedMap(rows)
+    checkAvailability()
+  } catch {
+    bookedMap.value = {}
+  }
+}
+
+function checkAvailability() {
+  hasTimeConflict.value = false
+  conflictDays.value = []
+
+  // ต้องมีช่วงวัน + ช่วงเวลา ถึงจะตรวจชนได้
+  if (!dpStart.value || !dpEnd.value || !formData.value.since_time || !formData.value.until_thetime) return
+
+  const uS = tToMin(formData.value.since_time)
+  const uE = tToMin(formData.value.until_thetime)
+  if (uS == null || uE == null) return
+
+  for (let d = new Date(dpStart.value); d <= dpEnd.value; d = addDays(d, 1)) {
+    const key = dayjs(d).format('YYYY-MM-DD')
+    const slots = bookedMap.value[key] || []
+    const clash = slots.some(([a,b]) => uE > a && uS < b)   // มีส่วนทับกัน
+    if (clash) {
+      hasTimeConflict.value = true
+      conflictDays.value.push(key)
+    }
+  }
+}
+
+
+
+
+
 const filteredAgencyOptions = computed(() => {
   const search = agencySearch.value.trim().toLowerCase()
   if (!search) return agencyOptions.value
@@ -657,8 +746,9 @@ function digitsOnly(v) {
 }
 
 function onIdFormInput(e) {
-  id_form.value = digitsOnly(e.target.value);
+  id_form.value = (e.target.value || '').replace(/\D/g, '').slice(0, 8)
 }
+
 
 function onProxyIdInput(e) {
   proxyStudentId.value = digitsOnly(e.target.value);
@@ -826,9 +916,12 @@ watch(() => formData.value.building, async (newBuilding) => {
       if (found && found.hasZone && found.zones && found.zones.length > 0) {
         zones.value = found.zones
         hasZone.value = true
-        if (!found.zones.some(z => z.name === formData.value.zone)) {
-          formData.value.zone = ''
-        }
+        const incoming = formData.value.zone
+if (incoming === ALL_ZONES_LABEL) {
+  // คงค่าไว้ ไม่ต้องล้าง
+} else if (!found.zones.some(z => z.name === incoming)) {
+  formData.value.zone = ''
+}
       } else {
         zones.value = []
         hasZone.value = false
@@ -870,6 +963,26 @@ function syncDateRange(type) {
     formData.value.uptodate = dateRange.value[1]
   }
 }
+
+// ให้ dpRange sync -> since/uptodate เสมอ (เลือกวันเดียวก็ได้)
+watch(dpRange, (rng) => {
+  if (!rng || !Array.isArray(rng) || !rng[0] || !rng[1]) {
+    formData.value.since = ''
+    formData.value.uptodate = ''
+    dpStart.value = null
+    dpEnd.value = null
+    dpRange.value = null 
+    return
+  }
+  const [s, e] = rng
+  dpStart.value = s
+  dpEnd.value   = e
+  formData.value.since    = toISO(s)
+  formData.value.uptodate = toISO(e)
+  checkAvailability()
+})
+
+
 
 // File Attach
 const selectedFiles = ref([])
@@ -1045,6 +1158,14 @@ watch(dpEnd, (d) => {
   formData.value.uptodate = toISO(d)
 })
 
+// โหลดรายการจองเมื่อเปลี่ยน อาคาร/โซน/ช่วงวันที่
+watch([() => formData.value.building, () => formData.value.zone], fetchBooked)
+watch([dpStart, dpEnd], fetchBooked)
+
+// ตรวจชนเวลาเมื่อเปลี่ยนเวลาเริ่ม-สิ้นสุด
+watch([() => formData.value.since_time, () => formData.value.until_thetime], checkAvailability)
+
+
 watch(selectedFiles, () => {
   window._tempSelectedFiles = selectedFiles.value
   saveFormToSession()
@@ -1186,91 +1307,86 @@ function validateTel() {
 function validateFields() {
   const fields = {}
 
-  // ฟิลด์บังคับหลัก
-  const requiredFields = [
-    'aw', 'date', 'tel', 'name_activity', 'reasons',
-    'since', 'uptodate', 'since_time', 'until_thetime',
-    'participants', 'building'
+  const required = [
+    'aw','date','tel','name_activity','reasons',
+    'since','uptodate','since_time','until_thetime',
+    'participants','building'
   ]
-  requiredFields.forEach((k) => {
-    if (!formData.value[k] || String(formData.value[k]).trim() === '') fields[k] = true
+  required.forEach(k => {
+    if (!formData.value[k] || String(formData.value[k]).trim()==='') fields[k]=true
   })
 
-  // ✅ ต้องกรอกเสมอ: ชื่อผู้ขอใช้สถานที่ / รหัสนักศึกษา-พนักงาน
-  if (!username_form.value || username_form.value.trim() === '') {
-    fields['username_form'] = true
-  }
-  if (!id_form.value || id_form.value.trim() === '') {
-    fields['id_form'] = true
-  }
+  // ผู้ขอใช้ + รหัสพนักงาน (รหัสต้องเป็นตัวเลข ≤ 8 หลัก)
+  if (!username_form.value || username_form.value.trim() === '') fields['username_form'] = true
+  if (!id_form.value || !/^\d{1,8}$/.test(id_form.value)) fields['id_form'] = true
 
-  // กรณีจองแทน เพิ่มเติม
-  if (isProxyBooking.value) {
-    if (!formData.value.requester || String(formData.value.requester).trim() === '') {
-      fields['requester'] = true
-    }
-    if (!proxyStudentName.value || proxyStudentName.value.trim() === '') {
-      fields['proxyStudentName'] = true
-    }
-    if (!proxyStudentId.value || proxyStudentId.value.trim() === '') {
-      fields['proxyStudentId'] = true
-    }
-  }
-
-  // ✅ หน่วยงาน (รวมกรณี 'อื่นๆ')
+  // หน่วยงาน (+ กรณี 'อื่นๆ')
   if (!finalAgency.value || String(finalAgency.value).trim() === '') fields['agency'] = true
-  if (agencyInput.value === 'อื่นๆ' && (!customAgency.value || String(customAgency.value).trim() === '')) {
+  if (agencyInput.value === 'อื่นๆ' &&
+      (!customAgency.value || String(customAgency.value).trim()==='')) {
     fields['agencyOther'] = true
   }
 
   // โซน (ถ้าอาคารนั้นมีโซน)
-  if (hasZone.value && (!formData.value.zone || String(formData.value.zone).trim() === '')) {
+  if (hasZone.value && (!formData.value.zone || String(formData.value.zone).trim()==='')) {
     fields['zone'] = true
   }
 
-  // ต้องมี user_id (จากผู้ล็อกอิน)
-  if (!proxyUserId.value || String(proxyUserId.value).trim() === '') fields['userId'] = true
+  // ต้องมี user_id (คนล็อกอิน)
+  if (!proxyUserId.value || String(proxyUserId.value).trim() === '') fields['userId']=true
 
-  // ✅ ไฟล์แนบอย่างน้อย 1
+  // ไฟล์แนบ >= 1
   if (selectedFiles.value.length === 0) {
-    fields['files'] = true
-    fileError.value = true
+    fields['files']=true
+    fileError.value=true
   } else {
-    fileError.value = false
+    fileError.value=false
   }
 
-  // กลุ่ม 2: ระบบสาธารณูปโภค (ถ้าเลือก "ต้องการ" ต้องมีค่าอย่างน้อย 1 ช่อง)
+  // ระบบสาธารณูปโภค
   if (formData.value.utilityRequest === 'yes') {
-    const utilityFilled =
-      (formData.value.turnon_air && String(formData.value.turnon_air).trim() !== '') ||
-      (formData.value.turnoff_air && String(formData.value.turnoff_air).trim() !== '') ||
-      (formData.value.turnon_lights && String(formData.value.turnon_lights).trim() !== '') ||
-      (formData.value.turnoff_lights && String(formData.value.turnoff_lights).trim() !== '') ||
-      (formData.value.other && String(formData.value.other).trim() !== '')
-    if (!utilityFilled) fields['utilityGroup'] = true
+    // ต้องเลือก restroom yes/no เสมอ
+    if (!['yes','no'].includes(formData.value.restroom)) fields['restroomChoice'] = true
+
+    const lightsOK =
+      !!formData.value.turnon_lights && !!formData.value.turnoff_lights &&
+      String(formData.value.turnon_lights).trim() !== '' &&
+      String(formData.value.turnoff_lights).trim() !== ''
+    const restroomYES = formData.value.restroom === 'yes'
+
+    if (!(lightsOK || restroomYES)) fields['utilityGroup'] = true
   }
 
-  // กลุ่ม 3: รายการประกอบอาคาร (ถ้าเลือก "ต้องการ" ต้องมีค่าอย่างน้อย 1 ช่อง)
+  // รายการประกอบอาคาร
   if (formData.value.facilityRequest === 'yes') {
     const facilityFilled =
       (formData.value.amphitheater && String(formData.value.amphitheater).trim() !== '') ||
       (formData.value.need_equipment && String(formData.value.need_equipment).trim() !== '')
     if (!facilityFilled) fields['facilityGroup'] = true
+
+    // เฉพาะอาคาร 72 พรรษา → บังคับ amphitheater ต้องมีค่า
+    if ((formData.value.building || '').includes('72') &&
+        !(formData.value.amphitheater && String(formData.value.amphitheater).trim() !== '')) {
+      fields['amphitheater'] = true
+    }
   }
 
-  // ✅ ตรวจรูปแบบเบอร์โทร (3–10 หลักตัวเลข)
+  // เบอร์โทร 3–10 หลัก
   const tel = formData.value.tel || ''
-  if (!tel || tel.length < 3 || tel.length > 10 || !/^\d{3,10}$/.test(tel)) {
-    fields['tel'] = true
-    telError.value = true
+  if (!/^\d{3,10}$/.test(tel)) {
+    fields['tel']=true
+    telError.value=true
   } else {
-    telError.value = false
+    telError.value=false
   }
 
-  // สรุปผล
+  // กันเวลาชน
+  // if (hasTimeConflict.value) fields['timeConflict'] = true
+
   missingFields.value = fields
   return Object.keys(fields).length === 0
 }
+
 
 function fileToBase64(file) {
   return new Promise((resolve, reject) => {
@@ -1282,9 +1398,24 @@ function fileToBase64(file) {
 }
 async function handleSubmit() {
   showValidate.value = true
-  if (!validateFields()) {
-    Swal.fire({ icon: 'warning', title: 'กรอกข้อมูลไม่ครบถ้วน', text: 'กรุณากรอกข้อมูลให้ครบถ้วนและแนบไฟล์ก่อนดำเนินการต่อ', confirmButtonText: 'ตกลง' })
-    return
+
+  // ตรวจความครบถ้วนก่อน
+  const isValid = validateFields()
+
+  // ถ้าไม่ผ่าน และสาเหตุไม่ใช่แค่ชนเวลา -> แจ้งเตือนและหยุด
+  if (!isValid) {
+    const keys = Object.keys(missingFields.value || {})
+    const onlyTimeConflict = keys.length === 1 && keys[0] === 'timeConflict'
+    if (!onlyTimeConflict) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'กรอกข้อมูลไม่ครบถ้วน',
+        text: 'กรุณากรอกข้อมูลให้ครบถ้วนและแนบไฟล์ก่อนดำเนินการต่อ',
+        confirmButtonText: 'ตกลง'
+      })
+      return
+    }
+    // ถ้าไม่ผ่านเพราะ "ชนเวลาอย่างเดียว" ให้ไปต่อได้ (จะถามยืนยันด้านล่าง)
   }
 
   // ✅ ใช้ไฟล์จริงเท่านั้น
@@ -1297,8 +1428,31 @@ async function handleSubmit() {
   // ถ้ายังไม่มีไฟล์จริง ให้แจ้งเตือน
   if (selectedFiles.value.length === 0) {
     fileError.value = true
-    Swal.fire({ icon: 'warning', title: 'ไม่มีไฟล์แนบ', text: 'กรุณาเลือกไฟล์อีกครั้ง', confirmButtonText: 'ตกลง' })
+    Swal.fire({
+      icon: 'warning',
+      title: 'ไม่มีไฟล์แนบ',
+      text: 'กรุณาเลือกไฟล์อีกครั้ง',
+      confirmButtonText: 'ตกลง'
+    })
     return
+  }
+
+  // 🚦 ถ้ามีชนเวลา ให้ถามยืนยันก่อน แต่ไม่บล็อก
+  if (hasTimeConflict.value) {
+    const listDays = (conflictDays.value || [])
+      .map(d => dayjs(d).format('DD/MM/YYYY'))
+      .join(', ')
+    const confirm = await Swal.fire({
+      icon: 'warning',
+      title: 'ช่วงเวลาทับกับรายการจอง',
+      html: listDays
+        ? `มีการจองในวันที่: ${listDays}<br>คุณต้องการดำเนินการจองทับหรือไม่`
+        : 'มีการจองทับช่วงเวลาอยู่แล้ว<br>คุณต้องการดำเนินการจองทับหรือไม่',
+      showCancelButton: true,
+      confirmButtonText: 'จองทับ',
+      cancelButtonText: 'ยกเลิก'
+    })
+    if (!confirm.isConfirmed) return
   }
 
   try {
@@ -1334,27 +1488,76 @@ async function handleSubmit() {
     router.push('/form_field_admin3')
   } catch (err) {
     console.error(err?.response?.data || err)
-    Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: 'บันทึกข้อมูลไม่สำเร็จ', confirmButtonText: 'ตกลง' })
+    Swal.fire({
+      icon: 'error',
+      title: 'ผิดพลาด',
+      text: 'บันทึกข้อมูลไม่สำเร็จ',
+      confirmButtonText: 'ตกลง'
+    })
   }
 }
 
 
+
 function handleClear() {
-  sessionStorage.removeItem('form_field_save')
+  // ✅ เก็บค่าเฉพาะ อาคาร/โซน ไว้
   const keepBuilding = formData.value.building
-  const keepZone = formData.value.zone
-  const keepRequester = formData.value.requester
-  const keepProxyUserId = proxyUserId.value
+  const keepZone     = formData.value.zone
+
+  // ลบ draft ใน session
+  sessionStorage.removeItem('form_field_save')
+
+  // ✅ รีเซ็ตฟอร์มทั้งหมด ยกเว้น building/zone
   formData.value = {
     aw: '', date: '', tel: '', name_activity: '', reasons: '',
-    since: '', uptodate: '', since_time: '', until_thetime: '', participants: '',
-    requester: keepRequester,
+    since: '', uptodate: '', since_time: '', until_thetime: '',
+    participants: '', requester: '',
     building: keepBuilding,
     zone: keepZone,
-    selectedUtility: '', turnon_air: '', turnoff_air: '', turnon_lights: '',
-    turnoff_lights: '', other: '', amphitheater: '', equipment: ''
+    selectedUtility: '',
+    turnon_air: '', turnoff_air: '',
+    turnon_lights: '', turnoff_lights: '',
+    other: '', amphitheater: '', need_equipment: '',
+    utilityRequest: 'no',
+    facilityRequest: 'no',
+    restroom: '',
+    proxyStudentName: '',
+    proxyStudentId: ''
   }
-  proxyUserId.value = keepProxyUserId
+
+  // ✅ ล้างค่าที่เกี่ยวกับหน่วยงาน/กล่องค้นหา
+  agencyInput.value = ''
+  agencySearch.value = ''
+  customAgency.value = ''
+  otherAgencyDetail.value = ''
+  isAgencyEditing.value = false
+  agencyDropdownOpen.value = false
+
+  // ✅ ล้างผู้ยื่น/รหัส (และไม่ดึงจาก localStorage)
+  username_form.value = ''
+  id_form.value = ''
+  localStorage.removeItem('username_form')
+  localStorage.removeItem('id_form')
+
+  // ✅ ล้าง proxy/ผู้ใช้งานที่จองแทน
+  proxyUserId.value = ''
+  isProxyBooking.value = false
+  proxyStudentName.value = ''
+  proxyStudentId.value = ''
+
+  // ✅ ล้างปฏิทิน/ช่วงวัน-เวลา
+  dpDate.value  = null
+  dpStart.value = null
+  dpEnd.value   = null
+  dpRange.value = null
+  dateRange.value = ['', '']
+
+  // ✅ ล้างสถานะชนเวลา/รายการจองที่โหลดมา
+  hasTimeConflict.value = false
+  conflictDays.value = []
+  bookedMap.value = {}
+
+  // ✅ ล้างไฟล์แนบ
   selectedFiles.value = []
   window._tempSelectedFiles = []
   fileError.value = false
@@ -1362,7 +1565,14 @@ function handleClear() {
     const fileInput = document.getElementById('fileUploadInput')
     if (fileInput) fileInput.value = ''
   }, 0)
+
+  // ✅ รีเซ็ต error อื่น ๆ
+  telError.value = false
+  missingFields.value = {}
+  showValidate.value = false
 }
+
+
 onBeforeRouteLeave((to, from, next) => {
   if (to.path !== '/form_field_admin' && to.path !== '/form_field_admin3') {
     selectedFiles.value = []
@@ -1527,6 +1737,15 @@ onMounted(async () => {
   dpDate.value  = safeDate(formData.value.date)
   dpStart.value = safeDate(formData.value.since)
   dpEnd.value   = safeDate(formData.value.uptodate)
+  // ======= เซ็ตค่า DatePicker ให้ตรงกับข้อมูลเดิม =======
+dpDate.value  = safeDate(formData.value.date)
+
+const s = safeDate(formData.value.since)
+const e = safeDate(formData.value.uptodate)
+dpStart.value = s
+dpEnd.value   = e
+dpRange.value = (s && e) ? [s, e] : null     // <-- ถ้าไม่มีค่าจริง ให้เป็น null
+
 })
 
 // ✅ โหลดคืนไฟล์ทุกครั้งเมื่อ component ถูก activate (เช่น Back จากหน้า 3)
@@ -2028,6 +2247,37 @@ onBeforeUnmount(() => {
   border-color: #ff4747 !important;
   background-color: #fff0f0 !important;
 }
+
+/* ==== ให้ layout ของช่วงเวลาไฟฟ้าส่องสว่างเหมือนหน้า form_field ==== */
+.inline-range{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+.inline-range input[type="time"]{
+  flex: 1 1 0;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 10px 14px;
+  border: 2px solid #94a3b8;
+  border-radius: 8px;
+  background: #f9fafb;
+  font-size: 14px;
+}
+/* ขีดคั่นกลางระหว่างเวลาเริ่ม-สิ้นสุด */
+.range-dash{
+  font-size: 20px;
+  user-select: none;
+}
+
+/* ใช้กับตัวเลือกห้องสุขา (yes/no) ให้จัดแนวเหมือนหน้า user */
+.radio-inline{
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
 
 </style>
 <style>

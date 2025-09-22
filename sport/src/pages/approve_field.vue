@@ -13,13 +13,12 @@
         <router-link to="/booking_field_admin" active-class="active"><i class="pi pi-map-marker"></i> จองสนาม</router-link>
         <router-link to="/approve_field" active-class="active"><i class="pi pi-verified"></i> อนุมัติ</router-link>
         <!-- <router-link to="/return_admin" active-class="active"><i class="pi pi-box"></i> รับคืนอุปกรณ์ </router-link> -->
+         <router-link to="/agency_admin" active-class="active"><i class="pi pi-briefcase"></i> หน่วยงาน </router-link>
         <router-link to="/members" active-class="active"><i class="pi pi-user-edit"></i> พนักงาน/ผู้ดูแล </router-link>
         <router-link to="/history_admin" active-class="active"><i class="pi pi-history"></i> ระบบประวัติการทำรายการ</router-link>
       </nav>
     </aside>
-
     <div v-if="isMobile && !isSidebarClosed" class="sidebar-overlay" @click="toggleSidebar"></div>
-
     <div class="main">
       <header class="topbar">
         <button class="menu-toggle" @click="toggleSidebar">☰</button>
@@ -31,12 +30,10 @@
     class="notification-backdrop"
     @click="closeNotifications"
   ></div>
-
   <button class="notification-btn" @click="toggleNotifications">
     <i class="pi pi-bell"></i>
     <span v-if="unreadCount > 0" class="badge">{{ unreadCount }}</span>
   </button>
-
   <div v-if="showNotifications" class="notification-dropdown">
     <ul>
       <li
@@ -215,6 +212,7 @@ export default {
   methods: {
 
     // สร้าง DOM ฟอร์มสนามสำหรับแคปเจอร์ PDF
+// สร้าง DOM ฟอร์มสนามสำหรับแคปเจอร์ PDF (อัปเดตให้ใส่ค่า 'อื่นๆ' แบบ contenteditable)
 _buildFieldPdfNode(b, secretary_choice = {}, reason_admin = '', secThaiName = '', secSignUrl = '') {
   const holder = document.createElement('div');
   holder.id = 'pdf-field';
@@ -233,7 +231,7 @@ _buildFieldPdfNode(b, secretary_choice = {}, reason_admin = '', secThaiName = ''
   const reqSig = this.userSigMap?.[reqKey] || '';
   holder.innerHTML = buildFieldFormPreviewV2(b, secThaiName, secSignUrl, reqSig);
 
-  // เติมค่าที่เลือกใน dialog: “เลขานุการศูนย์กีฬา > อื่นๆ”
+  // === เติมค่าที่เลือกใน dialog: “เลขานุการศูนย์กีฬา > อื่นๆ” ===
   const chk = holder.querySelector('#sec_other_chk');
   const box = holder.querySelector('#sec_other_reason');
 
@@ -242,12 +240,26 @@ _buildFieldPdfNode(b, secretary_choice = {}, reason_admin = '', secThaiName = ''
     (!!reason_admin && String(reason_admin).trim() !== '');
 
   if (chk) chk.checked = wantOther;
+
   if (box) {
-    box.disabled = false;
-    box.value = wantOther ? (reason_admin || '') : '';
+    // รองรับทั้ง input และ contenteditable
+    const text = wantOther ? (reason_admin || '') : '';
+    // ถ้าเป็น input/textarea
+    if ('value' in box) box.value = text;
+
+    // ถ้าเป็น contenteditable div
+    const isCE = box.isContentEditable || box.getAttribute('contenteditable') === 'true';
+    if (isCE) {
+      box.textContent = text;
+      // ซ่อน placeholder ถ้ามี
+      try { box.setAttribute('data-ph', ''); } catch (_){}
+    } else if (!('value' in box)) {
+      // เผื่อเป็น element ธรรมดา
+      box.textContent = text;
+    }
   }
 
-  // แช่แข็ง input/checkbox ให้กลายเป็นตัวหนังสือก่อนจับภาพ
+  // แช่แข็ง input/checkbox/contenteditable ให้เป็นตัวหนังสือก่อนจับภาพ
   if (typeof this._freezeFormForPdf === 'function') {
     this._freezeFormForPdf(holder);
   }
@@ -256,108 +268,67 @@ _buildFieldPdfNode(b, secretary_choice = {}, reason_admin = '', secThaiName = ''
 },
 
 
-    async _buildEquipmentCtxFromGroup(group){
-  const bookingId = group.booking_id || group.items?.[0]?.booking_id || null;
 
-  // รวมจำนวนตามชื่ออุปกรณ์
-  const mergedQty = new Map();
-  (group.items || []).forEach(it => {
-    const name = it?.name || '-';
-    const q = Number(it?.quantity ?? 0) || 0;
-    mergedQty.set(name, (mergedQty.get(name) || 0) + q);
-  });
+    // === สร้าง context สำหรับพรีวิวอนุมัติ "อุปกรณ์" ===
+_buildEquipmentCtxFromGroup(group) {
+  const items = Array.isArray(group?.items) ? group.items : [];
+  const it0   = items[0] || {};
 
-  let requester='-', requesterId='-', dateBorrow='-', timeBorrow='-', dateRange='-';
-  let agency='-', reason='-', location='-', tel='';   // << ค่าว่างไว้ก่อน เพื่อไม่ให้ขึ้น "โทร -"
-  const remarkMap = {};
+  // ชื่อผู้ยืม / รหัส / เบอร์
+  const requester   = it0.username_form || it0.requester || it0.user_id || "-";
+  const requesterId = it0.id_form || it0.user_id || "-";
+  const tel         = it0.tel || "";
 
-  // helpers
-  const pick = (obj, keys=[]) => {
-    if (!obj) return '';
-    for (const k of keys) {
-      const v = obj[k];
-      if (v !== undefined && v !== null && String(v).trim()) return String(v).trim();
-    }
-    return '';
-  };
-  const pickFromList = (list, keys=[]) => {
-    for (const row of (list || [])) {
-      const v = pick(row, keys);
-      if (v) return v;
-    }
-    return '';
-  };
+  // เหตุผล / สถานที่
+  const reason   = it0.reason || it0.reasons || "";
+  const location = it0.location || it0.place || (it0.zone && it0.zone !== "-" ? it0.zone : (it0.name || ""));
 
-  if (bookingId){
-    // 1) history → ชื่อผู้ยืม/รหัส/วันเวลา/ช่วงวัน + (fallback fields)
-    const resH = await axios.get(`${API_BASE}/api/history`, { params: { booking_id: bookingId } });
-    let list = Array.isArray(resH.data) ? resH.data : [];
-    list = list
-      .filter(h => String(h?.booking_id || '') === String(bookingId))
-      .filter(h => (h?.type || '').toLowerCase() === 'equipment')
-      .sort((a,b) => new Date(b.updatedAt || b.createdAt || b.date || 0) - new Date(a.updatedAt || a.createdAt || a.date || 0));
+  // ช่วงวันที่ (แปลงเป็น dd/mm/yyyy - dd/mm/yyyy)
+  const sinceStr = it0.since     ? this.formatDate(it0.since)     : "-";
+  const uptoStr  = it0.uptodate  ? this.formatDate(it0.uptodate)  : "-";
+  const dateRange = `${sinceStr} - ${uptoStr}`;
 
-    const recUser = list.find(h => h?.username_form && String(h.username_form).trim());
-    if (recUser) requester = String(recUser.username_form).trim();
-
-    const recId = list.find(h => h?.id_form && String(h.id_form).trim());
-    if (recId) requesterId = String(recId.id_form).trim();
-
-    const recDate = list[0];
-    if (recDate) {
-      if (recDate.createdAt) {
-        dateBorrow = this.formatDate(recDate.createdAt);
-        const dt = new Date(recDate.createdAt);
-        if (!isNaN(dt)) {
-          timeBorrow = dt.toLocaleTimeString('th-TH', { hour:'2-digit', minute:'2-digit', hour12:false }) + ' น.';
-        }
-      } else if (recDate.date) {
-        dateBorrow = this.formatDate(recDate.date);
-      }
-      const since = recDate?.since ? this.formatDate(recDate.since) : '-';
-      const upto  = recDate?.uptodate ? this.formatDate(recDate.uptodate) : '-';
-      dateRange = `${since} - ${upto}`;
-    }
-
-    // 2) booking_equipment → หน่วยงาน/เหตุผล/สถานที่/หมายเหตุรายรายการ
-    const resB = await axios.get(`${API_BASE}/api/booking_equipment?id=${bookingId}`);
-    const be = Array.isArray(resB.data) ? resB.data[0] : resB.data;
-    if (be){
-      agency   = pick(be, ['agency'])              || agency;
-      reason   = pick(be, ['reason','purpose'])    || reason;
-      location = pick(be, ['location'])            || location;
-
-      if (Array.isArray(be.items)){
-        be.items.forEach(i => { remarkMap[i.item_name] = i.remark || ''; });
-      }
-    }
-
-    // 3) TEL + fallback อื่น ๆ : หาได้จากทั้ง booking_equipment และ history
-    const telKeys = ['tel','phone','telephone','tel_form','telphone','contact_phone','contactTel','contact'];
-    const telFromBe   = pick(be, telKeys);
-    const telFromHist = pickFromList(list, telKeys);
-    tel = telFromBe || telFromHist || '';
-
-    if (!agency   || agency   === '-') agency   = pickFromList(list, ['agency','department','org','organization']) || agency;
-    if (!reason   || reason   === '-') reason   = pickFromList(list, ['reasons','reason','purpose'])              || reason;
-    if (!location || location === '-') location = pickFromList(list, ['location','place','place_use'])            || location;
-  }
-
-  const rows = Array.from(mergedQty.entries()).map(([name, qty], idx) => ({
+  // แถวรายการ
+  const rows = items.map((it, idx) => ({
     idx: idx + 1,
-    name,
-    quantity: qty,
-    remark: remarkMap[name] || ''
+    name: it.name || "-",
+    quantity: Number(it.quantity ?? 0) || 0,
+    remark: it.remark || it.remarks || it.note || ""
   }));
 
-  return { requester, requesterId, tel, agency, reason, location, dateBorrow, timeBorrow, dateRange, rows };
+  // วันที่/เวลามารับของ (ถ้ามี)
+  const receive_date = it0.receive_date || it0.dateBorrow || "";
+  const receive_time = it0.receive_time || it0.timeBorrow || "";
+
+  // >>> createdAt: ดึงจาก item แรกก่อน แล้วค่อยไล่หาจากตัวอื่น
+  const pickCreatedAt = (o) =>
+    (o?.createdAt && (o.createdAt.$date || o.createdAt)) ||
+    (o?.created_at && (o.created_at.$date || o.created_at)) ||
+    null;
+
+  const createdAt =
+    pickCreatedAt(it0) ||
+    items.map(pickCreatedAt).find(Boolean) ||
+    pickCreatedAt(group) ||
+    null;
+
+  return {
+    requester, requesterId, tel,
+    reason, location, dateRange, rows,
+    receive_date, receive_time,
+    // สำคัญ: ใส่ createdAt ลง ctx
+    createdAt,
+    // เผื่อใช้ต่อในพรีวิว
+    items
+  };
 },
 
 
 
-// แปลง input/checkbox ให้เป็น element นิ่ง ๆ เพื่อให้ html2canvas เก็บค่าถูกต้อง 100%
 _freezeFormForPdf(root) {
   if (!root) return;
+
+  // checkbox -> ☑/☐
   root.querySelectorAll('input[type="checkbox"]').forEach(cb => {
     const mark = document.createElement('span');
     mark.textContent = cb.checked ? '☑' : '☐';
@@ -367,48 +338,77 @@ _freezeFormForPdf(root) {
     mark.style.fontSize = '16px';
     cb.replaceWith(mark);
   });
+
+  // text input -> กล่องนิ่ง (ยกเว้นช่อง 'อื่นๆ' ให้เป็นตัวอักษรล้วน)
   root.querySelectorAll('input[type="text"]').forEach(inp => {
     const val = (inp.value || inp.getAttribute('value') || '').trim();
     const span = document.createElement('span');
     span.className = 'pdf-fake-input';
+
+    if (inp.id === 'sec_other_reason' || inp.id === 'head_other_reason') {
+      Object.assign(span.style, {
+        display: 'inline',
+        minWidth: '0',
+        padding: '0',
+        border: 'none',
+        borderRadius: '0',
+        background: 'transparent'
+      });
+    } else {
+      Object.assign(span.style, {
+        display: 'inline-block',
+        minWidth: '220px',
+        padding: '6px 8px',
+        border: '1px solid #cbd5e1',
+        borderRadius: '6px',
+        background: '#f8fafc',
+      });
+    }
     span.textContent = val || ' ';
-
-    // Object.assign(span.style, {
-    //   display: 'inline-block',
-    //   minWidth: '220px',
-    //   padding: '6px 8px',
-    //   border: '1px solid #cbd5e1',
-    //   borderRadius: '6px',
-    //   background: '#f8fafc',
-    // });
-
-       // ⬇️ ยกเว้นช่อง "อื่นๆ" ของ 1.เลขานุการศูนย์กีฬา และ 2.หัวหน้าศูนย์กีฬา ให้เป็นตัวหนังสือล้วนๆ
-   if (inp.id === 'sec_other_reason' || inp.id === 'head_other_reason') {
-
-     Object.assign(span.style, {
-       display: 'inline',
-       minWidth: '0',
-       padding: '0',
-       border: 'none',
-       borderRadius: '0',
-       background: 'transparent'
-     });
-   } else {
-     Object.assign(span.style, {
-       display: 'inline-block',
-       minWidth: '220px',
-       padding: '6px 8px',
-       border: '1px solid #cbd5e1',
-       borderRadius: '6px',
-       background: '#f8fafc',
-     });
-   }
-
     inp.replaceWith(span);
   });
+
+  // NEW: contenteditable / .mfu-ta -> ทำเป็น div นิ่ง
+  root.querySelectorAll('[contenteditable="true"], .mfu-ta').forEach(el => {
+    const text = (el.textContent || '').trim();
+    const repl = document.createElement('div');
+    repl.className = 'pdf-fake-input';
+
+    // ช่อง 'อื่นๆ' ให้แสดง "ข้อความล้วน" ไม่มีกล่อง
+    const plain = (el.id === 'sec_other_reason' || el.id === 'head_other_reason');
+
+    if (plain) {
+      Object.assign(repl.style, {
+        display: 'inline',
+        minWidth: '0',
+        padding: '0',
+        border: 'none',
+        borderRadius: '0',
+        background: 'transparent',
+        whiteSpace: 'pre-wrap',
+        wordBreak: 'break-word',
+        overflowWrap: 'anywhere',
+        lineHeight: '1.6',
+      });
+    } else {
+      Object.assign(repl.style, {
+        display: 'inline-block',
+        minWidth: '220px',
+        padding: '6px 8px',
+        border: '1px solid #cbd5e1',
+        borderRadius: '6px',
+        background: '#f8fafc',
+        whiteSpace: 'pre-wrap',
+        wordBreak: 'break-word',
+        overflowWrap: 'anywhere',
+        lineHeight: '1.6',
+      });
+    }
+
+    repl.textContent = text || (plain ? '' : ' ');
+    el.replaceWith(repl);
+  });
 },
-
-
 
 async _makeA4OnePageBlob(element) {
   if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch {} }
@@ -934,6 +934,10 @@ async fetchAndGroup() {
         approvedById: h.approvedById || '',
         thaiName_admin: h.thaiName_admin || '',
         signaturePath_admin: h.signaturePath_admin || '',
+
+        receive_date:  h.receive_date?.$date || h.receive_date || null,
+        receive_time:  h.receive_time || null,
+
       };
     });
 
@@ -1119,7 +1123,7 @@ async approveAll() {
             approvedAt,
             bookingPdfUrl: u,
             booking_pdf_url: u,
-            attachment: u ? [u] : []
+            // attachment: u ? [u] : []
           };
         }
 
@@ -1142,22 +1146,23 @@ async approveAll() {
 },
 
 
+// วางแทนที่เฉพาะฟังก์ชัน approveGroup ได้เลย
 async approveGroup(group) {
   const groupType = String(group.type || group.items?.[0]?.type || "").toLowerCase().trim();
   const isField = groupType === "field";
   const isEquipment = groupType === "equipment";
+  const MAX_CH = 110;
 
   // เคลียร์ค่าจากรอบก่อน
   this.secretary_choice = null;
   this.reason_admin = '';
 
   if (isField) {
-    // ===== FIELD: พรีวิว พร้อมติ๊ก "อื่นๆ"
+    // ===== FIELD: พรีวิว =====
     const it = group.items?.[0] || {};
-    const reqKey = it.user_id || it.id_form || '';        // เผื่อบางเคสส่ง id_form มา
-    const reqSig = this.userSigMap?.[reqKey] || '';        // URL ลายเซ็นผู้ยื่นคำขอ
+    const reqKey = it.user_id || it.id_form || '';
+    const reqSig = this.userSigMap?.[reqKey] || '';
     const html = buildFieldFormPreviewV2(it, this.loggedThaiName, this.loggedSignatureUrl, reqSig);
-
 
     const result = await Swal.fire({
       title: "ยืนยันอนุมัติใช้งานสถานที่",
@@ -1172,18 +1177,62 @@ async approveGroup(group) {
         const p = Swal.getPopup();
         const chk = p.querySelector('#sec_other_chk');
         const box = p.querySelector('#sec_other_reason');
-        const sync = () => { const on = !!chk?.checked; if (box){ box.disabled = !on; if (!on) box.value=''; } };
-        chk?.addEventListener('change', sync);
-        if (this.reason_admin) { if (chk) chk.checked = true; if (box){ box.disabled=false; box.value=this.reason_admin; } }
-        sync();
+        if (!box) return;
+
+        const ensureChecked = () => { if (chk && !chk.checked) chk.checked = true; };
+
+        const isTextarea = ('value' in box);
+        const getVal = el => isTextarea ? (el.value || '') : (el.textContent || '');
+        const setVal = (el, v) => {
+          if (isTextarea) el.value = v;
+          else {
+            el.textContent = v;
+            try {
+              const r = document.createRange(); r.selectNodeContents(el); r.collapse(false);
+              const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+            } catch (_) {}
+          }
+        };
+
+        const clamp = () => {
+          let v = getVal(box);
+          if (v.length > MAX_CH) setVal(box, v.slice(0, MAX_CH));
+        };
+
+        box.addEventListener('keydown', (e) => {
+          const allowed = ['Backspace','Delete','ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End','Tab','Enter'];
+          if (allowed.includes(e.key) || e.ctrlKey || e.metaKey) return;
+          const cur = getVal(box);
+          let hasSelection = false;
+          if (isTextarea) {
+            hasSelection = (box.selectionStart !== box.selectionEnd);
+          } else {
+            const sel = window.getSelection();
+            if (sel && sel.rangeCount) hasSelection = sel.toString().length > 0;
+          }
+          if (cur.length >= MAX_CH && !hasSelection) e.preventDefault();
+        });
+
+        box.addEventListener('focus', ensureChecked);
+        box.addEventListener('input', () => { ensureChecked(); clamp(); });
+        box.addEventListener('paste', () => setTimeout(() => { ensureChecked(); clamp(); }, 0));
+
+        if (this.reason_admin) {
+          setVal(box, String(this.reason_admin).slice(0, MAX_CH));
+          if (chk) chk.checked = true;
+        }
       },
       preConfirm: () => {
         const p = Swal.getPopup();
         const chk = p.querySelector('#sec_other_chk');
         const box = p.querySelector('#sec_other_reason');
-        const otherChecked = !!chk?.checked;
-        const otherText = otherChecked ? (box?.value || '').trim() : '';
-        this.reason_admin = otherChecked ? otherText : '';
+
+        let val = '';
+        if (box) val = ('value' in box) ? box.value : (box.textContent || '');
+        const text = String(val || '').slice(0, MAX_CH).trim();
+        const otherChecked = !!chk?.checked || text.length > 0;
+
+        this.reason_admin = otherChecked ? text : '';
         this.secretary_choice = {
           to_head: !!p.querySelector('#sec_to_head')?.checked,
           for_consider: !!p.querySelector('#sec_for_consider')?.checked,
@@ -1195,7 +1244,7 @@ async approveGroup(group) {
     if (!result.isConfirmed) return;
 
   } else {
-    // ===== EQUIPMENT: พรีวิวจาก ctx ที่ประกอบอัตโนมัติ
+    // ===== EQUIPMENT: พรีวิว =====
     const ctx = await this._buildEquipmentCtxFromGroup(group);
     const html = buildEquipmentApprovePreviewHTML(ctx);
 
@@ -1211,7 +1260,7 @@ async approveGroup(group) {
     });
     if (!result.isConfirmed) return;
 
-    // เตรียม PDF ของ "กลุ่มนี้" (ครั้งเดียว)
+    // เตรียม PDF ของกลุ่มอุปกรณ์ไว้ล่วงหน้า (ครั้งเดียว)
     let pdfHost = document.getElementById('pdf-capture-approve');
     if (!pdfHost) {
       pdfHost = document.createElement('div');
@@ -1219,13 +1268,12 @@ async approveGroup(group) {
       Object.assign(pdfHost.style, { position:'fixed', left:'-100000px', top:'-100000px', width:'0', height:'0' });
       document.body.appendChild(pdfHost);
     }
-
     this.__eqPdfUrl = '';
     try {
       const node = this._buildEquipmentPdfNode(ctx);
       pdfHost.appendChild(node);
       const pdfBlob = await this._makeA4OnePageBlob(node);
-      this.__eqPdfUrl = await this._uploadPdfBlob(pdfBlob);   // URL ไฟล์ PDF ใหม่
+      this.__eqPdfUrl = await this._uploadPdfBlob(pdfBlob);
     } catch (e) {
       console.warn('Generate/Upload equipment PDF failed:', e);
       this.__eqPdfUrl = '';
@@ -1237,18 +1285,16 @@ async approveGroup(group) {
   // ===== เริ่มบันทึกอนุมัติ =====
   const adminUserId = localStorage.getItem("user_id") || "";
   const approveDate = new Date().toISOString();
-
   Swal.fire({ title: "กำลังดำเนินการ...", didOpen: () => Swal.showLoading(), allowOutsideClick: false });
 
   // กันซ้ำในกลุ่ม
-  const seen = new Set();
-  const uniqItems = [];
+  const seen = new Set(), uniqItems = [];
   for (const it of group.items || []) {
     const key = String(it.id ?? it._id ?? "") || `${it.name}-${it.booking_id}-${it.startTime}-${it.endTime}`;
     if (!seen.has(key)) { seen.add(key); uniqItems.push(it); }
   }
 
-  // host เผื่อ field render pdf
+  // host เผื่อ field/equipment render pdf
   let pdfHost = document.getElementById('pdf-capture-approve');
   if (!pdfHost) {
     pdfHost = document.createElement('div');
@@ -1267,7 +1313,7 @@ async approveGroup(group) {
     let payload;
 
     if (isFieldItem) {
-      // Field: render + upload PDF ต่อรายการ
+      // Field: render + upload PDF ต่อรายการ แล้วอัปเดต bookingPdfUrl แต่ "ไม่ส่ง attachment"
       let pdfUrl = '';
       try {
         const node = this._buildFieldPdfNode(
@@ -1277,6 +1323,36 @@ async approveGroup(group) {
           this.loggedThaiName || '',
           this.loggedSignatureUrl || ''
         );
+
+        // ใส่ข้อความเหตุผลลง DOM ให้ renderer อ่านได้สม่ำเสมอ
+        const reason = String(this.reason_admin || '').slice(0, MAX_CH);
+        const boxPdf = node.querySelector('#sec_other_reason') ||
+                       node.querySelector('[name="sec_other_reason"]') ||
+                       node.querySelector('.sec_other_reason');
+        if (boxPdf) {
+          if ('value' in boxPdf) {
+            boxPdf.value = reason;
+          } else {
+            const repl = document.createElement('div');
+            repl.className = 'mfu-input';
+            repl.style.cssText = [
+              'border:1px solid #cbd5e1',
+              'border-radius:6px',
+              'padding:6px 8px',
+              'line-height:1.6',
+              'min-height:36px',
+              'white-space:pre-wrap',
+              'word-break:break-word',
+              'overflow-wrap:anywhere'
+            ].join(';');
+            repl.textContent = reason || '-';
+            boxPdf.replaceWith(repl);
+          }
+        }
+        const chkPdf = node.querySelector('#sec_other_chk');
+        if (chkPdf) chkPdf.checked = true;
+        node.querySelectorAll('[data-ph]').forEach(n => n.setAttribute('data-ph',''));
+
         pdfHost.appendChild(node);
         const pdfBlob = await this._makeA4OnePageBlob(node);
         pdfUrl = await this._uploadPdfBlob(pdfBlob);
@@ -1286,6 +1362,8 @@ async approveGroup(group) {
         try { pdfHost.innerHTML = ''; } catch(_) {}
       }
 
+      // ✅ อัปเดต bookingPdfUrl / booking_pdf_url เหมือนเดิม
+      // ⛔️ ไม่ส่ง attachment สำหรับ field
       payload = {
         admin_id: adminUserId,
         approvedAt: approveDate,
@@ -1294,17 +1372,16 @@ async approveGroup(group) {
         thaiName_admin: this.loggedThaiName || '',
         signaturePath_admin: this.loggedSignatureUrl || '',
         bookingPdfUrl: pdfUrl || '',
-        booking_pdf_url: pdfUrl || '',
-        attachment: pdfUrl ? [pdfUrl] : []
+        booking_pdf_url: pdfUrl || ''
       };
     } else {
-      // Equipment: ใช้ PDF เดียวกันทั้งกลุ่ม
+      // Equipment: ใช้ PDF เดียวกันทั้งกลุ่ม + ส่ง attachment ตามเดิม
       payload = {
         staff_id: adminUserId,
         approvedAt: approveDate,
         bookingPdfUrl: this.__eqPdfUrl || '',
         booking_pdf_url: this.__eqPdfUrl || '',
-        attachment: this.__eqPdfUrl ? [this.__eqPdfUrl] : []
+        // attachment: this.__eqPdfUrl ? [this.__eqPdfUrl] : []
       };
     }
 
@@ -1328,8 +1405,6 @@ async approveGroup(group) {
     Swal.fire("ผิดพลาด", `${msg}${status ? ` (รหัส ${status})` : ""}`, "error");
   }
 },
-
-
 
 async cancelGroup(group) {
   // กล่องยืนยัน + ช่องกรอกหมายเหตุ (บังคับกรอก)
@@ -1653,29 +1728,75 @@ isMultiDayEquipment(item) {
     <div class="swal-detail-wrap">
       ${innerHtml}
       <div class="swal-detail-actions">
-        ${showPdf ? `<button id="pdf-btn" type="button">ดูไฟล์ PDF</button>` : ``}
+        ${showPdf ? `<button id="pdf-btn" type="button">ดูฟอร์ม PDF</button>` : ``}
         ${showAttach ? `<button id="attach-btn" type="button">ดูไฟล์แนบ</button>` : ``}
       </div>
     </div>
   `;
 
-  const isSameDay = (a, b) => {
-    const A = this.parseToDate(a), B = this.parseToDate(b);
-    if (!A || !B) return true;
-    return A.getFullYear() === B.getFullYear() &&
-           A.getMonth() === B.getMonth() &&
-           A.getDate() === B.getDate();
-  };
-  const isMultiDayEquipment = (it) => {
-    if (String(it.type || group.type).toLowerCase() !== 'equipment') return false;
-    return !!it.since && !!it.uptodate && !isSameDay(it.since, it.uptodate);
+  // แปลง URL ให้เป็น http เสมอ (รองรับ path สัมพัทธ์ และ protocol-relative)
+  const toHttpUrl = (u) => {
+    const s = String(u || '').trim();
+    if (!s) return '';
+    if (/^\/\//.test(s)) return 'http:' + s; // //host/path -> http://host/path
+    if (!/^https?:\/\//i.test(s)) {          // /uploads/.. หรือ uploads/..
+      const { hostname, port } = window.location;
+      const hostport = port ? `${hostname}:${port}` : hostname;
+      const path = s.startsWith('/') ? s : '/' + s;
+      return `http://${hostport}${path}`;
+    }
+    return s.replace(/^https:/i, 'http:');    // https:// -> http://
   };
 
+  // ===== helper: ดึงอีเมลจาก users โดย "ต้อง" user_id ตรงเท่านั้น =====
+  const resolveEmailByUserIdStrict = async (uid) => {
+    const norm = (x) => String(x ?? '').trim();
+    const key = norm(uid);
+    if (!key) return '-';
+
+    this.userEmailExact = this.userEmailExact || {};
+    if (this.userEmailExact[key]) return this.userEmailExact[key];
+
+    const tryUrls = [
+      `${API_BASE}/api/users?user_id=${encodeURIComponent(key)}`,
+      `${API_BASE}/api/users/by-userid/${encodeURIComponent(key)}`,
+      `${API_BASE}/api/users/${encodeURIComponent(key)}`
+    ];
+
+    const pickExact = (data) => {
+      if (Array.isArray(data)) return data.find(u => norm(u?.user_id) === key) || null;
+      if (data && typeof data === 'object') return norm(data.user_id) === key ? data : null;
+      return null;
+    };
+
+    for (const url of tryUrls) {
+      try {
+        const res = await axios.get(url);
+        const user = pickExact(res?.data);
+        if (user) {
+          const email = norm(user.email || user.user_email || user.mail);
+          if (email) {
+            this.userEmailExact[key] = email;
+            return email;
+          }
+        }
+      } catch (_) { /* ignore, try next */ }
+    }
+    return '-';
+  };
+
+  // ===== Field =====
   if (group.type === 'field') {
-    const it = group.items[0] || {};
+    const it = group.items?.[0] || {};
     const zone = (it.zone && it.zone !== '-' && it.zone !== '') ? it.zone : '-';
-    const requesterBase = this.userMap[it.user_id] || it.requester || it.user_id || '-';
+
+    // ผู้ขอใช้
+    const requesterBase = this.userMap?.[it.user_id] || it.requester || it.user_id || '-';
     const requester = it.username_form || requesterBase;
+
+    // อีเมลจาก user_id เท่านั้น
+    const uid = String(it.user_id || it._user_id || it.id_form || '').trim();
+    const email = await resolveEmailByUserIdStrict(uid);
 
     const table = `
       <table class="swal-detail-table">
@@ -1683,28 +1804,18 @@ isMultiDayEquipment(item) {
           <tr><th>ชื่อสนาม</th><td>${esc(it.name || '-')}</td></tr>
           <tr><th>โซน</th><td>${esc(zone)}</td></tr>
           <tr><th>ชื่อผู้ขอใช้</th><td>${esc(requester)}</td></tr>
-          <tr><th>รหัสนักศึกษา/พนักงาน</th><td>${esc(it.id_form || '-')}</td></tr>
-          <!-- แถวใหม่ -->
-
-        <!--  <tr><th>จองแทนผู้ใช้</th><td>${esc(it.proxyStudentName || '-')}</td></tr>
-          <tr><th>รหัสนักศึกษา/พนักงาน (ของผู้ที่ถูกจองแทน)</th><td>${esc(it.proxyStudentId || '-')}</td></tr> -->
-
-          <!-- /แถวใหม่ -->
+          <tr><th>อีเมล</th><td>${esc(email)}</td></tr>
           <tr><th>วันที่ทำรายการ</th>
-  <td><span class="nowrap">${it.date ? esc(this.formatDate(it.date)) : '-'}</span></td>
-</tr>
-<tr>
-  <th>ช่วงวันที่ขอใช้</th>
-  <td>
-    <span class="nowrap">
-      ${esc(it.since ? this.formatDate(it.since) : '-')} - ${esc(it.uptodate ? this.formatDate(it.uptodate) : '-')}
-    </span>
-  </td>
-</tr>
-<tr><th>ช่วงเวลา</th>
-  <td><span class="nowrap">${esc(this.formatTimeRangeTH(it.startTime, it.endTime))}</span></td>
-</tr>
-
+            <td><span class="nowrap">${it.date ? esc(this.formatDate(it.date)) : '-'}</span></td>
+          </tr>
+          <tr><th>ช่วงวันที่ขอใช้</th>
+            <td><span class="nowrap">
+              ${esc(it.since ? this.formatDate(it.since) : '-')} - ${esc(it.uptodate ? this.formatDate(it.uptodate) : '-')}
+            </span></td>
+          </tr>
+          <tr><th>ช่วงเวลา</th>
+            <td><span class="nowrap">${esc(this.formatTimeRangeTH(it.startTime, it.endTime))}</span></td>
+          </tr>
         </tbody>
       </table>
     `;
@@ -1716,138 +1827,164 @@ isMultiDayEquipment(item) {
       confirmButtonColor: '#3085d6',
       customClass: { popup: 'swal-wide' },
       didOpen: () => {
+        // ปุ่ม PDF: เปิด "แท็บใหม่" แบบ http เท่านั้น และเปิดแค่ครั้งเดียว
         const btnPdf = document.getElementById('pdf-btn');
-        if (btnPdf) btnPdf.addEventListener('click', () => this.openBookingPdf(group));
+        if (btnPdf) {
+          btnPdf.addEventListener('click', async (e) => {
+            e.preventDefault(); e.stopPropagation();
+            try {
+              // หา URL จาก item/group ก่อน
+              let url =
+                it.bookingPdfUrl || it.pdfUrl || it.fileUrl ||
+                group.bookingPdfUrl || group.fileUrl || '';
+
+              // fallback: ค้นจาก history ด้วย booking_id
+              if (!url) {
+                const bookingId = group.booking_id || it.booking_id || it._id;
+                if (bookingId) {
+                  const res = await axios.get(`${API_BASE}/api/history`, { params: { booking_id: bookingId } });
+                  const arr = Array.isArray(res.data) ? res.data : [];
+                  // เอารายการ type 'field' ที่มีไฟล์ และล่าสุด
+                  arr.sort((a,b) =>
+                    new Date(b.updatedAt || b.createdAt || 0) - new Date(a.updatedAt || a.createdAt || 0)
+                  );
+                  const rec = arr.find(r =>
+                    String(r.type).toLowerCase() === 'field' &&
+                    (r.bookingPdfUrl || r.fileUrl || r.pdfUrl)
+                  );
+                  url = rec?.bookingPdfUrl || rec?.fileUrl || rec?.pdfUrl || '';
+                }
+              }
+
+              if (!url) {
+                await Swal.fire('ไม่พบไฟล์ PDF', 'รายการนี้ยังไม่มีไฟล์แนบ PDF', 'warning');
+                return;
+              }
+
+              const httpUrl = toHttpUrl(url); // บังคับ http
+              const a = document.createElement('a');
+              a.href = httpUrl;
+              a.target = '_blank';
+              a.rel = 'noopener';
+              document.body.appendChild(a);
+              a.click();      // เปิดแท็บใหม่ 1 ครั้ง
+              a.remove();
+            } catch (err) {
+              console.error(err);
+              Swal.fire('เปิดไฟล์ไม่ได้', 'เกิดข้อผิดพลาดระหว่างเปิดไฟล์ PDF', 'error');
+            }
+          }, { once: true }); // กันคลิกซ้ำแล้วเปิดหลายแท็บ
+        }
+
         const btnAttach = document.getElementById('attach-btn');
         if (btnAttach) btnAttach.addEventListener('click', () => this.viewAttachment(group));
       }
     });
 
   } else {
-  const esc = (s) => String(s ?? '-')
-    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
-    .replace(/>/g,'&gt;').replace(/"/g,'&quot;')
-    .replace(/'/g,'&#39;');
+    // ===== Equipment =====
+    const bookingId = group.booking_id || group.items?.[0]?.booking_id || null;
 
-  const tableWrap = (innerHtml, showPdf, showAttach) => `
-    <div class="swal-detail-wrap">
-      ${innerHtml}
-      <div class="swal-detail-actions">
-        ${showPdf ? `<button id="pdf-btn" type="button">ดูไฟล์ PDF</button>` : ``}
-        ${showAttach ? `<button id="attach-btn" type="button">ดูไฟล์แนบ</button>` : ``}
-      </div>
-    </div>
-  `;
+    // รวมจำนวนต่อชื่ออุปกรณ์
+    const merged = new Map();
+    (group.items || []).forEach(it => {
+      const name = it?.name || '-';
+      const qty  = Number(it?.quantity ?? 0) || 0;
+      merged.set(name, (merged.get(name) || 0) + qty);
+    });
 
-  const bookingId = group.booking_id || group.items?.[0]?.booking_id || null;
+    // ค่าแสดงผล
+    let requester      = '-';
+    let requesterEmail = '-';
+    let dateBorrow     = '-';
+    let dateRange      = '-';
 
-  // รวมจำนวนต่อ "ชื่ออุปกรณ์"
-  const merged = new Map();
-  (group.items || []).forEach(it => {
-    const name = it?.name || '-';
-    const qty  = Number(it?.quantity ?? 0) || 0;
-    merged.set(name, (merged.get(name) || 0) + qty);
-  });
+    // ใช้ user_id จาก history ของรายการแรก -> หาอีเมล
+    const item0 = group.items?.[0] || {};
+    const uid0  = String(item0.user_id || item0._user_id || item0.id_form || '').trim();
+    requesterEmail = await resolveEmailByUserIdStrict(uid0);
 
-  // ค่าแสดงผล
-  let requester   = '-'; // ผู้ขอใช้ (จาก username_form)
-  let requesterId = '-'; // ไอดีผู้ขอใช้ (จาก id_form)
-  let dateBorrow  = '-';
-  let dateRange   = '-';
+    // ชื่อผู้ขอใช้ + วันที่ จาก history
+    if (bookingId) {
+      try {
+        const res = await axios.get(`${API_BASE}/api/history`, { params: { booking_id: bookingId } });
+        let list = Array.isArray(res.data) ? res.data : [];
+        list = list
+          .filter(h => String(h?.booking_id || '') === String(bookingId))
+          .filter(h => (h?.type || '').toLowerCase() === 'equipment')
+          .sort((a,b) => new Date(b.updatedAt || b.createdAt || b.date || 0) - new Date(a.updatedAt || a.createdAt || a.date || 0));
 
-  if (bookingId) {
-    try {
-      const res = await axios.get(`${API_BASE}/api/history`, { params: { booking_id: bookingId } });
-      let list = Array.isArray(res.data) ? res.data : [];
-      list = list
-        .filter(h => String(h?.booking_id || '') === String(bookingId))
-        .filter(h => (h?.type || '').toLowerCase() === 'equipment')
-        .sort((a,b) => new Date(b.updatedAt || b.createdAt || b.date || 0) - new Date(a.updatedAt || a.createdAt || a.date || 0));
+        const recUser = list.find(h => (h?.username_form || '').trim());
+        if (recUser) requester = String(recUser.username_form).trim();
 
-      // ผู้ขอใช้
-      const recUser = list.find(h => h?.username_form && String(h.username_form).trim());
-      if (recUser) requester = String(recUser.username_form).trim();
+        const recDate = list.find(h => h?.createdAt || h?.date || h?.since || h?.uptodate) || list[0];
+        if (recDate) {
+          dateBorrow = recDate?.createdAt
+            ? this.formatDate(recDate.createdAt)
+            : (recDate?.date ? this.formatDate(recDate.date) : '-');
 
-      // รหัสนักศึกษา/พนักงาน
-      const recId = list.find(h => h?.id_form && String(h.id_form).trim());
-      if (recId) requesterId = String(recId.id_form).trim();
-
-      // วันที่ขอยืม + ช่วงวันที่ใช้
-      // วันที่ขอยืม + ช่วงวันที่ใช้  -> ใช้ createdAt เป็นหลัก
-const recDate = list.find(h => h?.createdAt || h?.date || h?.since || h?.uptodate) || list[0];
-if (recDate) {
-  // วันที่ขอยืมจาก createdAt (ถ้าไม่มี ค่อย fallback ไป date)
-  dateBorrow = recDate?.createdAt
-    ? this.formatDate(recDate.createdAt)
-    : (recDate?.date ? this.formatDate(recDate.date) : '-');
-
-  const since = recDate?.since ? this.formatDate(recDate.since) : '-';
-  const upto  = recDate?.uptodate ? this.formatDate(recDate.uptodate) : '-';
-  dateRange   = `${since} - ${upto}`;
-}
-
-    } catch (e) {
-      // ใช้ค่า default ถ้าดึงไม่สำเร็จ
+          const since = recDate?.since ? this.formatDate(recDate.since) : '-';
+          const upto  = recDate?.uptodate ? this.formatDate(recDate.uptodate) : '-';
+          dateRange   = `${since} - ${upto}`;
+        }
+      } catch (_) { /* ใช้ค่า default */ }
     }
-  }
 
-  const rowsData = Array.from(merged.entries()).map(([name, qty], idx) => ({
-    idx: idx + 1,
-    name,
-    quantity: qty,
-    requester,
-    requesterId,
-    dateBorrow,
-    dateRange
-  }));
+    const rowsData = Array.from(merged.entries()).map(([name, qty], idx) => ({
+      idx: idx + 1,
+      name,
+      quantity: qty,
+      requester,
+      requesterEmail,
+      dateBorrow,
+      dateRange
+    }));
 
-  const rowsHtml = rowsData.map(r => `
-  <tr>
-    <td class="c">${r.idx}</td>
-    <td class="col-name">${esc(r.name)}</td>
-    <td class="c col-qty">${esc(r.quantity)}</td>
-    <td class="c col-id nowrap">${esc(r.requesterId)}</td>
-    <td class="col-requester">${esc(r.requester)}</td>
-    <td class="c nowrap">${esc(r.dateBorrow)}</td>
-    <td class="c nowrap col-period" title="${esc(r.dateRange)}">${esc(r.dateRange)}</td>
-  </tr>
-`).join('');
-
-  const table = `
-  <table class="swal-detail-table items">
-    <thead>
+    const rowsHtml = rowsData.map(r => `
       <tr>
-        <th style="width:64px">ลำดับ</th>
-        <th class="col-name">รายการ</th>
-        <th class="col-qty">จำนวน</th>
-        <th class="col-id">รหัสนักศึกษา/พนักงาน</th>
-        <th class="col-requester">ผู้ขอใช้</th>
-        <th style="width:120px">วันที่ทำรายการ</th>
-        <th class="col-period">วันที่ขอยืม</th>
+        <td class="c">${r.idx}</td>
+        <td class="col-name">${esc(r.name)}</td>
+        <td class="c col-qty">${esc(r.quantity)}</td>
+        <td class="col-id">${esc(r.requesterEmail)}</td>
+        <td class="col-requester">${esc(r.requester)}</td>
+        <td class="c nowrap">${esc(r.dateBorrow)}</td>
+        <td class="c col-period" title="${esc(r.dateRange)}">${esc(r.dateRange)}</td>
       </tr>
-    </thead>
-    <tbody>${rowsHtml}</tbody>
-  </table>
-`;
-  Swal.fire({
-    title: 'รายละเอียดอุปกรณ์',
-    html: tableWrap(table, true, true),
-    confirmButtonText: 'ปิด',
-    confirmButtonColor: '#3085d6',
-    width: 1100,
-    customClass: { popup: 'swal-equipment' },
-    didOpen: () => {
-      const btnPdf = document.getElementById('pdf-btn');
-      if (btnPdf) btnPdf.addEventListener('click', () => this.downloadBookingPdf(group));
-      const btnAttach = document.getElementById('attach-btn');
-      if (btnAttach) btnAttach.addEventListener('click', () => this.viewAttachment(group));
-    }
-  });
-}
+    `).join('');
 
+    const table = `
+      <table class="swal-detail-table items">
+        <thead>
+          <tr>
+            <th style="width:64px">ลำดับ</th>
+            <th class="col-name">รายการ</th>
+            <th class="col-qty">จำนวน</th>
+            <th class="col-id">อีเมล</th>
+            <th class="col-requester">ผู้ขอใช้</th>
+            <th style="width:120px">วันที่ทำรายการ</th>
+            <th class="col-period">วันที่ขอยืม</th>
+          </tr>
+        </thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>
+    `;
+
+    Swal.fire({
+      title: 'รายละเอียดอุปกรณ์',
+      html: tableWrap(table, true, true),
+      confirmButtonText: 'ปิด',
+      confirmButtonColor: '#3085d6',
+      width: 'auto',
+      customClass: { popup: 'swal-equipment' },
+      didOpen: () => {
+        const btnPdf = document.getElementById('pdf-btn');
+        if (btnPdf) btnPdf.addEventListener('click', () => this.downloadBookingPdf(group));
+        const btnAttach = document.getElementById('attach-btn');
+        if (btnAttach) btnAttach.addEventListener('click', () => this.viewAttachment(group));
+      }
+    });
+  }
 },
-
-
 
 // --- ใหม่: เปิดไฟล์ PDF ในแท็บใหม่ ---
 async openBookingPdf(target) {
@@ -1859,38 +1996,52 @@ async openBookingPdf(target) {
     return;
   }
 
+  // helper: บังคับ http และรองรับทั้ง URL เต็ม/relative/protocol-relative
+  const toHttpUrl = (u) => {
+    const s = String(u || '').trim();
+    if (!s) return '';
+    if (/^\/\//.test(s)) return 'http:' + s;                    // //host/path -> http://host/path
+    if (!/^https?:\/\//i.test(s)) {                              // /uploads/... หรือ uploads/...
+      const { hostname, port } = window.location;
+      const hostport = port ? `${hostname}:${port}` : hostname;
+      const path = s.startsWith('/') ? s : '/' + s;
+      return `http://${hostport}${path}`;
+    }
+    return s.replace(/^https:/i, 'http:');                       // https:// -> http://
+  };
+
   try {
-    // ดึง history แล้วคัด URL ของไฟล์ (เหมือนเดิม)
+    // ดึง history แล้วคัด URL ของไฟล์
     const resHist = await axios.get(`${API_BASE}/api/history`, { params: { booking_id: bookingId } });
     let list = Array.isArray(resHist.data) ? resHist.data : [];
     list = list.filter(h => String(h?.booking_id || '') === String(bookingId));
     if (typeFilter) list = list.filter(h => (h?.type || '').toLowerCase() === typeFilter.toLowerCase());
     list.sort((a,b) => new Date(b.updatedAt || b.createdAt || b.date || 0) - new Date(a.updatedAt || a.createdAt || a.date || 0));
 
-    const picked = this.pickPdfUrl(list);
-    const rawUrl = this.normalizePdfUrl(picked);
+    const picked = this.pickPdfUrl(list);                        // สมมติคืน field: bookingPdfUrl/fileUrl/pdfUrl
+    const rawUrl = this.normalizePdfUrl ? this.normalizePdfUrl(picked) : (picked || '');
 
     if (!rawUrl) {
       Swal.fire('ผิดพลาด','ไม่พบ URL ของไฟล์ PDF สำหรับรายการนี้','error');
       return;
     }
 
-    // เปิดแท็บใหม่ (ไม่ดาวน์โหลด)
-    let opened = window.open(rawUrl, '_blank', 'noopener');
-    if (!opened) {
-      // เผื่อโดนบล็อก/โปรโตคอลไม่แมตช์ ลองสลับ http/https อีกที
-      if (/^https:\/\//i.test(rawUrl)) {
-        opened = window.open('http://' + rawUrl.slice('https://'.length), '_blank', 'noopener');
-      } else if (/^http:\/\//i.test(rawUrl)) {
-        opened = window.open('https://' + rawUrl.slice('http://'.length), '_blank', 'noopener');
-      }
-    }
-    
+    // เปิด "แท็บใหม่" แบบ http เท่านั้น (ครั้งเดียว)
+    const httpUrl = toHttpUrl(rawUrl);
+    const a = document.createElement('a');
+    a.href = httpUrl;
+    a.target = '_blank';
+    a.rel = 'noopener';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+
   } catch (err) {
     console.error('openBookingPdf error:', err);
     Swal.fire('ผิดพลาด','ไม่สามารถเปิดไฟล์ได้','error');
   }
 },
+
 
      // ==== PDF DOWNLOAD BUTTON ====
   async  exportPdf(item) {
@@ -2064,7 +2215,6 @@ doc.text(`โทร ${data.tel || '-'}`, 430, 100);
       const needEquipmentLines = doc.splitTextToSize('อุปกรณ์กีฬา (โปรดระบุรายการและจำนวน) ' + (data.need_equipment || '-'), 480);
       y = drawLines(doc, needEquipmentLines, 55, y + 10);
       y += 25;
-
       // ----------------- เซ็นชื่อ ---------------------
       const signNameHeight = 45;
       if (y + signNameHeight > doc.internal.pageSize.getHeight()) {
@@ -2072,7 +2222,6 @@ doc.text(`โทร ${data.tel || '-'}`, 430, 100);
         y = 50;
       }
       let signY = y;
-
       doc.setFontSize(12);
       doc.text('ลงชื่อ................................................', 25, signY);
       doc.text('ลงชื่อ................................................', 210, signY);
@@ -2087,20 +2236,17 @@ doc.text(`โทร ${data.tel || '-'}`, 430, 100);
       doc.text('คณะ/หัวหน้าหน่วยงาน', 434, signY + 45);
 
       y = signY + 65; // กล่องกรอบล่าง
-
       // ----------------- กรอบล่าง ---------------------
       const signBoxHeight = 190;
       if (y + signBoxHeight > doc.internal.pageSize.getHeight()) {
         doc.addPage();
         y = 50;
       }
-
       const boxY = y;
       const pageWidth2 = doc.internal.pageSize.getWidth();
       const boxWidth = (pageWidth2 - 40) / 3;
       const boxHeight = signBoxHeight;
       const marginLeft = 20;
-
       for (let i = 0; i < 3; i++) {
         doc.setDrawColor(30, 30, 30);
         doc.setLineWidth(1);
@@ -2153,17 +2299,14 @@ doc.text(`โทร ${data.tel || '-'}`, 430, 100);
       doc.text('.......................................................', x3 + 12, boxY + 125);
       doc.text('(....................................................)', x3 + 12, boxY + 150);
       doc.text('วันที่ ..........................................', x3 + 16, boxY + 175);
-
       for (let i = 0; i < 3; i++) {
         doc.setDrawColor(30, 30, 30);
         doc.setLineWidth(1);
         doc.line(marginLeft + i * boxWidth, boxY + 32, marginLeft + (i + 1) * boxWidth, boxY + 32);
       }
-
       doc.save('user_form.pdf');
       return;
     }
-
     // ------------------ EQUIPMENT (แบบเดิม) ------------------
     if (item.type === 'equipment') {
       const resBooking = await axios.get(`${API_BASE}/api/booking_equipment?id=${mainBookingId}`);
@@ -2187,15 +2330,13 @@ doc.text(`โทร ${data.tel || '-'}`, 430, 100);
           remark: matched ? matched.remark : '-'
         };
       });
-
       const doc = new jsPDF({ unit: 'pt', format: 'a4' });
       doc.setFont('Sarabun', 'normal');
       const pageWidth = doc.internal.pageSize.getWidth();
       const pageHeight = doc.internal.pageSize.getHeight();
-
       // Header
       doc.setFontSize(16);
-      const title = 'แบบฟอร์มการยืมอุปกรณ์/วัสดุ/ครุภัณฑ์ ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง';
+      const title = 'แบบฟอร์มการยืมอุปกรณ์ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง';
       const subTitle = 'โทร 053-917820-1 E-mail sport-complex@mfu.ac.th';
       doc.text(title, (pageWidth - doc.getTextWidth(title)) / 2, 45);
       doc.setFontSize(11);
@@ -2235,7 +2376,7 @@ doc.text(`โทร ${data.tel || '-'}`, 430, 100);
       // ข้อมูลทั่วไป
       y = checkAddPage(y, 16);
       doc.text(`ข้าพเจ้า ${bookingData.name || '-'}`, leftMargin, y);
-      doc.text(`รหัสนักศึกษา/พนักงาน ${bookingData.user_id || '-'}`, leftMargin + 270, y);
+      doc.text(`รหัสนักศึกษา/รหัสพนักงาน ${bookingData.user_id || '-'}`, leftMargin + 270, y);
 
       y += 28;
       y = checkAddPage(y, 16);
@@ -2353,18 +2494,13 @@ doc.text(`โทร ${data.tel || '-'}`, 430, 100);
     console.error(err);
   }
 }
-
   },
   async mounted() {
   // responsive
   window.addEventListener('resize', this.handleResize);
   this.handleResize();
-
-  // 1) โหลดผู้ใช้ + เตรียม map ชื่อ/ลายเซ็น + ค่าของแอดมินที่ล็อกอิน
   try {
     const userRes = await axios.get(`${API_BASE}/api/users`);
-
-    // map ไว้โชว์ชื่อจาก user_id
     this.userMap = {};
     (userRes.data || []).forEach(u => {
       const displayName =
@@ -2373,14 +2509,12 @@ doc.text(`โทร ${data.tel || '-'}`, 430, 100);
           : (u.name || u.user_id);
       this.userMap[u.user_id] = displayName;
     });
-
     // ✅ map ลายเซ็นของผู้ใช้ทุกคน (รองรับ signaturePath / signatureUrl / ฯลฯ)
     this.userSigMap = {};
     (userRes.data || []).forEach(u => {
       const raw = this.pickSignatureFromUser(u);    // ดึงจากหลายคีย์ เช่น signaturePath
       this.userSigMap[u.user_id] = this.normalizePdfUrl(raw || '');
     });
-
     // หา record ของคนที่ล็อกอินตอนนี้ (ไว้ตั้งชื่อ/ลายเซ็นของแอดมิน)
     const myId =
       localStorage.getItem('user_id') ||
@@ -2389,14 +2523,12 @@ doc.text(`โทร ${data.tel || '-'}`, 430, 100);
     const me = (userRes.data || []).find(
       u => String(u.user_id) === String(myId) || String(u.id) === String(myId)
     );
-
     // ✅ ชื่อไทยของผู้ล็อกอิน
     this.loggedThaiName =
       this.pickThaiNameFromUser(me) ||
       localStorage.getItem('thaiName') ||
       localStorage.getItem('thai_name') ||
       '';
-
     // ✅ ลายเซ็นของผู้ล็อกอิน (raw สำหรับเก็บ DB + url สำหรับแสดงผล)
     const rawSig =
       this.pickSignatureFromUser(me) ||
@@ -2405,8 +2537,6 @@ doc.text(`โทร ${data.tel || '-'}`, 430, 100);
       '';
     this.loggedSignatureRaw = rawSig || '';
     this.loggedSignatureUrl = this.normalizePdfUrl(rawSig);
-
-    // debug
     console.debug('approve_field/mounted', {
       myId,
       thaiName: this.loggedThaiName,
@@ -2420,15 +2550,11 @@ doc.text(`โทร ${data.tel || '-'}`, 430, 100);
     this.loggedSignatureRaw = '';
     this.loggedSignatureUrl = '';
   }
-
-  // 2) โหลด/จัดกลุ่มข้อมูลที่ต้องอนุมัติรอบแรก
   try {
     await this.fetchAndGroup();
   } catch (e) {
     console.error('fetchAndGroup @mounted ล้มเหลว:', e);
   }
-
-  // 3) ระบบแจ้งเตือน + ตั้งค่า polling/refresh
   this.lastSeenTimestamp =
     parseInt(localStorage.getItem(ADMIN_LAST_SEEN_KEY) || '0', 10) || 0;
 
@@ -2444,24 +2570,22 @@ doc.text(`โทร ${data.tel || '-'}`, 430, 100);
 
   document.addEventListener('mousedown', this.handleClickOutside);
 },
-
-
-
-
   beforeUnmount() {
     clearInterval(this.polling)
     document.removeEventListener('mousedown', this.handleClickOutside);
      window.removeEventListener('resize', this.handleResize);
   }
 }
-
-// --- Field detail popup helpers (module-scope, no `this`) ---
 // --- Field detail popup helpers (module-scope) ---
-function buildFieldFormPreviewV2(b = {}, secThaiName = '', secSignUrl = '', reqSignUrl = '') {
-  const dash = v => {
-    const s = (v ?? '').toString().trim();
-    return s ? s : '-';
-  };
+// ใช้เวลาปัจจุบันตอนกดอนุมัติในช่อง 1. เลขานุการศูนย์กีฬา
+function buildFieldFormPreviewV2(
+  b = {},
+  secThaiName = '',
+  secSignUrl = '',
+  reqSignUrl = '',
+  secApprovedAt
+) {
+  const dash = v => { const s = (v ?? '').toString().trim(); return s ? s : '-'; };
   const d = v => (v ?? '-') + '';
   const fmtDate = s => {
     if (!s) return '-';
@@ -2476,19 +2600,31 @@ function buildFieldFormPreviewV2(b = {}, secThaiName = '', secSignUrl = '', reqS
     return /^\d{1,2}:\d{2}/.test(s) ? `${s.slice(0,5)} น.` :
            /^\d{1,2}:\d{2}:\d{2}$/.test(s) ? `${s.slice(0,5)} น.` : `${s} น.`;
   };
+  const fmtDateTimeTH = (x) => {
+    const dd = x instanceof Date ? x : new Date(x ?? Date.now());
+    const date = new Intl.DateTimeFormat('th-TH-u-nu-latn', {
+      timeZone: 'Asia/Bangkok', day:'2-digit', month:'2-digit', year:'numeric'
+    }).format(dd);
+    const time = new Intl.DateTimeFormat('th-TH-u-nu-latn', {
+      timeZone: 'Asia/Bangkok', hour:'2-digit', minute:'2-digit', hour12:false
+    }).format(dd);
+    return `${date} ${time} น.`;
+  };
+  const _fmtDateLocal = d => `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()+543}`;
+  const fmtDateTimeLocal = s => {
+    if (!s) return '-';
+    const dd = new Date(String(s).trim());
+    if (isNaN(dd)) return '-';
+    return `${_fmtDateLocal(dd)} ${String(dd.getHours()).padStart(2,'0')}:${String(dd.getMinutes()).padStart(2,'0')} น.`;
+  };
 
   const tStart = b?.since_time || b?.startTime || '';
   const tEnd   = b?.until_thetime || b?.endTime   || '';
 
-  // แสดงจุดเลือก/ไม่เลือก (●/○) พร้อม fallback อัตโนมัติ
   const ynPack = (v, fallbackOn) => {
     const s = String(v ?? '').trim().toLowerCase();
-    if (['yes','true','1','เลือก','อนุญาต','allow','allowed'].includes(s)) {
-      return { yChar:'●', yOn:true,  nChar:'○', nOn:false };
-    }
-    if (['no','false','0','ไม่เลือก','ไม่อนุญาต','disallow','denied'].includes(s)) {
-      return { yChar:'○', yOn:false, nChar:'●', nOn:true  };
-    }
+    if (['yes','true','1','เลือก','อนุญาต','allow','allowed'].includes(s)) return { yChar:'●', yOn:true,  nChar:'○', nOn:false };
+    if (['no','false','0','ไม่เลือก','ไม่อนุญาต','disallow','denied'].includes(s)) return { yChar:'○', yOn:false, nChar:'●', nOn:true  };
     if (fallbackOn === true)  return { yChar:'●', yOn:true,  nChar:'○', nOn:false };
     if (fallbackOn === false) return { yChar:'○', yOn:false, nChar:'●', nOn:true  };
     return { yChar:'○', yOn:false, nChar:'○', nOn:false };
@@ -2510,88 +2646,60 @@ function buildFieldFormPreviewV2(b = {}, secThaiName = '', secSignUrl = '', reqS
     return b.restroom;
   })();
 
+  const secNow = secApprovedAt ? new Date(secApprovedAt) : new Date();
+
   return `
   <div class="mfu-form">
     <style>
-      .mfu-form{
-        font-family:'THSarabunNew','Sarabun','Noto Sans Thai',system-ui,sans-serif;
-        color:#111; line-height:1.35;
-      }
+      .mfu-form{ font-family:'THSarabunNew','Sarabun','Noto Sans Thai',system-ui,sans-serif; color:#111; line-height:1.35; }
       .mfu-head{text-align:center;margin-bottom:10px;}
       .mfu-title{font-size:22px;font-weight:700;}
       .mfu-sub{font-size:14px;margin-top:4px;}
       .mfu-meta{display:flex;gap:18px;flex-wrap:wrap;font-size:16px;margin:10px 0 4px;}
-
       .mfu-sec{margin-top:14px;font-size:16px;display:block;}
       .mfu-sec h4{margin:0;padding:0 0 10px;line-height:1.35;font-weight:700;}
       .mfu-par{text-indent:2em;margin-top:6px;}
-
-      /* list rows (ไม่ใช้ตาราง เพื่อให้ขึ้นบรรทัดใหม่ดีใน PDF) */
       .mfu-list{list-style:none;margin:4px 0 0;padding:0;}
       .mfu-list li{padding:6px 0;border-bottom:1px dashed #e5e7eb;}
-      .mfu-list li:first-child{border-bottom:0;}
-      .mfu-list li:last-child{border-bottom:0;}
-      .mfu-list b{display:inline-block;min-width:210px;white-space:nowrap;color:#111;}
+      .mfu-list li:first-child,.mfu-list li:last-child{border-bottom:0;}
+      .mfu-list b{display:inline-block;min-width:100px;white-space:nowrap;color:#111;}
       .mfu-list-util b{width:165px;min-width:166px;}
-      /* ทำให้บรรทัด “อาคาร” แคบลงเฉพาะแถวนี้ */
-      .mfu-list li.tight b{ min-width:60px; }
-
       .mfu-yn{margin:4px 0 6px;display:flex;gap:18px;}
       .mfu-yn .choice{display:inline-flex;align-items:center;gap:6px;font-size:16px;color:#374151;}
       .mfu-yn .dot{font-weight:700;font-size:18px;line-height:1;color:#9ca3af;}
       .mfu-yn .choice.on{color:#111;font-weight:700;}
       .mfu-yn .choice.on .dot{color:currentColor;}
-
       .mfu-boxes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:12px;}
       @media (max-width:720px){.mfu-boxes{grid-template-columns:1fr;}}
       .mfu-box{border:1px solid #333;padding:10px 12px;min-height:200px;position:relative;}
       .mfu-box h5{margin:0 0 8px;font-size:16px;font-weight:700;text-align:center;}
-      .mfu-box .row{display:flex;align-items:center;gap:8px;margin:10px 0;min-height:36px;}
+      .mfu-box .row{ display:flex; align-items:baseline; gap:8px; min-height:36px; flex-wrap:nowrap; }
+      .mfu-box .chk{ display:flex; align-items:center; gap:8px; cursor:pointer; white-space:nowrap; }
+      .mfu-box input[type="checkbox"]{ width:16px; height:16px; cursor:pointer; }
       .mfu-input{flex:1;min-width:0;padding:6px 8px;border:1px solid #cbd5e1;border-radius:6px;font:inherit;}
-      .row.center{justify-content:center;}
-      .paren{opacity:.85;}
-      .mfu-box .sig-row{ position:relative; min-height:56px; display:grid; }
-      .mfu-box .sigimg{ position:absolute; top:-6px; left:0; right:0; margin-left:auto; margin-right:auto; max-height:48px; width:auto; opacity:.95; pointer-events:none; }
-
+      .mfu-ta{ display:inline-block; width:auto; min-height:36px; line-height:1.6; white-space:pre-wrap; word-break:break-word; overflow-wrap:anywhere; flex:1; min-width:0; }
+      .mfu-ta:empty:before{ content: attr(data-ph); opacity:.5; }
+      .mfu-box .sig-row{ position:relative; height:56px; display:flex; align-items:flex-end; }
+      .mfu-box .sigimg{ position:absolute; left:0; right:0; margin:0 auto; bottom:4px; max-height:48px; width:auto; opacity:.95; pointer-events:none; }
+      .mfu-box .fill{ flex:1; border-bottom:1px dotted #444; height:1.15em; transform:translateY(-2px); }
+      .mfu-box .fill.full{ width:100%; }
+      .mfu-box .paren{ margin:0 4px; }
+      .mfu-box .sig-row + .row{ margin-top:0; align-items:center; }
       .mfu-note{margin-top:8px;font-size:14px;opacity:.9;}
-
-      /* ===================== SIGNATURE LINE (แก้ให้ใช้ได้ตอนทำ PDF) ===================== */
       .mfu-sign{ display:flex; justify-content:flex-end; padding-right:20px; margin-top:10px; }
-      .mfu-sign.mfu-signline{
-        --sign-width: clamp(210px,36vw,260px);
-        display:grid;
-        grid-template-columns:auto var(--sign-width);
-        column-gap:6px;
-        align-items:center;
-        margin-left:auto;
-        text-align:right;
-      }
+      .mfu-sign.mfu-signline{ --sign-width: clamp(210px,36vw,260px); display:grid; grid-template-columns:auto var(--sign-width); column-gap:6px; align-items:center; margin-left:auto; text-align:right; }
       .mfu-sign.mfu-signline .lab{ white-space:nowrap; }
-      .mfu-sign.mfu-signline .dots{
-        height:1.15em;
-        border-bottom:1px dotted #888;
-        position:relative;
-      }
+      .mfu-sign.mfu-signline .dots{ height:1.15em; border-bottom:1px dotted #888; position:relative; }
+      .mfu-sign.mfu-signline .sigimg{ position:absolute; top:-34px; left:0; right:0; margin:0 auto; max-height:48px; width:auto; opacity:.95; pointer-events:none; }
+      .mfu-sign.mfu-signline .name,.mfu-sign.mfu-signline .role{ grid-column:2; text-align:center; display:block; margin-top:6px; }
+      .mfu-sign.mfu-signline .date{ grid-column:2; text-align:center; display:block; margin-top:6px; }
+      .mfu-box .row.center{ justify-content: center; }
+      .mfu-box .row.center .date{ text-align: center; display: inline-block; }
+      .mfu-box .paren-row{ justify-content: center; }
+      .mfu-box .sig-row.spacer{ height:56px; }
 
-      .mfu-sign.mfu-signline .sigimg{
-      position:absolute; top:-34px; left:0; right:0; margin:0 auto;
-      max-height:48px; width:auto; opacity:.95; pointer-events:none;
-      }
-
-      .mfu-sign.mfu-signline .name,
-      .mfu-sign.mfu-signline .role{
-        grid-column:2;
-        text-align:center;
-        display:block;
-        margin-top:6px;
-      }
-        .mfu-sign.mfu-signline .date{
-        grid-column:2;
-        text-align:center;
-        display:block;
-        margin-top:6px;
-      }
-      /* ================================================================================ */
+      /* จำกัดช่อง ‘อื่นๆ’ ให้ไม่เกิน 3 บรรทัดจริง ๆ และไม่โชว์สกรอลล์บาร์ */
+      .limit-3lines{ max-height: calc(1.6em * 3); overflow: hidden; }
     </style>
 
     <div class="mfu-head">
@@ -2616,16 +2724,14 @@ function buildFieldFormPreviewV2(b = {}, secThaiName = '', secSignUrl = '', reqS
       </div>
     </div>
 
-    <!-- 1) ขออนุมัติใช้สถานที่ -->
     <div class="mfu-sec">
       <h4>1. ขออนุมัติใช้สถานที่</h4>
-      <ul class="mfu-list" style="margin-left:31px;">
-        <li class="tight"><b>อาคาร:</b> ${d(b?.name)}</li>
-        <li><b>ตำแหน่งพื้นที่/ห้องที่ต้องการใช้:</b> ${dash(b?.zone)}</li>
+      <ul class="mfu-list">
+        <li><b>อาคาร:</b> ${d(b?.name)}</li>
+        <li><b>พื้นที่/ห้อง:</b> ${dash(b?.zone)}</li>
       </ul>
     </div>
 
-    <!-- 2) ระบบสาธารณูปโภค -->
     <div class="mfu-sec">
       <h4>2. ขออนุญาตใช้ระบบสาธารณูปโภค</h4>
       <div class="mfu-yn">
@@ -2636,9 +2742,11 @@ function buildFieldFormPreviewV2(b = {}, secThaiName = '', secSignUrl = '', reqS
         <li><b>2.1 ไฟฟ้าส่องสว่าง:</b> ตั้งแต่ ${fmtTime(b?.turnon_lights)} - ${fmtTime(b?.turnoff_lights)}</li>
         <li><b>2.2 สุขา:</b> ${restroomText}</li>
       </ul>
+      <div class="mfu-note">
+        *ต้องได้รับการอนุมัติจากรองอธิการบดีผู้กำกับดูแล และสำเนาเอกสารถึงฝ่ายอนุรักษ์พลังงาน
+      </div>
     </div>
 
-    <!-- 3) รายการประกอบอาคาร -->
     <div class="mfu-sec">
       <h4>3. ขออนุมัติรายการประกอบอาคาร</h4>
       <div class="mfu-yn">
@@ -2649,39 +2757,67 @@ function buildFieldFormPreviewV2(b = {}, secThaiName = '', secSignUrl = '', reqS
         <li><b>3.1 ดึงอัฒจันทร์ภายในอาคารเฉลิมพระเกียรติฯ:</b> ${dash(b?.amphitheater)}</li>
         <li><b>3.2 อุปกรณ์กีฬา (โปรดระบุ):</b> ${dash(b?.need_equipment)}</li>
       </ul>
+      <div class="mfu-note">
+        ทั้งนี้ต้องแนบเอกสารโครงการหรือกิจกรรมที่ได้รับการอนุมัติแล้วพร้อมกำหนดการจัดกิจกรรมหากเป็นการเรียนการสอน <br>
+        ต้องแนบตารางการเรียนการสอน (Class schedule) พร้อมทั้งรายชื่อนักศึกษา
+      </div>
     </div>
 
-    <div class="mfu-note">
-      *ต้องได้รับการอนุมัติจากรองอธิการบดีผู้กำกับดูแล และแนบเอกสารโครงการ/กำหนดการ/ตารางเรียน
-    </div>
-
-    <!-- ลายเซ็นผู้ยื่นคำขอ (แก้ให้ขึ้นคนละบรรทัดตอนทำ PDF) -->
-    <div class="mfu-sign mfu-signline" style = "margin-top: 50px" >
+    <!-- ลายเซ็นผู้ยื่นคำขอ -->
+    <div class="mfu-sign mfu-signline" style="margin-top: 50px">
       <span class="lab">ลงชื่อ</span>
-     <span class="dots">
+      <span class="dots">
         ${reqSignUrl ? `<img class="sigimg" src="${reqSignUrl}" crossorigin="anonymous" alt="signature">` : ``}
       </span>
       <span class="name">( ${d(b?.username_form || b?.requester)} )</span>
       <span class="role">ผู้รับผิดชอบ</span>
-      <span class="date">วันที่ ${fmtDate(b?.createdAt || b?.date)}</span>
+      <span class="date">${fmtDateTimeLocal(b?.createdAt || b?.date)}</span>
     </div>
 
-    <!-- กล่อง 1 และ 2 -->
     <div class="mfu-boxes">
       <div class="mfu-box">
         <h5>1. เลขานุการศูนย์กีฬา</h5>
         <div class="row">
           <label class="chk" style="padding-left:30px"><span>เรียน หัวหน้าศูนย์กีฬาฯ</span></label>
         </div>
+
+        <!-- ช่อง “อื่นๆ” แบบ contenteditable: จำกัดจริง 3 บรรทัด + 255 ตัว -->
         <div class="row">
-          <label class="chk"><input type="checkbox" id="sec_other_chk" /> <span>อื่นๆ : </span></label>
-          <input type="text" id="sec_other_reason" class="mfu-input" placeholder="โปรดระบุ" disabled />
+          <label class="chk">
+            <input type="checkbox" id="sec_other_chk" />
+            <span>อื่นๆ : </span>
+          </label>
+          <div id="sec_other_reason"
+               class="mfu-input mfu-ta limit-3lines"
+               contenteditable="true"
+               data-ph="โปรดระบุ"
+               oninput="(function(el){
+                 var h=el.innerHTML;
+                 h=h.replace(/<div><br><\/div>/gi,'\n')
+                    .replace(/<div>/gi,'\n')
+                    .replace(/<\/div>/gi,'')
+                    .replace(/<br\s*\/?>/gi,'\n')
+                    .replace(/&nbsp;/gi,' ')
+                    .replace(/<[^>]+>/g,'');
+                 h=h.replace(/\r/g,'');
+                 var lines=h.split('\n').slice(0,3);
+                 var text=lines.join('\n');
+                 if(text.length>255) text=text.slice(0,255);
+                 if(el.innerText!==text){
+                   el.innerText=text;
+                   var r=document.createRange(); r.selectNodeContents(el); r.collapse(false);
+                   var s=window.getSelection(); s.removeAllRanges(); s.addRange(r);
+                 }
+               })(this)"
+               onkeydown="if(event.key==='Enter'){var v=(this.innerText||'').replace(/\r/g,''); if(v.split('\n').length>=3){event.preventDefault();}}"
+               onpaste="setTimeout(()=>{this.dispatchEvent(new Event('input'));},0)"></div>
         </div>
+
         <div class="row sig-row">
           ${secSignUrl ? `<img class="sigimg" src="${secSignUrl}" crossorigin="anonymous" alt="signature">` : ``}
         </div>
-        <div class="row"><span class="paren">(</span><span style="flex:1;text-align:center;">${d(secThaiName)}</span><span class="paren">)</span></div>
-        <div class="row center"><span>วันที่</span><span class="date">${fmtDate(b?.createdAt || b?.date)}</span></div>
+        <div class="row paren-row"><span class="paren">(</span><span style="flex:1;text-align:center;">${(secThaiName ?? '-') + ''}</span><span class="paren">)</span></div>
+        <div class="row center"><span></span><span class="date">${fmtDateTimeTH(secNow)}</span></div>
       </div>
 
       <div class="mfu-box">
@@ -2689,13 +2825,24 @@ function buildFieldFormPreviewV2(b = {}, secThaiName = '', secSignUrl = '', reqS
         <div class="row">
           <label class="chk"><input type="checkbox" id="head_to_vice" disabled /><span>เห็นชอบ</span></label>
         </div>
+
+        <!-- textarea (แม้ disabled ก็กัน input ให้แน่นอนถ้าเปิดใช้): 3 บรรทัด -->
         <div class="row">
-          <label class="chk"><input type="checkbox" id="head_other_chk" disabled /><span>อื่นๆ</span></label>
-          <input type="text" id="head_other_reason" class="mfu-input" placeholder="โปรดระบุ" disabled />
+          <label class="chk"><input type="checkbox" id="head_other_chk" disabled /><span>อื่นๆ :</span></label>
+          <textarea id="head_other_reason"
+                    class="mfu-input limit-3lines"
+                    placeholder="โปรดระบุ"
+                    rows="3"
+                    disabled
+                    style="resize:none;"
+                    oninput="var v=this.value.replace(/\r/g,''); v=v.split('\n').slice(0,3).join('\n'); if(v.length>255)v=v.slice(0,255); if(v!==this.value)this.value=v;"
+                    onkeydown="if(event.key==='Enter' && (this.value.split('\n').length>=3)){event.preventDefault();}"
+                    onpaste="setTimeout(()=>{var v=this.value.replace(/\r/g,''); v=v.split('\n').slice(0,3).join('\n'); if(v.length>255)v=v.slice(0,255); if(v!==this.value)this.value=v;},0)"></textarea>
         </div>
-        <div class="row sig-row"><span class="fill full"></span></div>
-        <div class="row"><span class="paren">(</span><span style="flex:1;text-align:center;"></span><span class="paren">)</span></div>
-        <div class="row center"><span>วันที่</span><span class="date">${fmtDate(b?.createdAt || b?.date)}</span></div>
+
+        <div class="row sig-row spacer"></div>
+        <div class="row paren-row"><span class="paren">(</span><span style="flex:1;text-align:center;"></span><span class="paren">)</span></div>
+        <div class="row center"><span></span><span class="date"></span></div>
       </div>
     </div>
   </div>`;
@@ -2704,74 +2851,111 @@ function buildFieldFormPreviewV2(b = {}, secThaiName = '', secSignUrl = '', reqS
 
 
 
+
 // === Equipment approve preview (HTML แสดงใน Swal) ===
 function buildEquipmentApprovePreviewHTML(ctx) {
-  const esc = s =>
-    String(s ?? '-')
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
+  const esc = (s) => String(s ?? "-")
+    .replace(/&/g,"&amp;").replace(/</g,"&lt;")
+    .replace(/>/g,"&gt;").replace(/"/g,"&quot;")
+    .replace(/'/g,"&#39;");
 
-  const todayStr = new Intl.DateTimeFormat('th-TH-u-nu-latn', {
-    timeZone: 'Asia/Bangkok',
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  }).format(new Date());
+  // ===== helpers =====
+  const toDate = (v) => {
+    if (!v) return null;
+    const x = v && v.$date ? v.$date : v;
+    const d = x instanceof Date ? x : new Date(x);
+    return isNaN(d) ? null : d;
+  };
+  const fmtDateTH = (v) => {
+    const d = toDate(v);
+    if (!d) return "-";
+    return new Intl.DateTimeFormat("th-TH-u-nu-latn", {
+      timeZone: "Asia/Bangkok", day: "2-digit", month: "2-digit", year: "numeric",
+    }).format(d);
+  };
+  const fmtTimeTH = (t) => {
+    if (!t) return "-";
+    const s = String(t).trim().replace(/\s*น\.?$/i, "");
+    if (/^\d{1,2}:\d{2}/.test(s)) return `${s.slice(0,5)} น.`;
+    if (/^\d{1,2}:\d{2}:\d{2}$/.test(s)) return `${s.slice(0,5)} น.`;
+    return `${s} น.`;
+  };
+  const fmtTH = (d) => ({
+    date: new Intl.DateTimeFormat("th-TH-u-nu-latn", {
+      timeZone: "Asia/Bangkok", day: "2-digit", month: "2-digit", year: "numeric",
+    }).format(d),
+    time: new Intl.DateTimeFormat("th-TH-u-nu-latn", {
+      timeZone: "Asia/Bangkok", hour: "2-digit", minute: "2-digit", hour12: false,
+    }).format(d),
+  });
 
+  // วันนี้ (หัวฟอร์ม)
+  const { date: dateTH } = fmtTH(new Date());
+
+  // วันที่/เวลาที่ใต้เส้นเซ็นผู้ยืม
+  const createdCandidates = [
+    ctx.createdAt, ctx.created_at, ctx.createAt, ctx.created,
+    ctx.items && ctx.items[0] && ctx.items[0].createdAt,
+    ctx.items && ctx.items[0] && ctx.items[0].created_at
+  ];
+  let sigDate = null;
+  for (const c of createdCandidates) { sigDate = toDate(c); if (sigDate) break; }
+  const sigFmt = sigDate ? fmtTH(sigDate) : null;
+  const sigDateTimeTH = sigFmt ? `${sigFmt.date} ${sigFmt.time} น.` : "-";
+
+  // ช่วงวันที่ใช้งานจาก ctx.dateRange ("A - B")
   const splitRange = (s) => {
-    if (!s) return ['-', '-'];
-    const p = String(s).split(' - ');
-    return [p[0] || '-', p[1] || '-'];
+    if (!s) return ["-","-"];
+    const p = String(s).split(" - ");
+    return [p[0] || "-", p[1] || "-"];
   };
   const [sinceStr, uptoStr] = splitRange(ctx.dateRange);
 
-  const rows = (ctx.rows || [])
-    .map(
-      (r) => `
-        <tr>
-          <td class="c">${r.idx}</td>
-          <td class="l">${esc(r.name)}</td>
-          <td class="c">${esc(r.quantity)}</td>
-          <td class="l">${esc(r.remark || '-')}</td>
-        </tr>
-      `
-    )
-    .join('');
+  // แถวรายการ
+  const rows = (ctx.rows || []).map(r => `
+    <tr>
+      <td class="c">${r.idx}</td>
+      <td class="c">${esc(r.name)}</td>
+      <td class="c">${esc(r.quantity)}</td>
+      <td class="c">${esc(r.remark || "-")}</td>
+    </tr>
+  `).join("");
+
+  // วันที่/เวลามารับของ
+  const showReceiveDate = ctx.receive_date ? fmtDateTH(ctx.receive_date) : (ctx.dateBorrow || "-");
+  const showReceiveTime = ctx.receive_time ? fmtTimeTH(ctx.receive_time) : (ctx.timeBorrow || "-");
 
   return `
   <div class="eqp-preview">
+    <!-- หัวเรื่อง -->
     <div class="eqp-head">
-      <div class="t1">แบบฟอร์มการยืมอุปกรณ์/วัสดุ/ครุภัณฑ์ ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง</div>
+      <div class="t1">แบบฟอร์มการยืมอุปกรณ์ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง</div>
       <div class="t2">โทร 0-5391-7820 และ 0-5391-7821 | E-mail: sport-complex@mfu.ac.th</div>
     </div>
 
+    <!-- ✅ ย้ายบล็อกขวานี้ลงมาบรรทัดถัดไป ไม่ใช้ absolute อีกต่อไป -->
     <div class="eqp-meta">
-      <div class="right">
+      <div class="right-meta">
         <div>ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง</div>
-        <div>วันที่ทำรายการ ${esc(ctx.dateBorrow)}</div>
-        <div>เวลาที่ทำรายการ ${esc(ctx.timeBorrow)}</div>
+        <div>วันที่มารับของ ${esc(showReceiveDate)}</div>
+        <div>เวลาที่มารับของ ${esc(showReceiveTime)}</div>
       </div>
     </div>
 
-    <div class="date" style="margin-top:30px">วันที่ ${todayStr}</div>
+    <div class="date" style="margin-top:30px">วันที่ ${dateTH}</div>
     <div style="margin-top:20px">ส่วนที่1 สำหรับผู้ขอใช้บริการ</div>
 
-    <!-- ก้อนย่อหน้า -->
     <section class="eqp-section eqp-section--par">
       <div class="eqp-par">
         ข้าพเจ้า ${esc(ctx.requester)}
-        รหัสนักศึกษา/พนักงาน ${esc(ctx.requesterId)}
-        ${ctx.tel ? `โทร ${esc(ctx.tel)}` : ''}
-        มีความประสงค์ขอยืมอุปกรณ์/วัสดุ/ครุภัณฑ์ ของศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง
+        รหัสนักศึกษา/รหัสพนักงาน ${esc(ctx.requesterId)}
+        ${ctx.tel ? 'โทร ' + esc(ctx.tel) : ''}
+        มีความประสงค์ขอยืมอุปกรณ์ของศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง
         เพื่อใช้ในงาน ${esc(ctx.reason)} สถานที่ใช้งาน ${esc(ctx.location)}
         ระหว่างวันที่ ${esc(sinceStr)} ถึงวันที่ ${esc(uptoStr)}
       </div>
     </section>
 
-    <!-- ก้อนตาราง -->
     <section class="eqp-section eqp-section--table">
       <table class="eqp-table">
         <thead>
@@ -2786,7 +2970,6 @@ function buildEquipmentApprovePreviewHTML(ctx) {
       </table>
     </section>
 
-    <!-- ก้อนล่าง: ลายเซ็น + กล่อง -->
     <div class="eqp-bottom">
       <div class="eqp-sign">
         <div class="sig sig-line">
@@ -2794,7 +2977,7 @@ function buildEquipmentApprovePreviewHTML(ctx) {
           <span class="line"><span class="name">${esc(ctx.requester)}</span></span>
           <span class="role">ผู้ยืม</span>
         </div>
-        <div class="date">วันที่ ${todayStr}</div>
+        <div class="date">${sigDateTimeTH}</div>
       </div>
 
       <div class="eqp-boxes">
@@ -2807,7 +2990,7 @@ function buildEquipmentApprovePreviewHTML(ctx) {
             <span class="dotfill"></span>
             <span class="role">ผู้ส่งมอบ</span>
           </div>
-          <div class="date">วันที่........../........../..........</div>
+          <div class="date">........../........../..........</div>
         </div>
 
         <div class="box">
@@ -2819,15 +3002,62 @@ function buildEquipmentApprovePreviewHTML(ctx) {
             <span class="dotfill"></span>
             <span class="role">ผู้รับคืน</span>
           </div>
-          <div class="date">วันที่........../........../..........</div>
+          <div class="date">........../........../..........</div>
         </div>
       </div>
 
       <div style="margin-top:20px">
-        *หมายเหตุ หากอุปกรณ์/วัสดุ/ครุภัณฑ์ เกิดการชำรุดเสียหายในระหว่างที่ผู้ยืมเป็นผู้รับผิดชอบ
+        *หมายเหตุ หากอุปกรณ์เกิดการชำรุดเสียหายในระหว่างที่ผู้ยืมเป็นผู้รับผิดชอบ
         ผู้ยืมจะต้องชดใช้ค่าเสียหายที่เกิดขึ้นทั้งหมด
       </div>
     </div>
+
+    <style>
+      /* หัวฟอร์มและบล็อกขวา (ไม่ซ้อนทับ) */
+      .eqp-head{
+        text-align:center;
+        margin-bottom: 8px;
+      }
+      .eqp-head .t1{ font-weight:700; font-size:20px; }
+      .eqp-head .t2{ font-size:14px; margin-top:2px; }
+
+      .eqp-meta{
+        display:flex;
+        justify-content:flex-end;
+        margin: 8px 0 12px;   /* เว้นที่ก่อนเข้าบรรทัด "วันที่ ..." */
+      }
+      .eqp-meta .right-meta{
+        text-align:right;
+        line-height:1.55;
+      }
+
+      .eqp-table{ width:100%; border-collapse:collapse; table-layout:fixed; }
+      .eqp-table th,.eqp-table td{
+        border:1px solid #ccc; padding:8px 10px; text-align:center;
+        vertical-align:middle; word-break:break-word; white-space:normal;
+      }
+      .eqp-table thead th{ font-weight:600; }
+      .eqp-table tbody tr{ height:40px; }
+
+      .eqp-sign{
+        display:grid; grid-template-columns:auto 240px auto;
+        column-gap:8px; align-items:center; justify-content:end; text-align:unset;
+      }
+      .eqp-sign .sig-line{ display:contents; }
+      .eqp-sign .sig-line .line{
+        height:1.2em; border-bottom:1px dotted #666;
+        display:flex; align-items:flex-end; justify-content:center;
+      }
+      .eqp-sign .sig-line .name{ padding:0 6px; background:transparent; }
+      .eqp-sign .date{ grid-column:2; justify-self:center; margin-top:6px; }
+
+      .eqp-boxes{ display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:18px; }
+      .eqp-boxes .box{ border:1px solid #ccc; padding:12px; min-height:160px; }
+      .eqp-boxes .title{ font-weight:600; margin-bottom:10px; text-align:center; }
+      .eqp-boxes .dotrow{ border-bottom:1px dotted #777; height:1.6em; margin:8px 0; }
+      .sign-inline{ display:flex; align-items:center; gap:6px; margin-top:10px; }
+      .sign-inline .dotfill{ flex:1; border-bottom:1px dotted #666; height:1.2em; }
+    </style>
   </div>`;
 }
 
@@ -2836,67 +3066,265 @@ function buildEquipmentApprovePreviewHTML(ctx) {
 
 
 </script>
+<!-- ===== GLOBAL (ไม่ scoped): วางแทนที่บล็อก <style> เดิมได้เลย ===== -->
+<style>
+@import '../css/style.css';
+
+/* ===== Theme tokens (global) ===== */
+:root{
+  --c-primary:#1d4ed8; --c-primary-900:#1e3a8a;
+  --c-accent:#213555;  --c-accent-2:#3a7ca5;
+  --c-muted:#f3f4f6;   --c-surface:#ffffff; --c-card:#ebebeb;
+  --c-danger:#f54c4f;  --c-danger-900:#7a292d;
+  --c-success:#80e479; --c-success-900:#478a48;
+  --c-border:#e6e9f2;  --c-border-2:#e2e8f0;
+  --shadow-1:0 2px 8px rgba(0,0,0,.08);
+  --shadow-2:0 4px 10px rgba(0,0,0,.15);
+  --radius-sm:6px; --radius-md:10px; --radius-lg:12px;
+  --thai-font:'THSarabunNew','Sarabun','Noto Sans Thai',system-ui,sans-serif;
+
+  /* ความกว้างสูงสุดของ popup รายละเอียดอุปกรณ์ */
+  --eqp-max: min(1400px, 98vw);
+}
+
+/* ===== Helpers ===== */
+.swal-center-text,.swal-center-title{ text-align:center !important; }
+.swal2-textarea{ min-height:110px !important; }
+
+/* ===== SweetAlert: โครงฐาน ===== */
+.swal2-popup .swal2-html-container{ overflow-x:hidden !important; }
+.swal2-popup .swal-detail-wrap{ max-width:min(1240px,96vw); overflow-x:visible !important; }
+.swal2-popup .swal-detail-actions{ text-align:center; margin-top:16px; }
+.swal2-popup #pdf-btn,
+.swal2-popup #attach-btn{
+  background:var(--c-accent); color:#fff; padding:8px 18px; border-radius:8px; border:none; cursor:pointer; margin:0 6px;
+}
+.swal2-popup #attach-btn{ background:var(--c-accent-2); }
+
+/* ===== ตารางทั่วไปใน Swal (2 คอลัมน์) ===== */
+.swal2-popup .swal-detail-table{
+  width:min(1200px,96vw); margin:0 auto; border-collapse:collapse; font-size:.98rem;
+}
+.swal2-popup .swal-detail-table tbody th{
+  text-align:left; white-space:nowrap; background:#f7f9fc; border:1px solid var(--c-border);
+  padding:8px 12px; width:180px; font-weight:700; color:#1f2a44;
+}
+.swal2-popup .swal-detail-table tbody td{
+  border:1px solid var(--c-border); padding:8px 12px; color:#1f2a44; word-break:break-word;
+}
+
+/* ===== ตาราง “อุปกรณ์” ===== */
+.swal2-popup .swal-detail-table.items{ table-layout:auto; width:100%; }
+.swal2-popup .swal-detail-table.items thead th{
+  background:var(--c-accent); color:#fff; padding:8px 10px; border:1px solid var(--c-border); text-align:center; font-weight:700;
+}
+.swal2-popup .swal-detail-table.items tbody td{ border:1px solid var(--c-border); padding:8px 10px; }
+.swal2-popup .swal-detail-table.items td.c{ text-align:center; }
+
+/* พรีเซ็ตคอลัมน์ (ไม่ซ้อนกันแล้ว) */
+.swal2-popup .swal-detail-table.items th.col-name,
+.swal2-popup .swal-detail-table.items td.col-name{ width:160px; max-width:160px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+.swal2-popup .swal-detail-table.items th.col-qty,
+.swal2-popup .swal-detail-table.items td.col-qty{ width:90px; }
+
+.swal2-popup .swal-detail-table.items th.col-requester,
+.swal2-popup .swal-detail-table.items td.col-requester{ min-width:200px; }
+
+.swal2-popup .swal-detail-table.items th.col-period,
+.swal2-popup .swal-detail-table.items td.col-period{
+  /* ให้เห็นครบและยอมตัดบรรทัดเมื่อพื้นที่ไม่พอ */
+  white-space:normal; word-break:break-word; overflow-wrap:anywhere;
+}
+
+/* ช่อง “อีเมล” — แสดงครบ ไม่ซ่อน ไม่ถูก .nowrap บังคับ */
+.swal2-popup .swal-detail-table.items th.col-id,
+.swal2-popup .swal-detail-table.items td.col-id,
+.swal2-popup .swal-detail-table.items td.col-id.nowrap{
+  width:clamp(280px,30vw,560px);
+  max-width:none;
+  white-space:normal !important;   /* ทับ .nowrap ที่อื่น */
+  word-break:break-word;
+  overflow-wrap:anywhere;
+  text-overflow:clip;
+  text-align:center;
+}
+
+/* ===== ขนาด popup (ใช้กฎเดียว ไม่ทับกัน) ===== */
+.swal2-popup.swal-wide,
+.swal2-popup.swal-form-approve,
+.swal2-popup.swal-equip-approve{
+  width:auto !important; max-width:min(1100px,98vw) !important; padding:26px !important; border-radius:var(--radius-lg) !important;
+}
+
+/* เฉพาะ “อุปกรณ์” — กว้างขึ้น */
+.swal2-popup.swal-equipment{
+  width:auto !important;
+  max-width:var(--eqp-max) !important;
+  padding:26px !important;
+  border-radius:var(--radius-lg) !important;
+  overflow:hidden !important; /* กันแถบเลื่อนแนวนอน */
+}
+
+/* M/L breakpoint */
+@media (min-width:601px){
+  .swal2-popup.swal-wide{ max-width:920px !important; padding:24px 18px !important; }
+  .swal2-popup .swal-detail-wrap{ max-width:920px; }
+  .swal2-popup .swal-detail-table,
+  .swal2-popup .swal-detail-table.items{ width:920px; }
+}
+
+/* Mobile */
+@media (max-width:600px){
+  .swal2-popup.swal-wide,
+  .swal2-popup.swal-equipment{ max-width:96vw !important; width:auto !important; }
+
+  .swal2-popup .swal-detail-table.items th.col-name,
+  .swal2-popup .swal-detail-table.items td.col-name{ width:150px; max-width:150px; }
+
+  .swal2-popup .swal-detail-table.items th.col-id,
+  .swal2-popup .swal-detail-table.items td.col-id{ width:auto; }
+}
+
+/* ===== Utilities (คงไว้ แต่รู้ว่าถูก override เฉพาะคอลัมน์อีเมล) ===== */
+.swal2-popup .nowrap{ white-space:nowrap !important; word-break:normal !important; }
+
+/* ===== MFU approve (คงของเดิม, ไม่แตะ) ===== */
+.swal2-popup.swal-form-approve .swal2-html-container{ max-height:70vh; overflow:auto; margin:10px 0 0 !important; }
+.swal2-popup.swal-form-approve .swal2-actions{ margin:18px 0 0 !important; }
+.swal2-popup.swal-form-approve .mfu-form .mfu-list li.tight b{ min-width:60px !important; }
+</style>
 
 
+<!-- ===== SCOPED: ทำให้ตรงกับกฎหลัก และตัดส่วนที่ซ้ำ/ขัดกัน ===== -->
 <style scoped>
-/* ===== Layout & page ===== */
-.histbody{
-  width:100%;
-  height:100vh;
-  padding:20px;
-  box-sizing:border-box;
-  overflow-x:hidden;
-}
-.history-filter{
-  display:flex; gap:10px; margin:0 0 18px; padding-left:70px;
-}
-.history-filter button{
-  background:#f3f4f6; border:1.5px solid #a5b4fc; color:#213555;
-  font-weight:600; padding:7px 22px; border-radius:10px; cursor:pointer;
-  transition:background .16s;
-}
-.history-filter button.active,
-.history-filter button:hover{
-  background:#1d4ed8; color:#fff; border-color:#1d4ed8;
-}
-
+/* Layout */
+.histbody{ width:100%; height:100vh; padding:20px; box-sizing:border-box; overflow-x:hidden; }
+.history-filter{ display:flex; gap:10px; margin:0 0 18px; padding-left:70px; }
 .hist-grid{ display:flex; flex-direction:column; gap:1rem; padding:1rem 70px; }
-.hist-card{ background:#ebebeb; border-radius:12px; box-shadow:0 4px 10px rgba(0,0,0,.15); padding:1rem 1.5rem; width:100%; }
+.hist-card{ background:var(--c-card); border-radius:var(--radius-lg); box-shadow:var(--shadow-2); padding:1rem 1.5rem; width:100%; }
 .hist-row{ display:flex; align-items:center; justify-content:space-between; gap:1rem; }
 .item-name{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .status-group{ display:flex; gap:8px; justify-content:flex-end; }
 
 /* Buttons */
+.history-filter button,
 .approve-btn,.cancel-btn,.detail-btn{
-  padding:4px 10px; color:#fff; border:none; border-radius:6px; cursor:pointer; font-size:.8rem; transition:background-color .3s;
+  font-weight:600; padding:7px 22px; border-radius:var(--radius-md); cursor:pointer;
+  transition:background .2s,color .2s,border-color .2s;
+  border:1.5px solid var(--c-border); background:var(--c-muted); color:var(--c-accent);
 }
-.approve-btn{ background:#80e479; } .approve-btn:hover{ background:#478a48; }
-.cancel-btn{ background:#f54c4f; margin-left:10px; } .cancel-btn:hover{ background:#7a292d; }
+.history-filter button.active,
+.history-filter button:hover{ background:var(--c-primary); color:#fff; border-color:var(--c-primary); }
+
+.approve-btn,.cancel-btn,.detail-btn{ padding:4px 10px; font-size:.8rem; border:0; color:#fff; border-radius:var(--radius-sm); }
+.approve-btn{ background:var(--c-success); } .approve-btn:hover{ background:var(--c-success-900); }
+.cancel-btn{ background:var(--c-danger); margin-left:10px; } .cancel-btn:hover{ background:var(--c-danger-900); }
 .detail-btn{ background:#304674; } .detail-btn:hover{ background:#2953d1; }
 
-/* Sidebar overlay */
+/* Overlay & Sidebar */
 .sidebar-overlay{ position:fixed; inset:0; background:rgba(0,0,0,.16); z-index:1100; }
 .sidebar{ z-index:1200; }
 
 /* Main table */
 .table-container{ padding:0 70px; overflow-x:auto; }
 .approve-table{
-  width:100%; border-collapse:collapse; background:#fff; border-radius:12px;
-  box-shadow:0 2px 8px rgba(0,0,0,.08);
+  width:100%; border-collapse:collapse; background:#fff; border-radius:var(--radius-lg);
+  box-shadow:var(--shadow-1);
 }
-.approve-table th,.approve-table td{ padding:.75rem 1rem; text-align:center; border-bottom:1px solid #e2e8f0; }
-.approve-table th{ background:#1e3a8a; color:#fff; font-weight:700; }
+.approve-table th,.approve-table td{ padding:.75rem 1rem; text-align:center; border:1px solid var(--c-border); }
+.approve-table th{ background:var(--c-primary-900); color:#fff; font-weight:700; }
 .approve-table tr:last-child td{ border-bottom:none; }
 
-/* Notifications */
-.notification-backdrop{ position:fixed; inset:0; background:transparent; z-index:1001; }
-.notification-dropdown{
-  position:absolute; right:0; top:38px; background:#fff; border-radius:18px 0 18px 18px;
-  box-shadow:0 8px 24px rgba(27,50,98,.14),0 2px 4px rgba(33,125,215,.06);
-  min-width:330px; max-width:370px; max-height:420px; overflow-y:auto; z-index:1002; padding:0; border:none;
-}
+/* MFU form */
+.mfu-form{ font-family:var(--thai-font); color:#111; line-height:1.35; }
+.mfu-head{ text-align:center; margin-bottom:10px; }
+.mfu-title{ font-size:22px; font-weight:700; }
+.mfu-sub{ font-size:14px; margin-top:4px; }
+.mfu-meta{ display:flex; gap:18px; flex-wrap:wrap; font-size:16px; margin:10px 0 4px; }
+.mfu-sec{ margin-top:12px; font-size:16px; }
+.mfu-sec h4{ margin:0 0 6px; font-weight:700; }
+.mfu-par{ text-indent:2em; margin-top:6px; }
+.mfu-kv{ display:grid; grid-template-columns:200px 1fr; border:1px solid var(--c-border); border-bottom:0; }
+.mfu-kv>div{ padding:8px 10px; border-bottom:1px solid var(--c-border); white-space:normal; word-break:break-word; overflow-wrap:anywhere; line-height:1.5; }
+.mfu-kv .k{ background:#f7f9fc; font-weight:700; white-space:nowrap; }
+.mfu-yn{ margin:6px 0 2px; } .mfu-yn span{ margin-right:18px; }
 
-/* Mobile (<=600px) */
+/* Sign */
+.mfu-signrow{ display:flex; gap:24px; justify-content:space-between; margin-top:14px; }
+.mfu-sign{ flex:1; }
+.mfu-dots{ display:inline-block; min-width:210px; border-bottom:1px dotted #888; transform:translateY(-3px); }
+
+/* Approve form overrides */
+.swal2-popup.swal-form-approve .mfu-form{ --kv-left:250px; }
+.swal2-popup.swal-form-approve .mfu-form .mfu-kv{ display:grid !important; grid-template-columns:var(--kv-left) 1fr !important; }
+.swal2-popup.swal-form-approve .mfu-form .mfu-kv>div{ padding:10px 12px; line-height:1.6; }
+.swal2-popup.swal-form-approve .mfu-form .mfu-yn{ margin:8px 0 6px; }
+@media (max-width:900px){ .swal2-popup.swal-form-approve .mfu-form{ --kv-left:180px; } }
+@media (max-width:600px){ .swal2-popup.swal-form-approve .mfu-form{ --kv-left:150px; } }
+.swal2-popup.swal-form-approve .mfu-form .mfu-sign{ width:auto !important; text-align:right !important; align-self:flex-end !important; }
+.swal2-popup.swal-form-approve .mfu-form .mfu-sign.mfu-signline{
+  --sign-width: clamp(210px,36vw,260px);
+  display:grid !important; width:fit-content; grid-template-columns:auto var(--sign-width);
+  column-gap:6px; align-items:center; margin-left:auto !important; text-align:right;
+}
+.swal2-popup.swal-form-approve .mfu-form .mfu-sign.mfu-signline .lab{ white-space:nowrap; }
+.swal2-popup.swal-form-approve .mfu-form .mfu-sign.mfu-signline .dots{ height:1.15em; border-bottom:1px dotted #888; }
+.swal2-popup.swal-form-approve .mfu-form .mfu-sign.mfu-signline .name,
+.swal2-popup.swal-form-approve .mfu-form .mfu-sign.mfu-signline .role{ grid-column:2; text-align:center; margin-top:6px; }
+
+/* Boxes */
+.mfu-boxes{ display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-top:12px; }
+.mfu-box{ border:1px solid #333; padding:12px 14px; min-height:170px; position:relative; }
+.mfu-box h5{ margin:0 0 8px; font-size:16px; font-weight:700; text-align:center; }
+.mfu-box .line{ margin:10px 0; }
+.mfu-note{ margin-top:8px; font-size:14px; opacity:.9; }
+.mfu-box .chk{ display:flex; align-items:center; gap:8px; cursor:pointer; }
+.mfu-box input[type="checkbox"]{ width:16px; height:16px; cursor:pointer; }
+.mfu-box .mfu-input{ flex:1; min-width:0; padding:6px 8px; border:1px solid #cbd5e1; border-radius:6px; font:inherit; }
+.mfu-box .row{ display:flex; align-items:center; gap:8px; min-height:36px; }
+.mfu-box .sig-row{ min-height:56px; }
+.mfu-box .fill{ flex:1; border-bottom:1px dotted #444; height:1.15em; transform:translateY(-2px); }
+.mfu-box .fill.full{ width:100%; }
+.mfu-box .paren{ margin:0 4px; }
+
+/* Boxes in Swal (2 cols, mobile 1 col) */
+.swal2-popup.swal-form-approve .mfu-form .mfu-boxes{ display:grid !important; grid-template-columns:repeat(2,minmax(0,1fr)) !important; gap:12px !important; }
+@media (max-width:700px){ .swal2-popup.swal-form-approve .mfu-form .mfu-boxes{ grid-template-columns:1fr !important; } }
+
+/* Equipment preview/sign */
+.eqp-preview{ font-family:var(--thai-font); color:#111; }
+.eqp-head{ text-align:center; margin-bottom:8px; }
+.eqp-head .t1{ font-weight:700; font-size:20px; }
+.eqp-head .t2{ font-size:14px; margin-top:2px; }
+.eqp-user{ font-size:16px; line-height:1.6; margin:10px 0 12px; }
+.eqp-user>div{ margin:2px 0; }
+.eqp-par{ font-size:16px; line-height:1.75; text-indent:2em; word-break:break-word; margin:12px 0 18px; }
+
+.eqp-table{ width:100%; border-collapse:collapse; table-layout:fixed; font-size:15px; margin:14px 0 22px; }
+.eqp-table thead th{ background:var(--c-accent); color:#fff; border:1px solid var(--c-border); padding:10px 14px; text-align:center; font-weight:700; }
+.eqp-table tbody td{ border:1px solid var(--c-border); padding:10px 14px; }
+.eqp-table th,.eqp-table td{ white-space:normal !important; word-break:break-word !important; overflow-wrap:anywhere !important; vertical-align:top; }
+.eqp-table td.c{ text-align:center; }
+.eqp-table td.l{ text-align:left; overflow:visible !important; text-overflow:clip !important; }
+.eqp-table thead th:nth-child(1){ width:18mm; }
+.eqp-table thead th:nth-child(3){ width:22mm; }
+.eqp-table thead th:nth-child(4){ width:60mm; }
+
+/* Sign block in Swal */
+.eqp-sign{ margin:16px 0 6px; display:flex; flex-direction:column; align-items:flex-end; text-align:right; }
+.eqp-sign .sig{ text-align:right; line-height:1.6; }
+.eqp-sign .sig-line{ display:grid; grid-template-columns:auto 240px auto; align-items:center; column-gap:8px; }
+.eqp-sign .sig-line .line{ height:1.2em; border-bottom:1px dotted #666; display:flex; align-items:flex-end; justify-content:center; }
+.eqp-sign .sig-line .name{ padding:0 6px; background:transparent; }
+.eqp-sign .date{ margin-top:6px; }
+.swal2-popup .eqp-sign{ display:grid !important; grid-template-columns:auto 240px auto !important; column-gap:8px !important; align-items:center !important; justify-content:end !important; text-align:unset !important; }
+.swal2-popup .eqp-sign .sig-line{ display:contents !important; }
+.swal2-popup .eqp-sign .date{ grid-column:2 !important; justify-self:center !important; margin-top:6px; }
+
+/* (อาศัยกฎคอลัมน์จากบล็อกหลักแล้ว ไม่ต้องประกาศซ้ำ) */
+
+/* Mobile */
 @media (max-width:600px){
   .item-name{ white-space:normal !important; word-break:break-word !important; overflow:visible !important; text-overflow:unset !important; max-width:100%; display:block !important; font-weight:500; text-align:center; margin-bottom:4px; }
   .histbody{ display:flex; flex-direction:column; align-items:center; padding:14px 0 0 !important; width:100vw; overflow-x:auto !important; }
@@ -2907,453 +3335,11 @@ function buildEquipmentApprovePreviewHTML(ctx) {
   .hist-row{ flex-direction:column !important; align-items:center !important; width:100% !important; gap:.5rem; justify-content:center !important; }
 }
 
-</style>
-
-
-<style>
-@import '../css/style.css';
-
-.swal-center-text{ text-align:center !important; }
-.swal-center-title{ text-align:center !important; }
-
-/* ===== SweetAlert detail base ===== */
-.swal2-popup .swal-detail-wrap{ max-width:min(1240px,96vw); overflow-x:auto; }
-.swal2-popup .swal-detail-actions{ text-align:center; margin-top:16px; }
-.swal2-popup #pdf-btn,
-.swal2-popup #attach-btn{
-  background:#213555; color:#fff; padding:8px 18px; border-radius:8px; border:none; cursor:pointer; margin:0 6px;
-}
-.swal2-popup #attach-btn{ background:#3a7ca5; }
-
-/* 2-col table (label/value) */
-.swal2-popup .swal-detail-table{
-  width:min(1200px,96vw);
-  border-collapse:collapse;
-  margin:0 auto;
-  font-size:.98rem;
-}
-.swal2-popup .swal-detail-table tbody th{
-  text-align:left; white-space:nowrap; background:#f7f9fc; border:1px solid #e6e9f2; padding:8px 12px; width:180px;
-  font-weight:700; color:#1f2a44;
-}
-.swal2-popup .swal-detail-table tbody td{
-  border:1px solid #e6e9f2; padding:8px 12px; color:#1f2a44; word-break:break-word;
-}
-
-/* Equipment table */
-.swal2-popup .swal-detail-table.items thead th{
-  background:#213555; color:#fff; padding:8px 10px; border:1px solid #e6e9f2; text-align:center; font-weight:700;
-}
-.swal2-popup .swal-detail-table.items tbody td{ border:1px solid #e6e9f2; padding:8px 10px; }
-.swal2-popup .swal-detail-table.items tbody td.c{ text-align:center; }
-
-.swal2-popup .swal-detail-table.items thead th:nth-child(1){ width:72px; } /* ลำดับ */
-.swal2-popup .swal-detail-table.items thead th:nth-child(3){ width:90px; } /* จำนวน */
-
-/* Dialog sizing – wide */
-.swal2-popup.swal-wide{
-  width:auto !important;
-  max-width:min(1100px,98vw) !important;
-  padding:28px 26px !important;
-}
-@media (min-width:601px){
-  .swal2-popup.swal-wide{ max-width:920px !important; padding:24px 18px !important; }
-  .swal2-popup .swal-detail-wrap{ max-width:920px; }
-  .swal2-popup .swal-detail-table,
-  .swal2-popup .swal-detail-table.items{ width:920px; }
-}
-@media (max-width:600px){
-  .swal2-popup.swal-wide{ max-width:96vw !important; }
-}
-
-/* Optional: specific sizing for equipment dialog */
-.swal2-popup.swal-equipment{
-  max-width:1100px !important;
-  padding:28px 26px !important;
-}
-@media (max-width:600px){
-  .swal2-popup.swal-equipment{ max-width:96vw !important; width:auto !important; }
-}
-
-/* Utilities */
-.swal2-popup .nowrap{ white-space:nowrap !important; word-break:normal !important; }
-.swal2-textarea{ min-height:110px !important; }
-
-/* ===== Approve Form dialog container tweaks ===== */
-.swal2-popup.swal-form-approve{
-  width:auto !important;
-  max-width:1100px !important;
-  padding:26px 26px !important;
-  border-radius:12px !important;
-}
-.swal2-popup.swal-form-approve .swal2-html-container{
-  max-height:70vh;
-  overflow:auto;
-  margin:10px 0 0 !important;
-}
-.swal2-popup.swal-form-approve .swal2-actions{ margin:18px 0 0 !important; }
-
-/* ===== MFU form (from buildFieldFormPreviewV2) ===== */
-.mfu-form{
-  font-family:'THSarabunNew','Sarabun','Noto Sans Thai',system-ui,sans-serif;
-  color:#111; line-height:1.35;
-}
-.mfu-head{ text-align:center; margin-bottom:10px; }
-.mfu-title{ font-size:22px; font-weight:700; }
-.mfu-sub{ font-size:14px; margin-top:4px; }
-
-.mfu-meta{
-  display:flex; gap:18px; flex-wrap:wrap;
-  font-size:16px; margin:10px 0 4px;
-}
-
-.mfu-sec{ margin-top:12px; font-size:16px; }
-.mfu-sec h4{ margin:0 0 6px; font-weight:700; }
-.mfu-par{ text-indent:2em; margin-top:6px; }
-
-/* ตาราง key/value พื้นฐาน (ค่าจริงถูก override ด้านล่างด้วย --kv-left) */
-.mfu-kv{
-  display:grid;
-  grid-template-columns: 200px 1fr;
-  border:1px solid #e6e9f2;
-  border-bottom:0;
-}
-.mfu-kv>div{
-  padding:8px 10px;
-  border-bottom:1px solid #e6e9f2;
-  white-space:normal;
-  word-break:break-word;
-  overflow-wrap:anywhere;
-  line-height:1.5;
-}
-.mfu-kv .k{
-  background:#f7f9fc;
-  font-weight:700;
-  white-space:nowrap;
-}
-
-/* เลือก/ไม่เลือก */
-.mfu-yn{ margin:6px 0 2px; }
-.mfu-yn span{ margin-right:18px; }
-
-/* ลายเซ็น + กล่อง 1–3 */
-.mfu-signrow{ display:flex; gap:24px; justify-content:space-between; margin-top:14px; }
-.mfu-sign{ flex:1; }
-.mfu-dots{ display:inline-block; min-width:210px; border-bottom:1px dotted #888; transform:translateY(-3px); }
-
-.mfu-boxes{ display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-top:12px; }
-.mfu-box{ border:1px solid #333; padding:10px 12px; min-height:170px; position:relative; }
-.mfu-box h5{ margin:0 0 8px; font-size:16px; font-weight:700; text-align:center; }
-.mfu-box .line{ margin:8px 0; }
-
-.mfu-note{ margin-top:8px; font-size:14px; opacity:.9; }
-
-/* ======= CONSOLIDATED OVERRIDES (แหล่งอ้างอิงสุดท้าย) ======= */
-
-/* 1) KV table – คุมที่เดียวด้วยตัวแปร */
-.swal2-popup.swal-form-approve .mfu-form{ --kv-left: 250px; }
-.swal2-popup.swal-form-approve .mfu-form .mfu-kv{
-  display:grid !important;
-  grid-template-columns: var(--kv-left) 1fr !important;
-  border:1px solid #e6e9f2; border-bottom:0;
-}
-.swal2-popup.swal-form-approve .mfu-form .mfu-kv>div{
-  padding:10px 12px; border-bottom:1px solid #e6e9f2;
-  line-height:1.6; white-space:normal; word-break:break-word; overflow-wrap:anywhere;
-}
-.swal2-popup.swal-form-approve .mfu-form .mfu-yn{ margin:8px 0 6px; }
-
-@media (max-width:900px){ .swal2-popup.swal-form-approve .mfu-form{ --kv-left:180px; } }
-@media (max-width:600px){ .swal2-popup.swal-form-approve .mfu-form{ --kv-left:150px; } }
-
-/* 2) Signature block – แบบชิดขวาชุดเดียว */
-.swal2-popup.swal-form-approve .mfu-form .mfu-sign{
-  width:auto !important;
-  text-align:right !important;
-  align-self:flex-end !important;
-}
-.swal2-popup.swal-form-approve .mfu-form .mfu-sign.mfu-signline{
-  --sign-width: clamp(210px,36vw,260px);
-  display:grid !important;        /* เปลี่ยนจาก inline-grid -> grid (block-level) */
-  width:fit-content;               /* กว้างเท่าที่จำเป็น */
-  grid-template-columns:auto var(--sign-width);
-  column-gap:6px; 
-  align-items:center;
-  margin-left:auto !important;     /* ดันไปชิดขวา */
-  text-align:right;                /* ให้ label “ลงชื่อ” ชิดขวาด้วย */
-}
-
-.swal2-popup.swal-form-approve .mfu-form .mfu-sign.mfu-signline .lab{ white-space:nowrap; }
-.swal2-popup.swal-form-approve .mfu-form .mfu-sign.mfu-signline .dots{
-  height:1.15em; border-bottom:1px dotted #888;
-}
-.swal2-popup.swal-form-approve .mfu-form .mfu-sign.mfu-signline .name,
-.swal2-popup.swal-form-approve .mfu-form .mfu-sign.mfu-signline .role{
-  grid-column:2; text-align:center; margin-top:6px;
-}
-
-/* 3) Equipment detail table – คอลัมน์ชุดเดียว */
-.swal2-popup .swal-detail-table.items{ table-layout:fixed; }
-.swal2-popup .swal-detail-table.items th.col-name,
-.swal2-popup .swal-detail-table.items td.col-name{
-  width:140px; max-width:140px; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-}
-.swal2-popup .swal-detail-table.items th.col-qty,
-.swal2-popup .swal-detail-table.items td.col-qty{ width:90px; }
-.swal2-popup .swal-detail-table.items th.col-id,
-.swal2-popup .swal-detail-table.items td.col-id{
-  width:110px; max-width:72px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; vertical-align:middle;
-}
-.swal2-popup .swal-detail-table.items th.col-requester,
-.swal2-popup .swal-detail-table.items td.col-requester{ min-width:240px; }
-.swal2-popup .swal-detail-table.items th.col-period,
-.swal2-popup .swal-detail-table.items td.col-period{
-  width:160px; max-width:160px; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-}
-
-/* Mobile tuning ของตารางอุปกรณ์ */
-@media (max-width:600px){
-  .swal2-popup .swal-detail-table.items{ table-layout:auto; }
-  .swal2-popup .swal-detail-table.items th.col-name,
-  .swal2-popup .swal-detail-table.items td.col-name{ width:160px; max-width:160px; }
-  .swal2-popup .swal-detail-table.items th.col-id,
-  .swal2-popup .swal-detail-table.items td.col-id{ width:200px; max-width:90px; }
-  .swal2-popup .swal-detail-table.items th.col-requester,
-  .swal2-popup .swal-detail-table.items td.col-requester{ min-width:200px; }
-  .swal2-popup .swal-detail-table.items th.col-period,
-  .swal2-popup .swal-detail-table.items td.col-period{
-    white-space:normal; word-break:break-word; overflow:visible; text-overflow:clip;
-    width:auto; max-width:none; line-height:1.35;
-  }
-}
-
-/* ให้กล่อง 1 และ 2 กว้างเต็มแถว (2 คอลัมน์) */
-.swal2-popup.swal-form-approve .mfu-form .mfu-boxes{
-  display: grid !important;
-  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-  gap: 12px !important;
-}
-
-/* มือถือ: เรียงเป็น 1 คอลัมน์ */
-@media (max-width:700px){
-  .swal2-popup.swal-form-approve .mfu-form .mfu-boxes{
-    grid-template-columns: 1fr !important;
-  }
-}
-
-/* == เพิ่มใหม่เพื่อ checkbox / textbox == */
-.mfu-box .chk{ display:flex; align-items:center; gap:8px; cursor:pointer; }
-.mfu-box input[type="checkbox"]{ width:16px; height:16px; cursor:pointer; }
-.mfu-box .mfu-input{
-  flex:1; min-width:0; padding:6px 8px;
-  border:1px solid #cbd5e1; border-radius:6px; font:inherit;
-}
-
-/* ให้ทุกแถวในกล่องสูงเท่ากัน */
-.mfu-box .row{
-  display:flex;
-  align-items:center;
-  gap:8px;
-  min-height:36px;            /* ความสูงมาตรฐานแต่ละบรรทัด */
-}
-
-/* แถวลายเซ็นของทั้งสองกล่องใช้ความสูงเดียวกัน */
-.mfu-box .sig-row{
-  min-height:56px;
-}
-
-/* เส้นประ/วงเล็บ/เส้นเติม เหมือนเดิม (ถ้ายังไม่มีให้ใส่ด้วย) */
-.mfu-box .fill{
-  flex:1;
-  border-bottom:1px dotted #444;
-  height:1.15em;
-  transform:translateY(-2px);
-}
-.mfu-box .fill.full{ width:100%; }
-.mfu-box .paren{ margin:0 4px; }
-
-/* Equipment  */
-/* ===== Equipment approve preview (ใน Swal) ===== */
-.swal2-popup.swal-equip-approve{
-  max-width: 1100px !important;
-  width: auto !important;
-  padding: 26px !important;
-}
-
-.eqp-preview{
-  font-family:'THSarabunNew','Sarabun','Noto Sans Thai', system-ui, sans-serif;
-  color:#111;
-}
-
-/* Head + meta */
-.eqp-head{ text-align:center; margin-bottom: 8px; }
-.eqp-head .t1{ font-weight:700; font-size:20px; }
-.eqp-head .t2{ font-size:14px; margin-top:2px; }
-
-.eqp-meta{ display:flex; justify-content:flex-end; margin: 8px 0 12px; }
-
-.eqp-meta .right{ text-align:right; line-height:1.5; }
-
-/* Paragraph (ประโยคเดียว) */
-.eqp-par{
-  font-size: 16px;
-  line-height: 1.75;         /* ↑ จาก 1.7 */
-  text-indent: 2em;
-  word-break: break-word;
-  margin: 12px 0 18px;       /* ↑ จาก 8 0 12 */
-}
-
-/* (ใช้ถ้ายังมีโครงเก่า eqp-user อยู่) */
-.eqp-user{ font-size:16px; line-height:1.6; margin:10px 0 12px; }
-.eqp-user > div{ margin:2px 0; }
-
-/* Table */
-.eqp-table{
-  width:100%;
-  border-collapse: collapse;
-  table-layout: fixed;
-  font-size: 15px;
-  margin: 14px 0 22px;
-}
-.eqp-table thead th{
-  background:#213555;
-  color:#fff;
-  border:1px solid #e6e9f2;
-  padding:10px 14px;
-  text-align:center;
-  font-weight:700;
-}
-.eqp-table tbody td{
-  border:1px solid #e6e9f2;
-  padding:10px 14px;
-}
-
-.eqp-table th,
-.eqp-table td{
-  white-space: normal !important;
-  word-break: break-word !important;       /* คำไทยยาวๆ */
-  overflow-wrap: anywhere !important;      /* กรณีไม่มีเว้นวรรค */
-  vertical-align: top;                     /* ให้หัวตารางกับข้อมูลชิดบน */
-}
-
-
-
-.eqp-table td.c{ text-align:center; }
-.eqp-table td.l{
-  text-align:left;
-  overflow: visible !important;
-  text-overflow: clip !important;
-}
-.eqp-table thead th:nth-child(1){ width: 18mm; } /* ลำดับ */
-.eqp-table thead th:nth-child(3){ width: 22mm; } /* จำนวน */
-.eqp-table thead th:nth-child(4){ width: 60mm; } /* หมายเหตุ (กว้างขึ้น) */
-
-/* Boxes (ความคิดเห็น/ผลการปฏิบัติงาน) */
-.eqp-boxes{
-  display:grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;                 /* ↑ ระยะห่างระหว่างกล่อง */
-  margin-top: 18px;          /* ↑ ระยะจากตาราง */
-}
-.eqp-boxes .box{ border:1px solid #333; padding:12px 14px; min-height:176px; }
-.eqp-boxes .title{
-  font-weight:700;
-  text-align:center;
-  padding-bottom:6px;      /* ระยะก่อนเส้น */
-  margin-bottom:10px;      /* ระยะหลังเส้น */
-  border-bottom:1px solid #9aa3b2;
-}
-.eqp-boxes .line{ margin: 10px 0; } /* ↑ */
-.eqp-boxes .box .date{
-  text-align:center;       /* ตรงกลาง */
-}
-
-/* Signature block */
-.eqp-sign{
-  margin:16px 0 6px;
-  display:flex;
-  flex-direction:column;
-  align-items:flex-end;          /* ชิดขวา */
-  text-align:right;
-}
-
-.eqp-sign .sig{
-  text-align: right;          /* ให้ข้อความภายในชิดขวาด้วย */
-  line-height: 1.6;
-}
-
-.eqp-sign .sig-line{
-  display:grid;
-  grid-template-columns:auto 240px auto; /* ปรับความกว้างช่องชื่อได้ */
-  align-items:center;
-  column-gap:8px;                          /* ระยะระหว่างคำ */
-}
-
-.eqp-sign .sig-line .line{
-  height:1.2em;
-  border-bottom:1px dotted #666;
-  display:flex;
-  align-items:flex-end;
-  justify-content:center;        /* ให้ชื่ออยู่กลางเส้น */
-}
-.eqp-sign .sig-line .name{ padding:0 6px; background:transparent; }
-.eqp-sign .date{ margin-top:6px; }
-
-/* ==== เส้นจุดแบบเต็มบรรทัด + แถวลงชื่อ บรรทัดเดียว (สำหรับพรีวิว) ==== */
-.eqp-boxes .dotrow{
-  height: 1.2em;
-  border-bottom: 1px dotted #666;
-  margin: 10px 0;
-}
-.eqp-boxes .sign-inline{
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  column-gap: 8px;
-  align-items: center;
-  margin-top: 6px;
-}
-.eqp-boxes .sign-inline .dotfill{
-  height: 1.2em;
-  border-bottom: 1px dotted #666;
-}
-.eqp-boxes .date{
-  text-align: center;
-  margin-top: 8px;
-}
-
-/* === Center the date under the signature line (Swal preview) === */
-.swal2-popup .eqp-sign{
-  /* ใช้ grid 3 คอลัมน์: label | เส้นเซ็น(240px) | บทบาท */
-  display: grid !important;
-  grid-template-columns: auto 240px auto !important;
-  column-gap: 8px !important;
-  align-items: center !important;
-  justify-content: end !important;   /* ทั้งบล็อกชิดขวาตามเดิม */
-  text-align: unset !important;       /* ไม่ต้อง right-align ทั้งบล็อก */
-}
-.swal2-popup .eqp-sign .sig-line{
-  /* ทำให้ลูก ๆ ของ sig-line กลายเป็น grid item ของ .eqp-sign */
-  display: contents !important;
-}
-.swal2-popup .eqp-sign .date{
-  grid-column: 2 !important;          /* ให้อยู่คอลัมน์กลาง (ตรงกับเส้นเซ็น) */
-  justify-self: center !important;    /* จัดกลางตามความกว้าง 240px */
-  margin-top: 6px;
-}
-
-.mfu-box #head_other_reason{
-  border: none !important;
-  background: transparent !important;
-  padding: 0 !important;
-  min-width: 0 !important;
-  box-shadow: none !important;
-}
-
-.swal2-popup.swal-form-approve .mfu-form .mfu-list li.tight b{
-  min-width: 60px !important;   /* จะเอา 80–140 ก็ปรับได้ */
-}
-
-
-
-
+/* จุดเฉพาะกิจ */
+.mfu-box #head_other_reason{ border:none !important; background:transparent !important; padding:0 !important; min-width:0 !important; box-shadow:none !important; }
+.mfu-box .row{ align-items:baseline; flex-wrap:nowrap; }
+.mfu-ta{ display:inline-block; width:auto; flex:1; min-width:0; }
+.mfu-box .chk{ white-space:nowrap; }
+.mfu-box .sig-row{ height:56px; display:flex; align-items:flex-end; }
+.mfu-box .sig-row + .row{ margin-top:0; align-items:center; }
 </style>

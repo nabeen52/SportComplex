@@ -77,7 +77,7 @@
       <div class="scroll-x-container">
         <div class="form-container">
           <div class="form-header">
-            <h3>แบบฟอร์มการยืมอุปกรณ์/วัสดุ/ครุภัณฑ์</h3>
+            <h3>แบบฟอร์มการยืมอุปกรณ์ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง</h3>
             <p><b>โทร: 0-5391-7820 และ 0-5391-7821 | E-mail: sport-complex@mfu.ac.th</b></p>
           </div>
 
@@ -104,15 +104,16 @@
                 <span v-if="touched && (showError && !id_form)" style="color:red">*</span>
               </label>
               <input
-                type="text"
-                class="custom-input"
-                v-model="form.id_form"
-                :class="{ 'is-invalid': touched && showError && !form.id_form }"
-                :readonly="false"
-                inputmode="numeric"
-                pattern="\d*"
-                @input="onIdInput"
-              />
+  type="text"
+  class="custom-input"
+  v-model="form.id_form"
+  :class="{ 'is-invalid': touched && showError && !form.id_form }"
+  :readonly="false"
+  inputmode="numeric"
+  pattern="\d*"
+  maxlength="10"
+  @input="onIdInput"
+/>
             </div>
 
             <!-- Agency -->
@@ -192,37 +193,42 @@
               />
             </div>
 
-            <!-- Reason -->
-            <div class="form-row">
-              <label>
-                เหตุผลที่ขอใช้
-                <span v-if="touched && (showError && !form.reason)" style="color:red">*</span>
-              </label>
-              <textarea
-                class="custom-textarea"
-                v-model="form.reason"
-                :class="{ 'is-invalid': touched && showError && !form.reason }"
-                :readonly="isFormLocked"
-                rows="4"
-                placeholder="กรอกเหตุผลในการขอใช้"
-              ></textarea>
-            </div>
+           <!-- Reason -->
+<div class="form-row">
+  <label>
+    เหตุผลที่ขอใช้
+    <span v-if="touched && (showError && !form.reason)" style="color:red">*</span>
+  </label>
+  <textarea
+    class="custom-textarea"
+    v-model="form.reason"
+    :class="{ 'is-invalid': touched && showError && !form.reason }"
+    :readonly="isFormLocked"
+    rows="4"
+    maxlength="100"
+    placeholder="กรอกเหตุผลในการขอใช้"
+  ></textarea>
+  <small class="char-counter">{{ reasonCount }}/{{ MAX_REASON }} ตัวอักษร</small>
+</div>
 
-            <!-- Location -->
-            <div class="form-row">
-              <label>
-                สถานที่ใช้งาน
-                <span v-if="touched && (showError && !form.location)" style="color:red">*</span>
-              </label>
-              <textarea
-                class="custom-textarea"
-                v-model="form.location"
-                :class="{ 'is-invalid': touched && showError && !form.location }"
-                :readonly="isFormLocked"
-                rows="3"
-                placeholder="กรอกสถานที่ใช้งาน"
-              ></textarea>
-            </div>
+<!-- Location -->
+<div class="form-row">
+  <label>
+    สถานที่ใช้งาน
+    <span v-if="touched && (showError && !form.location)" style="color:red">*</span>
+  </label>
+  <textarea
+    class="custom-textarea"
+    v-model="form.location"
+    :class="{ 'is-invalid': touched && showError && !form.location }"
+    :readonly="isFormLocked"
+    rows="3"
+    maxlength="100"
+    placeholder="กรอกสถานที่ใช้งาน"
+  ></textarea>
+  <small class="char-counter">{{ locationCount }}/{{ MAX_LOCATION }} ตัวอักษร</small>
+</div>
+
 
             <!-- ====== ช่วงวันที่ (แบบโรงแรม – เดือนเดียว) ====== -->
             <div class="form-row date-range-row">
@@ -339,7 +345,7 @@
             </div>
 
             <!-- Equipment cart title -->
-            <div class="form-section-title">รายการอุปกรณ์/วัสดุ/ครุภัณฑ์</div>
+            <div class="form-section-title">รายการอุปกรณ์</div>
           </div>
 
           <!-- Equipment table -->
@@ -370,13 +376,15 @@
                   </td>
                   <td>
                     <input
-                      type="text"
-                      class="equipment-remark-input"
-                      v-model="equipmentRemarks[name]"
-                      :readonly="isFormLocked"
-                      placeholder="หมายเหตุ"
-                      style="width: 100%;"
-                    />
+  type="text"
+  class="equipment-remark-input"
+  v-model="equipmentRemarks[name]"
+  :readonly="isFormLocked"
+  placeholder="หมายเหตุ"
+  maxlength="50"
+  style="width: 100%;"
+/>
+
                   </td>
                 </tr>
                 <tr v-if="Object.keys(cartMap).length === 0">
@@ -439,6 +447,13 @@ const agencyDropdownOpen = ref(false);
 const agencyInputEl = ref(null)
 const isAgencyEditing = ref(false)
 const fileUploadInput = ref(null)
+
+
+const MAX_REASON = 100;
+const MAX_LOCATION = 100;
+
+const reasonCount   = computed(() => (form.reason   || '').length);
+const locationCount = computed(() => (form.location || '').length);
 
 /* ===== Date variables ===== */
 const dpRange = ref(null)     // [Date, Date] | null   (ช่วงวันที่)
@@ -515,9 +530,10 @@ function onAgencyBlur() {
 }
 
 function onIdInput(e) {
-  let digits = e.target.value.replace(/\D/g, '');
+  let digits = e.target.value.replace(/\D/g, '').slice(0, 10);
   form.id_form = digits;
 }
+
 
 const form = reactive({
   name: '',
@@ -1363,6 +1379,15 @@ watch(dpReceive, (d) => {
   --subbar-h: 0px;
   --gap: 12px;
 }
+.char-counter{
+  display: block;
+  margin-top: 4px;
+  margin-left: 2px;
+  font-size: 12px;
+  font-style: italic;
+  color: #6b7280; /* เทาอ่อน อ่านง่าย */
+}
+
 </style>
 
 <style>

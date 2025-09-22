@@ -14,6 +14,7 @@
         <router-link to="/booking_field_admin" active-class="active"><i class="pi pi-map-marker"></i> จองสนาม</router-link>
         <router-link to="/approve_field" active-class="active"><i class="pi pi-verified"></i> อนุมัติ</router-link>
         <!-- <router-link to="/return_admin" active-class="active"><i class="pi pi-box"></i> รับคืนอุปกรณ์ </router-link> -->
+         <router-link to="/agency_admin" active-class="active"><i class="pi pi-briefcase"></i> หน่วยงาน </router-link>
         <router-link to="/members" active-class="active"><i class="pi pi-user-edit"></i> พนักงาน/ผู้ดูแล </router-link>
         <router-link to="/history_admin" active-class="active"><i class="pi pi-history"></i> ระบบประวัติการทำรายการ</router-link>
       </nav>
@@ -580,15 +581,15 @@ const getSearchNames = this._getSearchNames.bind(this);
         const getAv = this._getUserAvatar.bind(this);
 
        const rowHTML = (u) => {
-  const id = String(getId(u) || '-');
-  const displayName = String(getDisp(u) || '-');       // แสดง name
-  const searchNames = String(getSearchNames(u) || ''); // ใช้ค้นหา (ไทย+อังกฤษ)
+  const id = String(getId(u) || '-');                 // ใช้เพื่อค้นหาเท่านั้น
+  const displayName = String(getDisp(u) || '-');      // name ที่แสดง
+  const searchNames = String(getSearchNames(u) || '');// ไทย/อังกฤษ สำหรับค้นหา
   const email = String(u.email || '-');
-  const phone = String(getPhone(u) || '-');            // << NEW
+  const phone = String(getPhone(u) || '-');
   const role = String(u.role || '-');
   const img = getAv(u) || '';
 
-  const dataText = esc([id, searchNames, email, phone, role].join(' ')); // << รวม phone
+  const dataText = esc([id, searchNames, email, phone, role].join(' '));
 
   const fallbackSvg = encodeURIComponent(
     `<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'>
@@ -604,14 +605,15 @@ const getSearchNames = this._getSearchNames.bind(this);
         <img src="${img || fallbackUri}" alt="" loading="lazy"
              onerror="this.onerror=null;this.src='${fallbackUri}'" />
       </td>
-      <td>${esc(id)}</td>
+      <!-- ลบคอลัมน์ user_id ออก -->
       <td>${esc(displayName)}</td>
       <td>${esc(email)}</td>
-      <td>${esc(phone)}</td>       <!-- << NEW: phone column -->
+      <td>${esc(phone)}</td>
       <td>${esc(role)}</td>
     </tr>
   `;
 };
+
 
         const updateCount = () => {
           countEl.textContent = `ทั้งหมด ${filtered.length} รายการ`;
@@ -724,19 +726,19 @@ _buildUsersTableHTML() {
         <table class="lookup-table">
           <colgroup>
             <col style="width: 84px;">   <!-- picture -->
-            <col style="width: 140px;">  <!-- user_id -->
-            <col style="width: 24%;">    <!-- name -->
-            <col style="width: 28%;">    <!-- email -->
-            <col style="width: 16%;">    <!-- phone -->
+            <!-- ตัด user_id ออก -->
+            <col style="width: 30%;">    <!-- name -->
+            <col style="width: 36%;">    <!-- email -->
+            <col style="width: 18%;">    <!-- phone -->
             <col style="width: 110px;">  <!-- role -->
           </colgroup>
           <thead>
             <tr>
               <th>picture</th>
-              <th>user_id</th>
+              <!-- ตัด user_id ออก -->
               <th>name</th>
               <th>email</th>
-              <th>phone</th>      <!-- << NEW -->
+              <th>phone</th>
               <th>role</th>
             </tr>
           </thead>
@@ -751,6 +753,7 @@ _buildUsersTableHTML() {
     </div>
   `;
 }
+
 
 
 ,

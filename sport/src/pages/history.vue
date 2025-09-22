@@ -167,23 +167,24 @@
 
                   <!-- Action: ช่องซ้าย = Cancel/Return (ช่องเดียวกัน), กลาง = Detail, ขวา = ที่ว่าง -->
                   <td class="action-cell">
-                    <div class="action-grid">
-                      <!-- ช่องที่ 1: Cancel หรือ Return -->
-                      <template v-if="showCancelButton(group)">
-                        <button class="cancel-btn" @click="cancelForGroup(group)">Cancel</button>
-                      </template>
-                      <template v-else-if="showReturnButton(group)">
-                        <button class="return-btn" @click="returnItemGroup(group)">Return</button>
-                      </template>
-                      <span v-else class="btn-placeholder"></span>
+  <div :class="['action-grid', hasPrimaryAction(group) ? 'action-2' : 'action-3']">
+    <!-- ช่องซ้าย: Cancel หรือ Return หรือ Placeholder -->
+    <template v-if="showCancelButton(group)">
+      <button class="cancel-btn" @click="cancelForGroup(group)" :disabled="_isCancelling">Cancel</button>
+    </template>
+    <template v-else-if="showReturnButton(group)">
+      <button class="return-btn" @click="returnItemGroup(group)">Return</button>
+    </template>
+    <span v-else class="btn-placeholder"></span>
 
-                      <!-- ช่องที่ 2: Detail (อยู่ตรงกลางเสมอ) -->
-                      <button class="remark-btn" @click="detailGroup(group)">Detail</button>
+    <!-- ช่องกลาง: Detail (อยู่กลางคอลัมน์เสมอ) -->
+    <button class="remark-btn" @click="detailGroup(group)">Detail</button>
 
-                      <!-- ช่องที่ 3: เว้นว่างคงตำแหน่ง -->
-                      <span class="btn-placeholder"></span>
-                    </div>
-                  </td>
+    <!-- ช่องขวา: ใส่ Placeholder เฉพาะกรณีที่ "ไม่มี" ปุ่ม Cancel/Return เพื่อให้ Detail อยู่กึ่งกลางจริง -->
+    <span v-if="!hasPrimaryAction(group)" class="btn-placeholder"></span>
+  </div>
+</td>
+
                 </tr>
               </tbody>
             </table>
@@ -276,9 +277,6 @@
   </div>
 </template>
 
-
-
-
 <script>
 import axios from 'axios'
 import Swal from 'sweetalert2'
@@ -317,6 +315,7 @@ export default {
       isSubmittingReturnPhoto: false, // <<== ตัวแปรป้องกันการส่งซ้ำ
       refreshTimer: null,   // ⬅ ใช้ setInterval
       _lastSnapshot: '',
+      _isCancelling: false,
     }
   },
 
@@ -428,12 +427,12 @@ getGroupCreatedAt(group) {
   const latest = new Date(Math.max(...dates.map(d => d.getTime())));
   return latest; // formatDateOnly รองรับ Date object ได้
 },
+hasPrimaryAction(group) {
+  return this.showCancelButton(group) || this.showReturnButton(group);
+},
 
     buildReturnPayload(bookingId) {
-  const items = (this.histories || [])
-    .filter(h => String(h.booking_id) === String(bookingId));
-
-  // ⬅ เลือกตัวที่มีข้อมูล handover ก่อน ถ้าไม่มีค่อย fallback ไปตัวที่ Approved หรือชิ้นแรก
+  const items = (this.histories || []).filter(h => String(h.booking_id) === String(bookingId));
   const withHandover = items.find(i =>
     i.handoverById || i.handoverBy || i.handoverAt ||
     i.handoverRemarkSender || i.handoverRemarkReceiver
@@ -450,24 +449,22 @@ getGroupCreatedAt(group) {
     'id_form','agency',
     'approvedBy','approvedById',
     'bookingPdfUrl','booking_pdf_url',
-
-    // ✅ เพิ่ม 5 ฟิลด์ที่ต้องการ
+    // 5 ฟิลด์ handover
     'handoverById','handoverBy','handoverAt','handoverRemarkSender','handoverRemarkReceiver'
   ];
-
   FIELDS.forEach(k => {
     if (src[k] !== undefined && src[k] !== null && src[k] !== '') payload[k] = src[k];
   });
-
-  // บังคับให้ key ทั้ง 5 ออกไปเสมอ (ถึงจะว่าง)
   ['handoverById','handoverBy','handoverAt','handoverRemarkSender','handoverRemarkReceiver']
     .forEach(k => { if (!(k in payload)) payload[k] = src[k] ?? ''; });
 
-  if (!payload.type) payload.type = src.type || 'equipment';
-  payload.status = 'Return-pending';
+  // บังคับ type และสถานะ
+  if (!payload.type) payload.type = 'equipment';
+  payload.status = 'return-pending';   // ⬅⬅ สำคัญ
 
   return payload;
 },
+
 
     setStatusWidthToReturnPending() {
       this.$nextTick(() => {
@@ -842,48 +839,53 @@ getGroupCreatedAt(group) {
     },
 
     addSortDateToHistories(histories) {
-      return histories.map((h, idx) => {
-        const dateCandidates = [
-          h.returnedAt,
-          h.updatedAt,
-          h.approvedAt,
-          h.disapprovedAt,
-          h.createdAt,
-          h.end_date,
-          h.uptodate,
-          h.since,
-          h.date,
-        ].filter(Boolean);
+  return histories.map((h, idx) => {
+    const dateCandidates = [
+      h.returnedAt,
+      h.updatedAt,
+      h.approvedAt,
+      h.disapprovedAt,
+      h.createdAt,
+      h.end_date,
+      h.uptodate,
+      h.since,
+      h.date,
+    ].filter(Boolean);
 
-        let sortDate = dateCandidates
-          .map(d => new Date(d))
-          .filter(d => d instanceof Date && !isNaN(d))
-          .sort((a, b) => b.getTime() - a.getTime())[0];
+    let sortDate = dateCandidates
+      .map(d => new Date(d))
+      .filter(d => d instanceof Date && !isNaN(d))
+      .sort((a, b) => b.getTime() - a.getTime())[0];
 
-        if (!sortDate) sortDate = new Date(0);
+    if (!sortDate) sortDate = new Date(0);
 
-        return {
-          ...h,
-          id: h._id?.$oid || h._id || idx + 1,
-          sortDate,
-          status: this.statusLabel(h.status),
-          requester: h.requester || '-',
-          attachment: h.attachment || null,
-          fileName: h.fileName || null,
-          fileType: h.fileType || null,
-          returnedBy: h.returnedBy || '-',
-          remark: h.remark || '-',           // ใช้ remark ที่จะเอาไปโชว์ใน Detail
-          approvedBy: h.approvedBy || '-',
-          disapprovedBy: h.disapprovedBy,
+    return {
+      ...h,
+      id: h._id?.$oid || h._id || idx + 1,
+      sortDate,
+      status: this.statusLabel(h.status),
+      requester: h.requester || '-',
 
-          handoverById:          h.handoverById          || h.handover_by_id          || '',
-          handoverBy:            h.handoverBy            || h.handover_by             || h.handoverStaffName || '',
-          handoverAt:            h.handoverAt            || h.handover_at             || '',
-          handoverRemarkSender:  h.handoverRemarkSender  || h.handover_remark_sender  || '',
-          handoverRemarkReceiver:h.handoverRemarkReceiver|| h.handover_remark_receiver|| '',
-        };
-      });
-    },
+      // ⬇ แยกเก็บแต่ละฟิลด์ให้ชัดเจน
+      attachment: h.attachment || h.fileData || null,           // แนบไฟล์เดิม
+      returnPhoto: h.returnPhoto || h.return_photo || null,     // รูปคืนของ (ใหม่)
+
+      fileName: h.fileName || null,
+      fileType: h.fileType || null,
+      returnedBy: h.returnedBy || '-',
+      remark: h.remark || '-',
+      approvedBy: h.approvedBy || '-',
+      disapprovedBy: h.disapprovedBy,
+
+      handoverById:           h.handoverById           || h.handover_by_id           || '',
+      handoverBy:             h.handoverBy             || h.handover_by              || h.handoverStaffName || '',
+      handoverAt:             h.handoverAt             || h.handover_at              || '',
+      handoverRemarkSender:   h.handoverRemarkSender   || h.handover_remark_sender   || '',
+      handoverRemarkReceiver: h.handoverRemarkReceiver || h.handover_remark_receiver || '',
+    };
+  });
+},
+
 
     async reloadHistories() {
       try {
@@ -896,267 +898,370 @@ getGroupCreatedAt(group) {
       }
     },
 
-    async cancelGroup(group) {
-      const confirmed = await Swal.fire({
-        title: 'Confirm cancellations?',
-        text: 'Are you sure you want to cancel all reservations for this list?',
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#d33',
-        cancelButtonColor: '#9e9e9e',
-        confirmButtonText: 'Yes',
-        cancelButtonText: 'No'
-      });
-      if (confirmed.isConfirmed) {
-        try {
-          await Promise.all(group.items.map(item =>
-            axios.delete(`${API_BASE}/api/history/${item.id}`)
-          ));
-          Swal.fire('Cancelled', '', 'success');
-        } catch (error) {
-          Swal.fire('Error', 'Something went wrong', 'error');
-        }
-      }
-    },
+    // ยกเลิกทั้งกลุ่ม (Equipment หลายชิ้นใน booking เดียว)
+// ยกเลิกทั้งกลุ่ม (Equipment ทั้งแบบวันเดียว/หลายวันใน booking เดียว)
+async cancelGroup(group) {
+  if (this._isCancelling) return;
 
-    async cancelItem(itemId) {
-      const confirmed = await Swal.fire({
-        title: 'Confirm cancellation?',
-        text: 'Are you sure you want to cancel your booking?',
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#d33',
-        cancelButtonColor: '#3085d6',
-        confirmButtonText: 'Yes',
-        cancelButtonText: 'No'
-      });
-      if (confirmed.isConfirmed) {
-        try {
-          await axios.delete(`${API_BASE}/api/history/${itemId}`);
-          await this.fetchAndRenderHistories();
-          Swal.fire('Cancelled', '', 'success');
-        } catch (error) {
-          Swal.fire('Error', 'Something went wrong', 'error');
-        }
+  const { isConfirmed, value: rawReason } = await Swal.fire({
+    title: 'Confirm cancellations?',
+    text: 'Are you sure you want to cancel all reservations for this list?',
+    input: 'textarea',
+    inputPlaceholder: 'Reason (optional)',
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: '#d33',
+    cancelButtonColor: '#9e9e9e',
+    confirmButtonText: 'Yes',
+    cancelButtonText: 'No'
+  });
+  if (!isConfirmed) return;
+
+  const reason = (rawReason || '').trim();
+  this._isCancelling = true;
+
+  try {
+    const pendingItems = (group.items || []).filter(it => it.status === 'Pending');
+
+    // 1) พยายามยกเลิกทั้ง booking (ถ้าแบ็กเอนด์มี route นี้)
+    if (group.booking_id) {
+      try {
+        await axios.post(`${API_BASE}/api/history/booking/${group.booking_id}/cancel`, {
+          status: 'Canceled',
+          remark: reason,            // ✅ เก็บลง remark
+          reason: reason,            // (เผื่อโค้ดเดิมยังอ่าน reason)
+          canceledAt: new Date().toISOString(),
+        });
+      } catch {
+        // 2) ถ้าไม่มี route ยกเลิกทั้งกลุ่ม -> PATCH ทีละรายการที่ยัง Pending
+        await Promise.all(pendingItems.map(it =>
+          axios.patch(`${API_BASE}/api/history/${it.id}`, {
+            status: 'Canceled',
+            remark: reason,
+            reason: reason,
+            canceledAt: new Date().toISOString(),
+          })
+        ));
       }
-    },
+    } else {
+      // 3) ไม่รู้ booking_id -> PATCH ทีละรายการที่ยัง Pending
+      await Promise.all(pendingItems.map(it =>
+        axios.patch(`${API_BASE}/api/history/${it.id}`, {
+          status: 'Canceled',
+          remark: reason,
+          reason: reason,
+          canceledAt: new Date().toISOString(),
+        })
+      ));
+    }
+
+    // 4) เพื่อให้แน่ใจว่า remark ถูกบันทึกลง “แต่ละชิ้น” ในกลุ่มด้วย
+    //    (บางแบ็กเอนด์ route ยกเลิกทั้ง booking อาจอัปเดตสถานะอย่างเดียว)
+    const allIds = (group.items || []).map(it => it.id).filter(Boolean);
+    if (allIds.length && reason) {
+      await Promise.all(allIds.map(id =>
+        axios.patch(`${API_BASE}/api/history/${id}`, { remark: reason, reason })
+          .catch(() => {}) // เงียบถ้าอัปเดตซ้ำ/ไม่ได้
+      ));
+    }
+
+    await this.fetchAndRenderHistories();
+    Swal.fire('Cancelled', '', 'success');
+  } catch (error) {
+    console.error(error);
+    Swal.fire('Error', 'Something went wrong', 'error');
+  } finally {
+    this._isCancelling = false;
+  }
+}
+,
+
+   // ยกเลิกเดี่ยว (Field 1 รายการ หรืออุปกรณ์เดี่ยว)
+// ยกเลิกรายการเดี่ยว (ใช้กับ field หรืออุปกรณ์เดี่ยว)
+async cancelItem(itemId) {
+  const { isConfirmed, value: rawReason } = await Swal.fire({
+    title: 'Confirm cancellation?',
+    text: 'Are you sure you want to cancel your booking?',
+    input: 'textarea',
+    inputPlaceholder: 'Reason (optional)',
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: '#d33',
+    cancelButtonColor: '#3085d6',
+    confirmButtonText: 'Yes',
+    cancelButtonText: 'No'
+  });
+  if (!isConfirmed) return;
+
+  const reason = (rawReason || '').trim();
+
+  try {
+    // 1) route เฉพาะกิจ (ถ้ามี)
+    await axios.post(`${API_BASE}/api/history/${itemId}/cancel`, {
+      status: 'Canceled',
+      remark: reason,              // ✅ เก็บลง remark
+      reason: reason,              // เผื่อโค้ดเดิม
+      canceledAt: new Date().toISOString(),
+    });
+  } catch {
+    try {
+      // 2) fallback เป็น PATCH
+      await axios.patch(`${API_BASE}/api/history/${itemId}`, {
+        status: 'Canceled',
+        remark: reason,
+        reason: reason,
+        canceledAt: new Date().toISOString(),
+      });
+    } catch {
+      // 3) สุดท้ายจริง ๆ (ไม่แนะนำ เพราะอาจไม่บันทึกเหตุผล)
+      await axios.delete(`${API_BASE}/api/history/${itemId}`);
+    }
+  }
+
+  // กันพลาด: อัปเดต remark ซ้ำอีกรอบ (กรณี route ยกเลิกไม่เซต remark ให้)
+  if (reason) {
+    try { await axios.patch(`${API_BASE}/api/history/${itemId}`, { remark: reason, reason }); } catch {}
+  }
+
+  await this.fetchAndRenderHistories();
+  Swal.fire('Cancelled', '', 'success');
+}
+
+
+,
 
     // ====== แก้ไขแล้ว: เพิ่มคอลัมน์ Remark ในทั้ง field/equipment ======
     detailGroup(group) {
-      const esc = this.esc;
-      const fmtDate = (d) => this.formatDateOnly(d);
-      const fmtTime = (t) => {
-        if (!t) return '-';
-        const raw = String(t).trim().replace(/\s*น\.?$/, '');
-        if (/^\d{1,2}:\d{2}$/.test(raw)) return `${raw} น.`;
-        const dt = new Date(`1970-01-01T${raw}`);
-        if (!isNaN(dt)) {
-          const hhmm = dt.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', hour12: false });
-          return `${hhmm} น.`;
-        }
-        return `${raw} น.`;
-      };
-      const fmtTimeRange = (a,b)=>{
-        const A = fmtTime(a), B = fmtTime(b);
-        if (A==='-' && B==='-') return '-';
-        if (A!=='-' && B!=='-') return `${A} - ${B}`;
-        return A!=='-' ? A : B;
-      };
-const fmtDateRange = (a, b) => {
-  const A = fmtDate(a), B = fmtDate(b);
-  if (A !== '-' && B !== '-') return `${A} - ${B}`;
-  if (A !== '-') return A;
-  if (B !== '-') return B;
-  return '-';
-};
+  const esc = this.esc;
 
-      let html = '';
+  const fmtDate = (d) => this.formatDateOnly(d);
+  const fmtTime = (t) => {
+    if (!t) return '-';
+    const raw = String(t).trim().replace(/\s*น\.?$/, '');
+    if (/^\d{1,2}:\d{2}$/.test(raw)) return `${raw} น.`;
+    const dt = new Date(`1970-01-01T${raw}`);
+    if (!isNaN(dt)) {
+      const hhmm = dt.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', hour12: false });
+      return `${hhmm} น.`;
+    }
+    return `${raw} น.`;
+  };
+  const fmtTimeRange = (a,b)=>{
+    const A = fmtTime(a), B = fmtTime(b);
+    if (A==='-' && B==='-') return '-';
+    if (A!=='-' && B!=='-') return `${A} - ${B}`;
+    return A!=='-' ? A : B;
+  };
+  const fmtDateRange = (a, b) => {
+    const A = fmtDate(a), B = fmtDate(b);
+    if (A !== '-' && B !== '-') return `${A} - ${B}`;
+    if (A !== '-') return A;
+    if (B !== '-') return B;
+    return '-';
+  };
 
-      if (group.type === 'field') {
-        const it = group.items[0] || {};
-        const startTime = it.startTime || it.since_time || '';
-        const endTime   = it.endTime   || it.until_thetime || '';
-        const timeRange = fmtTimeRange(startTime, endTime);
-const dateCell =
-  (it.since || it.uptodate)
-    ? fmtDateRange(it.since, it.uptodate)   // ใช้ช่วง since - uptodate
-    : fmtDate(it.date);                      // fallback เป็น date เดิม
+  // helper: แปลงอะไรก็ได้ -> array ของ url
+  const toArr = (v) => Array.isArray(v) ? v : (v ? [v] : []);
+  const pickUrl = (x) => {
+    if (!x) return '';
+    if (typeof x === 'string') return x;
+    return x.url || x.path || x.fileUrl || x.file_url || '';
+  };
+  const absolutize = (u) => {
+    try {
+      const s = String(u || '');
+      if (!s) return '';
+      if (/^(blob:|data:)/i.test(s)) return s;
+      if (/^https?:\/\//i.test(s)) return s;
+      return this.normalizePdfUrl ? this.normalizePdfUrl(s) : s;
+    } catch { return u; }
+  };
 
-        html = `
-          <div class="swal-table-wrap">
-            <table class="swal-table">
-              <colgroup>
-                <col style="width:16%">
-                <col style="width:22%">
-                <col style="width:16%">
-                <col style="width:16%">
-                <col style="width:14%">
-                <col style="width:16%">  <!-- Remark -->
-              </colgroup>
-              <thead>
-                <tr>
-                  <th>Field</th>
-                  <th>Name</th>
-                  <th>Date</th>
-                  <th>Time</th>
-                  <th>Status</th>
-                  <th>Remark</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td>${esc(it.name)}</td>
-                  <td>
-                    <div><b>Name:</b> ${esc(it.username_form || '-')}</div>
-                     <!-- <div><b>Book for:</b> ${esc(it.proxyStudentName || '-')}</div> -->
-                  </td>
-                  <td class="td-center">${esc(dateCell)}</td>
-                  <td class="td-center">${esc(timeRange)}</td>
-                  <td class="td-center">${esc(it.status)}</td>
-                  <td>${esc(it.remark || '-')}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <div class="swal-actions">
-            <button id="pdf-btn" class="pdfmake-btn">Download PDF form</button>
-          </div>
-        `;
-      } else {
-        // ===== equipment =====
-        let statusToShow = '';
-        if (group.items.every(i => i.status === 'Return-pending')) statusToShow = 'Return-pending';
-        else if (group.items.every(i => i.status === 'Returned'))   statusToShow = 'Returned';
-        else if (group.items.every(i => i.status === 'Approved'))   statusToShow = 'Approved';
-        else if (group.items.every(i => i.status === 'Pending'))    statusToShow = 'Pending';
-        else if (group.items.every(i => i.status === 'Disapproved'))statusToShow = 'Disapproved';
-        else statusToShow = (group.items[0]?.status || '');
+  let html = '';
 
-        const shown = group.items.filter(i => i.status === statusToShow);
-        const first = group.items[0] || {};
-        const isOneDayBorrow = (!first.since && !first.uptodate);
-        const showPdfButton  = !isOneDayBorrow;
+  if (group.type === 'field') {
+    const it = group.items[0] || {};
+    const startTime = it.startTime || it.since_time || '';
+    const endTime   = it.endTime   || it.until_thetime || '';
+    const timeRange = fmtTimeRange(startTime, endTime);
+    const dateCell  = (it.since || it.uptodate) ? fmtDateRange(it.since, it.uptodate) : fmtDate(it.date);
 
-       const rows = shown.map((it, idx) => {
-  const retDate = it.returnedAt ? fmtDate(it.returnedAt) : '-';
+    html = `
+      <div class="swal-table-wrap">
+        <table class="swal-table">
+          <colgroup>
+            <col style="width:16%">
+            <col style="width:22%">
+            <col style="width:16%">
+            <col style="width:16%">
+            <col style="width:14%">
+            <col style="width:16%">
+          </colgroup>
+          <thead>
+            <tr>
+              <th>Field</th>
+              <th>Name</th>
+              <th>Date</th>
+              <th>Time</th>
+              <th>Status</th>
+              <th>Remark</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="td-center">${esc(it.name)}</td>
+              <td class="td-center">${esc(it.username_form || '-')}</td>
+              <td class="td-center">${esc(dateCell)}</td>
+              <td class="td-center">${esc(timeRange)}</td>
+              <td class="td-center">${esc(it.status)}</td>
+              <td class="td-center">${esc(it.remark && String(it.remark).trim() !== '' ? it.remark : '-')}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="swal-actions">
+        <button id="pdf-btn" class="pdfmake-btn">Download PDF form</button>
+      </div>
+    `;
+  } else {
+    // ===== equipment =====
+    let statusToShow = '';
+    if (group.items.every(i => i.status === 'Return-pending')) statusToShow = 'Return-pending';
+    else if (group.items.every(i => i.status === 'Returned'))   statusToShow = 'Returned';
+    else if (group.items.every(i => i.status === 'Approved'))   statusToShow = 'Approved';
+    else if (group.items.every(i => i.status === 'Pending'))    statusToShow = 'Pending';
+    else if (group.items.every(i => i.status === 'Disapproved'))statusToShow = 'Disapproved';
+    else statusToShow = (group.items[0]?.status || '');
 
-  const borrowerName =
-    it.username_form ||
-    (group.items?.[0]?.username_form) ||
-    it.requester || '-';
+    const shown = group.items.filter(i => i.status === statusToShow);
+    const first = group.items[0] || {};
+    const isMultiDayBorrow = Boolean(first.since || first.uptodate);  // หลายวัน?
+    const showPdfButton  = isMultiDayBorrow ? true : false;
 
-  const attArr = Array.isArray(it.attachment)
-    ? it.attachment
-    : (it.attachment ? [it.attachment] : []);
+    const rows = shown.map((it, idx) => {
+      const retDate = it.returnedAt ? fmtDate(it.returnedAt) : '-';
+      const borrowerName =
+        it.username_form ||
+        (group.items?.[0]?.username_form) ||
+        it.requester || '-';
 
-  const firstUrl = attArr[0] || null;
+      // ✅ ดึงรูปจาก returnPhoto ก่อน "เสมอ" (วันเดียวก็ใช้)
+      let photoList = toArr(it.returnPhoto || it.return_photo)
+        .map(pickUrl).map(absolutize).filter(Boolean);
 
-  const retPhotoCell =
-    (['Returned','Return-pending'].includes(it.status) && firstUrl)
-      ? `
-        <img
-          src="${firstUrl}"
-          alt="return-photo"
-          class="swal-thumb"
-          onclick="window.__showFullReturnPhoto && window.__showFullReturnPhoto('${firstUrl}')"
-        />
-        <div class="swal-thumb-hint">(คลิกเพื่อดูรูปเต็ม)</div>
-      `
-      : '-';
-
-  // *** ใช้ since - uptodate ถ้ามี ไม่งั้น fallback เป็น date เดิม ***
-  const dateCell = (it.since || it.uptodate)
-    ? fmtDateRange(it.since, it.uptodate)
-    : fmtDate(it.date);
-
-  return `
-    <tr>
-      <td class="td-center">${esc(idx+1)}</td>
-      <td>${esc(it.name)}</td>
-      <td class="td-center">${esc(it.quantity ?? '-')}</td>
-      <td>${esc(borrowerName)}</td>
-      <td class="td-center">${esc(dateCell)}</td>
-      <td class="td-center">${esc(it.status)}</td>
-      <td>${esc(it.remark || '-')}</td>
-      <td class="td-center">${retDate}</td>
-      <td class="td-center">${retPhotoCell}</td>
-    </tr>
-  `;
-}).join('');
-
-
-        html = `
-          <div class="swal-table-wrap">
-            <table class="swal-table">
-              <colgroup>
-                <col style="width:6%">   <!-- No -->
-                <col style="width:20%">  <!-- Equipment -->
-                <col style="width:9%">   <!-- Amount -->
-                <col style="width:18%">  <!-- Name -->
-                <col style="width:11%">  <!-- Date -->
-                <col style="width:12%">  <!-- Status -->
-                <col style="width:14%">  <!-- Remark -->
-                <col style="width:10%">  <!-- Return date -->
-                <col style="width:10%">  <!-- Photo -->
-              </colgroup>
-              <thead>
-                <tr>
-                  <th>No</th>
-                  <th>Equipment</th>
-                  <th>Amount</th>
-                  <th>Name</th>
-                  <th>Date</th>
-                  <th>Status</th>
-                  <th>Remark</th>         <!-- NEW -->
-                  <th>Return date</th>
-                  <th>Photo</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${rows || `<tr><td colspan="9" class="td-center">ไม่มีรายการ</td></tr>`}
-              </tbody>
-            </table>
-          </div>
-          ${showPdfButton ? `<div class="swal-actions"><button id="pdf-btn" class="pdfmake-btn">Download PDF form</button></div>` : ``}
-        `;
+      // ถ้ายังไม่มี -> fallback ไป attachment
+      if (photoList.length === 0) {
+        photoList = toArr(it.attachment).map(pickUrl).map(absolutize).filter(Boolean);
       }
 
-      Swal.fire({
-        title: 'Detail list',
-        html,
-        confirmButtonText: 'Close',
-        confirmButtonColor: '#3085d6',
-        customClass: {
-          popup: 'hist-swal',
-          title: 'hist-swal-title',
-          htmlContainer: 'hist-swal-html'
-        },
-        didOpen: () => {
-          const pdfBtn = document.getElementById('pdf-btn');
-          if (pdfBtn) pdfBtn.addEventListener('click', () => this.downloadPdfFromGroup(group));
+      const firstUrl = photoList[0] || '';
 
-          // ===== เพิ่มตัวแสดงรูปเต็ม =====
-          window.__showFullReturnPhoto = (src) => {
-            if (!src) return;
-            Swal.fire({
-              html: `
-                <div class="img-viewer-wrap">
-                  <img src="${src}" alt="photo" class="img-viewer"/>
-                  <div class="img-viewer-actions">
-                    <a href="${src}" target="_blank" rel="noopener">เปิดในแท็บใหม่</a>
-                  </div>
-                </div>
-              `,
-              showConfirmButton: false,
-              showCloseButton: true,
-              background: '#000',
-              customClass: { popup: 'img-swal' }
-            });
-          };
-        },
-        willClose: () => { window.__showFullReturnPhoto = undefined; }
-      });
+      const retPhotoCell =
+        (['Returned','Return-pending'].includes(it.status) && firstUrl)
+          ? `
+            <img
+              src="${firstUrl}"
+              alt="return-photo"
+              class="swal-thumb"
+              onclick="window.__showFullReturnPhoto && window.__showFullReturnPhoto('${firstUrl}')"
+            />
+            <div class="swal-thumb-hint">${
+              photoList.length > 1 ? '(+รูปเพิ่ม)' : '(คลิกเพื่อดูรูปเต็ม)'
+            }</div>
+          `
+          : '-';
+
+      const dateCell = (it.since || it.uptodate) ? fmtDateRange(it.since, it.uptodate) : fmtDate(it.date);
+
+      return `
+        <tr>
+          <td class="td-center">${esc(idx+1)}</td>
+          <td class="td-center">${esc(it.name)}</td>
+          <td class="td-center">${esc(it.quantity ?? '-')}</td>
+          <td class="td-center">${esc(borrowerName)}</td>
+          <td class="td-center">${esc(dateCell)}</td>
+          <td class="td-center">${esc(it.status)}</td>
+          <td class="td-center">${esc(it.remark && String(it.remark).trim() !== '' ? it.remark : '-')}</td>
+          <td class="td-center">${retDate}</td>
+          <td class="td-center">${retPhotoCell}</td>
+        </tr>
+      `;
+    }).join('');
+
+    html = `
+      <div class="swal-table-wrap">
+        <table class="swal-table">
+          <colgroup>
+            <col style="width:6%">
+            <col style="width:20%">
+            <col style="width:9%">
+            <col style="width:18%">
+            <col style="width:11%">
+            <col style="width:12%">
+            <col style="width:14%">
+            <col style="width:10%">
+            <col style="width:10%">
+          </colgroup>
+          <thead>
+            <tr>
+              <th>No</th>
+              <th>Equipment</th>
+              <th>Amount</th>
+              <th>Name</th>
+              <th>Date</th>
+              <th>Status</th>
+              <th>Remark</th>
+              <th>Return date</th>
+              <th>Photo</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows || `<tr><td colspan="9" class="td-center">ไม่มีรายการ</td></tr>`}
+          </tbody>
+        </table>
+      </div>
+      ${showPdfButton ? `<div class="swal-actions"><button id="pdf-btn" class="pdfmake-btn">Download PDF form</button></div>` : ``}
+    `;
+  }
+
+  Swal.fire({
+    title: 'Detail list',
+    html,
+    confirmButtonText: 'Close',
+    confirmButtonColor: '#3085d6',
+    customClass: {
+      popup: 'hist-swal',
+      title: 'hist-swal-title',
+      htmlContainer: 'hist-swal-html'
     },
+    didOpen: () => {
+      const pdfBtn = document.getElementById('pdf-btn');
+      if (pdfBtn) pdfBtn.addEventListener('click', () => this.downloadPdfFromGroup(group));
+
+      // ตัวแสดงรูปเต็ม
+      window.__showFullReturnPhoto = (src) => {
+        if (!src) return;
+        Swal.fire({
+          html: `
+            <div class="img-viewer-wrap">
+              <img src="${src}" alt="photo" class="img-viewer"/>
+              <div class="img-viewer-actions">
+                <a href="${src}" target="_blank" rel="noopener">เปิดในแท็บใหม่</a>
+              </div>
+            </div>
+          `,
+          showConfirmButton: false,
+          showCloseButton: true,
+          background: '#000',
+          customClass: { popup: 'img-swal' }
+        });
+      };
+    },
+    willClose: () => { window.__showFullReturnPhoto = undefined; }
+  });
+},
+
+
 
     async returnItemGroup(group) {
       this.showCamera = true;
@@ -1244,52 +1349,63 @@ const dateCell =
       return;
     }
 
-    // id ของเอกสารที่จะเปลี่ยนสถานะเป็น return-pending
-    const ids = (this.histories || [])
-      .filter(h => String(h.booking_id) === String(this.returnGroupBookingId))
-      .map(h => h.id);
-
-    if (ids.length === 0) {
+    const originals = (this.histories || [])
+      .filter(h => String(h.booking_id) === String(this.returnGroupBookingId));
+    if (!originals.length) {
       await Swal.fire('ผิดพลาด', 'ไม่พบบันทึกในกลุ่มนี้', 'error');
       return;
     }
 
-    // ดึง "ข้อมูลเดิม" ของรายการที่จะส่งแนบไปพร้อมรูป
     const meta = this.buildReturnPayload(this.returnGroupBookingId);
-
     const ts = Date.now();
-    await Promise.all(ids.map(id => {
-      const form = new FormData();
-      // แนบรูป
-      form.append('attachment', this.cameraBlob, `return_photo_${id}_${ts}.jpg`);
-      // แนบฟิลด์ข้อมูลเดิม
-      Object.entries(meta).forEach(([k, v]) => {
-        form.append(k, typeof v === 'object' ? JSON.stringify(v) : String(v));
-      });
-      // ส่งไปยังแบ็กเอนด์
-      return axios.patch(`${API_BASE}/api/history/${id}/request-return`, form);
-    }));
 
-    // ปิดกล้อง/ล้าง state
-    if (this.cameraStream) {
-      try { this.cameraStream.getTracks().forEach(t => t.stop()); } catch {}
-      this.cameraStream = null;
-    }
-    if (this.cameraPreviewUrl) {
-      URL.revokeObjectURL(this.cameraPreviewUrl);
-      this.cameraPreviewUrl = null;
-    }
+    await Promise.all(
+      originals.map(orig => {
+        const form = new FormData();
+
+        // รูปคืนของ
+        form.append('returnPhoto', this.cameraBlob, `return_photo_${orig.id}_${ts}.jpg`);
+
+        // คงค่า attachment เดิม (ถ้ามี)
+        const oldAtt = orig?.attachment;
+        if (Array.isArray(oldAtt)) form.append('attachment', JSON.stringify(oldAtt));
+        else if (oldAtt) form.append('attachment', String(oldAtt));
+
+        // ย้ำสถานะ/ประเภทให้แน่ชัด
+        form.append('status', 'return-pending');  // ⬅⬅ สำคัญ
+        form.append('type', 'equipment');         // กันหลุด
+
+        // แนบ meta อื่น ๆ
+        Object.entries(meta).forEach(([k, v]) => {
+          if (k === 'status' || k === 'type') return; // กันซ้ำกับสองบรรทัดด้านบน
+          form.append(k, typeof v === 'object' ? JSON.stringify(v) : String(v));
+        });
+
+        // createdAt เดิม
+        const rawCreated =
+          (orig?.createdAt && orig.createdAt.$date) ? orig.createdAt.$date : orig?.createdAt;
+        let createdAtOld = '';
+        if (rawCreated) {
+          const d = rawCreated instanceof Date ? rawCreated : new Date(rawCreated);
+          if (!isNaN(d)) createdAtOld = d.toISOString();
+        }
+        form.append('createdAt_old', createdAtOld);
+
+        // ยิง API
+        return axios.patch(`${API_BASE}/api/history/${orig.id}/request-return`, form);
+      })
+    );
+
+    // ปิดกล้อง/ล้าง state & refresh
+    if (this.cameraStream) { try { this.cameraStream.getTracks().forEach(t => t.stop()); } catch {} }
+    this.cameraStream = null;
+    if (this.cameraPreviewUrl) { URL.revokeObjectURL(this.cameraPreviewUrl); this.cameraPreviewUrl = null; }
     this.cameraBlob = null;
     this.showCamera = false;
     this.returnGroupBookingId = null;
 
     await this.fetchAndRenderHistories();
-    await Swal.fire({
-  title: 'ส่งคำขอสำเร็จ',
-  html: 'ส่งคำขอคืนอุปกรณ์เรียบร้อย',
-  icon: 'success',
-  customClass: { htmlContainer: 'swal-center-text' }
-});
+    await Swal.fire({ title:'ส่งคำขอสำเร็จ', html:'ส่งคำขอคืนอุปกรณ์เรียบร้อย', icon:'success', customClass:{ htmlContainer:'swal-center-text' } });
 
   } catch (err) {
     console.error(err);
@@ -1297,10 +1413,11 @@ const dateCell =
   } finally {
     this.isSubmittingReturnPhoto = false;
   }
-}
-,
+},
 
-    async fetchNotifications() {
+
+
+   async fetchNotifications() {
       if (!this.userId) return;
       try {
         this.pruneOldNotifications();
@@ -1444,7 +1561,6 @@ const dateCell =
   }
 };
 </script>
-
 
 <style scoped>
 .histbody {
@@ -1865,6 +1981,11 @@ const dateCell =
     white-space: nowrap;
   }
 }
+.cancel-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 </style>
 
 <style>
@@ -1986,9 +2107,7 @@ const dateCell =
   word-break: break-word;       /* NEW */
 }
 
-.history-table td.action-cell {
-  padding-left:90px !important;  
-}
+
 </style>
 
 <style>
@@ -2045,7 +2164,8 @@ const dateCell =
   background: #f7f9ff;
 }
 
-.td-center{ text-align: center; }
+.td-center { text-align: center !important; }
+
 
 /* รูปตัวอย่างใบคืน */
 .swal-thumb{
@@ -2165,5 +2285,57 @@ const dateCell =
   text-align: center !important;
 }
 
+:root{
+  --action-w: 96px;   /* ความกว้างปุ่ม/ช่องในคอลัมน์ Action */
+}
+
+/* เซลล์ Action ให้ชิดกลางคอลัมน์จริง ๆ */
+.action-cell{
+  padding: 8px !important;     /* ตัด padding-left ที่ดันให้เอียง */
+  text-align: center !important;
+}
+
+/* Grid ปุ่มในคอลัมน์ Action */
+.action-grid{
+  display: inline-grid;
+  align-items: center;
+  justify-content: center;     /* จัดทั้งกริดให้อยู่กึ่งกลางคอลัมน์ */
+  column-gap: 8px;
+}
+
+/* กรณี "มี" ปุ่ม Cancel/Return -> ใช้ 2 คอลัมน์ (ซ้าย: Cancel/Return, ขวา: Detail) และทั้งกริดจะถูกจัดกลาง */
+.action-grid.action-2{
+  grid-template-columns: var(--action-w) var(--action-w);
+}
+
+/* กรณี "ไม่มี" ปุ่ม Cancel/Return -> ใช้ 3 คอลัมน์ [placeholder | Detail | placeholder] เพื่อให้ Detail อยู่กึ่งกลางจริง */
+.action-grid.action-3{
+  grid-template-columns: var(--action-w) var(--action-w) var(--action-w);
+}
+
+/* ให้ปุ่มและ placeholder กว้างเท่ากัน */
+.action-grid .cancel-btn,
+.action-grid .remark-btn,
+.action-grid .return-btn,
+.action-grid .btn-placeholder{
+  width: var(--action-w);
+  white-space: nowrap;
+}
+
+/* ช่องว่างหลอก: กินพื้นที่เท่าปุ่ม แต่ไม่แสดง */
+.btn-placeholder{
+  visibility: hidden;
+  display: inline-block;
+  height: 28px;  /* เท่าความสูงปุ่ม โดยประมาณ */
+}
+
+/* ขยายความกว้างตารางแม้มี inline style */
+.history-table { width: 96% !important; }
+
+/* เผื่อพื้นที่คอลัมน์ Action เพิ่มเป็น 18% และไปลดคอลัมน์อื่นลงเล็กน้อย */
+.history-table col:nth-child(2){ width:14% !important; } /* Type */
+.history-table col:nth-child(3){ width:16% !important; } /* Name */
+.history-table col:nth-child(4){ width:14% !important; } /* Time/Amount */
+.history-table col:nth-child(6){ width:18% !important; } /* Action */
 
 </style>

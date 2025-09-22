@@ -64,12 +64,28 @@
     <i class="pi pi-angle-left"></i>
   </button>
 
+<div class="nav-date-wrap">
+  <!-- กล่องที่เห็น: ให้คลิกได้ -->
+  <div class="nav-date-display" @click="openDatePicker">
+    {{ dateDisplay }}
+    <i class="pi pi-calendar" style="margin-left:8px"></i>
+  </div>
+
+  <!-- input จริง ซ่อนแต่ยังอยู่ใน DOM -->
   <input
     type="date"
-    class="nav-date"
+    ref="dateInputEl"
+    class="nav-date-native"
     :value="dateInputValue"
+    lang="th-TH"
     @change="onPickDate($event.target.value)"
   />
+</div>
+
+
+
+
+
 
   <button class="nav-btn next" @click="shiftWeek(1)" aria-label="Next week">
     <i class="pi pi-angle-right"></i>
@@ -247,6 +263,7 @@ const selectedZoneName = ref(null)
 // === NEW: label สำหรับ "ทุกโซน"
 const ALL_ZONES_LABEL = 'ทุกโซน'
 
+
 function selectAllZones () {
   selectedZoneName.value = ALL_ZONES_LABEL
 }
@@ -288,6 +305,22 @@ const vFitText = {
     el.__fitTextRO && el.__fitTextRO.disconnect()
     delete el.__fitTextRO
     delete el.__fitTextApply
+  }
+}
+
+
+const dateInputEl = ref(null)
+
+function openDatePicker() {
+  const el = dateInputEl.value
+  if (!el) return
+  // Chromium (Chrome/Edge) รองรับ
+  if (typeof el.showPicker === 'function') {
+    el.showPicker()
+  } else {
+    // Safari/Firefox (fallback)
+    el.focus()
+    el.click()
   }
 }
 
@@ -392,6 +425,14 @@ function fmtYMD(d) {
   const dd = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${dd}`;
 }
+// ⬇⬇⬇ ใส่ตรงนี้
+const dateDisplay = computed(() => {
+  const d = weekStart.value
+  const dd = String(d.getDate()).padStart(2, '0')
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const yyyy = d.getFullYear()
+  return `${dd}/${mm}/${yyyy}`
+})
 const dateInputValue = computed(() => fmtYMD(weekStart.value));
 
 function onPickDate(ymdStr) {
@@ -754,16 +795,17 @@ function engMonthShort(m) {
 }
 
 /* Range label under the title (Gregorian year) */
-function formatRangeLabel(a, b) {
-  const sameMonth = a.getMonth() === b.getMonth() && a.getFullYear() === b.getFullYear();
-  const startPart = `${a.getDate()} ${EN_MON[a.getMonth()]}`;
-  const endPart   = `${b.getDate()} ${EN_MON[b.getMonth()]} ${b.getFullYear()}`;
-
-  // If start & end in the same month/year → "1 Sep - 7 Sep 2025"
-  if (sameMonth) return `${startPart} - ${endPart}`;
-  // Different month or year → "29 Aug 2025 - 4 Sep 2025"
-  return `${startPart} ${a.getFullYear()} - ${endPart}`;
+function ddmmyyyy(d) {
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const yyyy = d.getFullYear();
+  return `${dd}/${mm}/${yyyy}`;
 }
+
+function formatRangeLabel(a, b) {
+  return `${ddmmyyyy(a)} - ${ddmmyyyy(b)}`; // เช่น 09/09/2025 - 15/09/2025
+}
+
 
 /* Status label on booking chip (English) */
 function mapStatus(s) {
@@ -830,85 +872,37 @@ watch(() => route.query.fieldName, async (v) => {
 .cal-title{ font-weight:800; font-size:1.05rem; color:#1e2c48 }
 .cal-sub{ color:#6b7280; font-size:.9rem }
 
-/* ===== ปุ่มเลื่อนสัปดาห์ + date picker (ระยะเท่ากัน/สีเดียวกัน) ===== */
-.cal-head .cal-right{
-  display:flex;
-  align-items:center;
-  gap:12px; /* เว้นเท่ากันซ้าย-ขวา */
-}
-
-/* ปุ่มนำทาง (ซ้าย/ขวา) — ใช้สีเดียวกัน */
+/* ===== ปุ่มเลื่อนสัปดาห์ ===== */
+.cal-head .cal-right{ display:flex; align-items:center; gap:12px }
 .cal-head .nav-btn{
   display:inline-flex; align-items:center; justify-content:center;
   width:36px; height:36px; padding:0; border:none; border-radius:10px;
-  color:#fff;
-  background: linear-gradient(135deg, #304674, #304674); /* ⬅ สีเดียวกันทั้งสองปุ่ม */
+  color:#fff; background:linear-gradient(135deg, #304674, #304674);
   box-shadow:0 2px 8px rgba(0,0,0,.08);
-  cursor:pointer;
-  transition:transform .06s ease, box-shadow .2s ease, filter .2s ease;
+  cursor:pointer; transition:transform .06s ease, box-shadow .2s ease, filter .2s ease;
 }
 .cal-head .nav-btn i{ font-size:1.05rem; line-height:1 }
 .cal-head .nav-btn:hover{ filter:brightness(1.05); box-shadow:0 4px 12px rgba(0,0,0,.12) }
 .cal-head .nav-btn:active{ transform:translateY(1px) scale(.98) }
 
-
-/* input วันที่ — ใช้ gap อย่างเดียว ไม่ใส่ margin ซ้ำ */
-.cal-head .nav-date{
-  border:1px solid #cbd5e1;
-  background:#fff;
-  border-radius:10px;
-  padding:6px 10px;
-  margin:0;                 /* ตัด margin-left เดิม */
-  font:inherit;
-  line-height:1;
-  height:36px;
-  outline:none;
-}
-.cal-head .nav-date:focus{
-  box-shadow:0 0 0 3px rgba(59,130,246,.2);
-  border-color:#93c5fd;
-}
-
-/* โหมด compact ให้สัดส่วนเล็กลงพร้อมกันทั้งปุ่มและ input */
-.calendar-card.compact .cal-head .nav-btn{ width:34px; height:32px }
-.calendar-card.compact .cal-head .nav-date{ height:32px; padding:4px 8px }
-
-/* ===== แถบเวลาแนวนอน ===== */
-.cal-times{
-  display: flex;
-  align-items: center;
-  gap: 0;
-  padding: 6px 0 8px 0; /* เริ่มแกนชิดกริดด้านล่าง */
-}
+/* ===== time scale ===== */
+.cal-times{ display:flex; align-items:center; gap:0; padding:6px 0 8px 0 }
 .day-col-spacer{ width:86px; flex:0 0 auto }
 .time-scale{
-  display: grid;
-  grid-template-columns: repeat(var(--hours), minmax(0,1fr));
-  gap: 0;
-  width: 100%;
+  display:grid; grid-template-columns:repeat(var(--hours), minmax(0,1fr));
+  gap:0; width:100%;
 }
-.time-tick{
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: .8rem;
-  color: #42526e;
-  text-align: center;
-  position: relative;
-  padding-bottom: 2px;
-}
+.time-tick{ display:flex; align-items:center; justify-content:center; font-size:.8rem; color:#42526e; padding-bottom:2px }
 
-/* ===== โครงตาราง ===== */
+/* ===== grid body ===== */
 .cal-body{ border-top:1px solid #e6eef7 }
 .cal-row{
   display:flex;
   min-height: calc((var(--lane-h) * var(--lanes)) + (2 * var(--layer-pad-y)));
-  border-bottom:1px solid #e6eef7;
-  background:#fbfdff;
-  --lanes: 1;
+  border-bottom:1px solid #e6eef7; background:#fbfdff; --lanes:1;
 }
 .day-col{
-  width:86px; flex:0 0 auto;  padding: 6px 6px; text-align:center;
+  width:86px; flex:0 0 auto; padding:6px 6px; text-align:center;
   display:flex; flex-direction:column; align-items:center; justify-content:center; row-gap:2px;
 }
 /* วันย่อ > เลขวัน > เดือน */
@@ -916,106 +910,49 @@ watch(() => route.query.fieldName, async (v) => {
 .day-num{ order:2; font-weight:900; font-size:1.4rem; color:#1f2937; letter-spacing:.5px; line-height:1 }
 .day-mon{ order:3; color:#94a3b8; font-size:.8rem }
 
-/* เส้นกริดแนวตั้ง */
-.timeline{
-  position: relative;
-  flex: 1;
-  background: #fff;
-  overflow: visible;
-  isolation: isolate;        /* กัน z-index บังชิป */
-}
+.timeline{ position:relative; flex:1; background:#fff; overflow:visible; isolation:isolate }
 .hour-columns{
-  position: absolute;
-  inset: 0;
-  display: grid;
-  grid-template-columns: repeat(var(--hours), minmax(0,1fr));
-  z-index: 0;
-  pointer-events: none;
+  position:absolute; inset:0; display:grid; grid-template-columns:repeat(var(--hours), minmax(0,1fr));
+  z-index:0; pointer-events:none;
 }
 .hour-col{ border-left:1px solid #ecf2fa }
 .hour-col:last-child{ border-right:1px solid #ecf2fa }
-.booking-layer{
-  position: relative;
-  height: 100%;
-  z-index: 2;
-  padding: var(--layer-pad-y) 0;
-}
+.booking-layer{ position:relative; height:100%; z-index:2; padding:var(--layer-pad-y) 0 }
 
-/* ===== ชิปการจอง ===== */
+/* ===== booking chip ===== */
 .booking-chip{
   position:absolute;
-  /* ทำให้ “ความสูงภายนอก” เท่ากับสูตรที่ใช้คำนวนเลน (ไม่ยืด/หด) */
-  height: var(--chip-outer-h);     /* คงที่ */
-  background: var(--chip-bg-color, #ead7c0);
-  border: var(--chip-border) solid var(--chip-border-color, #6d4b3b);
-  border-radius: 8px;
-  display:flex;
-  align-items:center;              /* จัดเนื้อหากลางแนวตั้ง */
-  padding: var(--chip-pad-y) 10px; /* ใช้ค่าจากตัวแปรเท่านั้น */
-  box-sizing:border-box;           /* รวม padding/border ใน height แล้ว */
-  overflow:hidden;                 /* ไม่ให้ล้น */
-  white-space:normal;
-  z-index:3;
+  height:var(--chip-outer-h);
+  background:var(--chip-bg-color, #ead7c0);
+  border:var(--chip-border) solid var(--chip-border-color, #6d4b3b);
+  border-radius:8px;
+  display:flex; align-items:center;
+  padding:var(--chip-pad-y) 10px; box-sizing:border-box; overflow:hidden; white-space:normal; z-index:3;
 }
 .chip-inner{ display:flex; flex-direction:column; line-height:1.1; width:100% }
-.chip-top{
-  display:flex;
-  justify-content:space-between;
-  align-items:center;        /* ตรงกลางแนวตั้ง */
-  gap:8px;
-  padding-right:0;
-  white-space:nowrap;        /* ไม่ตัดบรรทัด */
-}
-.chip-code{
-  min-width:0;               /* ให้ย่อได้ */
-  overflow:hidden;
-  text-overflow:ellipsis;    /* ตัดด้วย ... */
-  flex:1 1 auto;
-}
+.chip-top{ display:flex; justify-content:space-between; align-items:center; gap:8px; padding-right:0; white-space:nowrap }
+.chip-code{ min-width:0; overflow:hidden; text-overflow:ellipsis; flex:1 1 auto }
 .chip-status{
-  flex-shrink:0;             /* ไม่ให้หดจนดันบรรทัด */
-  font-size:.72rem;
-  padding:2px 6px;
-  border-radius:999px;
-  border:1px solid var(--chip-border-color, #6d4b3b);
-  background:#ffffffa8;
-  line-height:1;
-  white-space:nowrap;
-  margin-left:8px;
+  flex-shrink:0; font-size:.72rem; padding:2px 6px; border-radius:999px;
+  border:1px solid var(--chip-border-color, #6d4b3b); background:#ffffffa8; line-height:1; white-space:nowrap; margin-left:8px;
 }
-.chip-sub{
-  font-size:.9rem;
-  color:#4b382db0;
-  margin-top:2px;
-  white-space:nowrap;
-  overflow:hidden;
-  text-overflow:ellipsis;
-}
+.chip-sub{ font-size:.9rem; color:#4b382db0; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
 
-/* โหมดแคบ: ลด padding และซ่อนสถานะเพื่อให้เวลาพอดี */
-.booking-chip.narrow{ padding: var(--chip-pad-y) 6px; }
-.booking-chip.narrow .chip-top{ gap:4px; }
-.booking-chip.narrow .chip-status{ display:none; }  /* กันเบียด */
-.booking-chip.narrow .chip-sub{ font-size:.78rem; } /* อ่านง่ายขึ้น */
-.chip-mini{ display:none !important; }
+/* แคบมาก → ซ่อน status */
+.booking-chip.narrow{ padding:var(--chip-pad-y) 6px }
+.booking-chip.narrow .chip-top{ gap:4px }
+.booking-chip.narrow .chip-status{ display:none }
+.booking-chip.narrow .chip-sub{ font-size:.78rem }
+.chip-mini{ display:none !important }
 
-/* ===== ส่วนล่าง (รูป + โซน) ===== */
-.below-flex{
-  display:flex; flex-wrap:wrap; gap:2rem; padding: 12px 20px 20px; background:#dbe9f4;
-}
+/* ===== bottom (image + zone) ===== */
+.below-flex{ display:flex; flex-wrap:wrap; gap:2rem; padding:12px 20px 20px; background:#dbe9f4 }
 .left-column{ flex:1 1 60%; max-width:60%; position:relative; min-height:480px }
-.right-column{
-  flex:1 1 35%; max-width:35%;
-  display:flex; flex-direction:column; align-items:center; justify-content:center;
-  min-height:480px;
-}
+.right-column{ flex:1 1 35%; max-width:35%; display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:480px }
 .field-image{
   width:100%; max-width:800px; height:480px; object-fit:cover !important;
-  background:#fff; border-radius:12px; margin-bottom:0;
-  box-shadow:0 4px 12px rgba(0,0,0,.1); display:block; margin-left:auto; margin-right:auto;
+  background:#fff; border-radius:12px; margin-bottom:0; box-shadow:0 4px 12px rgba(0,0,0,.1); display:block; margin-left:auto; margin-right:auto;
 }
-
-/* โซน (แนวตั้ง) */
 .zone-selector{ width:100%; text-align:center; display:flex; flex-direction:column; align-items:center }
 .zone-label{ font-weight:800; font-size:1.2rem; margin-bottom:12px }
 .zone-actions{ display:flex; flex-direction:column; align-items:center; gap:10px }
@@ -1029,16 +966,13 @@ watch(() => route.query.fieldName, async (v) => {
 .zone-buttons button.zone-disabled, .zone-buttons button:disabled{
   background:#f4f4f4 !important; color:#aaa !important; border-color:#bbb !important; cursor:not-allowed !important; opacity:.7;
 }
-
-/* ปุ่ม BOOKING */
 .booking-btn{
-  margin-top:14px; padding:14px 50px; font-size:1.2rem; border:none; background:linear-gradient(135deg, #304674, #304674);
+  margin-top:14px; padding:14px 50px; font-size:1.2rem; border:none;
+  background:linear-gradient(135deg, #304674, #304674);
   color:#fff; border-radius:999px; font-weight:700; cursor:pointer; transition:.3s;
   box-shadow:0 4px 12px rgba(0,0,0,.25); letter-spacing:1px;
 }
 .booking-btn:disabled{ background:#aaa; cursor:not-allowed; box-shadow:none }
-
-/* ป้ายชื่อโซนบนรูป */
 .zone-overlay-label{
   position:absolute; top:16px; left:16px;
   background:rgba(0,123,255,.86); color:#fff; padding:10px 22px; font-size:1.05rem; font-weight:800;
@@ -1046,18 +980,18 @@ watch(() => route.query.fieldName, async (v) => {
 }
 
 /* ===== Notifications ===== */
-.badge { background:red; color:#fff; border-radius:50%; padding:2px 6px; font-size:.75rem; vertical-align:top; margin-left:4px }
+.badge{ background:red; color:#fff; border-radius:50%; padding:2px 6px; font-size:.75rem; vertical-align:top; margin-left:4px }
 .notification-dropdown{
   position:absolute; right:0; top:38px; background:#fff; border-radius:18px 0 18px 18px;
   box-shadow:0 8px 24px rgba(27,50,98,.14), 0 2px 4px rgba(33,125,215,.06);
-  min-width:330px; max-width:370px; max-height:420px;
-  overflow-y:auto; z-index:1002; padding:0; border:none; animation:fadeDown .22s
+  min-width:330px; max-width:370px; max-height:420px; overflow-y:auto; z-index:1002; padding:0; border:none; animation:fadeDown .22s
 }
 @keyframes fadeDown{ 0%{opacity:0;transform:translateY(-24px)} 100%{opacity:1;transform:translateY(0)} }
 .notification-dropdown ul{ padding:0; margin:0; list-style:none }
 .notification-dropdown li{
-  background:linear-gradient(90deg,#f6fafd 88%,#e2e7f3 100%); margin:.2em .8em; padding:.85em 1.1em; border-radius:12px;
-  border:none; font-size:1.07rem; font-weight:500; color:#1e2c48; box-shadow:0 2px 8px rgba(85,131,255,.06); display:flex; gap:10px; position:relative
+  background:linear-gradient(90deg,#f6fafd 88%,#e2e7f3 100%);
+  margin:.2em .8em; padding:.85em 1.1em; border-radius:12px; border:none;
+  font-size:1.07rem; font-weight:500; color:#1e2c48; box-shadow:0 2px 8px rgba(85,131,255,.06); display:flex; gap:10px; position:relative
 }
 .notification-dropdown li::before{ content:"🔔"; font-size:1.2em; margin-right:7px; color:#1976d2; opacity:.8 }
 .notification-dropdown li.no-noti{ background:#f2f3f6; color:#a7aab7; justify-content:center; font-style:italic }
@@ -1068,33 +1002,19 @@ watch(() => route.query.fieldName, async (v) => {
 .notification-backdrop{ position:fixed; inset:0; background:transparent; z-index:1001 }
 
 /* ===== Highlight today ===== */
-.cal-row.is-today { background:#f4f7ff }
-.cal-row.is-today .day-num { color:#1d4ed8 }
-.cal-row.is-today .day-dow { color:#1d4ed8 }
-.chip-zone{ color: var(--chip-border-color, #6d4b3b); font-weight:900 }
+.cal-row.is-today{ background:#f4f7ff }
+.cal-row.is-today .day-num{ color:#1d4ed8 }
+.cal-row.is-today .day-dow{ color:#1d4ed8 }
+.chip-zone{ color:var(--chip-border-color, #6d4b3b); font-weight:900 }
 
-/* สีสถานะแบบเจาะจง */
-.chip-status[data-status="pending"]{
-  background:#e5e7eb; border-color:#6b7280; color:#374151;
-}
-.chip-status[data-status="approved"]{
-  background:#dcfce7; border-color:#16a34a; color:#166534;
-}
+/* สถานะ */
+.chip-status[data-status="pending"]{ background:#e5e7eb; border-color:#6b7280; color:#374151 }
+.chip-status[data-status="approved"]{ background:#dcfce7; border-color:#16a34a; color:#166534 }
 
-/* ===== Compact mode: ลดความสูงทั้งการ์ดและแถวปฏิทิน ===== */
+/* ===== Compact mode ===== */
 .calendar-card.compact{
-  margin: 12px 16px 6px;
-  padding: 12px 12px 8px;
-
-  /* ปรับความสูงชิปให้ครอบ 2 บรรทัด + status (ไม่ทับกันแล้ว) */
-  --chip-h: 40px;      /* เดิม 28px */
-  --chip-pad-y: 4px;
-  --chip-border: 2px;
-
-  /* เว้นระยะห่างระหว่างเลนเล็กน้อย ~0.5px */
-  --lane-gap: 6px;      /* เดิม 6px */
-
-  --layer-pad-y: 4px;
+  margin:12px 16px 6px; padding:12px 12px 8px;
+  --chip-h:40px; --chip-pad-y:4px; --chip-border:2px; --lane-gap:6px; --layer-pad-y:4px;
 }
 .calendar-card.compact .cal-head{ margin-bottom:4px }
 .calendar-card.compact .cal-times{ padding:4px 0 6px 0 }
@@ -1104,23 +1024,65 @@ watch(() => route.query.fieldName, async (v) => {
 .calendar-card.compact .day-num{ font-size:1.2rem }
 .calendar-card.compact .day-mon{ font-size:.72rem }
 
-/* ===== mobile tweak ===== */
+/* ===== mobile ===== */
 @media (max-width: 900px){
   .left-column{ flex:1 1 100%; max-width:100% }
   .right-column{ flex:1 1 100%; max-width:100%; min-height:auto; padding-bottom:10px }
   .time-tick{ font-size:.8rem }
 }
 
-/* NEW: ปุ่ม All Zone */
+/* ===== All Zone button tweak ===== */
+.zone-buttons .zone-btn{ justify-content:center; font-weight:800 }
+
+/* ===== Date picker mask (สำคัญ) ===== */
+.nav-date-wrap{
+  position: relative;
+  width:160px;
+  height:36px;
+}
+.nav-date-display{
+  position:absolute; inset:0;
+  z-index:2;               /* ใต้ input */
+  border:1px solid #cbd5e1; background:#fff; border-radius:10px;
+  padding:6px 10px; color:#111827;
+  display:flex; align-items:center; justify-content:center; gap:8px;
+}
+.nav-date-display i{ flex-shrink:0 }
+.nav-date-native{
+  position:absolute; inset:0;
+  z-index:3;               /* บน display */
+  width:100%; height:100%;
+  opacity:0; cursor:pointer;
+}
+.nav-date-display .pi{ color:#304674; font-size:1.05rem }
+/* ขนาด compact */
+.calendar-card.compact .nav-date-wrap{ height:32px }
+.calendar-card.compact .nav-date-display{ padding:4px 8px }
 
 
-/* ทำให้ All Zone ใช้สไตล์เดียวกับ .zone-buttons button แต่จัดกลางข้อความ */
-.zone-buttons .zone-btn{
-  justify-content: center;   /* ปุ่มอื่นไม่โดน เพราะคลาสเฉพาะ */
-  font-weight: 800;
+.nav-date-wrap{ position:relative; width:160px; height:36px }
+
+/* ให้ตัวที่เห็นอยู่ "บนสุด" และคลิกได้ */
+.nav-date-display{
+  position:absolute; inset:0; z-index:3;
+  border:1px solid #cbd5e1; background:#fff; border-radius:10px;
+  display:flex; align-items:center; justify-content:center; gap:8px;
+  padding:6px 10px; color:#111827; cursor:pointer;
 }
 
+/* input จริง ซ่อนไว้ และไม่ดักคลิก */
+.nav-date-native{
+  position:absolute; inset:0; z-index:1;
+  width:100%; height:100%;
+  opacity:0; pointer-events:none;
+}
+
+.nav-date-display .pi{ color:#304674; font-size:1.05rem }
+.calendar-card.compact .nav-date-wrap{ height:32px }
+.calendar-card.compact .nav-date-display{ padding:4px 8px }
+
 </style>
+
 
 
 <style>

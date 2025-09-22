@@ -299,21 +299,26 @@ async function removeItem(product) {
 async function handleCheckout() {
   if (products.value.length === 0) return;
 
+  // รวมจำนวนอุปกรณ์ชื่อเดียวกันในตะกร้า
   const itemMap = {};
   products.value.forEach((p) => {
-    if (!itemMap[p.name]) itemMap[p.name] = 0;
-    itemMap[p.name] += p.quantity;
+    itemMap[p.name] = (itemMap[p.name] || 0) + p.quantity;
   });
 
-  const resultItems = [];
-  Object.entries(itemMap).forEach(([name, qty]) => {
-    const avail = stockMap.value[name] || 0;
-    resultItems.push({
+  // จำกัดตามสต็อกปัจจุบัน
+  const resultItems = Object.entries(itemMap)
+    .map(([name, qty]) => ({
       name,
-      quantity: Math.min(qty, avail),
-    });
-  });
+      quantity: Math.min(qty, stockMap.value[name] || 0),
+    }))
+    .filter(it => it.quantity > 0);
 
+  if (resultItems.length === 0) {
+    Swal.fire('Out of stock', 'No available quantity to request.', 'warning');
+    return;
+  }
+
+  // ถามเลือกยืมวันเดียว/หลายวัน
   const { value: borrowType } = await Swal.fire({
     title: 'Do you want to borrow for one day or several days?',
     icon: 'question',
@@ -322,53 +327,69 @@ async function handleCheckout() {
       oneDay: 'One day',
       multiDay: 'Several days',
     },
-    inputValidator: (value) => {
-      if (!value) {
-        return 'Please select one'
-      }
-    },
+    inputValidator: (value) => (!value ? 'Please select one' : undefined),
     confirmButtonText: 'OK',
     showCancelButton: true,
     cancelButtonText: 'Cancel'
-  })
+  });
 
   if (!borrowType) return;
 
+  // ===== หลายวัน → ไปกรอกฟอร์ม =====
   if (borrowType === 'multiDay') {
     router.push({
       path: '/form_equipment',
-      query: {
-        items: JSON.stringify(resultItems)
-      }
+      query: { items: JSON.stringify(resultItems) }
     });
-  } else if (borrowType === 'oneDay') {
-    const booking_id = `${Date.now()}_${userId}`;
-    try {
-      const userId = localStorage.getItem('user_id') || ''
-      if (!userId) {
-        Swal.fire('Please log in before using', '', 'warning')
-        return
-      }
+    return;
+  }
 
-      for (const item of resultItems) {
-        await axios.post(`${API_BASE}/api/history`, {
-          user_id: userId,
+  // ===== วันเดียว → ส่งคำขอไปให้ staff เลย (step เฉพาะ staff) =====
+  const uid = localStorage.getItem('user_id') || '';
+  if (!uid) {
+    await Swal.fire({ icon: 'warning', title: 'Please log in before using', confirmButtonText: 'OK' });
+    router.replace('/login');
+    return;
+  }
+
+  const booking_id = `${Date.now()}_${uid}`;
+  const nowISO = new Date().toISOString();
+
+  // พayload พื้นฐาน: ไม่ใส่ since/uptodate = ยืมวันเดียว
+  const basePayload = {
+    user_id: uid,
+    type: 'equipment',
+    status: 'pending',
+    booking_id,
+    date: nowISO,
+    step: [
+      { role: 'staff', approve: null, createdAt: nowISO, updatedAt: nowISO }
+    ],
+  };
+
+  try {
+    await Promise.all(
+      resultItems.map(item =>
+        axios.post(`${API_BASE}/api/history`, {
+          ...basePayload,
           name: item.name,
           quantity: item.quantity,
-          status: 'pending',
-          booking_id
         })
-      }
+      )
+    );
 
-      await axios.delete(`${API_BASE}/api/cart?user_id=${userId}`)
-      Swal.fire('Sent request successfully', '', 'success')
-      products.value = []
-      router.push('/history')
-    } catch (err) {
-      Swal.fire('An error occurred', err.message || 'Unable to send request', 'error')
-    }
+    // เคลียร์ตะกร้า
+    await axios.delete(`${API_BASE}/api/cart?user_id=${uid}`);
+    products.value = [];
+
+    await Swal.fire('Sent request successfully', '', 'success');
+    router.push('/history');
+  } catch (err) {
+    const msg = err?.response?.data?.message || err.message || 'Unable to send request';
+    Swal.fire('An error occurred', msg, 'error');
   }
 }
+
 
 const totalCartItems = computed(() => {
   return products.value.length
