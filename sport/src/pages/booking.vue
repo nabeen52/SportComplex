@@ -175,6 +175,10 @@
 
         <!-- Right: zones -->
         <div class="right-column" @click.self="clearZone">
+        <div v-if="isLamduanUser" class="view-only-banner">
+  บัญชี @lamduan.mfu.ac.th ไม่สามารถทำการจองผ่านระบบได้
+</div>
+
           <div
   v-if="field && field.hasZone && field.zones && field.zones.length > 0"
   class="zone-selector"
@@ -212,19 +216,31 @@
     </button>
   </div>
 
-  <button class="booking-btn" @click="bookZone" :disabled="zoneRequired && !selectedZoneName">
-    <i class="pi pi-check-circle" style="margin-right: 8px"></i>
-    BOOKING
-  </button>
+  <button
+  class="booking-btn"
+  @click="bookZone"
+  :disabled="(zoneRequired && !selectedZoneName) || isLamduanUser"
+  :title="isLamduanUser ? 'บัญชี @lamduan.mfu.ac.th ไม่สามารถจองผ่านระบบได้' : ''"
+>
+  <i class="pi pi-check-circle" style="margin-right: 8px"></i>
+  BOOKING
+</button>
+
 </div>
 
           </div>
 
           <div v-else-if="field">
-            <button class="booking-btn" @click="bookZone">
-              <i class="pi pi-check-circle" style="margin-right: 8px"></i>
-              BOOKING
-            </button>
+            <button
+  class="booking-btn"
+  @click="bookZone"
+  :disabled="isLamduanUser"
+  :title="isLamduanUser ? 'บัญชี @lamduan.mfu.ac.th ไม่สามารถจองผ่านระบบได้' : ''"
+>
+  <i class="pi pi-check-circle" style="margin-right: 8px"></i>
+  BOOKING
+</button>
+
           </div>
         </div>
       </div>
@@ -253,6 +269,31 @@ import axios from 'axios'
 const API_BASE = import.meta.env.VITE_API_BASE
 const route = useRoute()
 const router = useRouter()
+
+
+// --- NEW: อีเมลผู้ใช้ + ตัวเช็กโดเมน lamduan ---
+const userEmail = ref(localStorage.getItem('email') || localStorage.getItem('user_email') || '')
+
+const isLamduanUser = computed(() => {
+  const s = (userEmail.value || '').trim().toLowerCase()
+  return /@lamduan\.mfu\.ac\.th$/.test(s)
+})
+
+// --- NEW: ดึงอีเมลจาก backend กรณีมี user_id ---
+async function fetchUserEmail () {
+  if (!userId) return
+  try {
+    const res = await axios.get(`${API_BASE}/api/user/${userId}`)
+    // พยายามอ่านหลายฟิลด์ตามที่ระบบเคยใช้
+    const email =
+      res.data?.email ||
+      res.data?.googleEmail ||
+      res.data?.username || ''   // เผื่อบางระบบเก็บอีเมลไว้ใน username
+    if (email) userEmail.value = email
+  } catch (e) {
+    // เงียบไว้ได้ (fallback คือ localStorage)
+  }
+}
 
 /* ---------- state ---------- */
 const isSidebarClosed = ref(false)
@@ -483,7 +524,15 @@ const fieldHasZones = computed(() =>
 function clearZone() { if (selectedZoneName.value) selectedZoneName.value = null }
 function selectZone(zone) { selectedZoneName.value = zone.name }
 function bookZone() {
-  if (zoneRequired.value && !selectedZoneName.value) { alert('กรุณาเลือกโซนก่อนจอง'); return }
+  // NEW: กันผู้ใช้โดเมน lamduan กดจอง
+  if (isLamduanUser.value) {
+    alert('บัญชี @lamduan.mfu.ac.th ไม่สามารถจองผ่านระบบได้')
+    return
+  }
+  if (zoneRequired.value && !selectedZoneName.value) {
+    alert('กรุณาเลือกโซนก่อนจอง')
+    return
+  }
   router.push({ path: '/form_field', query: { fieldName: fieldName.value, zone: selectedZoneName.value } })
 }
 
@@ -822,6 +871,7 @@ function safe(v) { return (v || '').toString().slice(0, 12) }
 
 /* ---------- lifecycle ---------- */
 onMounted(async () => {
+   await fetchUserEmail()
   await loadField()
   await loadBookings()
   await fetchNotifications()
@@ -1080,6 +1130,17 @@ watch(() => route.query.fieldName, async (v) => {
 .nav-date-display .pi{ color:#304674; font-size:1.05rem }
 .calendar-card.compact .nav-date-wrap{ height:32px }
 .calendar-card.compact .nav-date-display{ padding:4px 8px }
+
+.view-only-banner{
+  margin-bottom:12px;
+  padding:10px 14px;
+  border-radius:10px;
+  background:#f8d4d4;
+  color:#ff7575;
+  border:1px solid #ff7575;
+  font-weight:700;
+  text-align:center;
+}
 
 </style>
 
