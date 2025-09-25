@@ -402,7 +402,17 @@ async function openEditSwal() {
   const currentSig = signatureImageUrl.value
   const html = `
     <div class="swal-edit-wrap">
-      <input type="tel" id="swal-phone" class="swal2-input" placeholder="เบอร์โทร" value="${info.value.phone || ''}">
+      <input
+        type="tel"
+        id="swal-phone"
+        class="swal2-input"
+        placeholder="เบอร์โทร (4–10 หลัก)"
+        value="${info.value.phone || ''}"
+        inputmode="numeric"
+        minlength="4"
+        maxlength="10"
+        pattern="\\d{4,10}"
+      >
       <input type="file" id="swal-signature" class="swal2-file" accept="image/*" style="margin-top:6px;">
       <div id="swal-preview" class="swal-preview">
         ${currentSig
@@ -411,9 +421,8 @@ async function openEditSwal() {
       </div>
     </div>
   `
-
   const { isConfirmed, value } = await Swal.fire({
-    title: 'Edit Profile',
+    title: 'เเก้ไขโปรไฟล์',
     html,
     focusConfirm: false,
     showCancelButton: true,
@@ -422,8 +431,17 @@ async function openEditSwal() {
     width: 560,
     customClass: { popup: 'swal-center-popup' },
     didOpen: () => {
+      const phoneEl = document.getElementById('swal-phone')
       const fileEl = document.getElementById('swal-signature')
       const previewEl = document.getElementById('swal-preview')
+
+      // บังคับให้เป็นเลขล้วน และตัดให้ไม่เกิน 10 หลักขณะพิมพ์
+      phoneEl?.addEventListener('input', () => {
+        let v = (phoneEl.value || '').replace(/\D+/g, '') // keep digits only
+        if (v.length > 10) v = v.slice(0, 10)             // hard cap 10
+        phoneEl.value = v
+      })
+
       fileEl?.addEventListener('change', () => {
         const f = fileEl.files?.[0]
         if (!f) {
@@ -437,23 +455,34 @@ async function openEditSwal() {
     preConfirm: () => {
       const phone = (document.getElementById('swal-phone')?.value || '').trim()
       const file = document.getElementById('swal-signature')?.files?.[0] || null
+
       const hasPhoneChange = phone !== (info.value.phone || '')
       const hasSignature = !!file
+
       if (!hasPhoneChange && !hasSignature) {
         Swal.showValidationMessage('ใส่เบอร์ใหม่หรืออัปโหลดลายเซ็นอย่างน้อย 1 อย่าง')
         return false
       }
+
+      // ตรวจความยาวเบอร์: 4–10 หลัก (เฉพาะกรณีมีการเปลี่ยนแปลงเบอร์)
+      if (hasPhoneChange) {
+        const digitsOnly = phone.replace(/\D+/g, '')
+        if (digitsOnly.length > 0 && (digitsOnly.length < 4 || digitsOnly.length > 10)) {
+          Swal.showValidationMessage('กรุณากรอกเบอร์ 4–10 หลัก')
+          return false
+        }
+      }
+
       return { phone, file }
     }
   })
-
   if (!isConfirmed) return
   const { phone, file } = value
 
   try {
     const fd = new FormData()
     if (phone !== (info.value.phone || '')) fd.append('phone', phone)
-    if (file) fd.append('signature', file) // ฝั่งหลังบ้านอ่าน field 'signature'
+    if (file) fd.append('signature', file) // ฝั่งหลังบ้านอ่านจาก field 'signature'
 
     const res = await axios.patch(`${API_BASE}/api/users/profile`, fd, {
       headers: { 'Content-Type': 'multipart/form-data' },
@@ -473,6 +502,7 @@ async function openEditSwal() {
     Swal.fire('เกิดข้อผิดพลาด', e.response?.data?.message || e.message, 'error')
   }
 }
+
 
 
 /* =========================

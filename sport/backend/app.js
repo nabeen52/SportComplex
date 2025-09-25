@@ -6,10 +6,15 @@ connectDB();
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
+const path = require('path');
+const favicon = require('serve-favicon');
+
+// โฟลเดอร์ public ของ frontend (อยู่คนละโฟลเดอร์กับ backend)
+const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 
 const axios = require('axios');
 const mime = require('mime-types');
-const path = require('path');
+
 const multer = require('multer');
 const storage = multer.memoryStorage();
 const session = require('express-session');
@@ -29,6 +34,13 @@ const bcrypt = require('bcrypt');
 const UploadFile = require('./models/upload_file');
 const BookingField = require('./models/booking_field');
 const app = express();
+const ICON_PATH = path.resolve(
+    'D:\\SportComplex\\SportComplex\\sport\\public\\img\\435-4359797_mae-fah-luang-university-logo-mae-fah-luang-removebg-preview.png'
+);
+
+// วางแถวบน ๆ หลัง app = express()
+app.use(favicon(ICON_PATH, { maxAge: '10y' }));
+app.get('/favicon.ico', (req, res) => res.sendFile(ICON_PATH));
 
 const uploadRoot = path.join(__dirname, 'uploads');
 const newsDir = path.join(uploadRoot, 'news');
@@ -71,6 +83,18 @@ const transporter = nodemailer.createTransport({
         pass: process.env.MAIL_PASS,
     }
 });
+// === Date format helpers (dd/mm/yyyy) ===
+const pad2 = (n) => String(n).padStart(2, '0');
+const toDate = (v) => (v instanceof Date ? v : new Date(v));
+function formatDate(v) {
+    if (!v) return '-';
+    const d = toDate(v);
+    if (isNaN(d)) return '-';
+    return `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)}/${d.getFullYear()}`;
+}
+function formatDateRange(since, uptodate) {
+    return `${formatDate(since)}-${formatDate(uptodate)}`;
+}
 
 const returnsDir = path.join(__dirname, 'public', 'uploads', 'returns');
 fs.mkdirSync(returnsDir, { recursive: true });
@@ -84,32 +108,19 @@ if (!fs.existsSync(uploadDir)) {
 // ฟังก์ชันส่งอีเมล
 async function sendApproveEmail({ to, name, equipment, quantity }) {
     if (!to) return;
-    const mailOptions = {
-        from: '"MFU Sport Complex" <your.email@gmail.com>',
-        to,
-        subject: 'แจ้งเตือน: อนุมัติการยืมอุปกรณ์',
-        html: `
-            <div>
-                <h2>รายการยืมอุปกรณ์ของคุณได้รับการอนุมัติแล้ว</h2>
-                <p><b>ชื่อผู้ยืม:</b> ${name || '-'}</p>
-                <p><b>อุปกรณ์:</b> ${equipment || '-'}</p>
-                <p><b>จำนวน:</b> ${quantity || '-'}</p>
-                <br>
-                <p>กรุณาติดต่อรับอุปกรณ์ที่ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง</p>
-                <hr>
-                <p style="font-size: 0.95em; color: #888;">Sport Complex – MFU</p>
-            </div>
-        `
-    };
+    const html = `
+    <div>
+      <h2>รายการยืมอุปกรณ์ของคุณได้รับการอนุมัติแล้ว</h2>
+      <p><b>ชื่อผู้ยืม:</b> ${name || '-'}</p>
+      <p><b>อุปกรณ์:</b> ${equipment || '-'}</p>
+      <p><b>จำนวน:</b> ${quantity || '-'}</p>
+      <br>
+      <p>กรุณาติดต่อรับอุปกรณ์ที่ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง</p>
+      <hr><p style="font-size:0.95em;color:#888;">Sport Complex – MFU</p>
+    </div>`;
     try {
-        await transporter.sendMail(mailOptions);
-    } catch (err) {
-        console.error('ส่งเมลไม่สำเร็จ:', err);
-    }
-}
-async function getStaffEmails() {
-    const staff = await User.find({ role: 'staff', email: { $exists: true, $ne: "" } });
-    return staff.map(s => s.email);
+        return await sendBulk(to, 'แจ้งเตือน: อนุมัติการยืมอุปกรณ์', html);
+    } catch (err) { console.error('ส่งเมลไม่สำเร็จ:', err); }
 }
 
 // ★ ดึงอีเมล staff/admin/super
@@ -138,11 +149,11 @@ const listToHtml = (items = []) =>
 
 async function sendBulk(toList, subject, html) {
     try {
-        const to = Array.isArray(toList) ? toList.filter(Boolean) : [toList];
+        const to = Array.isArray(toList) ? [...new Set(toList.filter(Boolean))] : [toList];
         if (!to.length) return;
         await transporter.sendMail({ from: FROM_ADDR, to, subject, html });
     } catch (e) {
-        console.error('[sendBulk mail error]', e.message);
+        console.error('[sendBulk mail error]', e);
     }
 }
 
@@ -164,19 +175,13 @@ async function notifyAdminNewBorrow({ requester, items, booking_id }) {
         <h2>มีรายการขอยืมอุปกรณ์รออนุมัติ</h2>
         <p><b>ผู้ขอ:</b> ${requester}</p>
         <ul>${itemList}</ul>
-        <p><b>Booking ID:</b> ${booking_id || '-'}</p>
         <br>
         <p>กรุณาเข้าสู่ระบบศูนย์กีฬาเพื่ออนุมัติรายการนี้</p>
         <hr>
         <p style="font-size: 0.95em; color: #888;">Sport Complex – MFU</p>
       </div>
     `;
-    await transporter.sendMail({
-        from: '"MFU Sport Complex" <your.email@gmail.com>',
-        to: adminEmails,
-        subject: 'แจ้งเตือน: มีรายการขอยืมอุปกรณ์รออนุมัติ (ยืมหลายวัน)',
-        html
-    });
+    await sendBulk(adminEmails, 'แจ้งเตือน: มีรายการขอยืมอุปกรณ์รออนุมัติ (ยืมหลายวัน)', html);
 }
 // แจ้งเตือน staff ทุกคนเมื่อมีรายการยืมอุปกรณ์วันเดียว
 async function notifyStaffNewBorrow({ requester, items, booking_id }) {
@@ -188,19 +193,13 @@ async function notifyStaffNewBorrow({ requester, items, booking_id }) {
         <h2>มีรายการขอยืมอุปกรณ์รออนุมัติ</h2>
         <p><b>ผู้ขอ:</b> ${requester}</p>
         <ul>${itemList}</ul>
-        <p><b>Booking ID:</b> ${booking_id || '-'}</p>
         <br>
         <p>กรุณาเข้าสู่ระบบศูนย์กีฬาเพื่ออนุมัติรายการนี้</p>
         <hr>
         <p style="font-size: 0.95em; color: #888;">Sport Complex – MFU</p>
       </div>
     `;
-    await transporter.sendMail({
-        from: '"MFU Sport Complex" <your.email@gmail.com>',
-        to: staffEmails,
-        subject: 'แจ้งเตือน: มีรายการขอยืมอุปกรณ์รออนุมัติ (ยืมวันเดียว)',
-        html
-    });
+    return await sendBulk(staffEmails, 'แจ้งเตือน: มีรายการขอยืมอุปกรณ์รออนุมัติ (ยืมวันเดียว)', html);
 }
 // Helper: ส่งอีเมลแจ้งเตือนคน approve ว่ามีรายการรอ confirm การคืน
 async function notifyApproverReturnPending({ approverId, userName, equipment, quantity, booking_id }) {
@@ -213,181 +212,154 @@ async function notifyApproverReturnPending({ approverId, userName, equipment, qu
             <p><b>ชื่อผู้ยืม:</b> ${userName || '-'}</p>
             <p><b>อุปกรณ์:</b> ${equipment || '-'}</p>
             <p><b>จำนวน:</b> ${quantity || '-'}</p>
-            <p><b>Booking ID:</b> ${booking_id || '-'}</p>
             <br>
             <p>กรุณาตรวจสอบและยืนยันการคืนที่ระบบศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง</p>
             <hr>
             <p style="font-size: 0.95em; color: #888;">Sport Complex – MFU</p>
         </div>
     `;
-    await transporter.sendMail({
-        from: '"MFU Sport Complex" <your.email@gmail.com>',
-        to: staff.email,
-        subject: 'แจ้งเตือน: มีรายการคืนอุปกรณ์รอการยืนยัน',
-        html
-    });
+    return await sendBulk(staff.email, 'แจ้งเตือน: มีรายการคืนอุปกรณ์รอการยืนยัน', html);
 }
 // ฟังก์ชันส่งอีเมลแจ้ง user ว่า "ไม่ได้รับการอนุมัติการยืมอุปกรณ์"
 async function sendDisapproveEquipmentEmail({ to, name, equipment, quantity }) {
     if (!to) return;
-    const mailOptions = {
-        from: '"MFU Sport Complex" <your.email@gmail.com>',
-        to,
-        subject: 'แจ้งเตือน: ไม่อนุมัติการยืมอุปกรณ์',
-        html: `
-            <div>
-                <h2>รายการขอยืมอุปกรณ์ของคุณไม่ได้รับการอนุมัติ</h2>
-                <p><b>ชื่อผู้ยืม:</b> ${name || '-'}</p>
-                <p><b>อุปกรณ์:</b> ${equipment || '-'}</p>
-                <p><b>จำนวน:</b> ${quantity || '-'}</p>
-                <br>
-                <p>หากมีข้อสงสัย กรุณาติดต่อเจ้าหน้าที่ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง</p>
-                <hr>
-                <p style="font-size: 0.95em; color: #888;">Sport Complex – MFU</p>
-            </div>
-        `
-    };
+    const html = `
+    <div>
+      <h2>รายการขอยืมอุปกรณ์ของคุณไม่ได้รับการอนุมัติ</h2>
+      <p><b>ชื่อผู้ยืม:</b> ${name || '-'}</p>
+      <p><b>อุปกรณ์:</b> ${equipment || '-'}</p>
+      <p><b>จำนวน:</b> ${quantity || '-'}</p>
+      <br>
+      <p>หากมีข้อสงสัย กรุณาติดต่อเจ้าหน้าที่ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง</p>
+      <hr><p style="font-size:0.95em;color:#888;">Sport Complex – MFU</p>
+    </div>`;
     try {
-        await transporter.sendMail(mailOptions);
+        return await sendBulk(to, 'แจ้งเตือน: ไม่อนุมัติการยืมอุปกรณ์', html);
+    } catch (err) { console.error('ส่งเมลแจ้ง disapprove equipment ไม่สำเร็จ:', err); }
+}
+
+// === อีเมลอนุมัติอุปกรณ์แบบ "วันเดียว" ส่งให้ผู้ใช้ทันที ไม่ต้องรอส่งมอบ ===
+async function sendApproveEquipmentEmailImmediate({ to, name, itemsHtml, fileUrl }) {
+    if (!to) return;
+    const html = `
+    <div>
+      <h2>รายการยืมอุปกรณ์ของคุณได้รับการอนุมัติแล้ว</h2>
+      <p><b>ชื่อผู้ยืม:</b> ${name || '-'}</p>
+      ${itemsHtml || ''}
+      <br>
+      <p>โปรดติดต่อรับอุปกรณ์ที่ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวงในช่วงเวลาที่กำหนด</p>
+      <hr><p style="font-size:0.95em;color:#888;">Sport Complex – MFU</p>
+    </div>
+  `;
+    try {
+        return await sendBulk(to, 'แจ้งเตือน: อนุมัติการยืมอุปกรณ์ (ยืมวันเดียว)', html);
     } catch (err) {
-        console.error('ส่งเมลแจ้ง disapprove equipment ไม่สำเร็จ:', err);
+        console.error('ส่งเมลอนุมัติ (วันเดียว) ไม่สำเร็จ:', err);
     }
 }
+
 // ส่งอีเมลแจ้ง user ว่าคืนของสำเร็จแล้ว
-async function sendReturnSuccessEmail({ to, name, equipment, quantity }) {
+// ส่งอีเมลแจ้ง user ว่าคืนของสำเร็จแล้ว (FIXED)
+async function sendReturnSuccessEmail({ to, name, equipment, quantity, fileUrl }) {
     if (!to) return;
-    const mailOptions = {
-        from: '"MFU Sport Complex" <your.email@gmail.com>',
-        to,
-        subject: 'แจ้งเตือน: คืนอุปกรณ์สำเร็จ',
-        html: `
-            <div>
-                <h2>การคืนอุปกรณ์ของคุณสำเร็จ</h2>
-                <p><b>ชื่อผู้คืน:</b> ${name || '-'}</p>
-                <p><b>อุปกรณ์:</b> ${equipment || '-'}</p>
-                <p><b>จำนวน:</b> ${quantity || '-'}</p>
-                <br>
-                <p>ขอบคุณที่ใช้บริการศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง</p>
-                <hr>
-                <p style="font-size: 0.95em; color: #888;">Sport Complex – MFU</p>
-            </div>
-        `
-    };
+    const html = `
+    <div>
+      <h2>การคืนอุปกรณ์ของคุณสำเร็จ</h2>
+      <p><b>ชื่อผู้คืน:</b> ${name || '-'}</p>
+      <p><b>อุปกรณ์:</b> ${equipment || '-'}</p>
+      <p><b>จำนวน:</b> ${quantity || '-'}</p>
+      ${fileUrl ? `<p><b>เอกสารรับคืน:</b> <a href="${fileUrl}" target="_blank" rel="noopener">เปิดไฟล์</a></p>` : ''}
+      <br>
+      <p>ขอบคุณที่ใช้บริการศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง</p>
+      <hr>
+      <p style="font-size: 0.95em; color: #888;">Sport Complex – MFU</p>
+    </div>
+  `;
     try {
-        await transporter.sendMail(mailOptions);
+        return await sendBulk(to, 'แจ้งเตือน: คืนอุปกรณ์สำเร็จ', html);
     } catch (err) {
         console.error('ส่งเมลคืนของสำเร็จไม่สำเร็จ:', err);
     }
 }
+
 // แจ้งเตือน admin ทุกคนเมื่อมีรายการขอใช้สนามเข้ามาใหม่ (pending)
 async function notifyAdminNewFieldBooking({ requester, building, activity, since, uptodate, zone, booking_id }) {
     const adminEmails = await getAdminEmails();
     if (!adminEmails.length) return;
     const html = `
-      <div>
-        <h2>มีรายการขออนุมัติใช้สนาม รอพิจารณา</h2>
-        <p><b>ผู้ขอ:</b> ${requester || '-'}</p>
-        <p><b>อาคาร/สนาม:</b> ${building || '-'}</p>
-        <p><b>กิจกรรม:</b> ${activity || '-'}</p>
-        <p><b>วันที่:</b> ${since || '-'} ถึง ${uptodate || '-'}</p>
-        <p><b>โซน:</b> ${zone || '-'}</p>
-        <p><b>Booking ID:</b> ${booking_id || '-'}</p>
-        <br>
-        <p>กรุณาเข้าสู่ระบบศูนย์กีฬาเพื่ออนุมัติรายการนี้</p>
-        <hr>
-        <p style="font-size: 0.95em; color: #888;">Sport Complex – MFU</p>
-      </div>
-    `;
-    await transporter.sendMail({
-        from: '"MFU Sport Complex" <your.email@gmail.com>',
-        to: adminEmails,
-        subject: 'แจ้งเตือน: มีรายการขออนุมัติใช้สนาม',
-        html
-    });
+  <div>
+    <h2>มีรายการขออนุมัติใช้สนาม รอพิจารณา</h2>
+    <p><b>ผู้ขอ:</b> ${requester || '-'}</p>
+    <p><b>อาคาร/สนาม:</b> ${building || '-'}</p>
+    <p><b>กิจกรรม:</b> ${activity || '-'}</p>
+    <p><b>วันที่:</b> ${formatDateRange(since, uptodate)}</p>
+    <p><b>โซน:</b> ${zone || '-'}</p>
+    <br>
+    <p>กรุณาเข้าสู่ระบบศูนย์กีฬาเพื่ออนุมัติรายการนี้</p>
+    <hr>
+    <p style="font-size: 0.95em; color: #888;">Sport Complex – MFU</p>
+  </div>
+`;
+
+    return await sendBulk(adminEmails, 'แจ้งเตือน: มีรายการขออนุมัติใช้สนาม', html);
 }
 // ส่งอีเมลแจ้ง user ว่าได้รับการอนุมัติการขอใช้สนาม
-async function sendApproveFieldEmail({ to, name, field, activity, since, uptodate, startTime, endTime }) {
+async function sendApproveFieldEmail({ to, name, field, activity, since, uptodate, startTime, endTime, fileUrl }) {
     if (!to) return;
-    const mailOptions = {
-        from: '"MFU Sport Complex" <your.email@gmail.com>',
-        to,
-        subject: 'แจ้งเตือน: การจองสนามของคุณได้รับการอนุมัติ',
-        html: `
-            <div>
-                <h2>รายการขอใช้สนามของคุณได้รับการอนุมัติ</h2>
-                <p><b>ชื่อผู้ขอ:</b> ${name || '-'}</p>
-                <p><b>สนาม:</b> ${field || '-'}</p>
-                <p><b>กิจกรรม:</b> ${activity || '-'}</p>
-                <p><b>วันที่:</b> ${since || '-'} ถึง ${uptodate || '-'}</p>
-                <p><b>เวลา:</b> ${startTime || '-'} ถึง ${endTime || '-'}</p>
-                <br>
-                <p>ขอบคุณที่ใช้บริการศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง</p>
-                <hr>
-                <p style="font-size: 0.95em; color: #888;">Sport Complex – MFU</p>
-            </div>
-        `
-    };
+    const html = `
+  <div>
+    <h2>รายการขอใช้สนามของคุณได้รับการอนุมัติ</h2>
+    <p><b>ชื่อผู้ขอ:</b> ${name || '-'}</p>
+    <p><b>สนาม:</b> ${field || '-'}</p>
+    <p><b>กิจกรรม:</b> ${activity || '-'}</p>
+    <p><b>วันที่:</b> ${formatDateRange(since, uptodate)}</p>
+    <p><b>เวลา:</b> ${startTime || '-'} ถึง ${endTime || '-'}</p>
+    ${fileUrl ? `<p><b>ไฟล์อนุมัติ:</b> <a href="${fileUrl}" target="_blank" rel="noopener">เปิดไฟล์</a></p>` : ''}
+    <br>
+    <p>ขอบคุณที่ใช้บริการศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง</p>
+    <hr><p style="font-size:0.95em;color:#888;">Sport Complex – MFU</p>
+  </div>`;
+
     try {
-        await transporter.sendMail(mailOptions);
-    } catch (err) {
-        console.error('ส่งเมลแจ้ง approve field ไม่สำเร็จ:', err);
-    }
+        return await sendBulk(to, 'แจ้งเตือน: การจองสนามของคุณได้รับการอนุมัติ', html);
+    } catch (err) { console.error('ส่งเมลแจ้ง approve field ไม่สำเร็จ:', err); }
 }
+
 // ส่งอีเมลแจ้ง user ว่าไม่ได้รับการอนุมัติจองสนาม
 async function sendDisapproveFieldEmail({ to, name, field, activity, since, uptodate, startTime, endTime }) {
     if (!to) return;
-    const mailOptions = {
-        from: '"MFU Sport Complex" <your.email@gmail.com>',
-        to,
-        subject: 'แจ้งเตือน: ไม่อนุมัติการขอใช้สนาม',
-        html: `
-            <div>
-                <h2>รายการขอใช้สนามของคุณไม่ได้รับการอนุมัติ</h2>
-                <p><b>ชื่อผู้ขอ:</b> ${name || '-'}</p>
-                <p><b>สนาม:</b> ${field || '-'}</p>
-                <p><b>กิจกรรม:</b> ${activity || '-'}</p>
-                <p><b>วันที่:</b> ${since || '-'} ถึง ${uptodate || '-'}</p>
-                <p><b>เวลา:</b> ${startTime || '-'} ถึง ${endTime || '-'}</p>
-                <br>
-                <p>หากมีข้อสงสัย กรุณาติดต่อเจ้าหน้าที่ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง</p>
-                <hr>
-                <p style="font-size: 0.95em; color: #888;">Sport Complex – MFU</p>
-            </div>
-        `
-    };
+    const html = `
+  <div>
+    <h2>รายการขอใช้สนามของคุณไม่ได้รับการอนุมัติ</h2>
+    <p><b>ชื่อผู้ขอ:</b> ${name || '-'}</p>
+    <p><b>สนาม:</b> ${field || '-'}</p>
+    <p><b>กิจกรรม:</b> ${activity || '-'}</p>
+    <p><b>วันที่:</b> ${formatDateRange(since, uptodate)}</p>
+    <p><b>เวลา:</b> ${startTime || '-'} ถึง ${endTime || '-'}</p>
+    <hr><p style="font-size:0.95em;color:#888;">Sport Complex – MFU</p>
+  </div>`;
+
     try {
-        await transporter.sendMail(mailOptions);
-    } catch (err) {
-        console.error('ส่งเมลแจ้ง disapprove field ไม่สำเร็จ:', err);
-    }
+        return await sendBulk(to, 'แจ้งเตือน: ไม่อนุมัติการขอใช้สนาม', html);
+    } catch (err) { console.error('ส่งเมลแจ้ง disapprove field ไม่สำเร็จ:', err); }
 }
 // ฟังก์ชันส่งอีเมลแจ้ง user ว่า "รายการขอใช้สนามของคุณถูกยกเลิก"
 async function sendCancelFieldEmail({ to, name, field, activity, since, uptodate, startTime, endTime }) {
     if (!to) return;
-    const mailOptions = {
-        from: '"MFU Sport Complex" <your.email@gmail.com>',
-        to,
-        subject: 'แจ้งเตือน: การขอใช้สนามของคุณถูกยกเลิก',
-        html: `
-            <div>
-                <h2>รายการขอใช้สนามของคุณถูกยกเลิก</h2>
-                <p><b>ชื่อผู้ขอ:</b> ${name || '-'}</p>
-                <p><b>สนาม:</b> ${field || '-'}</p>
-                <p><b>กิจกรรม:</b> ${activity || '-'}</p>
-                <p><b>วันที่:</b> ${since || '-'} ถึง ${uptodate || '-'}</p>
-                <p><b>เวลา:</b> ${startTime || '-'} ถึง ${endTime || '-'}</p>
-                <br>
-                <p>หากมีข้อสงสัย กรุณาติดต่อเจ้าหน้าที่ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง</p>
-                <hr>
-                <p style="font-size: 0.95em; color: #888;">Sport Complex – MFU</p>
-            </div>
-        `
-    };
+    const html = `
+  <div>
+    <h2>รายการขอใช้สนามของคุณถูกยกเลิก</h2>
+    <p><b>ชื่อผู้ขอ:</b> ${name || '-'}</p>
+    <p><b>สนาม:</b> ${field || '-'}</p>
+    <p><b>กิจกรรม:</b> ${activity || '-'}</p>
+    <p><b>วันที่:</b> ${formatDateRange(since, uptodate)}</p>
+    <p><b>เวลา:</b> ${startTime || '-'} ถึง ${endTime || '-'}</p>
+    <hr><p style="font-size:0.95em;color:#888;">Sport Complex – MFU</p>
+  </div>`;
+
     try {
-        await transporter.sendMail(mailOptions);
-    } catch (err) {
-        console.error('ส่งเมลแจ้ง cancel field ไม่สำเร็จ:', err);
-    }
+        return await sendBulk(to, 'แจ้งเตือน: การขอใช้สนามของคุณถูกยกเลิก', html);
+    } catch (err) { console.error('ส่งเมลแจ้ง cancel field ไม่สำเร็จ:', err); }
 }
 async function saveGoogleProfilePic(picUrl, userId) {
     try {
@@ -580,8 +552,16 @@ function buildPublicUrl(req, relPath) {
     return relPath.startsWith('/') ? `${base}${relPath}` : `${base}/${relPath}`;
 }
 
-app.use('/uploads', require('express').static(path.join(__dirname, 'public', 'uploads')));
-
+// ============ Multer + Static Uploads (upload file to ./uploads) ==========
+app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
+    setHeaders: (res, filePath) => {
+        if (filePath.endsWith('.pdf')) {
+            res.setHeader('Content-Type', 'application/pdf');
+            res.setHeader('X-Content-Type-Options', 'nosniff');
+            res.setHeader('Accept-Ranges', 'bytes');
+        }
+    }
+}));
 
 app.set('trust proxy', 1);
 const allowedOrigins = [
@@ -936,16 +916,12 @@ app.get('/api/history/booked', async (req, res) => {
     }
 });
 
-// ============ Multer + Static Uploads (upload file to ./uploads) ==========
-app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
-    setHeaders: (res, filePath) => {
-        if (filePath.endsWith('.pdf')) {
-            res.setHeader('Content-Type', 'application/pdf');
-            res.setHeader('X-Content-Type-Options', 'nosniff');
-            res.setHeader('Accept-Ranges', 'bytes');
-        }
-    }
-}));
+
+
+// (ถ้ายังไม่ได้มี) ให้เสิร์ฟไฟล์ static ใน public
+app.use(express.static(PUBLIC_DIR));
+
+
 
 app.use('/uploads/signatures', express.static(path.join(__dirname, 'uploads', 'signatures')));
 
@@ -1407,12 +1383,13 @@ app.patch('/api/users/update_id', async (req, res) => {
 
 // ============ CREATE HISTORY ============
 // ============ CREATE HISTORY ============
+// ============ CREATE HISTORY ============
 app.post('/api/history', async (req, res) => {
     try {
         const body = req.body || {};
         const type = String(body.type || 'field').toLowerCase();
 
-        // helpers (เฉพาะใน route นี้กัน error ตัวแปรไม่เจอ)
+        // helpers เฉพาะ route
         const toArr = (v) => Array.isArray(v) ? v : (v ? [v] : []);
         const isEmptyLike = (v) => {
             const s = (v ?? '').toString().trim().toLowerCase();
@@ -1424,29 +1401,23 @@ app.post('/api/history', async (req, res) => {
         const step =
             (type === 'equipment' && isEquipmentOneDay(body))
                 ? keepStaffOnly
-                : normalizeIncomingStep(body.step, type, body); // สำหรับเคสอื่น ๆ
+                : normalizeIncomingStep(body.step, type, body);
 
-        // status เริ่มต้น
         const status = body.status || deriveStatusFromStep(step, type, body) || 'pending';
 
-        // สร้างเอกสาร
         const doc = await History.create({
-            // --- core fields ---
             user_id: body.user_id,
             type,
             status,
             name: body.name,
             name_active: body.name_active,
             zone: body.zone,
-
             since: isEmptyLike(body.since) ? null : body.since,
             uptodate: isEmptyLike(body.uptodate) ? null : body.uptodate,
             startTime: body.startTime || '',
             endTime: body.endTime || '',
             quantity: body.quantity,
             date: body.date ? new Date(body.date) : new Date(),
-
-            // --- booking / files ---
             agency: body.agency || '',
             booking_id: body.booking_id || null,
             attachment: toArr(body.attachment),
@@ -1455,14 +1426,10 @@ app.post('/api/history', async (req, res) => {
             fileUrl: body.fileUrl || '',
             bookingPdfUrl: body.bookingPdfUrl || '',
             bookingPdf: body.bookingPdf || null,
-
-            // --- user form ---
             proxyStudentName: body.proxyStudentName || '',
             proxyStudentId: body.proxyStudentId || '',
             username_form: body.username_form || '',
             id_form: body.id_form || '',
-
-            // --- field-only extras (ถ้าเป็น equipment ปล่อยว่างได้) ---
             utilityRequest: body.utilityRequest || '',
             facilityRequest: body.facilityRequest || '',
             turnon_air: body.turnon_air || '',
@@ -1481,13 +1448,9 @@ app.post('/api/history', async (req, res) => {
             date_receive: body.date_receive || null,
             receiver: body.receiver || '',
             restroom: body.restroom || '',
-
-            // --- equipment receive scheduling ---
             receive_date: body.receive_date || null,
             receive_time: body.receive_time || '',
             createdAt_old: body.createdAt_old || null,
-
-            // --- secretary/admin meta (flow สนาม) ---
             reason_admin: body.reason_admin || '',
             secretary_choice: {
                 to_head: !!(body.secretary_choice?.to_head),
@@ -1496,8 +1459,6 @@ app.post('/api/history', async (req, res) => {
             },
             thaiName_admin: body.thaiName_admin || '',
             signaturePath_admin: body.signaturePath_admin || '',
-
-            // --- supervisor meta (flow สนาม) ---
             superApprovedBy: body.superApprovedBy || '',
             superApprovedById: body.superApprovedById || '',
             superApprovedAt: body.superApprovedAt || null,
@@ -1513,8 +1474,6 @@ app.post('/api/history', async (req, res) => {
                 for_consider_supervisor: !!(body.head_choice_supervisor?.for_consider_supervisor),
                 other_checked_supervisor: !!(body.head_choice_supervisor?.other_checked_supervisor),
             },
-
-            // --- handover meta (flow อุปกรณ์) ---
             handoverById: body.handoverById || '',
             handoverBy: body.handoverBy || '',
             handoverAt: body.handoverAt || null,
@@ -1524,30 +1483,56 @@ app.post('/api/history', async (req, res) => {
             handoverReceiverDate: body.handoverReceiverDate || null,
             condition: body.condition || '',
             returnPhoto: body.returnPhoto || null,
-
-            // --- step ---
             step,
         });
 
-        // กันกรณีมี middleware เติม role อื่นเข้ามา: ยืมวันเดียว (equipment) → รีเซ็ตให้เหลือ staff เท่านั้น
+        // บังคับ one-day ให้เหลือ staff อย่างเดียว (กัน hook เก่า)
         if (type === 'equipment' && isEquipmentOneDay(body)) {
-            const hasOnlyStaff =
+            const onlyStaff =
                 Array.isArray(doc.step) &&
                 doc.step.length === 1 &&
                 String(doc.step[0]?.role).toLowerCase() === 'staff';
-
-            if (!hasOnlyStaff) {
+            if (!onlyStaff) {
                 await History.updateOne({ _id: doc._id }, { $set: { step: keepStaffOnly } });
                 doc.step = keepStaffOnly;
             }
         }
 
+        // === ส่งเมลแจ้งเตือนตามชนิดคำขอ (ย้ายมาก่อนการตอบกลับ) ===
+        try {
+            const requesterName = await getUserDisplayNameById(doc.user_id);
+            if (doc.type === 'field') {
+                await notifyAdminNewFieldBooking({
+                    requester: requesterName,
+                    building: doc.name,
+                    activity: doc.name_active,
+                    since: doc.since,
+                    uptodate: doc.uptodate,
+                    zone: doc.zone,
+                    booking_id: doc.booking_id
+                });
+            } else if (doc.type === 'equipment') {
+                const items = [{ name: doc.name, quantity: doc.quantity }];
+                if (isSingleDay(doc)) {
+                    // วันเดียว → แจ้ง staff
+                    await notifyStaffNewBorrow({ requester: requesterName, items, booking_id: doc.booking_id });
+                } else {
+                    // หลายวัน → แจ้ง admin (แก้ปัญหาอีเมลไม่เข้า)
+                    await notifyAdminNewBorrow({ requester: requesterName, items, booking_id: doc.booking_id });
+                }
+            }
+        } catch (mailErr) {
+            console.error('notify on create history error:', mailErr);
+        }
+
+        // ✅ ค่อยตอบกลับหลังส่งเมล
         return res.status(201).json(doc);
     } catch (err) {
         console.error('POST /api/history error:', err);
         return res.status(400).json({ message: err.message || 'Create history failed' });
     }
 });
+
 
 
 
@@ -1752,7 +1737,8 @@ app.patch('/api/history/:id/return', async (req, res) => {
                     to: user.email,
                     name: user.thaiName || user.name || user.email || saved.user_id,
                     equipment: saved.name,
-                    quantity: saved.quantity
+                    quantity: saved.quantity,
+                     fileUrl: saved.bookingPdfUrl || ''   // << แนบลิงก์ไฟล์รับคืนถ้ามี
                 });
             }
         } catch (mailErr) {
@@ -1904,7 +1890,6 @@ app.patch('/api/history/:id/request-return', uploadReturn.single('returnPhoto'),
               <h2>มีรายการคืนอุปกรณ์รอการยืนยัน</h2>
               <p><b>ชื่อผู้คืน:</b> ${userName}</p>
               ${itemsHtml}
-              <p><b>Booking ID:</b> ${oldRecord.booking_id || ''}</p>
               <p><b>หลักฐานภาพถ่าย:</b> <a href="${newDoc.returnPhoto}" target="_blank" rel="noopener">เปิดดูรูป</a></p>
               <hr><p style="font-size:0.95em;color:#888;">Sport Complex – MFU</p>
             </div>
@@ -1953,14 +1938,18 @@ app.patch('/api/history/:id/handover', async (req, res) => {
             handoverAt: handoverAt ? new Date(handoverAt) : new Date(),
             ...(remarkSender ? { handoverRemarkSender: remarkSender } : {}),
             ...(remarkReceiver ? { handoverRemarkReceiver: remarkReceiver } : {}),
-            ...(bookingPdfUrl ? {
-                bookingPdfUrl: bookingPdfUrl,
-                bookingPdf: bookingPdfUrl,
-                booking_pdf_url: bookingPdfUrl,
-            } : {}),
+            ...(bookingPdfUrl
+                ? {
+                    bookingPdfUrl: bookingPdfUrl,
+                    bookingPdf: bookingPdfUrl,
+                    booking_pdf_url: bookingPdfUrl,
+                }
+                : {}),
         };
 
-        let matched = 0, modified = 0, docs = [];
+        let matched = 0,
+            modified = 0,
+            docs = [];
 
         if (booking_id) {
             const result = await History.updateMany(
@@ -1970,22 +1959,23 @@ app.patch('/api/history/:id/handover', async (req, res) => {
             matched = result.matchedCount ?? result.nMatched ?? 0;
             modified = result.modifiedCount ?? result.nModified ?? 0;
 
-            const affected = await History.find({ type: 'equipment', booking_id }, { _id: 1, name: 1, quantity: 1, user_id: 1 }).lean();
+            const affected = await History.find(
+                { type: 'equipment', booking_id },
+                { _id: 1, name: 1, quantity: 1, user_id: 1 }
+            ).lean();
             docs = affected;
 
-            // ✅ step: staff ส่งมอบแล้ว (approve=true) — ครบชุด roles ของ equipment
+            // ✅ อัปเดต step: staff ส่งมอบแล้ว
             for (const h of affected) {
                 try {
                     await updateHistoryStep(
                         { id: h._id, role: 'staff', approve: true, actorName: finalName },
-                        { syncStatus: true } // สถานะรวมยังคง approved
+                        { syncStatus: true }
                     );
                 } catch (e) {
                     console.error(`update step staff handover ${h._id} error:`, e.message);
                 }
             }
-
-            // แจ้งผู้ยืม (คงโค้ดส่งเมลเดิมของคุณไว้)
         } else {
             const updated = await History.findByIdAndUpdate(
                 req.params.id,
@@ -1994,9 +1984,18 @@ app.patch('/api/history/:id/handover', async (req, res) => {
             );
             if (!updated) return res.status(404).json({ message: 'Not found' });
             matched = modified = 1;
-            docs = [{ _id: updated._id, name: updated.name, quantity: updated.quantity, booking_id: updated.booking_id }];
 
-            // ✅ step: staff ส่งมอบแล้ว (approve=true) สำหรับรายการเดียว
+            // 👈 เติม user_id ด้วย เพื่อใช้ร่วมกับเคส booking_id ได้
+            docs = [
+                {
+                    _id: updated._id,
+                    name: updated.name,
+                    quantity: updated.quantity,
+                    booking_id: updated.booking_id,
+                    user_id: updated.user_id,
+                },
+            ];
+
             try {
                 await updateHistoryStep(
                     { id: updated._id, role: 'staff', approve: true, actorName: finalName },
@@ -2005,21 +2004,57 @@ app.patch('/api/history/:id/handover', async (req, res) => {
             } catch (e) {
                 console.error(`update step staff handover single ${updated._id} error:`, e.message);
             }
-
-            // แจ้งผู้ยืม (คงโค้ดส่งเมลเดิมของคุณไว้)
         }
 
-        res.json({
+        // ===== ส่งอีเมลถึงผู้ยืมว่า "ส่งมอบแล้ว" (ทำงานทั้งสองเคส) =====
+        try {
+            const borrowerUserId =
+                docs?.[0]?.user_id ||
+                (await History.findById(req.params.id).lean())?.user_id ||
+                null;
+
+            const itemsForMail = docs.map((d) => ({ name: d.name, quantity: d.quantity }));
+
+            if (borrowerUserId) {
+                const borrower = await User.findOne({ user_id: borrowerUserId }).lean();
+                if (borrower?.email) {
+                    const borrowerName =
+                        borrower?.thaiName || borrower?.name || borrower?.email || borrower?.user_id || '';
+                    const itemsHtml = listToHtml(itemsForMail);
+
+                    await sendBulk(
+                        borrower.email,
+                        'แจ้งเตือน: เจ้าหน้าที่ได้ส่งมอบอุปกรณ์ให้คุณแล้ว',
+                        `
+            <div>
+              <h2>สถานะการยืมอุปกรณ์: ส่งมอบเรียบร้อย</h2>
+              <p><b>ผู้รับมอบ:</b> ${borrowerName}</p>
+              ${itemsHtml}
+              ${bookingPdfUrl ? `<p><b>เอกสาร:</b> <a href="${bookingPdfUrl}" target="_blank" rel="noopener">เปิดไฟล์</a></p>` : ''}
+              <p style="margin-top:10px;">กรุณาตรวจสอบอุปกรณ์และเก็บรักษาอย่างเหมาะสม</p>
+              <hr><p style="font-size:0.95em;color:#888;">Sport Complex – MFU</p>
+            </div>
+            `
+                    );
+                }
+            }
+        } catch (mailErr) {
+            console.error('handover: send mail to borrower error:', mailErr.message);
+        }
+
+        return res.json({
             success: true,
-            matched, modified,
+            matched,
+            modified,
             handoverBy: { id: handoverById, name: finalName },
-            items: docs
+            items: docs,
         });
     } catch (err) {
         console.error('handover error:', err);
         res.status(500).json({ message: err.message });
     }
 });
+
 
 
 
@@ -2207,9 +2242,10 @@ app.post('/api/history/:id/cancel', async (req, res) => {
             try {
                 const requesterDisp = await getUserDisplayNameById(updated.user_id);
                 const when = `
-    <p><b>วันที่:</b> ${(updated.since || '')} ถึง ${(updated.uptodate || '')}</p>
-    <p><b>เวลา:</b> ${(updated.startTime || '-')} ถึง ${(updated.endTime || '-')}</p>
-  `;
+  <p><b>วันที่:</b> ${formatDateRange(updated.since, updated.uptodate)}</p>
+  <p><b>เวลา:</b> ${(updated.startTime || '-')} ถึง ${(updated.endTime || '-')}</p>
+`;
+
 
                 const wasSecApproved = isUserCancel && (before?.status === 'pending') && !!before?.approvedById;
 
@@ -2612,7 +2648,6 @@ app.patch('/api/equipments/:id/status', async (req, res) => {
         <div>
           <h2>คำขอยืมอุปกรณ์ของ ${borrowerName} ถูกยกเลิกแล้ว</h2>
           ${itemsHtml}
-          <p><b>Booking ID:</b> ${bookingIdForMail}</p>
           <hr><p style="font-size:0.95em;color:#888;">Sport Complex – MFU</p>
         </div>
         `
@@ -2629,7 +2664,6 @@ app.patch('/api/equipments/:id/status', async (req, res) => {
         <div>
           <h2>คำขอยืมอุปกรณ์ของ ${borrowerName} ถูกยกเลิกแล้ว</h2>
           ${itemsHtml}
-          <p><b>Booking ID:</b> ${bookingIdForMail}</p>
           <hr><p style="font-size:0.95em;color:#888;">Sport Complex – MFU</p>
         </div>
         `
@@ -2647,7 +2681,6 @@ app.patch('/api/equipments/:id/status', async (req, res) => {
           <h2>คำขอยืมอุปกรณ์ที่รอการส่งมอบถูกยกเลิกแล้ว</h2>
           <p><b>ผู้ยกเลิก:</b> ${borrowerName}</p>
           ${itemsHtml}
-          <p><b>Booking ID:</b> ${bookingIdForMail}</p>
           <p style="margin-top:10px;">สถานะเดิม: อนุมัติแล้ว (รอการส่งมอบ)</p>
           <hr><p style="font-size:0.95em;color:#888;">Sport Complex – MFU</p>
         </div>
@@ -2664,7 +2697,6 @@ app.patch('/api/equipments/:id/status', async (req, res) => {
         <div>
           <h2>ยกเลิกรายการยืมอุปกรณ์สำเร็จ</h2>
           ${itemsHtml}
-          <p><b>Booking ID:</b> ${bookingIdForMail}</p>
           <hr><p style="font-size:0.95em;color:#888;">Sport Complex – MFU</p>
         </div>
         `
@@ -2800,9 +2832,10 @@ app.patch('/api/history/:id/cancel_field', async (req, res) => {
             const isUserCancel = canceledBy === 'user' || actorRole === 'user';
             const requesterDisp = await getUserDisplayNameById(updated.user_id);
             const when = `
-    <p><b>วันที่:</b> ${(updated.since || '')} ถึง ${(updated.uptodate || '')}</p>
-    <p><b>เวลา:</b> ${(updated.startTime || '-')} ถึง ${(updated.endTime || '-')}</p>
-  `;
+  <p><b>วันที่:</b> ${formatDateRange(updated.since, updated.uptodate)}</p>
+  <p><b>เวลา:</b> ${(updated.startTime || '-')} ถึง ${(updated.endTime || '-')}</p>
+`;
+
 
             // ใช้ oldHistory (อ่านมาก่อน cancel) เพื่อเช็คว่าเลขาฯ อนุมัติไว้แล้วหรือยัง
             const wasSecApproved = isUserCancel && (oldHistory?.status === 'pending') && !!oldHistory?.approvedById;
@@ -3019,52 +3052,64 @@ app.patch('/api/history/:id/approve_equipment', async (req, res) => {
         }
 
         // 5) ส่งเมล (คงเดิม)
+        // 5) ส่งเมล (แยกตามวันเดียว/หลายวัน)
         try {
             const borrowerId = pendingItems[0]?.user_id;
             let borrower = await User.findOne({ user_id: borrowerId });
             if (!borrower) borrower = await User.findById(borrowerId).catch(() => null);
 
             const itemsHtml = listToHtml(pendingItems);
-            const bookingIdForMail = pendingItems[0]?.booking_id || '';
 
-            if (borrower?.email) {
-                await sendBulk(
-                    borrower.email,
-                    'แจ้งเตือน: อนุมัติคำขอยืมอุปกรณ์แล้ว (รอการส่งมอบ)',
-                    `
-            <div>
-              <h2>อนุมัติคำขอยืมอุปกรณ์ของคุณแล้ว</h2>
-              <p><b>ชื่อผู้ยืม:</b> ${borrower?.thaiName || borrower?.name || borrower?.email || borrower?.user_id || ''}</p>
-              ${itemsHtml}
-              <p><b>Booking ID:</b> ${bookingIdForMail}</p>
-              <p style="margin-top:10px;">สถานะปัจจุบัน: <b>รอการส่งมอบ</b></p>
-              <hr><p style="font-size:0.95em;color:#888;">Sport Complex – MFU</p>
-            </div>
-          `
-                );
-            }
+            if (isOneDay) {
+                // ✅ ยืมวันเดียว: ส่งเมลอนุมัติให้ผู้ใช้ทันที และไม่แจ้ง staff ว่ารอส่งมอบ
+                if (borrower?.email) {
+                    await sendApproveEquipmentEmailImmediate({
+                        to: borrower.email,
+                        name: borrower?.thaiName || borrower?.name || borrower?.email || borrower?.user_id || '',
+                        itemsHtml,
+                        fileUrl: pdfUrl || ''
+                    });
+                }
+            } else {
+                // 🟡 ยืมหลายวัน: พฤติกรรมเดิม — แจ้งผู้ใช้ว่า "รอการส่งมอบ" และแจ้ง staff
+                if (borrower?.email) {
+                    await sendBulk(
+                        borrower.email,
+                        'แจ้งเตือน: อนุมัติคำขอยืมอุปกรณ์แล้ว (รอการส่งมอบ)',
+                        `
+        <div>
+          <h2>อนุมัติคำขอยืมอุปกรณ์ของคุณแล้ว</h2>
+          <p><b>ชื่อผู้ยืม:</b> ${borrower?.thaiName || borrower?.name || borrower?.email || borrower?.user_id || ''}</p>
+          ${itemsHtml}
+          <p style="margin-top:10px;">สถานะปัจจุบัน: <b>รอการส่งมอบ</b></p>
+          <hr><p style="font-size:0.95em;color:#888;">Sport Complex – MFU</p>
+        </div>
+        `
+                    );
+                }
 
-            const staffEmails = await getStaffEmails();
-            if (staffEmails.length) {
-                const borrowerName = borrower?.thaiName || borrower?.name || borrower?.email || borrower?.user_id || borrowerId || '';
-                await sendBulk(
-                    staffEmails,
-                    'แจ้งเตือน: มีรายการอุปกรณ์รอการส่งมอบ',
-                    `
-            <div>
-              <h2>มีรายการอุปกรณ์รอการส่งมอบ</h2>
-              <p><b>ผู้ยืม:</b> ${borrowerName}</p>
-              ${itemsHtml}
-              <p><b>Booking ID:</b> ${bookingIdForMail}</p>
-              <p style="margin-top:10px;">สถานะ: <b>รอการส่งมอบ</b></p>
-              <hr><p style="font-size:0.95em;color:#888;">Sport Complex – MFU</p>
-            </div>
-          `
-                );
+                const staffEmails = await getStaffEmails();
+                if (staffEmails.length) {
+                    const borrowerName = borrower?.thaiName || borrower?.name || borrower?.email || borrower?.user_id || borrowerId || '';
+                    await sendBulk(
+                        staffEmails,
+                        'แจ้งเตือน: มีรายการอุปกรณ์รอการส่งมอบ',
+                        `
+        <div>
+          <h2>มีรายการอุปกรณ์รอการส่งมอบ</h2>
+          <p><b>ผู้ยืม:</b> ${borrowerName}</p>
+          ${itemsHtml}
+          <p style="margin-top:10px;">สถานะ: <b>รอการส่งมอบ</b></p>
+          <hr><p style="font-size:0.95em;color:#888;">Sport Complex – MFU</p>
+        </div>
+        `
+                    );
+                }
             }
         } catch (mailErr) {
             console.error('approve_equipment notify mail error:', mailErr.message);
         }
+
 
         // 6) ตอบกลับ
         return res.send({
@@ -3176,7 +3221,7 @@ app.patch('/api/history/:id/approve_field', async (req, res) => {
               <p><b>ผู้ขอ:</b> ${await getUserDisplayNameById(updated.user_id)}</p>
               <p><b>สนาม:</b> ${updated.name || '-'}</p>
               <p><b>กิจกรรม:</b> ${updated.name_active || '-'}</p>
-              <p><b>วันที่:</b> ${(updated.since || '')} ถึง ${(updated.uptodate || '')}</p>
+              <p><b>วันที่:</b> ${formatDateRange(updated.since, updated.uptodate)}</p>
               <p><b>เวลา:</b> ${(updated.startTime || '-')} ถึง ${(updated.endTime || '-')}</p>
               <p><b>โซน:</b> ${updated.zone || '-'}</p>
             </div>`
@@ -3343,6 +3388,7 @@ app.patch('/api/history/:id/approve_field_super', async (req, res) => {
                     uptodate: updated.uptodate,
                     startTime: updated.startTime,
                     endTime: updated.endTime,
+                    fileUrl: updated.bookingPdfUrl || ''   // แนบลิงก์ไฟล์ถ้ามี
                 });
             }
         } catch (mailErr) {
@@ -4156,5 +4202,5 @@ app.post('/api/booking_field_upload', bookingFieldUpload.array('files'), async (
     }
 });
 // ========== Start server ==========
-const PORT = process.env.PORT || 8021;
+const PORT = process.env.PORT || 8020;
 app.listen(PORT, () => console.log('Backend running on port', PORT));

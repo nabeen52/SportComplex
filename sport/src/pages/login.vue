@@ -25,7 +25,7 @@
   
         <!-- Title -->
         <div style="text-align: center; color: white; margin-bottom: 0rem;">
-          <h3 style="font-size: 1.15rem; font-weight: bold;">FIELD BOOKING / EQUIPMENT LOAN SYSTEM</h3>
+          <h3 style="font-size: 1.15rem; font-weight: bold;">Field & Equipment Reservation System</h3>
           <p style="font-size: 1.125rem;">ระบบจองสนาม/ยืมอุปกรณ์</p>
         </div>
 
@@ -47,21 +47,22 @@
       </div>
 
       <!-- Footer -->
-        <div class="footer">
-  <div class="footer-address">
-    <span class="footer-univ">ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง มหาวิทยาลัยแม่ฟ้าหลวง </span>
-    <span class="footer-location"> 333 หมู่1 ต.ท่าสุด อ.เมือง จ.เชียงราย 57100</span>
-  </div>
-  <div class="footer-row">
-    <div class="footer-fb">
-      Facebook: <a href="https://www.facebook.com/mfusportcomplex" target="_blank" style="text-decoration: underline; color: #FFFFFF;">MFU Sports Complex Center</a>
-    </div>
-    <div class="footer-contact">
-      <span>โทรศัพท์: 0-5391-7821</span>
-      <span style="margin-left:1.5rem">Email: <a href="mailto:sport-complex@mfu.ac.th" style="text-decoration: underline; color: #FFFFFF;">sport-complex@mfu.ac.th</a></span>
-    </div>
-  </div>
+        <!-- Footer -->
+<div class="footer">
+  <p class="footer-line">
+    ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง มหาวิทยาลัยแม่ฟ้าหลวง 333 หมู่1 ต.ท่าสุด อ.เมือง จ.เชียงราย 57100
+  </p>
+  <p class="footer-line">
+    Facebook:
+    <a href="https://www.facebook.com/mfusportcomplex" target="_blank">MFU Sports Complex Center</a>
+    &nbsp;&nbsp;โทรศัพท์: 0-5391-7821&nbsp;&nbsp;
+    Email: <a href="mailto:sport-complex@mfu.ac.th">sport-complex@mfu.ac.th</a>
+  </p>
+  <p class="footer-line footer-copy">
+    © 2025 Center for Information Technology Services, Mae Fah Luang University. All rights reserved.
+  </p>
 </div>
+
 
     </div>
   </div>
@@ -189,10 +190,30 @@ onMounted(() => {
   text-align: center;
   color: #FFE8BF;
   font-size: 1rem;
-  padding-bottom: 1.5rem;
+  padding-bottom: 0.5rem;
   flex-shrink: 0;
 }
 
+.footer-line {
+  margin: 2px 0;              /* ระยะห่างบรรทัดพอดี */
+  line-height: 1.4;           /* อ่านง่าย */
+  white-space: normal;        /* ให้ตัดบรรทัดอัตโนมัติเมื่อหน้าจอแคบ */
+}
+
+.footer a {
+  color: #FFFFFF;
+  text-decoration: underline; /* เหมือนภาพตัวอย่าง */
+}
+
+.footer-copy {
+  opacity: 0.95;
+}
+
+/* มือถือ */
+@media (max-width: 600px) {
+  .footer { font-size: 0.95rem; }
+  .footer-line { padding: 0 0.25rem; }
+}
 html, body, #app {
   height: 100%;
   margin: 0;

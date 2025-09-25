@@ -51,7 +51,7 @@
       <!-- Body -->
       <section class="content">
         <div class="content-head">
-          <h2 class="page-title"> List of agencies</h2>
+          <h2 class="page-title"> List of Department</h2>
           <div class="tools">
             <input
               v-model="searchQuery"
