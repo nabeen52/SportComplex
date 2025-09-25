@@ -34,13 +34,6 @@ const bcrypt = require('bcrypt');
 const UploadFile = require('./models/upload_file');
 const BookingField = require('./models/booking_field');
 const app = express();
-const ICON_PATH = path.resolve(
-    'D:\\SportComplex\\SportComplex\\sport\\public\\img\\435-4359797_mae-fah-luang-university-logo-mae-fah-luang-removebg-preview.png'
-);
-
-// วางแถวบน ๆ หลัง app = express()
-app.use(favicon(ICON_PATH, { maxAge: '10y' }));
-app.get('/favicon.ico', (req, res) => res.sendFile(ICON_PATH));
 
 const uploadRoot = path.join(__dirname, 'uploads');
 const newsDir = path.join(uploadRoot, 'news');
@@ -555,6 +548,9 @@ function buildPublicUrl(req, relPath) {
 // ============ Multer + Static Uploads (upload file to ./uploads) ==========
 app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
     setHeaders: (res, filePath) => {
+        // บอก favicon เป็นไฟล์ PNG เดียวกับที่ใช้
+        res.setHeader('Link', '</img/435-4359797_mae-fah-luang-university-logo-mae-fah-luang-removebg-preview.png>; rel="icon"; type="image/png"');
+
         if (filePath.endsWith('.pdf')) {
             res.setHeader('Content-Type', 'application/pdf');
             res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -916,7 +912,14 @@ app.get('/api/history/booked', async (req, res) => {
     }
 });
 
-
+// ใช้ PNG เป็น favicon ตรง ๆ ได้เลย
+// ใส่ไว้แทนบรรทัด favicon เดิม
+const favPath = path.join(PUBLIC_DIR, 'img', '435-4359797_mae-fah-luang-university-logo-mae-fah-luang-removebg-preview.png');
+if (fs.existsSync(favPath)) {
+    app.use(favicon(favPath));
+} else {
+    console.warn('[favicon] not found, skip:', favPath);
+}
 
 // (ถ้ายังไม่ได้มี) ให้เสิร์ฟไฟล์ static ใน public
 app.use(express.static(PUBLIC_DIR));
@@ -4202,5 +4205,5 @@ app.post('/api/booking_field_upload', bookingFieldUpload.array('files'), async (
     }
 });
 // ========== Start server ==========
-const PORT = process.env.PORT || 8021;
+const PORT = process.env.PORT || 8020;
 app.listen(PORT, () => console.log('Backend running on port', PORT));
