@@ -1,25 +1,30 @@
-<template>  
+<template>
   <div class="layout">
+    <!-- Sidebar -->
     <aside class="sidebar" :class="{ closed: isSidebarClosed }">
       <div class="sidebar-header">
         <img src="/img/logo.png" alt="logo" class="logo" />
         <p class="sidebar-title">Sport Complex MFU</p>
       </div>
       <nav class="nav-links">
-        <router-link to="/home_user" exact-active-class="active"><i class="pi pi-home"></i> Home</router-link>
-        <router-link to="/booking_field" active-class="active"><i class="pi pi-map-marker"></i> Field</router-link>
-        <router-link to="/booking_equipment" active-class="active"><i class="pi pi-box"></i> Equipment</router-link>
-        <router-link to="/history" active-class="active"><i class="pi pi-history"></i> History</router-link>
+        <router-link to="/dashboard" exact-active-class="active"><i class="pi pi-chart-pie"></i> แดชบอร์ด</router-link>
+        <router-link to="/home_admin" exact-active-class="active"><i class="pi pi-megaphone"></i> แก้ไขข่าว</router-link>
+        <router-link to="/edit_field" active-class="active"><i class="pi pi-map-marker"></i> แก้ไขสนาม</router-link>
+        <router-link to="/edit_equipment" active-class="active"><i class="pi pi-clipboard"></i> แก้ไขอุปกรณ์ </router-link>
+         <router-link to="/step" active-class="active"><i class="pi pi-sitemap"></i> แก้ไขขั้นตอนการอนุมัติ </router-link>
+        <router-link to="/booking_field_admin" active-class="active"><i class="pi pi-map-marker"></i> จองสนาม</router-link>
+        <router-link to="/approve_field" active-class="active"><i class="pi pi-verified"></i> อนุมัติ</router-link>
+        <router-link to="/agency_admin" active-class="active"><i class="pi pi-briefcase"></i> หน่วยงาน </router-link>
+        <router-link to="/members" active-class="active"><i class="pi pi-user-edit"></i> พนักงาน/ผู้ดูแล </router-link>
+        <router-link to="/history_admin" active-class="active"><i class="pi pi-history"></i> ระบบประวัติการทำรายการ</router-link>
       </nav>
     </aside>
 
-    <div
-      v-if="!isSidebarClosed"
-      class="sidebar-overlay"
-      @click="toggleSidebar"
-    ></div>
+    <div v-if="!isSidebarClosed" class="sidebar-overlay" @click="toggleSidebar"></div>
 
+    <!-- Main -->
     <div class="main">
+      <!-- Topbar -->
       <header class="topbar">
         <button class="menu-toggle" @click="toggleSidebar">☰</button>
         <div class="topbar-actions">
@@ -31,10 +36,14 @@
             </button>
             <div v-if="showNotifications" class="notification-dropdown">
               <ul>
-                <li v-for="(noti, idx) in notifications.slice(0, 10)" :key="noti.id || idx"
-                  :class="['notification-item', noti.type || '', { unread: idx === 0 }]">
-                  {{ noti.message }}
-                </li>
+                <li
+                    v-for="(noti, idx) in notifications.slice(0, 10)"
+                    :key="noti.id || idx"
+                    :class="['notification-item', noti.type || '', { unread: noti.timestamp > lastSeenTimestamp }]"
+                  >
+                    {{ noti.message }}
+                  </li>
+
                 <li v-if="notifications.length === 0" class="no-noti">ไม่มีแจ้งเตือน</li>
               </ul>
             </div>
@@ -48,1297 +57,898 @@
       </header>
 
       <!-- Stepper -->
-<div class="headStepper" role="navigation" aria-label="ขั้นตอน">
-  <div class="stepper">
-    <div v-for="(step, index) in steps" :key="index" class="step">
-      <div
-        class="circle"
-        :class="{ active: index === currentStep, completed: index < currentStep }"
-        @click="tryGoStep(index)"
-        :style="{ cursor: canGoToStep(index) ? 'pointer' : 'not-allowed', opacity: canGoToStep(index) ? 1 : 0.5 }"
-      ></div>
-      <div class="label">{{ step }}</div>
-      <div v-if="index < steps.length - 1" class="line" :class="{ filled: index < currentStep }"></div>
-    </div>
-  </div>
-</div>
-<!-- spacer กันเนื้อหาโดนทับ (ซ่อนไว้ใน CSS) -->
-<div class="headStepper-spacer"></div>
-
-
-      <div class="scroll-x-container">
-      <div class="form-container">
-        <h1 style="display: flex; justify-content: center;">ยืนยันข้อมูล</h1>
-        <div id="pdf-section"> 
-        <div class="form-header">
-          <h3>แบบฟอร์มการยืมอุปกรณ์ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง</h3>
-          <p><b>โทร: 0-5391-7820 และ 0-5391-7821 | E-mail: sport-complex@mfu.ac.th</b></p>
-        </div>
-
-        <!-- กลุ่มขวา: วันที่มารับของและเวลามารับของ -->
-        <div class="form-header-section">
-          <div class="right-form" style="align-items: flex-end; text-align: right;">
-            <div class="form-row-title" style="font-size: 18px; font-weight: bold;">
-              ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง
-            </div>
-            <div>
-    <!-- วันที่และเวลา -->
-<div style="display: flex; flex-direction: column; align-items: flex-start;">
-  <span style="display: flex; gap: 19px;"> <!-- gap = ระยะห่างระหว่างคำกับเลข -->
-    <span><b>วันที่มารับของ</b></span>
-    <span>
-      {{ booking && booking.receive_date
-        ? new Date(booking.receive_date).toLocaleDateString('th-TH')
-        : "" }}
-    </span>
-  </span>
-  <span style="display: flex; gap: 6px;">
-    <span><b>เวลาที่มารับของ</b></span>
-    <span>
-      {{ booking && booking.receive_time ? booking.receive_time : "" }} น.
-    </span>
-  </span>
-</div>
-
-
-
-            </div>
+      <div class="headStepper" role="navigation" aria-label="ขั้นตอน">
+        <div class="stepper">
+          <div v-for="(step, index) in steps" :key="index" class="step">
+            <div
+              class="circle"
+              :class="{ active: index === currentStep, completed: index < currentStep }"
+              @click="tryGoStep(index)"
+              :style="{ cursor: canGoToStep(index) ? 'pointer' : 'not-allowed', opacity: canGoToStep(index) ? 1 : 0.5 }"
+            ></div>
+            <div class="label">{{ step }}</div>
+            <div v-if="index < steps.length - 1" class="line" :class="{ filled: index < currentStep }"></div>
           </div>
         </div>
-
-        <!-- =================== ข้อมูลผู้ขอ/รายละเอียด =================== -->
-        <div class="form-row" style="padding-top: 30px; flex-direction: column; align-items: flex-start;">
-         <span style="margin-bottom: 0;">
-  <b>วันที่ </b> {{ todayThai }}
-</span>
-
-          <span style="font-weight: bold; margin-top: 8px;">
-            ส่วนที่ 1 สำหรับผู้ขอใช้บริการ
-          </span>
-        </div>
-
-        <!-- ========== ข้าพเจ้า ... รหัสนักศึกษา ... หน่วยงาน ========== -->
-        <div class="form-row mt-30"
-          style="text-indent: 80px; text-align: left; line-height: 2.0;">
-          ข้าพเจ้า {{ booking && booking.username_form || "-" }}
-          รหัสนักศึกษา {{ booking && booking.id_form || "-" }}
-           {{ booking && booking.agency || "-" }}
-          โทร {{ booking && booking.number || "-" }}
-          มีความประสงค์ขอยืมอุปกรณ์ของศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง เพื่อใช้ในงาน {{ booking && booking.reason || "-" }}
-          สถานที่ใช้งาน {{ booking && booking.location || "-" }}
-          ระหว่างวันที่ {{ booking && booking.start_date ? (new Date(booking.start_date)).toLocaleDateString('th-TH') : "-" }}
-          ถึงวันที่ {{ booking && booking.end_date ? (new Date(booking.end_date)).toLocaleDateString('th-TH') : "-" }}
-        </div>
-
-        <div class="form-row" style="padding-top: 10px; justify-content: flex-start !important;">
-          <span>โดยมีรายการดังต่อไปนี้</span>
-        </div>
-
-        <!-- ================= ตารางรายการอุปกรณ์ ================= -->
-        <div class="form-row" style="padding-top: 0px;">
-          <table class="equipment-table">
-            <thead>
-              <tr>
-                <th>ลำดับ</th>
-                <th>รายการ</th>
-                <th>จำนวน</th>
-                <th>หมายเหตุ</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="(item, index) in equipmentList" :key="index">
-                <td>{{ index + 1 }}</td>
-                <td><span class="block-text">{{ item.name }}</span></td>
-                <td><span class="block-text">{{ item.quantity }}</span></td>
-                <td><span class="block-text">{{ item.remark }}</span></td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-<!-- ========= ลายเซ็นผู้ยืม (ชิดขวา, วันที่อยู่ “ระหว่างคำว่าลงชื่อกับผู้ยืม” และกึ่งกลางใต้ชื่อ) ========= -->
-<div class="sigX">
-  <div class="sigX-row">
-    <span class="sigX-left">ลงชื่อ</span>
-
-    <!-- กล่องกลาง = สมอของวันที่ -->
-    <span class="sigX-nameAnchor">
-      <span class="sigX-name">{{ booking && booking.username_form || "-" }}</span>
-      <!-- ใช้วันที่วันนี้แทนจุด -->
-      <span class="sigX-date">
-  <span class="dots">{{ nowThai }}</span>
-</span>
-
-    </span>
-
-    <span class="sigX-right">ผู้ยืม</span>
-  </div>
-</div>
-<!-- ========= /ลายเซ็นผู้ยืม ========= -->
-
-
-        <!-- ================= ส่วนลายเซ็น/ความเห็น ================= -->
-        <div class="form-row" style="padding-top: 10px;">
-          <table class="approval-table">
-            <thead>
-              <tr>
-                <th style="width: 50%;">ผลการดำเนินการ/ผลการปฏิบัติงาน</th>
-                <th style="width: 50%;">ผลการดำเนินการ/ผลการปฏิบัติงาน</th>
-              </tr>
-            </thead>
-            <tbody>
-            <tr>
-              <!-- ซ้าย -->
-              <td class="approval-cell">
-                <div class="approval-content">
-                  <div class="approval-lines">
-                    ..........................................................................<br>
-                    ..........................................................................<br>
-                  </div>
-                  <div class="approval-sign">
-                    ลงชื่อ......................................................ผู้ส่งมอบ<br>
-                    
-                    วันที่.............../.............../...............
-                  </div>
-                </div>
-              </td>
-
-              <!-- ขวา -->
-              <td class="approval-cell">
-                <div class="approval-content">
-                  <div class="approval-lines">
-                    ..........................................................................<br>
-                    ..........................................................................<br>
-                  </div>
-                  <div class="approval-sign">
-                    ลงชื่อ........................................................ผู้รับคืน<br>
-                                    วันที่.............../.............../...............
-                  </div>
-                </div>
-              </td>
-            </tr>
-          </tbody>
-
-          </table>
-        </div>
-        <div style="margin-top: 15px;"></div>
-<p class="note-block"> <b> *หมายเหตุ หากอุปกรณ์เกิดการชำรุดเสียหายในระหว่างที่ผู้ยืมเป็นผู้รับผิดชอบ ผู้ยืมจะต้องชดใช้ค่าเสียหายที่เกิดขึ้นทั้งหมด</b>
- 
-</p>
-       
       </div>
 
-      <!-- ไฟล์แนบ (ยังไม่อัปโหลด) -->
-<div v-if="tempFiles.length > 0" class="form-row" style="flex-direction: column; align-items: flex-start; padding-top: 20px;">
-  <span style="font-weight: bold; margin-bottom: 6px;">ไฟล์แนบ:</span>
-  <ul style="list-style-type: disc; padding-left: 20px; margin: 0;">
-    <li v-for="(f, idx) in tempFiles" :key="idx" style="margin-bottom: 4px;">
-      <span style="font-weight: 500;">{{ f.name }}</span>
-      <span style="font-size: 12px; color: #888; margin-left: 10px;">
-        ({{ f.type || 'unknown' }}, {{ Math.ceil((f.size||0)/1024) }} KB)
-      </span>
-    </li>
-  </ul>
-</div>
+      <div class="scroll-x-container">
+        <!-- Confirm Form -->
+        <div class="form-container admin3">
+          <h1 class="title">ยืนยันข้อมูล</h1>
 
-      <div class="button-wrapper">
-        <button id="btnBack" @click="handleBack">Back</button>
-        <button id="btnNext" @click="handleNext" :disabled="isLoading">Next</button>
+          <div id="pdf-section">
+            <section id="uniform-lines">
+              <div class="form-header">
+                <h3>แบบฟอร์มขออนุมัติใช้สถานที่ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง</h3>
+                <p><b>โทร: 0-5391-7820 และ 0-5391-7821 | E-mail: sport-complex@mfu.ac.th</b></p>
+              </div>
+
+              <!-- Header Info -->
+              <div class="info-left">
+                <span class="bold">ที่ อว.</span>
+                <span class="line-field single-line">{{ info.aw }}</span>
+                <span class="bold" style="margin-left: 50px;">วันที่</span>
+                <span class="line-field single-line">{{ formatDateOnly(info.date) }}</span>
+                <span class="bold" style="margin-left: 50px;">โทร</span>
+                <span class="line-field single-line">{{ info.tel }}</span>
+              </div>
+
+              <!-- Detail -->
+              <div class="form-row mt-15" style="margin-left:0;"><span class="bold">เรื่อง</span><span>ขออนุมัติใช้สถานที่</span></div>
+              <div class="form-row mt-15" style="margin-left:0;"><span class="bold">เรียน</span><span>หัวหน้าศูนย์กีฬาฯ</span></div>
+
+              <div class="form-row mt-15" style="text-indent: 80px; text-align:left; line-height: 2.0;">
+                ด้วย {{ info.agency }}
+                จะดำเนินกิจกรรม/โครงการ {{ info.name_activity }}
+                เหตุผลในการขอใช้เพื่อ {{ info.reasons }}
+                ในวันที่ {{ formatDateOnly(info.since) }} ถึงวันที่ {{ formatDateOnly(info.uptodate) }}
+                ช่วงเวลา {{ formatTimeTH(info.since_time) }} ถึงเวลา {{ formatTimeTH(info.until_thetime) }}
+                จำนวนผู้เข้าร่วม {{ info.participants }} คน
+                และเพื่อให้การดำเนินงานเป็นไปด้วยความเรียบร้อย จึงเรียนมาเพื่อขออนุมัติ ดังนี้
+              </div>
+
+              <!-- ข้อ 1 -->
+              <div class="form-row bold" style="margin-left:0;"><span>1. ขออนุมัติใช้สถานที่</span></div>
+              <table class="util-table util-colon-align" style="margin-left:80px;">
+                <colgroup>
+                  <col class="c-label" /><col class="c-colon" /><col />
+                </colgroup>
+                <tr>
+                  <td class="util-label">อาคาร</td><td class="colon">:</td>
+                  <td class="restroom-text">{{ info.building && info.building.trim() !== '' ? info.building : '-' }}</td>
+                </tr>
+                <tr>
+                  <td class="util-label">พื้นที่/ห้อง</td><td class="colon">:</td>
+                  <td class="restroom-text">{{ info.zone && info.zone.trim() !== '' ? info.zone : '-' }}</td>
+                </tr>
+              </table>
+
+              <!-- ข้อ 2 -->
+              <div class="form-row util-header" style="margin-left:0;">
+                <span class="bold">2. ขออนุมัติใช้ระบบสาธารณูปโภค</span>
+                <div class="util-choose">
+                  <span :class="['radio-print', { on: isYes(info.utilityRequest) }]"></span><label style="margin-right:18px;">เลือก</label>
+                  <span :class="['radio-print', { on: isNo(info.utilityRequest) }]"></span><label>ไม่เลือก</label>
+                </div>
+              </div>
+
+              <div v-if="isYes(info.utilityRequest)" class="util-wrap" style="margin-left:80px;">
+                <table class="util-table util-colon-align">
+                  <colgroup>
+                    <col class="c-label" /><col class="c-colon" />
+                    <col class="c-time" /><col class="c-sep" /><col class="c-time" />
+                  </colgroup>
+                  <tr>
+                    <td class="util-label">2.1 ไฟฟ้าส่องสว่าง</td><td class="colon">:</td>
+                    <td class="time"><span class="since">ตั้งแต่</span> {{ formatTimeTH(info.turnon_lights) }}</td>
+                    <td class="sep">-</td>
+                    <td class="time">{{ formatTimeTH(info.turnoff_lights) }}</td>
+                  </tr>
+                  <tr>
+                    <td class="util-label">2.2 ห้องสุขา</td><td class="colon">:</td>
+                    <td class="restroom-text" colspan="3">
+                      {{ isYes(info.restroom) ? 'ต้องการใช้งาน' : (isNo(info.restroom) ? 'ไม่ต้องการใช้งาน' : '-') }}
+                    </td>
+                  </tr>
+                </table>
+              </div>
+
+              <div class="note-line">
+                <span style="font-weight:bold; font-size: 15px;">
+                  *ต้องได้รับการอนุมัติจากรองอธิการบดีผู้กำกับดูแล และสำเนาเอกสารถึงฝ่ายอนุรักษ์พลังงาน
+                </span>
+              </div>
+
+              <!-- ข้อ 3 -->
+              <div class="form-row bold" style="margin-left:0;">
+                <span>3. ขออนุมัติรายการประกอบอาคาร</span>
+                <span :class="['radio-print', { on: isYes(info.facilityRequest) }]" style="margin-left:8px;"></span><label style="margin-right:18px;">เลือก</label>
+                <span :class="['radio-print', { on: isNo(info.facilityRequest) }]"></span><label>ไม่เลือก</label>
+              </div>
+
+              <div v-if="isYes(info.facilityRequest)">
+                <div class="form-row block-row" style="margin-left:80px;">
+                  <span style="white-space:nowrap;">3.1 ดึงอัฒจันทร์ภายในอาคารเฉลิมพระเกียรติฯ :</span>
+                  <span class="line-field block-text force-inline">{{ info.amphitheater && info.amphitheater.trim() !== '' ? info.amphitheater : '-' }}</span>
+                </div>
+                <div class="form-row block-row" style="margin-left:80px;">
+                  <span style="white-space:nowrap;">3.2 อุปกรณ์กีฬา (โปรดระบุรายการและจำนวน) :</span>
+                  <span class="line-field block-text force-inline">{{ info.need_equipment && info.need_equipment.trim() !== '' ? info.need_equipment : '-' }}</span>
+                </div>
+              </div>
+
+              <div class="note-line">
+                <span style="font-weight:bold; font-size:15px;">ทั้งนี้ต้องแนบเอกสารโครงการหรือกิจกรรมที่ได้รับการอนุมัติแล้วพร้อมกำหนดการจัดกิจกรรม</span>
+              </div>
+              <div class="note-line">
+                <span style="font-weight:bold; font-size:15px;">หากเป็นการเรียนการสอน ต้องแนบตารางการเรียนการสอน (Class schedule) พร้อมทั้งรายชื่อนักศึกษา</span>
+              </div>
+            </section>
+
+            <!-- ตารางเซ็นชื่อ (บน) – ผู้รับผิดชอบชิดขวา -->
+            <table class="sign-header-table single-right" style="display: flex; justify-content: right;">
+              <tbody>
+                <tr>
+                  <td>
+                    <div class="sig-box">
+                      <div class="sign-line">
+                        <span class="sign-text">ลงชื่อ</span>
+                        <div class="signature-wrap">
+                          <template v-if="signatureUrl">
+                            <img :src="signatureUrl" alt="ลายเซ็น" class="signature-img" crossorigin="anonymous" @error="signatureUrl = ''" />
+                          </template>
+                          <template v-else>
+                            <span class="dot-line-inline">......................................</span>
+                          </template>
+                        </div>
+                        <span aria-hidden="true"></span>
+                      </div>
+                      <div class="sig-under">
+                        <div class="sig-name" style="padding-bottom:8px;">( {{ info.proxyStudentName || info.username_form || '-' }} )</div>
+                        <div class="sig-role" style="padding-bottom:8px;">ผู้รับผิดชอบ</div>
+                        <div class="sig-date">{{ nowTH }}</div>
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+
+            <!-- ตารางเซ็นชื่อ (ล่าง) – 2 ช่อง ตาม form_field3 -->
+            <div class="avoid-break">
+              <div class="form-row" style="padding-top:10px;">
+                <table class="approval-sign-table two-cols">
+                  <thead>
+                    <tr>
+                      <th>1. เลขานุการศูนย์กีฬาฯ</th>
+                      <th>2. หัวหน้าศูนย์กีฬาฯ</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>
+                        <div class="td-inner">
+                          <div class="checkbox-line">
+                            <span class="box-print"></span><label>เรียน หัวหน้าศูนย์กีฬาฯ</label>
+                          </div>
+                          <div class="checkbox-line">
+                            <span class="box-print"></span><label>อื่นๆ</label>
+                            <span class="dot-line dot-line-custom"></span>
+                          </div>
+                          <div class="line-row"><span class="dot-line"></span></div>
+                          <div class="line-row">(<span class="dot-line"></span>)</div>
+                          <div class="date-row">วันที่ ............/............/............</div>
+                        </div>
+                      </td>
+                      <td>
+                        <div class="td-inner">
+                          <div class="checkbox-line">
+                            <span class="box-print"></span><label>เห็นชอบ</label>
+                          </div>
+                          <div class="checkbox-line">
+                            <span class="box-print"></span><label>อื่นๆ</label>
+                            <span class="dot-line dot-line-custom"></span>
+                          </div>
+                          <div class="line-row"><span class="dot-line"></span></div>
+                          <div class="line-row">(<span class="dot-line"></span>)</div>
+                          <div class="date-row">วันที่ ............/............/............</div>
+                        </div>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div style="margin-top:12px;">
+              <span style="font-weight:bold; font-size:15px;">
+                หมายเหตุ: ให้นักศึกษา/ผู้รับผิดชอบแนบเอกสารโครงการหรือกำหนดการเพื่อประกอบการพิจารณา
+              </span>
+            </div>
+          </div>
+
+          <!-- ไฟล์แนบ -->
+          <div v-if="fileAttachments && fileAttachments.length > 0" class="form-row mt-30">
+            <span>ไฟล์แนบ</span>
+            <div class="attached-files-list">
+              <div v-for="(file, idx) in fileAttachments" :key="idx" class="attached-file-item">
+                <a :href="file.url" target="_blank" :download="file.fileName">
+                  {{ file.fileName || 'ไฟล์แนบ' }}
+                </a>
+                <span v-if="file.size" style="color:#888; font-size:12px; margin-left:8px;">({{ file.size }} KB)</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="button-wrapper mt-30">
+            <button id="btnBack" @click="goBack">Back</button>
+            <button id="btnNext" @click="handleNext" :disabled="isLoading">{{ isLoading ? 'Processing…' : 'Next' }}</button>
+          </div>
+        </div>
       </div>
-    </div>
-    </div>
-    <footer class="foot">
+
+      <!-- Footer -->
+      <footer class="foot">
         <div class="footer-left">
           <p>
             Sport Complex – Mae Fah Luang University |
             Tel: 0-5391-7820 and 0-5391-7821 | Facebook:
             <a href="https://www.facebook.com/mfusportcomplex" target="_blank">MFU Sports Complex Center</a>
-            |
-            Email:
-            <a href="mailto:sport-complex@mfu.ac.th">sport-complex@mfu.ac.th</a>
+            | Email: <a href="mailto:sport-complex@mfu.ac.th">sport-complex@mfu.ac.th</a>
           </p>
           <p>© 2025 Center for Information Technology Services, Mae Fah Luang University. All rights reserved.</p>
         </div>
       </footer>
+    </div>
   </div>
-</div>
 </template>
 
 <script setup>
-import { ref, onMounted, onBeforeUnmount } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { useRouter, onBeforeRouteLeave } from 'vue-router'
 import axios from 'axios'
 import html2pdf from 'html2pdf.js'
 
 const API_BASE = import.meta.env.VITE_API_BASE
+const ADMIN_LAST_SEEN_KEY = 'admin_lastSeenTimestamp'
 
+// -------- layout / nav --------
 const router = useRouter()
-const booking = ref(null)
-const equipmentList = ref([])
-const uploadedFiles = ref([])
-const attachedFiles = ref([])
-const isLoading = ref(false)
 const isSidebarClosed = ref(false)
-const steps = ['กรอกข้อมูล', 'ยืนยันข้อมูล', 'สำเร็จ']
+function toggleSidebar(){ isSidebarClosed.value = !isSidebarClosed.value }
+
+// -------- stepper --------
+const steps = ['กรอกข้อมูล','ยืนยันข้อมูล','สำเร็จ']
 const currentStep = ref(1)
-const products = ref([]) // จำนวนรายการในรถเข็น
+function canGoToStep(i){ return i <= currentStep.value }
+function tryGoStep(i){
+  if (i===0) router.push('/form_field_admin')
+  else if (i===1) router.push('/form_field_admin3')
+  else if (i===2) router.push('/form_field_admin4')
+}
+
+// -------- notifications / cart (เหมือน form_field3) --------
 const showNotifications = ref(false)
 const notifications = ref([])
 const unreadCount = ref(0)
+const products = ref([])
 const userId = localStorage.getItem('user_id') || ''
-const tempFiles = ref([])
-
-// ✅ roles สำหรับ flow ยืมอุปกรณ์ (admin อนุมัติ / staff ส่งมอบ)
-const EQUIP_APPROVAL_ROLES = ['admin', 'staff'];
-
-/** ✅ สร้างค่าเริ่มต้นของ step ให้ครบทุก role */
-const buildInitialEquipmentStep = () =>
-  EQUIP_APPROVAL_ROLES.map(r => ({ role: r, approve: null }));
-
-
-
-/* >>> ใช้วันที่วันนี้ (ไทย) สำหรับลายเซ็นผู้ยืม */
-const todayThai = ref(new Date().toLocaleDateString('th-TH'))
-
-const lastSeenTimestamp = ref(parseInt(localStorage.getItem('lastSeenTimestamp') || '0'))
+const lastSeenTimestamp = ref(0)
 let polling = null
-/* >>> ไทม์แสตมป์ (วัน/เดือน/ปี เวลา) ภาษาไทย สำหรับลายเซ็น */
-const nowThai = ref(formatThaiTimestamp(new Date()))
 
-function formatThaiTimestamp(d) {
-  const date = d.toLocaleDateString('th-TH')
-  const time = d.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })
-  return `${date} ${time} น.`
-}
-
-/* อัปเดตทุกนาที เผื่อผู้ใช้เปิดหน้านานๆ */
-let nowTicker = null
-onMounted(() => {
-  nowTicker = setInterval(() => {
-    nowThai.value = formatThaiTimestamp(new Date())
-  }, 60 * 1000)
-})
-onBeforeUnmount(() => {
-  if (nowTicker) clearInterval(nowTicker)
-})
-
-function pruneOldNotifications() {
-  const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000
+function pruneOldNotifications () {
+  const cutoff = Date.now() - (7 * 24 * 60 * 60 * 1000) // เก็บ 7 วัน
   notifications.value = notifications.value.filter(n => (n?.timestamp ?? 0) >= cutoff)
 }
 
-function loadTempFilesFromPage1() {
-  const equipFiles = Array.isArray(window._equipTempFiles) ? window._equipTempFiles : []
-  const fieldFiles = Array.isArray(window._fieldTempFiles) ? window._fieldTempFiles : []
-  tempFiles.value = [...equipFiles, ...fieldFiles]
+// --- keys สำหรับ snapshot ---
+const SNAP_KEY = 'field_form_snapshot'
+const KEEP_ROUTES = ['/form_field_admin', '/form_field_admin3']   // เส้นทางใน flow นี้
+
+function saveSnapshot() {
+  try {
+    localStorage.setItem(SNAP_KEY, JSON.stringify(info.value || {}))
+  } catch {}
 }
 
-function toggleNotifications() {
+
+
+function toggleNotifications () {
   showNotifications.value = !showNotifications.value
   if (showNotifications.value) {
     lastSeenTimestamp.value = Date.now()
-    localStorage.setItem('lastSeenTimestamp', String(lastSeenTimestamp.value))
-    unreadCount.value = 0
+    localStorage.setItem(ADMIN_LAST_SEEN_KEY, String(lastSeenTimestamp.value))
+    unreadCount.value = 0 // เคลียร์ badge เมื่อเปิดดู
   }
 }
 
-const PDF_FILENAME = 'แบบฟอร์มการยืมอุปกรณ์-วัสดุ-ครุภัณฑ์.pdf'
 
-
-async function uploadPdfBlob(pdfBlob) {
-  const fd = new FormData()
-  fd.append('file', pdfBlob, 'equipment-booking.pdf')
-  const up = await axios.post(`${API_BASE}/api/upload`, fd, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-    maxBodyLength: Infinity,
-    maxContentLength: Infinity,
-  })
-  return up.data?.fileUrl
-}
-
-function exportToPDF() {
-  smartPageBreak();
-  const element = document.getElementById('pdf-section');
-  element.classList.add('pdf-export-font-size'); // <<< เพิ่มคลาสลดฟอนต์
- const opt = {
-  margin: [0.5, 0.5, 0.5, 0.5],
-  filename: PDF_FILENAME,
-  image: { type: 'jpeg', quality: 0.98 },
-  html2canvas: { scale: 2, useCORS: true },
-  jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' },
-  pagebreak: { mode: ['css', 'legacy'] }
-};
-  html2pdf()
-    .from(element)
-    .set(opt)
-    .save()
-    .then(() => {
-      element.classList.remove('pdf-export-font-size'); // <<< ถอดคลาส
-    })
-    .catch(() => {
-      element.classList.remove('pdf-export-font-size');
-    });
-}
-async function fileToBase64(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = e => resolve(e.target.result.split(',')[1]) // base64 (ตัด header)
-    reader.onerror = reject
-    reader.readAsDataURL(file)
-  })
-}
-
-async function uploadTempFiles() {
-  const results = []
-  for (const f of (tempFiles.value || [])) {
-    const fd = new FormData()
-    fd.append('file', f, f.name)
-    const res = await axios.post(`${API_BASE}/api/upload`, fd, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-      maxBodyLength: Infinity,
-      maxContentLength: Infinity,
-    })
-    results.push({
-      fileId: null,
-      fileName: f.name,
-      mimeType: f.type || '',
-      fileUrl: res.data.fileUrl
-    })
-  }
-  return results
-}
-
-// รับ element id, return Blob ของไฟล์ pdf
-function htmlToPdfBlob(elementId) {
-  smartPageBreak();
-  return new Promise((resolve, reject) => {
-    const element = document.getElementById(elementId)
-    const opt = {
-  margin: [0.5, 0.5, 0.5, 0.5],
-  filename: PDF_FILENAME,
-  image: { type: 'jpeg', quality: 0.98 },
-  html2canvas: { scale: 2, useCORS: true },
-  jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' },
-  pagebreak: { mode: ['css', 'legacy'] }
-}
-
-   html2pdf()
-      .from(element)
-      .set(opt)
-      .outputPdf('blob')
-      .then(blob => {
-        element.classList.remove('pdf-export-font-size');
-        resolve(blob);
-      })
-      .catch(err => {
-        element.classList.remove('pdf-export-font-size');
-        reject(err);
-      });
-  });
-}
-function blobToBase64(blob) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onloadend = () => resolve(reader.result.split(',')[1]) // เอาเฉพาะ base64
-    reader.onerror = reject
-    reader.readAsDataURL(blob)
-  })
-}
-
-function smartPageBreak() {
-  // ปรับเป็นขนาด px ตาม jsPDF (1 in = 96 px), A4 สูง ~1122 px ที่ scale=1
-  const PAGE_HEIGHT = 1122 * 0.95; // margin เผื่อขอบเล็กน้อย
-  const pdfSection = document.getElementById('pdf-section');
-  const approvalSection = pdfSection.querySelector('.approval-table').closest('.form-row');
-
-  // เอาความสูงจนถึง approval-section
-  const contentHeight = approvalSection.offsetTop;
-
-  // ลบ page-break เดิม (ถ้ามี)
-  const exist = pdfSection.querySelector('.page-break');
-  if (exist) exist.remove();
-
-  // ถ้าเนื้อหายาวเกิน 1 หน้า ให้แทรก div.page-break ก่อน approval-section
-  if (contentHeight > PAGE_HEIGHT) {
-    const pageBreak = document.createElement('div');
-    pageBreak.className = 'page-break';
-    approvalSection.parentNode.insertBefore(pageBreak, approvalSection);
-  }
-}
-
-function closeNotifications() {
+function closeNotifications () {
   showNotifications.value = false
 }
-async function fetchNotifications() {
-  if (!userId) return
+
+
+
+function handleClickOutside (event) {
+  const dropdown = document.querySelector('.notification-dropdown')
+  const btn = document.querySelector('.notification-btn')
+  if (
+    dropdown &&
+    !dropdown.contains(event.target) &&
+    btn &&
+    !btn.contains(event.target)
+  ) {
+    closeNotifications()
+  }
+}
+
+/** ดึงแจ้งเตือน pending เฉพาะ field / equipment */
+async function fetchNotifications () {
   try {
     pruneOldNotifications()
 
-    const res = await axios.get(`${API_BASE}/api/history?user_id=${userId}`)
-    const targetStatuses = ['approved', 'disapproved', 'cancel', 'canceled', 'returned']
+    const res = await axios.get(`${API_BASE}/api/history/approve_field`)
+    const data = Array.isArray(res.data) ? res.data : []
 
-    const newNotis = (res.data || []).filter(item =>
-      targetStatuses.includes((item.status || '').toLowerCase())
+    const pendings = data.filter(
+      (item) => item.status === 'pending' && (item.type === 'field' || item.type === 'equipment')
     )
 
-    if (newNotis.length) {
-      const mapped = newNotis.map(item => ({
-        id: item._id,
-        type: (item.status || '').toLowerCase(),
-        timestamp: item.returnedAt
-          ? new Date(item.returnedAt).getTime()
-          : item.updatedAt
-          ? new Date(item.updatedAt).getTime()
-          : item.approvedAt
-          ? new Date(item.approvedAt).getTime()
-          : item.date
-          ? new Date(item.date).getTime()
-          : Date.now(),
-        message: `รายการ '${item.name}' ของคุณ${
-          (item.status || '').toLowerCase() === 'approved'
-            ? ' ได้รับการอนุมัติ'
-            : (item.status || '').toLowerCase() === 'disapproved'
-            ? ' ไม่ได้รับการอนุมัติ'
-            : (item.status || '').toLowerCase() === 'cancel' || (item.status || '').toLowerCase() === 'canceled'
-            ? ' ถูกยกเลิก'
-            : (item.status || '').toLowerCase() === 'returned'
-            ? ' คืนของสำเร็จแล้ว'
-            : ''
-        }`
-      }))
+    if (pendings.length) {
+      const newMessages = pendings.map((item) => {
+        const id = item._id?.$oid || item._id
+        const ts =
+          (item.updatedAt && new Date(item.updatedAt).getTime()) ??
+          (item.createdAt && new Date(item.createdAt).getTime()) ??
+          (item.date && new Date(item.date).getTime()) ??
+          Date.now()
 
-      // รวม + ตัดซ้ำตาม id + เรียงเวลาใหม่สุดบน
-      notifications.value = [...notifications.value, ...mapped]
-        .filter((v, i, arr) => arr.findIndex(x => x.id === v.id) === i)
+        return {
+          id,
+          type: 'pending',
+          timestamp: ts,
+          message: item.type === 'field'
+            ? `สนาม '${item.name}' กำลังรอการอนุมัติ`
+            : `อุปกรณ์ '${item.name}' กำลังรอการอนุมัติ`
+        }
+      })
+
+      // รวม-ตัดซ้ำ-เรียงใหม่สุดก่อน
+      notifications.value = [...notifications.value, ...newMessages]
+        .filter((v, i, arr) => arr.findIndex(x => (x.id || i) === (v.id || i)) === i)
         .sort((a, b) => b.timestamp - a.timestamp)
 
       pruneOldNotifications()
     }
 
-    // นับเฉพาะที่ยังไม่ได้อ่าน (timestamp > lastSeenTimestamp)
+    // badge = จำนวนที่ยัง “ใหม่กว่า” ครั้งล่าสุดที่เปิดดู
     unreadCount.value = notifications.value.filter(n => n.timestamp > lastSeenTimestamp.value).length
   } catch {
-    // เงียบไว้ ไม่ต้องรบกวนผู้ใช้
+    // เงียบไว้
   }
 }
 
-
-onMounted(async () => {
-  lastSeenTimestamp.value = parseInt(localStorage.getItem('lastSeenTimestamp') || '0')
-
-  const formDataRaw = localStorage.getItem('equipmentFormData')
-  let bookingId = null
-
-  if (formDataRaw) {
-    const parsed = JSON.parse(formDataRaw)
-    booking.value = parsed.form
-
-    // ✅ ดึงค่าที่ส่งมาจากหน้าแรก
-    booking.value.username_form = parsed.form.username_form || ""
-    booking.value.id_form       = parsed.form.id_form || ""
-    booking.value.number        = parsed.form.number || parsed.form.tel || parsed.form.phone || "" // ✅ เพิ่มบรรทัดนี้
-
-    bookingId = booking.value.booking_id || booking.value._id || booking.value.id
-    if (!booking.value.booking_id && (booking.value._id || booking.value.id)) {
-      booking.value.booking_id = booking.value._id || booking.value.id
-    }
-
-    if (booking.value.items && Array.isArray(booking.value.items)) {
-      equipmentList.value = booking.value.items.map(item => ({
-        name: item.item_name,
-        quantity: item.amount,
-        remark: item.remark || ''
-      }))
-    }
-  }
-
-  loadTempFilesFromPage1()
-
-  const fileData = localStorage.getItem('equipment_upload_file')
-  if (fileData) {
-    try {
-      uploadedFiles.value = JSON.parse(fileData)
-    } catch {
-      uploadedFiles.value = []
-    }
-  }
-
-  if (bookingId) {
-    try {
-      const res = await axios.get(`${API_BASE}/api/booking_equipment/${bookingId}`)
-      attachedFiles.value = res.data.attachedFiles || res.data.attachment || []
-
-      if (res.data.items && Array.isArray(res.data.items)) {
-        equipmentList.value = res.data.items.map(item => ({
-          name: item.item_name,
-          quantity: item.amount,
-          remark: item.remark || ''
-        }))
-      }
-    } catch {
-      attachedFiles.value = []
-    }
-
-    fetchNotifications()
-    polling = setInterval(fetchNotifications, 30000)
-    await loadCart()
-  }
-})
-
-
-onBeforeUnmount(() => {
-  if (polling) clearInterval(polling)
-})
-
-
-function toggleSidebar() {
-  isSidebarClosed.value = !isSidebarClosed.value
-}
-
-async function loadCart() {
+async function loadCart(){
   if (!userId) return
-  try {
+  try{
     const res = await axios.get(`${API_BASE}/api/cart?user_id=${userId}`)
     products.value = res.data
-  } catch (err) {
-    products.value = []
+  }catch{ products.value = [] }
+}
+
+// -------- form data (align to form_field3) --------
+const info = ref({})
+const fileAttachments = ref([])
+const signatureUrl = ref('')
+
+const YES_TOKENS = ['yes','เลือก','ต้องการ','true','1']
+const NO_TOKENS  = ['no','ไม่เลือก','ไม่ต้องการ','false','0']
+const norm = v => (v ?? '').toString().trim().toLowerCase()
+const isYes = v => YES_TOKENS.includes(norm(v))
+const isNo  = v => NO_TOKENS.includes(norm(v))
+
+function formatDateOnly(dateTime){
+  if (!dateTime) return '-'
+  let dateStr = dateTime
+  if (typeof dateTime==='string' && dateTime.includes('T')) dateStr = dateTime.split('T')[0]
+  if (dateStr.includes('/')) return dateStr
+  const [y,m,d] = dateStr.split('-')
+  if (!y||!m||!d) return dateStr
+  return `${d.padStart(2,'0')}/${m.padStart(2,'0')}/${(parseInt(y)+543)}`
+}
+function formatTimeTH(s){
+  if (!s || typeof s!=='string') return '-'
+  const t = s.trim().slice(0,5)
+  return /^\d{2}:\d{2}$/.test(t) ? `${t} น.` : s + ' น.'
+}
+
+// timestamp สำหรับแสดงใต้กล่องเซ็นชื่อ (ให้ตรงกับ form_field3)
+const nowTH = ref('')
+function getNowTH(){
+  const now = new Date()
+  const dd = String(now.getDate()).padStart(2,'0')
+  const mm = String(now.getMonth()+1).padStart(2,'0')
+  const yyyyTH = String(now.getFullYear()+543)
+  const HH = String(now.getHours()).padStart(2,'0')
+  const MM = String(now.getMinutes()).padStart(2,'0')
+  return `${dd}/${mm}/${yyyyTH} ${HH}:${MM} น.`
+}
+nowTH.value = getNowTH()
+let nowTicker = null
+onMounted(()=>{ nowTicker = setInterval(()=> nowTH.value = getNowTH(), 60*1000) })
+onBeforeUnmount(()=>{ if (nowTicker) clearInterval(nowTicker) })
+
+// toAbsUrl เหมือนหน้า form_field3 (สำหรับลายเซ็น)
+function toAbsUrl(p){
+  if (!p) return ''
+  const s = String(p)
+  if (/^https?:\/\//i.test(s)) return s
+  if (s.startsWith('/')) return `${API_BASE}${s}`
+  return `${API_BASE}/${s}`
+}
+
+// โหลดข้อมูล booking + ผู้ใช้ + ไฟล์แนบ แล้ว normalize ให้อยู่โครงเดียวกับ form_field3
+function normalizeFieldBooking(doc={}){
+  return {
+    aw: doc.aw || '',
+    date: doc.date || '',
+    tel: doc.tel || doc.number || '',
+    agency: doc.agency || doc.agency_other_detail || '',
+    name_activity: doc.name_activity || '',
+    reasons: doc.reasons || '',
+    building: doc.building || '',
+    zone: doc.zone || '',
+    since: doc.since || '',
+    uptodate: doc.uptodate || '',
+    since_time: doc.since_time || '',
+    until_thetime: doc.until_thetime || '',
+    participants: doc.participants || '',
+    utilityRequest: doc.utilityRequest || '',
+    restroom: doc.restroom || '',
+    facilityRequest: doc.facilityRequest || '',
+    amphitheater: doc.amphitheater || '',
+    need_equipment: doc.need_equipment || '',
+    proxyStudentName: doc.proxyStudentName || '',
+    username_form: doc.username_form || '',
+    id_form: doc.id_form || '',
+    user_id: doc.user_id || '',
+    booking_id: doc._id || doc.id || localStorage.getItem('bookingId') || ''
   }
 }
 
+onMounted(async ()=>{
+  lastSeenTimestamp.value = parseInt(localStorage.getItem(ADMIN_LAST_SEEN_KEY) || '0')
+  await fetchNotifications()
+  polling = setInterval(fetchNotifications, 30000)
+  document.addEventListener('mousedown', handleClickOutside)
+  loadCart()
 
-function handleBack() {
-  router.push('/form_equipment')
-}
-
-function canGoToStep(index) {
-  return index <= currentStep.value
-}
-function tryGoStep(index) {
-  if (canGoToStep(index)) {
-    if (index === 0) router.push('/form_equipment')
-    else if (index === 1) router.push('/form_equipment3')
-    else if (index === 2) router.push('/form_equipment4')
-  }
-}
-async function handleNext() {
-  if (!booking.value || equipmentList.value.length === 0) {
-    alert('ไม่มีข้อมูลจะบันทึก');
-    return;
-  }
-
-  const bookingIdFromServer =
-    booking.value.booking_id || booking.value._id || booking.value.id || '';
-  if (!bookingIdFromServer) {
-    alert('ไม่พบ booking_id กรุณากรอกข้อมูลใหม่อีกครั้ง');
-    return;
-  }
-
-  isLoading.value = true;
-  try {
-    // 1) ทำ PDF เป็น Blob
-    const pdfBlob = await htmlToPdfBlob('pdf-section');
-
-    // 2) อัปโหลด PDF → ได้ URL
-    const pdfUrl = await uploadPdfBlob(pdfBlob);
-
-    // 3) อัปโหลดไฟล์แนบชั่วคราว (ถ้ามี)
-    const uploaded = await uploadTempFiles();
-
-    // 4) บันทึกเข้า history (หนึ่งแถวต่อหนึ่งรายการอุปกรณ์)
-    //    ✅ ส่งค่า `step` เริ่มต้น: [{ role:'admin', approve:null }, { role:'staff', approve:null }]
-    for (const item of equipmentList.value) {
-      await axios.post(`${API_BASE}/api/history`, {
-        type: 'equipment',
-        booking_id: bookingIdFromServer,
-        user_id: booking.value.user_id,
-
-        username_form: booking.value.username_form || '',
-        id_form: booking.value.id_form || '',
-        number: (booking.value.number ?? '').toString().trim(),
-
-        name: item.name,
-        quantity: item.quantity,
-        status: 'pending',
-        agency: booking.value.agency || booking.value.school_of || '',
-
-        attachment: uploaded.map(u => u.fileUrl || u.fileId).filter(Boolean),
-        fileName: uploaded.map(u => u.fileName),
-        fileType: uploaded.map(u => u.mimeType),
-
-        reasons: booking.value.reason || '',
-        since: booking.value.start_date || '',
-        uptodate: booking.value.end_date || '',
-
-        // วันเวลาที่กำหนดให้มารับของ
-        receive_date: booking.value.receive_date || '',
-        receive_time: booking.value.receive_time || '',
-
-        bookingPdfUrl: pdfUrl,
-
-        // ✅ สำคัญ: บันทึก step ลง DB
-        step: buildInitialEquipmentStep(),
-      });
+  const bookingId = localStorage.getItem('bookingId')
+  if (!bookingId){
+    // เผื่อมาแบบ snapshot
+    const snapRaw = localStorage.getItem('field_form_snapshot')
+    if (snapRaw){
+      info.value = normalizeFieldBooking(JSON.parse(snapRaw))
+    }else{
+      return router.push({ path:'/form_field_admin', query:{ restore:'true' }})
     }
+  }else{
+    try{
+      const res = await axios.get(`${API_BASE}/api/booking_field/${bookingId}`)
+      const doc = res?.data?.data ?? res?.data ?? {}
+      info.value = normalizeFieldBooking(doc)
 
-    // 5) เคลียร์รถเข็น/ไฟล์ชั่วคราว แล้วไปหน้าสำเร็จ
-    await axios.delete(`${API_BASE}/api/cart`, {
-      data: { user_id: booking.value.user_id },
-    });
-    window._equipTempFiles = [];
-    localStorage.removeItem('equipmentFormData');
-    localStorage.setItem('equipment_booking_id', bookingIdFromServer);
+      // Normalize yes/no ให้แน่นอนเหมือน form_field3
+      info.value.utilityRequest  = isYes(info.value.utilityRequest)  ? 'yes' : (isNo(info.value.utilityRequest)  ? 'no' : '')
+      info.value.restroom        = isYes(info.value.restroom)        ? 'yes' : (isNo(info.value.restroom)        ? 'no' : '')
+      info.value.facilityRequest = isYes(info.value.facilityRequest) ? 'yes' : (isNo(info.value.facilityRequest) ? 'no' : '')
 
-    router.push('/form_equipment4');
-  } catch (err) {
-    alert('เกิดข้อผิดพลาด: ' + (err.response?.data?.message || err.message));
-  } finally {
-    isLoading.value = false;
+      // ไฟล์แนบ
+      const rawAttach = doc.attachedFiles || doc.attachment || doc.files || []
+      fileAttachments.value = (rawAttach || []).map((x,i)=>({
+        url: x?.url || x?.fileUrl || '',
+        fileName: x?.originalName || x?.fileName || x?.name || `attachment_${i+1}`,
+        size: x?.size ? Math.ceil(Number(x.size)/1024) : null
+      }))
+
+      // ลายเซ็นของผู้ยื่น
+      if (info.value.user_id){
+        try{
+          const u = await axios.get(`${API_BASE}/api/user/${info.value.user_id}`)
+          const sigPath = u.data.signaturePath || u.data.signature_url || u.data.signature || ''
+          signatureUrl.value = sigPath ? toAbsUrl(sigPath) : ''
+        }catch{ signatureUrl.value = '' }
+      }
+    }catch{
+      // ถ้าดึงไม่ได้ให้กลับไปหน้า 1
+      return router.push({ path:'/form_field_admin', query:{ restore:'true' }})
+    }
+  }
+})
+onBeforeUnmount(()=>{
+   if (polling) clearInterval(polling) 
+   if (polling) clearInterval(polling)
+  document.removeEventListener('mousedown', handleClickOutside)
+  }
+)
+
+function goBack()
+{   
+  // เซฟข้อมูลไว้ก่อนค่อยย้อนกลับ
+  saveSnapshot()
+  router.push({ path: '/form_field_admin', query: { restore: 'true' } }) 
+}
+
+// ---------- PDF: ทำให้ตรงกับ form_field3 (A4 one page scale) ----------
+const pdfFilename = 'แบบฟอร์มขออนุมัติใช้สถานที่ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง.pdf'
+const A4_W = Math.round(210 * (96/25.4))   // ≈ 794px
+const A4_H = Math.round(297 * (96/25.4))   // ≈ 1123px
+const PAD_X = 12
+const PAD_Y = 12
+
+async function makeA4OnePageBlob(element){
+  if (document.fonts && document.fonts.ready){ try{ await document.fonts.ready }catch{} }
+
+  const orig = {
+    width: element.style.width, height: element.style.height,
+    margin: element.style.margin, padding: element.style.padding,
+    transform: element.style.transform, transformOrigin: element.style.transformOrigin,
+    display: element.style.display,
+  }
+
+  const wrapper = document.createElement('div')
+  Object.assign(wrapper.style, {
+    width: A4_W+'px', height: A4_H+'px', background:'#fff',
+    padding:'0', margin:'0', position:'relative', overflow:'hidden'
+  })
+
+  const innerW = A4_W - 2*PAD_X
+  const innerH = A4_H - 2*PAD_Y
+
+  element.classList.add('pdf-export','pdf-onepage')
+  element.style.display = 'block'
+  element.style.margin = '0 auto'
+  element.style.padding = `${PAD_Y}px ${PAD_X}px`
+  element.style.width = innerW + 'px'
+  element.style.transformOrigin = 'top center'
+  element.style.transform = 'scale(1)'
+
+  const parent = element.parentNode
+  const next = element.nextSibling
+  parent.insertBefore(wrapper, element)
+  wrapper.appendChild(element)
+
+  await nextTick(); await new Promise(r=>requestAnimationFrame(r))
+
+  let contentHeight = element.scrollHeight
+  let scale = Math.min(1, innerH / contentHeight)
+  if (scale < 1){
+    element.style.width = (innerW / scale) + 'px'
+    await new Promise(r=>requestAnimationFrame(r))
+    contentHeight = element.scrollHeight
+    scale = Math.min(1, innerH / contentHeight)
+  }
+  element.style.transform = `scale(${scale})`
+  await new Promise(r=>requestAnimationFrame(r))
+
+  const opt = {
+    margin: 0,
+    filename: pdfFilename,
+    image: { type: 'jpeg', quality: 0.98 },
+    html2canvas: { scale: 2, useCORS: true, backgroundColor:'#ffffff' },
+    jsPDF: { unit:'px', format:[A4_W, A4_H], orientation:'portrait' },
+    pagebreak: { mode: [] }
+  }
+
+  const pdfBlob = await html2pdf().from(wrapper).set(opt).outputPdf('blob')
+
+  if (next) parent.insertBefore(element, next); else parent.appendChild(element)
+  wrapper.remove()
+  element.classList.remove('pdf-export','pdf-onepage')
+  element.style.width = orig.width
+  element.style.height = orig.height
+  element.style.margin = orig.margin
+  element.style.padding = orig.padding
+  element.style.transform = orig.transform
+  element.style.transformOrigin = orig.transformOrigin
+  element.style.display = orig.display
+
+  return pdfBlob
+}
+async function htmlToPdfBlob(elementId){
+  const el = document.getElementById(elementId)
+  return await makeA4OnePageBlob(el)
+}
+async function uploadPdfBlob(pdfBlob){
+  const fd = new FormData()
+  fd.append('file', pdfBlob, 'booking.pdf')
+  const up = await axios.post(`${API_BASE}/api/upload`, fd, {
+    headers:{ 'Content-Type':'multipart/form-data' }
+  })
+  return up.data?.fileUrl
+}
+
+// ---------- Next (สร้าง History แบบ form_field3) ----------
+const isLoading = ref(false)
+async function handleNext(){
+  const bookingIdFromServer = info.value.booking_id || ''
+  const userIdForSave = info.value.user_id || localStorage.getItem('user_id') || ''
+  if (!bookingIdFromServer){ alert('ไม่พบเลขที่คำขอ (booking_id)'); return }
+  if (!userIdForSave){ alert('ไม่พบผู้ใช้ที่ทำรายการ (user_id)'); return }
+
+  isLoading.value = true
+  try{
+    // 1) PDF 1 หน้าแน่นอน
+    const pdfBlob = await htmlToPdfBlob('pdf-section')
+    const pdfUrl = await uploadPdfBlob(pdfBlob)
+
+    // 2) แนบไฟล์จาก booking (ถ้ามีใน multer/แนบเดิม)
+    const allAttach = (fileAttachments.value || []).map(f=>f.url).filter(Boolean)
+    const allNames  = (fileAttachments.value || []).map(f=>f.fileName || 'ไฟล์แนบ')
+
+    // 3) ดึง roles อนุมัติ (field) เพื่อฝั่ง approve ใช้ต่อให้ตรง baseline
+    let stepArray = []
+    try{
+      const resStep = await axios.get(`${API_BASE}/api/settings/approval_roles`)
+      const roles = Array.isArray(resStep?.data?.value?.field) ? resStep.data.value.field : []
+      const VALID = ['staff','admin','super']
+      const cleaned = Array.from(new Set(roles.map(r=>String(r||'').trim().toLowerCase()).filter(r=>VALID.includes(r))))
+      stepArray = cleaned.map(r=>({ role:r, approve: null }))
+    }catch{ stepArray = [] }
+
+    // 4) สร้างประวัติ
+    await axios.post(`${API_BASE}/api/history`, {
+      user_id: userIdForSave,
+      name: info.value.building,
+      name_active: info.value.name_activity,
+      zone: info.value.zone,
+      since: info.value.since,
+      uptodate: info.value.uptodate,
+      startTime: info.value.since_time,
+      endTime: info.value.until_thetime,
+      status: 'pending',
+      type: 'field',
+      agency: info.value.agency,
+      booking_id: bookingIdFromServer,
+      attachment: allAttach,
+      fileName: allNames,
+      date: new Date(),
+      proxyStudentName: info.value.proxyStudentName || '',
+      proxyStudentId: info.value.proxyStudentId || '',
+      bookingPdfUrl: pdfUrl,
+      username_form: info.value.username_form || '',
+      id_form: info.value.id_form || '',
+      step: stepArray,
+      utilityRequest: info.value.utilityRequest || '',
+      restroom: info.value.restroom || '',
+      facilityRequest: info.value.facilityRequest || '',
+      turnon_air: info.value.turnon_air || '',
+      turnoff_air: info.value.turnoff_air || '',
+      turnon_lights: info.value.turnon_lights || '',
+      turnoff_lights: info.value.turnoff_lights || '',
+      other: info.value.other || '',
+      amphitheater: info.value.amphitheater || '',
+      need_equipment: info.value.need_equipment || '',
+      aw: info.value.aw || '',
+      tel: info.value.tel || '',
+      reasons: info.value.reasons || '',
+      participants: info.value.participants || '',
+      requester: info.value.requester || '',
+      no_receive: info.value.no_receive || '',
+      date_receive: info.value.date_receive || null,
+      receiver: info.value.receiver || '',
+      fileUrl: info.value.fileUrl || ''
+    })
+
+    // ลบ snapshot เมื่อจบขั้นตอนยืนยันแล้ว
+    localStorage.removeItem(SNAP_KEY)
+    router.push('/form_field_admin4')
+
+  }catch(err){
+    alert('เกิดข้อผิดพลาด: ' + (err?.response?.data?.message || err.message))
+  }finally{
+    isLoading.value = false
   }
 }
 
 
+// ออกจาก route ไปที่อื่นที่ไม่ใช่ flow -> เคลียร์ snapshot
+onBeforeRouteLeave((to) => {
+  if (!KEEP_ROUTES.includes(to.path)) {
+    localStorage.removeItem(SNAP_KEY)
+  }
+})
 
+// ปิดแท็บ/รีเฟรช -> ถือว่าออกจากหน้า เคลียร์ snapshot
+onMounted(() => {
+  window.addEventListener('beforeunload', clearSnapshotOnUnload)
+})
+onBeforeUnmount(() => {
+  window.removeEventListener('beforeunload', clearSnapshotOnUnload)
+})
+function clearSnapshotOnUnload() {
+  try { localStorage.removeItem(SNAP_KEY) } catch {}
+}
 </script>
 
 <style scoped>
-.headStepper {
-  position: sticky;
-  top: 60px;                 /* ปรับให้พอดีกับความสูง topbar ของคุณ */
-  z-index: 10;
-  width: 90%;
-  max-width: 900px;
-  margin: 0 auto 16px;
-  background: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(2px);
-  border-radius: 20px;
-  box-shadow: 0 4px 20px rgba(0,0,0,.1);
+/* ===== Stepper (เหมือน form_field3) ===== */
+.headStepper { position: sticky; top: 60px; z-index: 10; width: 90%; max-width: 900px; margin: 0 auto 16px;
+  background: rgba(255,255,255,.85); backdrop-filter: blur(2px); border-radius: 20px; box-shadow: 0 4px 20px rgba(0,0,0,.1);}
+.stepper{ display:flex; align-items:center; justify-content:center; padding:20px 20px 52px; border-radius:20px; }
+.headStepper-spacer{ display:none; }
+.main{ padding-top: var(--topbar-h); }
+.step{ position:relative; display:flex; align-items:center; }
+.circle{ width:30px; height:30px; border-radius:50%; background:#ccc; transition:background .3s; cursor:pointer; }
+.circle.active{ background:#ff4d4f; } .circle.completed{ background:#ff4d4f; opacity:.5; }
+.label{ position:absolute; top:45px; left: calc(30px/2); transform: translateX(-50%); font-size:12px; white-space:nowrap; text-align:center; }
+.line{ width:80px; height:4px; background:#ccc; margin:0 5px; transition: background .3s; }
+.line.filled{ background:#ff4d4f; }
+
+/* ===== Form Container ===== */
+.title{ text-align:center; margin-bottom:20px; }
+.form-container{ background:#fff; margin:30px auto; padding:40px; width:90%; max-width:900px; border-radius:20px; box-shadow:0 4px 20px rgba(0,0,0,.1);}
+.form-header{ text-align:center; margin-bottom:20px; }
+.info-left{ display:flex; align-items:center; gap:12px; margin-top:0; flex-wrap:wrap; }
+.form-row{ display:flex; align-items:center; gap:10px; }
+.mt-30{ margin-top:30px; } .mt-15{ margin-top:15px; }
+.bold{ font-weight:700; }
+.line-field{ padding:0 6px; min-width:50px; min-height:20px; max-width:650px; white-space: pre-wrap; word-wrap: break-word; overflow-wrap: break-word; display:block; line-height:1.5em; }
+
+/* ===== Utilities table align (เหมือน form_field3) ===== */
+.util-table{ border-collapse:collapse; table-layout:fixed; }
+.util-table td{ padding:0 4px; height:26px; vertical-align:middle; font-size:15px; }
+.util-table .util-label{ white-space:nowrap; }
+.util-table .time{ white-space:nowrap; text-align:left; padding-left:0; }
+.util-table .sep{ text-align:center; }
+.util-table.util-colon-align col.c-label{ width:230px !important; }
+.util-table.util-colon-align col.c-colon{ width:12px !important; }
+.util-table.util-colon-align col.c-time{ width:74px !important; }
+.util-table.util-colon-align col.c-sep{ width:34px !important; }
+.util-table.util-colon-align td.colon{ text-align:center; padding:0 2px !important; }
+.util-table.util-colon-align td.time,
+.util-table.util-colon-align td.restroom-text{ padding-left:2px !important; white-space:nowrap; }
+.util-table.util-colon-align .time .since{ margin-right:4px; }
+
+/* ===== Signature tables & style (เหมือน form_field3) ===== */
+.avoid-break, .approval-sign-table, .sign-header-table{ page-break-inside: avoid; break-inside: avoid; }
+.sign-header-table{ width:100%; border-collapse:collapse; margin-top:16px; table-layout:fixed; }
+.sign-header-table td{ padding:14px 10px 12px 10px; font-size:16px; text-align:center; vertical-align:top; word-break:break-word; width:100%; }
+.sign-header-table.single-right td{ text-align:right !important; padding-right:0 !important; }
+.sign-header-table.single-right .sig-box{ display:block !important; margin-left:auto !important; margin-right:0 !important; text-align:center !important; min-width:320px; }
+.sign-line{ --sign-gap:8px; display:grid; grid-template-columns:1fr auto 1fr; align-items:end; column-gap:var(--sign-gap); white-space:nowrap; width:100%; text-align:center; }
+.sign-text{ justify-self:end; }
+.signature-wrap{ justify-self:center; display:inline-block; }
+.signature-img{ height:48px; display:inline-block; vertical-align:bottom; max-width:260px; object-fit:contain; }
+.dot-line-inline{ display:inline-block; min-width:200px; }
+.sig-under .sig-date{ font-size:13px !important; line-height:1.2; }
+
+/* ตารางเซ็นชื่อ 2 ช่อง */
+.approval-sign-table{ width:100%; border-collapse:collapse; table-layout:fixed; background:#fff; margin-bottom:16px; }
+.approval-sign-table th, .approval-sign-table td{ border:1px solid #222; font-size:16px; vertical-align:top; padding:0; text-align:left; }
+.approval-sign-table.th{ background:#f8f9fa; }
+.approval-sign-table.two-cols th, .approval-sign-table.two-cols td{ width:50%; }
+.td-inner{ display:flex; flex-direction:column; justify-content:flex-start; height:auto; min-height:160px; padding:12px; box-sizing:border-box; }
+.checkbox-line{ display:flex; align-items:center; gap:6px; margin-bottom:6px; min-height:26px; white-space:nowrap; }
+.dot-line{ display:inline-block; width:98%; border-bottom:1px dotted #222; height:15px; min-width:60px; vertical-align:middle; }
+.dot-line-custom{ flex:1 1 0; border-bottom:1.5px dotted #222; min-width:80px; margin-left:8px; margin-right:6px; height:16px; display:inline-block; }
+.line-row{ display:flex; align-items:center; height:22px; margin:2px 0; }
+.date-row{ display:flex; align-items:center; height:22px; margin-top:15px !important; justify-content:center !important; }
+
+/* ===== Attachments ===== */
+.attached-files-list{ margin-top:8px; max-height:140px; overflow-y:auto; border:1px solid #ccc; border-radius:6px; background:#f9fafb; padding:6px 16px; }
+.attached-file-item{ font-size:14px; color:#26577C; padding:3px 0; border-bottom:1px solid #eee; white-space:normal; word-break:break-all; }
+.attached-file-item:last-child{ border-bottom:none; }
+.attached-file-item a{ color:#048ace; text-decoration:underline; }
+
+/* ===== Buttons ===== */
+.button-wrapper{ display:flex; justify-content:space-between; gap:16px; margin-top:30px; }
+#btnBack, #btnNext{ font-size:1rem; font-weight:500; padding:.55rem 1.5rem; border:none; border-radius:8px; outline:none; cursor:pointer; transition:background .22s, color .22s, box-shadow .22s; box-shadow:0 1px 6px rgba(0,0,0,.07); }
+#btnBack{ background:#6c757d; color:#fff; }
+#btnBack:hover{ background:#5a6268; }
+#btnNext{ background:#007bff; color:#fff; }
+
+/* ===== Notifications (เหมือน form_field3) ===== */
+.notification-dropdown{ position:absolute; right:0; top:38px; background:#fff; border-radius:18px 0 18px 18px; box-shadow:0 8px 24px rgba(27,50,98,.14), 0 2px 4px rgba(33,125,215,.06); min-width:330px; max-width:370px; max-height:420px; overflow-y:auto; z-index:1002; padding:0; border:none; animation: fadeDown .22s; }
+@keyframes fadeDown{ 0%{opacity:0; transform:translateY(-24px);} 100%{opacity:1; transform:translateY(0);} }
+.notification-dropdown ul{ padding:0; margin:0; list-style:none; }
+.notification-dropdown li{ background:linear-gradient(90deg,#f6fafd 88%,#e2e7f3 100%); margin:.2em .8em; padding:.85em 1.1em; border-radius:12px; font-size:1.07rem; font-weight:500; color:#1e2c48; box-shadow:0 2px 8px rgba(85,131,255,.06); display:flex; gap:10px; }
+.notification-dropdown li.no-noti{ background:#f2f3f6; color:#a7aab7; justify-content:center; font-style:italic; }
+.notification-item.approved{ background:linear-gradient(90deg,#e9fbe7 85%,#cbffdb 100%); border-left:4px solid #38b000; color:#228c22; }
+.notification-item.disapproved{ background:linear-gradient(90deg,#ffeaea 85%,#ffd6d6 100%); border-left:4px solid #ff6060; color:#b91423; }
+.notification-item.canceled,.notification-item.cancel{ background:linear-gradient(90deg,#f9d7d7 80%,#e26a6a 100%); border-left:4px solid #bb2124; color:#91061a; }
+.notification-item.returned{ background:linear-gradient(90deg,#e0f0ff 85%,#b6e0ff 100%); border-left:4px solid #1976d2; color:#1976d2; }
+.notification-backdrop{ position:fixed; inset:0; background:transparent; z-index:1001; }
+.badge{ background:red; color:#fff; border-radius:50%; padding:2px 6px; font-size:.75rem; margin-left:4px; }
+
+@media (max-width:540px){
+  .scroll-x-container{ overflow-x:auto; -webkit-overflow-scrolling:touch; width:100vw; padding:0; }
+  .form-container{ min-width:900px; width:900px; max-width:900px; padding:16px 24px !important; border-radius:10px !important; box-sizing:border-box; }
 }
 
-.stepper {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px 20px 52px;   /* เพิ่ม padding ล่างให้ label อยู่ในกรอบ */
-  border-radius: 20px;
-}
+/* ===== PDF export tweaks ===== */
+.pdf-export{ font-size:16px !important; }
+#pdf-section, #pdf-section *{ font-family:'THSarabunNew','Sarabun','Noto Sans Thai',Tahoma,sans-serif !important; letter-spacing:0; }
+#pdf-section .bold, #pdf-section b, #pdf-section strong, #pdf-section th{ font-weight:700; }
 
-/* spacer ไม่ต้องใช้จริง */
-.headStepper-spacer { display: none; }
+/* Uniform line spacing block (ตาม baseline) */
+#uniform-lines{ --line-gap:10px; line-height:1.35; }
+#uniform-lines .form-row, #uniform-lines .block-row, #uniform-lines .util-wrap, #uniform-lines .note-line{ margin-top:var(--line-gap) !important; margin-bottom:0 !important; }
+#uniform-lines .form-row.bold:first-of-type{ margin-top:0 !important; }
+#uniform-lines .util-table{ margin-top:var(--line-gap) !important; }
+#uniform-lines .util-table td{ padding-top:0 !important; padding-bottom:0 !important; height:26px !important; vertical-align:middle; }
+#uniform-lines .mt-30, #uniform-lines .mt-15{ margin-top:var(--line-gap) !important; }
 
-.main { padding-top: var(--topbar-h); }
-
-.step {
-  display: flex;
-  align-items: center;
-  position: relative;
-}
-.circle {
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  background-color: #ccc;
-  z-index: 1;
-}
-.circle.active {
-  background-color: #ff4d4f;
-}
-.circle.completed {
-  background-color: #ff4d4f;
-  opacity: 0.5;
-}
-.label{
-  position: absolute;
-  top: 45px;                 
-  left: 15px;                
-  transform: translateX(-50%);
-  font-size: 12px;
-  white-space: nowrap;
-  text-align: center;
-}
-.line {
-  height: 4px;
-  width: 80px;
-  background-color: #ccc;
-  margin: 0 5px;
-  z-index: 0;
-}
-.line.filled {
-  background-color: #ff4d4f;
-}
-.form-container {
-  background-color: white;
-  margin: 30px auto;
-  padding: 40px;
-  width: 90%;
-  max-width: 900px;
-  border-radius: 20px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-}
-.form-header {
-  text-align: center;
-  margin-bottom: 20px;
-}
-#btnNext {
-  padding: 0.5rem 1rem;
-  background-color: #048ace;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  text-decoration: none;
-  display: inline-block;
-}
-.button-wrapper {
-  display: flex;
-  justify-content: space-between;
-  margin: 20px auto 0 auto;
-  width: 90%;
-  max-width: 900px;
-}
-#btnBack {
-  padding: 0.5rem 1rem;
-  background-color: #6c757d;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  text-decoration: none;
-  display: inline-block;
-}
-#btnBack:hover {
-  background-color: #5a6268;
-}
-.form-header-section {
-  display: flex;
-  justify-content: flex-end;
-  gap: 40px;
-  margin-top: 30px;
-}
-.left-form,
-.right-form {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  flex: 1;
-}
-.form-row {
-  display: flex;
-  align-items: center;
-  gap: 12px; /* ระยะห่าง */
-  margin-bottom: 16px;
-  flex-wrap: wrap;
-  justify-content: flex-start; /* ทำให้ชิดซ้าย */
-}
-
-.form-row-title {
-  font-weight: bold;
-  margin-bottom: 10px;
-}
-.line-field,
-.line-field.block-text,
-.line-field.block-expanding,
-.reason-underline {
-  display: inline-block;
-  border-bottom: 2px solid #334155;
-  min-width: 140px;
-  max-width: 100%;
-  width: auto;
-  padding: 10px 8px 3px 8px;
-  margin-bottom: 6px;
-  background: none;
-  white-space: pre-wrap;
-  word-break: break-word;
-  overflow-wrap: break-word;
-  vertical-align: bottom;
-  box-sizing: border-box;
-}
-.line-field.block-expanding {
-  width: 100%;
-  min-width: 160px;
-  margin-bottom: 6px;
-}
-.equipment-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-top: 20px;
-  margin-bottom: 30px;
-}
-.equipment-table th,
-.equipment-table td {
-  border: 1px solid #000;
-  padding: 8px;
-  text-align: left;
-  font-size: 14px;
-  white-space: pre-wrap;
-  word-break: break-word;
-  max-width: 350px;
-}
-.equipment-table th {
-  background-color: #f0f0f0;
-  text-align: center; /* จัดหัวข้อกลาง */
-}
-.approval-table {
+/* === ทำหัวตารางให้ตรงกับ form_field3 === */
+.approval-sign-table {
   width: 100%;
   border-collapse: collapse;
   table-layout: fixed;
-  margin-top: 24px;
-}
-.approval-table th,
-.approval-table td {
-  border: 1px solid #000;
-  padding: 6px 6px;
-  font-size: 14px;
-  text-align: left;
-  vertical-align: top;
-  word-break: break-word;
-  overflow-wrap: break-word;
-}
-.approval-table th {
-  background: #f7f7f7;
-  font-weight: bold;
-  text-align: center;
-}
-
-.page-break {
-  page-break-before: always;
-  break-before: page;
-}
-/* ===== CSS แจ้งเตือนแบบ history ===== */
-.notification-dropdown {
-  position: absolute;
-  right: 0;
-  top: 38px;
   background: #fff;
-  border-radius: 18px 0 18px 18px;
-  box-shadow:
-    0 8px 24px 0 rgba(27, 50, 98, 0.14),
-    0 2px 4px 0 rgba(33, 125, 215, 0.06);
-  min-width: 330px;
-  max-width: 370px;
-  max-height: 420px;
-  overflow-y: auto;
-  z-index: 1002;
-  padding: 0;
-  border: none;
-  animation: fadeDown 0.22s;
-}
-@keyframes fadeDown {
-  0% { opacity: 0; transform: translateY(-24px);}
-  100% { opacity: 1; transform: translateY(0);}
-}
-.notification-dropdown ul {
-  padding: 0;
-  margin: 0;
-  list-style: none;
-}
-.notification-dropdown li {
-  background: linear-gradient(90deg, #f6fafd 88%, #e2e7f3 100%);
-  margin: 0.2em 0.8em;
-  padding: 0.85em 1.1em;
-  border-radius: 12px;
-  border: none;
-  font-size: 1.07rem;
-  font-weight: 500;
-  color: #1e2c48;
-  box-shadow: 0 2px 8px 0 rgba(85, 131, 255, 0.06);
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  position: relative;
-  cursor: default;
-  transition: background 0.2s;
-}
-.notification-dropdown li:not(:last-child) {
-  margin-bottom: 0.15em;
-}
-.notification-dropdown li::before {
-  content: "🔔";
-  font-size: 1.2em;
-  margin-right: 7px;
-  color: #1976d2;
-  opacity: 0.80;
-}
-.notification-dropdown li.no-noti {
-  background: #f2f3f6;
-  color: #a7aab7;
-  justify-content: center;
-  font-style: italic;
-}
-.notification-dropdown::-webkit-scrollbar {
-  width: 7px;
-}
-.notification-dropdown::-webkit-scrollbar-thumb {
-  background: #e1e7f5;
-  border-radius: 10px;
-}
-.notification-dropdown::-webkit-scrollbar-track {
-  background: transparent;
-}
-.notification-item.approved {
-  background: linear-gradient(90deg, #e9fbe7 85%, #cbffdb 100%);
-  border-left: 4px solid #38b000;
-  color: #228c22;
-}
-.notification-item.disapproved {
-  background: linear-gradient(90deg, #ffeaea 85%, #ffd6d6 100%);
-  border-left: 4px solid #ff6060;
-  color: #b91423;
-}
-.notification-item.canceled,
-.notification-item.cancel {
-  background: linear-gradient(90deg, #f9d7d7 80%, #e26a6a 100%);
-  border-left: 4px solid #bb2124;
-  color: #91061a;
-}
-.notification-item.returned {
-  background: linear-gradient(90deg, #e0f0ff 85%, #b6e0ff 100%);
-  border-left: 4px solid #1976d2;
-  color: #1976d2;
-}
-.notification-item {
-  transition: background 0.3s, border-color 0.3s, color 0.3s;
-}
-
-.notification-backdrop {
-  position: fixed;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: transparent;
-  z-index: 1001; /* ต้องน้อยกว่า .notification-dropdown (1002) */
-}
-
-.badge {
-  background-color: red;
-  color: white;
-  border-radius: 50%;
-  padding: 2px 6px;
-  font-size: 0.75rem;
-  vertical-align: top;
-  margin-left: 4px;
-}
-
-@media (max-width: 540px) {
-  .scroll-x-container {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    width: 100vw;
-    padding: 0;
-  }
-  .form-container {
-    min-width: 900px;
-    width: 900px;
-    max-width: 900px;
-    padding: 16px 24px !important;
-    border-radius: 10px !important;
-    box-sizing: border-box;
-  }
-  .form-row {
-    width: 100% !important;
-    min-width: 0 !important;
-    box-sizing: border-box !important;
-  }
-  .custom-input,
-  .custom-textarea,
-  input[type="text"],
-  input[type="date"],
-  input[type="time"],
-  select,
-  textarea {
-    width: 100% !important;
-    min-width: 0 !important;
-    max-width: 100% !important;
-    box-sizing: border-box !important;
-    overflow-x: auto;
-  }
-  .equipment-table,
-  .approval-table {
-    min-width: 600px;
-  }
-}
-/* ลบเส้นใต้เฉพาะในโซนฟอร์ม */
-.form-container .line-field,
-.form-container .reason-underline {
-  border-bottom: none !important;
-  background: none !important;
-  padding-bottom: 0 !important;
-}
-.form-row-align {
-  display: flex;
-  align-items: center;
-  gap: 8px; /* ระยะห่างแต่ละช่อง */
-  flex-wrap: wrap;
-}
-.align-field {
-  min-width: 120px;
-  max-width: 220px;
-  display: inline-block;
-  vertical-align: middle;
-  margin-right: 18px;
-  /* ไม่มีเส้นใต้ */
-  border-bottom: none !important;
-  background: none !important;
-  padding-bottom: 0 !important;
-  font-weight: 500;
-}
-.form-row-align > span:not(.align-field) {
-  min-width: 80px;
-  text-align: right;
-  font-weight: 400;
-}
-@media (max-width: 540px) {
-  .form-row-align {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0;
-  }
-  .align-field {
-    margin-right: 0;
-    min-width: 120px;
-    max-width: 100%;
-  }
-}
-.form-user-row {
-  margin-left: 30px !important;      /* ให้ชิดซ้ายสุด */
-  padding-left: 0px !important;
-  gap: 10px;
-  margin-top: 4px;                 /* ลดความห่าง */
-  margin-bottom: 8px;              /* ลดความห่าง */
-  font-size: 16px;                 /* ขนาดตัวอักษร */
-  line-height: 1.35;               /* ความสูงแต่ละบรรทัด */
-}
-.form-row, .form-row-align {
-  margin-bottom: 6px !important;   /* ลดความห่างระหว่างบรรทัด */
-  line-height: 1.5;
-}
-.user-info-row {
-  margin-top: 24px;
-  margin-bottom: 8px;
-  font-size: 16px;
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px;
-  line-height: 1.4;
-}
-.user-info-row > span {
-  /* เพิ่ม spacing เฉพาะตัวหัวข้อให้โดดเด่น */
-  margin-right: 8px;
-}
-.user-info-row > span[style*="font-weight: bold"] {
-  font-size: 18px;
-  margin-right: 20px;
-}
-.form-row {
-  display: flex;
-  align-items: center;
-  gap: 12px; /* ระยะห่างระหว่าง "ลงชื่อ" กับชื่อ */
   margin-bottom: 16px;
-  flex-wrap: wrap;
-  justify-content: flex-start; /* ชิดซ้าย */
-}
-.form-row-sign {
-  display: flex;
-  align-items: center;
-  gap: 10px;           /* ระยะห่างระหว่าง "ลงชื่อ" กับชื่อ */
-  justify-content: flex-end; /* ชิดขวา */
 }
 
-.form-row-sign .label {
-  white-space: nowrap; /* ป้องกันคำว่า "ลงชื่อ" หักบรรทัด */
-}
-/* PDF ONLY */
-.pdf-export-font-size {
-  font-size: 16px !important;   /* ฟอนต์ปกติ */
-}
-
-.pdf-export-font-size h1,
-.pdf-export-font-size h2,
-.pdf-export-font-size h3,
-.pdf-export-font-size .form-row-title,
-.pdf-export-font-size .form-header h3 {
-  font-size: 18px !important;   /* ฟอนต์หัวข้อ */
-  font-weight: bold;
-}
-
-.pdf-export-header {
-  font-size: 18px !important;
-  font-weight: bold;
-}
-
-.equipment-table td:nth-child(1),
-.equipment-table td:nth-child(3) {
-  text-align: center; /* จัดข้อความกลาง */
-}
-
-/* ==================== ลายเซ็น (เฉพาะที่แก้) ==================== */
-/* กล่องลายเซ็นรวม – ชิดขวาเหมือนเดิม และเผื่อพื้นที่สำหรับวันที่ */
-.sigX{
-  width:100%;
-  max-width:700px;
-  margin:12px 0 2px auto;  /* ชิดขวา */
-  padding-bottom:26px;     /* กันพื้นที่สำหรับวันที่ */
-}
-
-/* ใช้ grid 3 คอลัมน์: ซ้าย(ลงชื่อ) | กลาง(ชื่อ+วันที่) | ขวา(ผู้ยืม) */
-.sigX-row{
-  display:grid;
-  grid-template-columns:auto max-content auto;
-  justify-content:end;     /* ดันทั้งชุดไปชิดขวา */
-  align-items:baseline;    /* ให้ baseline เท่ากัน */
-  column-gap:12px;
-  white-space:nowrap;
-  line-height:1.2;
-}
-
-.sigX-left,.sigX-right{ font-weight:400; }
-
-/* สมอของ “ชื่อ + วันที่” */
-.sigX-nameAnchor{
-  position: relative;
-  display: inline-block;
-  width: max-content;          /* ให้กว้างพอรองรับวันที่ */
-}
-
-.sigX-name{
-  display:inline-block;
-  white-space:nowrap;
-}
-
-/* วันที่อยู่ “ใต้ชื่อ” กึ่งกลาง และไม่แตกบรรทัด */
-/* นิดเดียว: เลื่อนซ้าย ~8px */
-.sigX-date{
-  position: absolute;
-  top: 100%;
-  left: calc(50% - 20px);   /* เดิม 50% -> ขยับซ้าย 8px */
-  transform: translateX(-50%);
-  margin-top: 10px;
-  display: inline-flex;
-  align-items: baseline;
-  gap: 4px;
-  white-space: nowrap;
-  line-height: 1;
-  font-size: 0.9em;
-  z-index: 1;
-}
-
-/* =============================================================== */
-
-/* หมายเหตุ: ให้เป็นบล็อกธรรมดา ชิดซ้ายเต็มความกว้าง */
-.note-block{
-  display: block;
-  margin: 6px 0 0 0;
-  font-size: 12.5px;
-  font-style: italic;
+.approval-sign-table th,
+.approval-sign-table td {
+  border: 1px solid #222;         /* เหมือนหน้า form_field3 */
+  vertical-align: top;
+  padding: 0;                      /* เดี๋ยวคุมหัวแยก */
+  font-size: 16px;
   text-align: left;
-  width: 100%;
-  color: #000;
 }
 
-/* จัดเนื้อหาในช่องความเห็นให้อยู่กึ่งกลางกรอบ */
-.approval-cell { padding: 0; vertical-align: middle; }
+/* หัวตาราง: ให้เหมือน form_field3 เป๊ะ */
+.approval-sign-table th {
+  text-align: center !important;
+  background: #f8f9fa !important;
+  font-weight: 700 !important;
+  font-size: 16.5px !important;
+  padding: 10px 0 !important;
+}
 
-.approval-content{
-  min-height: 210px;              /* ปรับความสูงกรอบได้ */
+/* คอลัมน์กว้างเท่า ๆ กัน */
+.approval-sign-table.two-cols th,
+.approval-sign-table.two-cols td {
+  width: 50%;
+}
+
+/* เนื้อในเซลล์ (กล่องลายเซ็น) – ใช้แบบเดียวกับ form_field3 */
+.td-inner{
   display: flex;
   flex-direction: column;
-  justify-content: space-between;  /* ดันลายเซ็นไปล่างของกรอบ */
-  align-items: center;
-  text-align: center;
-  padding: 12px 12px 16px;
-}
-.approval-lines{ 
-  line-height: 1.9; 
-  margin-bottom: 8px; 
-}
-.approval-sign{ 
-  line-height: 1.8; 
-  margin-top: 12px;    
-}
-:root{
-  --topbar-h: 64px;
-  --subbar-h: 0px;
-  --gap: 12px;
+  justify-content: flex-start;
+  height: auto;
+  min-height: 160px;
+  padding: 12px;
+  box-sizing: border-box;
 }
 
-/* ตัดช่องว่างส่วนอื่นให้กระชับ (เดิมของคุณ) */
-.equipment-table{
-  margin-top: 6px !important;
-  margin-bottom: 10px !important;
-}
-/* ===== บีบช่องว่างเฉพาะกรอบความเห็น (ซ้าย/ขวา) ===== */
-/* 1) ระยะ padding ล่างของเซลล์ในตารางความเห็น */
-.approval-table td{
-  /* เดิม 3px */
-  padding: 6px 6px 8px 6px !important; /* ↑ เพิ่มช่องว่างจากเส้นกรอบล่าง */
-}
+.checkbox-line{ display:flex; align-items:center; gap:6px; margin-bottom:6px; min-height:26px; white-space:nowrap; }
+.dot-line{ display:inline-block; width:98%; border-bottom:1px dotted #222; height:15px; min-width:60px; vertical-align:middle; }
+.dot-line-custom{ flex:1 1 0; border-bottom:1.5px dotted #222; min-width:80px; margin-left:8px; margin-right:6px; height:16px; display:inline-block; }
+.line-row{ display:flex; align-items:center; height:22px; margin:2px 0; }
+.date-row{ display:flex; align-items:center; height:22px; margin-top: 15px !important; justify-content: center !important; }
 
-.approval-cell { 
-  padding: 0 !important; 
-  vertical-align: top !important;   /* ไม่ต้องดันเนื้อหาลงกลางเซลล์ */
-}
-
-.approval-content{
-  /* เอาความสูงขั้นต่ำออก และลด padding ล่างสุด */
-  min-height: unset !important;
-  padding: 8px 8px 2px 8px !important;   /* เดิม 10 10 12 */
-  gap: 4px !important;                   /* ลดช่องไฟภายใน */
-  justify-content: flex-start !important;
-}
-
-.approval-lines{
-  line-height: 1.5 !important;
-  margin-bottom: 2px !important;
-}
-
-.approval-sign{
-  line-height: 1.25 !important;
-  margin-top: 3px !important;            /* ลดช่องไฟก่อนบล็อกล่าง */
-  margin-bottom: 0 !important;           /* กันระยะล่างเกิน */
-}
-
-/* กัน element สุดท้ายในกรอบมี margin ล่าง */
-.approval-content > *:last-child {
-  margin-bottom: 0 !important;
-}
-
-@media (max-width: 540px){
-  .sigX{ max-width:520px; }
-}
 </style>
-<!-- วางบล็อกนี้ท้ายไฟล์ SFC เลย -->
+
 <style>
-/* โหลดฟอนต์ TH Sarabun New */
+/* TH Sarabun (โหลดเฉพาะหน้านี้ก็พอ แต่ใช้ global font-face ได้) */
 @font-face{
-  font-family: 'THSarabunNew';
-  src: url('/fonts/THSarabunNew.woff2') format('woff2'),
-       url('/fonts/THSarabunNew.woff') format('woff');
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
+  font-family:'THSarabunNew';
+  src:url('/fonts/THSarabunNew.woff2') format('woff2'),
+      url('/fonts/THSarabunNew.woff') format('woff');
+  font-weight:400; font-style:normal; font-display:swap;
 }
 @font-face{
-  font-family: 'THSarabunNew';
-  src: url('/fonts/THSarabunNew-Bold.woff2') format('woff2'),
-       url('/fonts/THSarabunNew-Bold.woff') format('woff');
-  font-weight: 700;
-  font-style: normal;
-  font-display: swap;
+  font-family:'THSarabunNew';
+  src:url('/fonts/THSarabunNew-Bold.woff2') format('woff2'),
+      url('/fonts/THSarabunNew-Bold.woff') format('woff');
+  font-weight:700; font-style:normal; font-display:swap;
 }
 
-/* ใช้ฟอนต์เฉพาะในเอกสาร PDF ตั้งแต่หัวข้อฟอร์มถึงชื่อในวงเล็บท้าย */
-#pdf-section, #pdf-section *{
-  font-family: 'THSarabunNew', 'Sarabun', Tahoma, sans-serif !important;
-}
-
-/* ทำตัวหนาให้ส่วนหัว/หัวตาราง/ตัวหนาในเอกสารดูถูกน้ำหนักฟอนต์ */
-#pdf-section h1,
-#pdf-section h2,
-#pdf-section h3,
-#pdf-section b,
-#pdf-section th,
-#pdf-section .form-row-title,
-#pdf-section .form-header h3{
-  font-weight: 700;
-}
+/* บังคับใช้ฟอนต์ใน pdf-section */
+#pdf-section, #pdf-section *{ font-family:'THSarabunNew','Sarabun',Tahoma,sans-serif !important; }
 
 @import '../css/style.css';
 </style>

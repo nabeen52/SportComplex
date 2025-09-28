@@ -34,6 +34,7 @@ const bcrypt = require('bcrypt');
 const UploadFile = require('./models/upload_file');
 const BookingField = require('./models/booking_field');
 const app = express();
+const Settings = require('./models/settings');
 
 const uploadRoot = path.join(__dirname, 'uploads');
 const newsDir = path.join(uploadRoot, 'news');
@@ -89,7 +90,7 @@ function formatDateRange(since, uptodate) {
     return `${formatDate(since)}-${formatDate(uptodate)}`;
 }
 
-const returnsDir = path.join(__dirname, 'public', 'uploads', 'returns');
+const returnsDir = path.join(__dirname, 'uploads', 'returns');
 fs.mkdirSync(returnsDir, { recursive: true });
 
 const uploadReturn = multer({ storage: multer.memoryStorage() });
@@ -546,18 +547,20 @@ function buildPublicUrl(req, relPath) {
 }
 
 // ============ Multer + Static Uploads (upload file to ./uploads) ==========
-app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
-    setHeaders: (res, filePath) => {
-        // บอก favicon เป็นไฟล์ PNG เดียวกับที่ใช้
-        res.setHeader('Link', '</img/435-4359797_mae-fah-luang-university-logo-mae-fah-luang-removebg-preview.png>; rel="icon"; type="image/png"');
+// app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
+//     setHeaders: (res, filePath) => {
+//         // บอก favicon เป็นไฟล์ PNG เดียวกับที่ใช้
+//         res.setHeader('Link', '</img/435-4359797_mae-fah-luang-university-logo-mae-fah-luang-removebg-preview.png>; rel="icon"; type="image/png"');
 
-        if (filePath.endsWith('.pdf')) {
-            res.setHeader('Content-Type', 'application/pdf');
-            res.setHeader('X-Content-Type-Options', 'nosniff');
-            res.setHeader('Accept-Ranges', 'bytes');
-        }
-    }
-}));
+//         if (filePath.endsWith('.pdf')) {
+//             res.setHeader('Content-Type', 'application/pdf');
+//             res.setHeader('X-Content-Type-Options', 'nosniff');
+//             res.setHeader('Accept-Ranges', 'bytes');
+//         }
+//     }
+// }));
+
+
 
 app.set('trust proxy', 1);
 const allowedOrigins = [
@@ -569,6 +572,34 @@ const allowedOrigins = [
     'http://reserv-scc.mfu.ac.th:8010',    // <--- เพิ่มอันนี้
     'https://reserv-scc.mfu.ac.th:8010'    // <--- และอันนี้
 ];
+const uploadsCors = cors({
+    origin: function (origin, cb) {
+        if (!origin) return cb(null, true);                      // e.g. direct open
+        return allowedOrigins.includes(origin) ? cb(null, true)  // ใช้ allowedOrigins เดิมของคุณ
+            : cb(new Error('CORS'), false);
+    },
+    credentials: true,
+    exposedHeaders: ['Content-Disposition'] // เผื่อดาวน์โหลดไฟล์ชื่อไทย
+});
+
+// อย่าใส่ Access-Control-Allow-Origin:* เองใน setHeaders
+app.use(
+    '/uploads',
+    uploadsCors,
+    (req, res, next) => { res.setHeader('Vary', 'Origin'); next(); },
+    express.static(path.join(__dirname, 'uploads'), {
+        setHeaders: (res, filePath) => {
+            // เฮดเดอร์สำหรับ PDF/ไฟล์
+            if (filePath.endsWith('.pdf')) {
+                res.setHeader('Content-Type', 'application/pdf');
+                res.setHeader('X-Content-Type-Options', 'nosniff');
+                res.setHeader('Accept-Ranges', 'bytes');
+            }
+            res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        }
+    })
+);
+
 app.use(cors({
     origin: function (origin, callback) {
         // allow requests with no origin (like mobile apps, curl, postman)
@@ -914,15 +945,11 @@ app.get('/api/history/booked', async (req, res) => {
 
 // ใช้ PNG เป็น favicon ตรง ๆ ได้เลย
 // ใส่ไว้แทนบรรทัด favicon เดิม
-const favPath = path.join(PUBLIC_DIR, 'img', '435-4359797_mae-fah-luang-university-logo-mae-fah-luang-removebg-preview.png');
-if (fs.existsSync(favPath)) {
-    app.use(favicon(favPath));
-} else {
-    console.warn('[favicon] not found, skip:', favPath);
-}
+// ชี้ไปยังไฟล์ PNG ใน dist/img ของคุณ
+app.use(favicon(path.join(PUBLIC_DIR, 'favicon.ico')));
 
-// (ถ้ายังไม่ได้มี) ให้เสิร์ฟไฟล์ static ใน public
-app.use(express.static(PUBLIC_DIR));
+// static อื่น ๆ
+app.use(express.static(PUBLIC_DIR, { maxAge: '7d' })); // เผื่อเสิร์ฟไฟล์ public ตรงๆ
 
 
 
@@ -1383,30 +1410,156 @@ app.patch('/api/users/update_id', async (req, res) => {
 });
 // ==================== History (Borrow/Return/Approve/Disapprove) ====================
 // ================== POST /api/history ==================
-
-// ============ CREATE HISTORY ============
-// ============ CREATE HISTORY ============
 // ============ CREATE HISTORY ============
 app.post('/api/history', async (req, res) => {
     try {
         const body = req.body || {};
         const type = String(body.type || 'field').toLowerCase();
 
-        // helpers เฉพาะ route
+        // ---------- helpers ----------
         const toArr = (v) => Array.isArray(v) ? v : (v ? [v] : []);
         const isEmptyLike = (v) => {
             const s = (v ?? '').toString().trim().toLowerCase();
             return !s || s === 'null' || s === 'undefined';
         };
-        const keepStaffOnly = [{ role: 'staff', approve: null }];
+        const ALLOWED = new Set(['staff', 'admin', 'super']);
+        const cleanRoles = (arr) =>
+            Array.from(new Set(
+                (Array.isArray(arr) ? arr : [])
+                    .map(r => String(r || '').trim().toLowerCase())
+                    .filter(r => ALLOWED.has(r))
+            ));
 
-        // one-day (equipment) → บังคับให้มีแค่ role 'staff'
-        const step =
-            (type === 'equipment' && isEquipmentOneDay(body))
-                ? keepStaffOnly
-                : normalizeIncomingStep(body.step, type, body);
+        const sanitizeIncomingStep = (step) => {
+            if (!Array.isArray(step)) return [];
+            const now = new Date();
+            const seen = new Set();
+            return step.map(r => {
+                const role = String((r && r.role) != null ? r.role : r || '')
+                    .trim()
+                    .toLowerCase();
+                if (!role || !ALLOWED.has(role) || seen.has(role)) return null;
+                seen.add(role);
+                let approve = null;
+                if (r && 'approve' in r) {
+                    approve = r.approve === true ? true : r.approve === false ? false : null;
+                }
+                return {
+                    role,
+                    approve,
+                    createdAt: r?.createdAt ? new Date(r.createdAt) : now,
+                    updatedAt: now
+                };
+            }).filter(Boolean);
+        };
 
-        const status = body.status || deriveStatusFromStep(step, type, body) || 'pending';
+        // แปลง พ.ศ. → ค.ศ. และพยายาม parse วันที่หลายรูปแบบ
+        const parseDateSmart = (raw) => {
+            if (!raw) return null;
+            let s = String(raw).trim();
+            const yMatch = s.match(/(\d{4})/);
+            if (yMatch) {
+                const y = parseInt(yMatch[1], 10);
+                if (y > 2400) s = s.replace(String(y), String(y - 543));
+            }
+            let d = new Date(s);
+            if (!isNaN(d)) return d;
+            const m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+            if (m) {
+                const dd = m[1].padStart(2, '0');
+                const mm = m[2].padStart(2, '0');
+                const yy = m[3];
+                d = new Date(`${yy}-${mm}-${dd}T00:00:00`);
+                if (!isNaN(d)) return d;
+            }
+            return null;
+        };
+
+        const isSameCalendarDay = (d1, d2) =>
+            d1.getFullYear() === d2.getFullYear() &&
+            d1.getMonth() === d2.getMonth() &&
+            d1.getDate() === d2.getDate();
+
+        const isEquipmentMultiDay = (b) => {
+            const sRaw = b?.since || b?.start_date;
+            const eRaw = b?.uptodate || b?.end_date;
+            const s = parseDateSmart(sRaw);
+            const e = parseDateSmart(eRaw);
+            if (!s || !e) return false;
+            return !isSameCalendarDay(s, e);
+        };
+
+        // อ่าน roles จาก Settings ให้ครอบคลุมทั้ง schema เก่า/ใหม่
+        async function loadRolesFromSettings() {
+            let field = [], equipment = [], equipment_one_day = [];
+            try {
+                // 1) พยายามอ่านแบบแยก 3 เอกสารก่อน (สมัยใหม่)
+                const [docField, docEquip, docEquip1d] = await Promise.all([
+                    Settings.findOne({ key: 'approval_roles_field' }).lean(),
+                    Settings.findOne({ key: 'approval_roles_equipment' }).lean(),
+                    Settings.findOne({ key: 'approval_roles_equipment_one_day' }).lean(),
+                ]);
+                field = cleanRoles(docField?.value || []);
+                equipment = cleanRoles(docEquip?.value || []);
+                equipment_one_day = cleanRoles(docEquip1d?.value || []);
+            } catch { }
+
+            try {
+                // 2) ถ้ายังว่าง ให้ลองอ่าน key เดียว 'approval_roles' (ที่เก็บ {field,equipment,equipment_one_day})
+                if (!field.length || !equipment.length || !equipment_one_day.length) {
+                    const setDoc = await Settings.findOne({ key: 'approval_roles' }).lean();
+                    const val = setDoc?.value || {};
+                    // รองรับ alias เก่า ๆ ด้วย
+                    field = field.length ? field : cleanRoles(val.field || []);
+                    equipment = equipment.length ? equipment : cleanRoles(val.equipment || []);
+                    equipment_one_day = equipment_one_day.length
+                        ? equipment_one_day
+                        : cleanRoles(val.equipment_one_day || val.one_day || val.equipmentOneDay || []);
+                }
+            } catch { }
+
+            return { field, equipment, equipment_one_day };
+        }
+
+        // ---------- เริ่มจากค่า step ที่ FE ส่งมา ----------
+        let step = sanitizeIncomingStep(body.step);
+
+        // ---------- โหลด roles จาก settings ----------
+        const rolesAll = await loadRolesFromSettings();
+        let rolesField = rolesAll.field || [];
+        let rolesEquipMulti = rolesAll.equipment || [];
+        let rolesEquip1Day = rolesAll.equipment_one_day || [];
+
+        // ---------- สรุป step ตามประเภท ----------
+        if (type === 'field') {
+            // ใช้ settings.field เสมอ (กันว่าง)
+            if (rolesField.length > 0) {
+                const now = new Date();
+                step = rolesField.map(r => ({ role: r, approve: null, createdAt: now, updatedAt: now }));
+            }
+        } else if (type === 'equipment') {
+            const now = new Date();
+            if (isEquipmentMultiDay(body)) {
+                // หลายวัน → ใช้ settings.equipment
+                if (rolesEquipMulti.length > 0) {
+                    step = rolesEquipMulti.map(r => ({ role: r, approve: null, createdAt: now, updatedAt: now }));
+                } else if (!step.length) {
+                    // กันว่างสุดท้าย
+                    step = [{ role: 'staff', approve: null, createdAt: now, updatedAt: now }];
+                }
+            } else {
+                // วันเดียว → ใช้ settings.equipment_one_day ก่อน, ถ้าว่างค่อย fallback -> equipment -> FE -> ['staff']
+                if (rolesEquip1Day.length > 0) {
+                    step = rolesEquip1Day.map(r => ({ role: r, approve: null, createdAt: now, updatedAt: now }));
+                } else if (rolesEquipMulti.length > 0) {
+                    step = rolesEquipMulti.map(r => ({ role: r, approve: null, createdAt: now, updatedAt: now }));
+                } else if (!step.length) {
+                    step = [{ role: 'staff', approve: null, createdAt: now, updatedAt: now }];
+                }
+            }
+        }
+
+        const status = String(body.status || 'pending').toLowerCase();
 
         const doc = await History.create({
             user_id: body.user_id,
@@ -1415,24 +1568,27 @@ app.post('/api/history', async (req, res) => {
             name: body.name,
             name_active: body.name_active,
             zone: body.zone,
-            since: isEmptyLike(body.since) ? null : body.since,
-            uptodate: isEmptyLike(body.uptodate) ? null : body.uptodate,
+            since: isEmptyLike(body.since) ? null : (parseDateSmart(body.since) || body.since),
+            uptodate: isEmptyLike(body.uptodate) ? null : (parseDateSmart(body.uptodate) || body.uptodate),
             startTime: body.startTime || '',
             endTime: body.endTime || '',
             quantity: body.quantity,
             date: body.date ? new Date(body.date) : new Date(),
             agency: body.agency || '',
             booking_id: body.booking_id || null,
+
             attachment: toArr(body.attachment),
             fileName: toArr(body.fileName),
             fileType: toArr(body.fileType),
             fileUrl: body.fileUrl || '',
-            bookingPdfUrl: body.bookingPdfUrl || '',
+            bookingPdfUrl: body.bookingPdfUrl || body.booking_pdf_url || '',
             bookingPdf: body.bookingPdf || null,
+
             proxyStudentName: body.proxyStudentName || '',
             proxyStudentId: body.proxyStudentId || '',
             username_form: body.username_form || '',
             id_form: body.id_form || '',
+
             utilityRequest: body.utilityRequest || '',
             facilityRequest: body.facilityRequest || '',
             turnon_air: body.turnon_air || '',
@@ -1442,66 +1598,31 @@ app.post('/api/history', async (req, res) => {
             amphitheater: body.amphitheater || '',
             need_equipment: body.need_equipment || '',
             other: body.other || '',
+
             aw: body.aw || '',
             tel: body.tel || '',
             reasons: body.reasons || '',
             participants: body.participants || '',
             requester: body.requester || '',
+
             no_receive: body.no_receive || '',
             date_receive: body.date_receive || null,
             receiver: body.receiver || '',
             restroom: body.restroom || '',
-            receive_date: body.receive_date || null,
+
+            receive_date: body.receive_date ? parseDateSmart(body.receive_date) : null,
             receive_time: body.receive_time || '',
             createdAt_old: body.createdAt_old || null,
+
             reason_admin: body.reason_admin || '',
-            secretary_choice: {
-                to_head: !!(body.secretary_choice?.to_head),
-                for_consider: !!(body.secretary_choice?.for_consider),
-                other_checked: !!(body.secretary_choice?.other_checked),
-            },
-            thaiName_admin: body.thaiName_admin || '',
-            signaturePath_admin: body.signaturePath_admin || '',
-            superApprovedBy: body.superApprovedBy || '',
-            superApprovedById: body.superApprovedById || '',
-            superApprovedAt: body.superApprovedAt || null,
-            to_vice_supervisor: !!body.to_vice_supervisor,
-            for_consider_supervisor: !!body.for_consider_supervisor,
-            other_checked_supervisor: !!body.other_checked_supervisor,
-            reason_supervisor: body.reason_supervisor || '',
-            thaiName_supervisor: body.thaiName_supervisor || '',
-            signaturePath_supervisor: body.signaturePath_supervisor || '',
-            approvedAt_supervisor: body.approvedAt_supervisor || null,
-            head_choice_supervisor: {
-                to_vice_supervisor: !!(body.head_choice_supervisor?.to_vice_supervisor),
-                for_consider_supervisor: !!(body.head_choice_supervisor?.for_consider_supervisor),
-                other_checked_supervisor: !!(body.head_choice_supervisor?.other_checked_supervisor),
-            },
-            handoverById: body.handoverById || '',
-            handoverBy: body.handoverBy || '',
-            handoverAt: body.handoverAt || null,
-            handoverRemarkSender: body.handoverRemarkSender || '',
-            handoverRemarkReceiver: body.handoverRemarkReceiver || '',
-            handoverReceiverThaiName: body.handoverReceiverThaiName || '',
-            handoverReceiverDate: body.handoverReceiverDate || null,
-            condition: body.condition || '',
-            returnPhoto: body.returnPhoto || null,
+
+            // ⬅️ สำคัญ: เก็บ step ที่สรุปแล้ว
             step,
         });
 
-        // บังคับ one-day ให้เหลือ staff อย่างเดียว (กัน hook เก่า)
-        if (type === 'equipment' && isEquipmentOneDay(body)) {
-            const onlyStaff =
-                Array.isArray(doc.step) &&
-                doc.step.length === 1 &&
-                String(doc.step[0]?.role).toLowerCase() === 'staff';
-            if (!onlyStaff) {
-                await History.updateOne({ _id: doc._id }, { $set: { step: keepStaffOnly } });
-                doc.step = keepStaffOnly;
-            }
-        }
+        console.log('[history.create] type=%s booking=%s step=%j', doc.type, doc.booking_id, doc.step);
 
-        // === ส่งเมลแจ้งเตือนตามชนิดคำขอ (ย้ายมาก่อนการตอบกลับ) ===
+        // === แจ้งอีเมล (ตามเดิม) ===
         try {
             const requesterName = await getUserDisplayNameById(doc.user_id);
             if (doc.type === 'field') {
@@ -1512,23 +1633,16 @@ app.post('/api/history', async (req, res) => {
                     since: doc.since,
                     uptodate: doc.uptodate,
                     zone: doc.zone,
-                    booking_id: doc.booking_id
+                    booking_id: doc.booking_id,
                 });
             } else if (doc.type === 'equipment') {
                 const items = [{ name: doc.name, quantity: doc.quantity }];
-                if (isSingleDay(doc)) {
-                    // วันเดียว → แจ้ง staff
-                    await notifyStaffNewBorrow({ requester: requesterName, items, booking_id: doc.booking_id });
-                } else {
-                    // หลายวัน → แจ้ง admin (แก้ปัญหาอีเมลไม่เข้า)
-                    await notifyAdminNewBorrow({ requester: requesterName, items, booking_id: doc.booking_id });
-                }
+                await notifyAdminNewBorrow({ requester: requesterName, items, booking_id: doc.booking_id });
             }
         } catch (mailErr) {
-            console.error('notify on create history error:', mailErr);
+            console.error('notify error:', mailErr);
         }
 
-        // ✅ ค่อยตอบกลับหลังส่งเมล
         return res.status(201).json(doc);
     } catch (err) {
         console.error('POST /api/history error:', err);
@@ -1741,7 +1855,7 @@ app.patch('/api/history/:id/return', async (req, res) => {
                     name: user.thaiName || user.name || user.email || saved.user_id,
                     equipment: saved.name,
                     quantity: saved.quantity,
-                     fileUrl: saved.bookingPdfUrl || ''   // << แนบลิงก์ไฟล์รับคืนถ้ามี
+                    fileUrl: saved.bookingPdfUrl || ''   // << แนบลิงก์ไฟล์รับคืนถ้ามี
                 });
             }
         } catch (mailErr) {
@@ -1913,19 +2027,25 @@ app.patch('/api/history/:id/request-return', uploadReturn.single('returnPhoto'),
 
 
 // ================== PATCH /api/history/:id/handover ==================
+// ====================== HANDOVER (STAFF) ======================
 app.patch('/api/history/:id/handover', async (req, res) => {
     try {
         const body = req.body || {};
 
-        const handoverById = (body.handoverById || body.staff_id || '').toString().trim();
+        const handoverById = (body.handoverById || body.staff_id || body.actor_id || '').toString().trim();
         const handoverByName = (body.handoverByName || body.thai_name || '').toString().trim();
         const handoverAt = body.handoverAt;
         const remarkSender = (body.remarkSender || body.remark_sender || '').toString().trim();
         const remarkReceiver = (body.remarkReceiver || body.remark_receiver || '').toString().trim();
         const booking_id = body.booking_id ? String(body.booking_id) : null;
+        const bookingPdfUrl = (body.bookingPdfUrl || body.booking_pdf_url || '').toString().trim();
 
-        const bookingPdfUrl = (body.bookingPdfUrl || '').toString().trim();
+        // ===== ตรวจสอบคนส่งมอบ =====
+        if (!handoverById && !handoverByName) {
+            return res.status(400).json({ success: false, message: 'ต้องระบุ staff_id หรือชื่อผู้ส่งมอบ' });
+        }
 
+        // ===== หา finalName จากฐานผู้ใช้ถ้าไม่ได้ส่งชื่อมา =====
         let finalName = handoverByName;
         if (!finalName && handoverById) {
             const u = await User.findOne({ user_id: handoverById }).lean();
@@ -1935,10 +2055,12 @@ app.patch('/api/history/:id/handover', async (req, res) => {
                 handoverById;
         }
 
+        // ===== เตรียม field ที่จะเซ็ต (ไม่แตะต้อง status) =====
+        const now = new Date();
         const setDoc = {
             handoverById: handoverById || '',
             handoverBy: finalName || '',
-            handoverAt: handoverAt ? new Date(handoverAt) : new Date(),
+            handoverAt: handoverAt ? new Date(handoverAt) : now,
             ...(remarkSender ? { handoverRemarkSender: remarkSender } : {}),
             ...(remarkReceiver ? { handoverRemarkReceiver: remarkReceiver } : {}),
             ...(bookingPdfUrl
@@ -1950,74 +2072,84 @@ app.patch('/api/history/:id/handover', async (req, res) => {
                 : {}),
         };
 
-        let matched = 0,
-            modified = 0,
-            docs = [];
-
+        // ===== เลือกรายการเป้าหมาย (เฉพาะ equipment + สถานะต้อง approved) =====
+        let targets = [];
         if (booking_id) {
-            const result = await History.updateMany(
-                { type: 'equipment', booking_id, status: { $in: ['approved', 'Approved'] } },
-                { $set: setDoc }
-            );
-            matched = result.matchedCount ?? result.nMatched ?? 0;
-            modified = result.modifiedCount ?? result.nModified ?? 0;
-
-            const affected = await History.find(
-                { type: 'equipment', booking_id },
-                { _id: 1, name: 1, quantity: 1, user_id: 1 }
-            ).lean();
-            docs = affected;
-
-            // ✅ อัปเดต step: staff ส่งมอบแล้ว
-            for (const h of affected) {
-                try {
-                    await updateHistoryStep(
-                        { id: h._id, role: 'staff', approve: true, actorName: finalName },
-                        { syncStatus: true }
-                    );
-                } catch (e) {
-                    console.error(`update step staff handover ${h._id} error:`, e.message);
-                }
-            }
+            targets = await History.find({
+                type: 'equipment',
+                booking_id,
+                status: { $in: ['approved', 'Approved'] },
+            }).lean();
         } else {
-            const updated = await History.findByIdAndUpdate(
-                req.params.id,
-                { $set: setDoc },
-                { new: true }
-            );
-            if (!updated) return res.status(404).json({ message: 'Not found' });
-            matched = modified = 1;
-
-            // 👈 เติม user_id ด้วย เพื่อใช้ร่วมกับเคส booking_id ได้
-            docs = [
-                {
-                    _id: updated._id,
-                    name: updated.name,
-                    quantity: updated.quantity,
-                    booking_id: updated.booking_id,
-                    user_id: updated.user_id,
-                },
-            ];
-
-            try {
-                await updateHistoryStep(
-                    { id: updated._id, role: 'staff', approve: true, actorName: finalName },
-                    { syncStatus: true }
-                );
-            } catch (e) {
-                console.error(`update step staff handover single ${updated._id} error:`, e.message);
+            const doc = await History.findById(req.params.id).lean();
+            if (!doc) return res.status(404).json({ message: 'Not found' });
+            if (String(doc.type).toLowerCase() !== 'equipment') {
+                return res.status(400).json({ message: 'ไม่ใช่รายการอุปกรณ์' });
             }
+            if (!['approved', 'Approved'].includes(String(doc.status))) {
+                return res.status(409).json({ message: 'สถานะต้องเป็น approved ก่อนจึงจะส่งมอบได้' });
+            }
+            targets = [doc];
         }
 
-        // ===== ส่งอีเมลถึงผู้ยืมว่า "ส่งมอบแล้ว" (ทำงานทั้งสองเคส) =====
+        if (!targets.length) {
+            return res.status(409).json({ success: false, message: 'ไม่พบรายการที่พร้อมส่งมอบ (approved)' });
+        }
+
+        const ids = targets.map(t => t._id);
+
+        // ===== อัปเดตเอกสาร: set ข้อมูลส่งมอบ (ไม่เปลี่ยน status) =====
+        const bulkSet = await History.updateMany(
+            { _id: { $in: ids } },
+            { $set: setDoc }
+        );
+
+        // ===== อัปเดต step: staff.approve = true =====
+        await History.updateMany(
+            { _id: { $in: ids } },
+            { $set: { 'step.$[el].approve': true } },
+            { arrayFilters: [{ 'el.role': 'staff' }] }
+        );
+
+        // ===== หักสต็อก + บันทึก usageByMonthYear/usageCount (ถ้าคุณตั้งใจทำที่ขั้นตอนส่งมอบ) =====
+        const usageMap = {};
+        for (const it of targets) {
+            const nm = (it.name || '').trim();
+            const qty = Math.abs(Number(it.quantity) || 0);
+            if (!nm || !qty) continue;
+            usageMap[nm] = (usageMap[nm] || 0) + qty;
+        }
+        const year = now.getFullYear();
+        const month = now.getMonth() + 1;
+
+        for (const [equipName, usageQty] of Object.entries(usageMap)) {
+            const equipment = await Equipment.findOne({ name: equipName });
+            if (!equipment) continue;
+
+            equipment.usageByMonthYear = equipment.usageByMonthYear || [];
+            const found = equipment.usageByMonthYear.find(x => x.year === year && x.month === month);
+            if (found) found.usage += usageQty;
+            else equipment.usageByMonthYear.push({ year, month, usage: usageQty });
+
+            const currentQty = Number(equipment.quantity) || 0;
+            equipment.quantity = Math.max(0, currentQty - usageQty);
+
+            equipment.usageCount = (Number(equipment.usageCount) || 0) + usageQty;
+
+            equipment.markModified('usageByMonthYear');
+            await equipment.save();
+        }
+
+        // ===== เตรียมข้อมูลสำหรับอีเมล =====
+        const borrowerUserId =
+            targets?.[0]?.user_id ||
+            (await History.findById(req.params.id).lean().catch(() => null))?.user_id ||
+            null;
+
+        const itemsForMail = targets.map(d => ({ name: d.name, quantity: d.quantity }));
+
+        // ===== ส่งอีเมลถึงผู้ยืมว่า "ส่งมอบแล้ว" =====
         try {
-            const borrowerUserId =
-                docs?.[0]?.user_id ||
-                (await History.findById(req.params.id).lean())?.user_id ||
-                null;
-
-            const itemsForMail = docs.map((d) => ({ name: d.name, quantity: d.quantity }));
-
             if (borrowerUserId) {
                 const borrower = await User.findOne({ user_id: borrowerUserId }).lean();
                 if (borrower?.email) {
@@ -2029,14 +2161,14 @@ app.patch('/api/history/:id/handover', async (req, res) => {
                         borrower.email,
                         'แจ้งเตือน: เจ้าหน้าที่ได้ส่งมอบอุปกรณ์ให้คุณแล้ว',
                         `
-            <div>
-              <h2>สถานะการยืมอุปกรณ์: ส่งมอบเรียบร้อย</h2>
-              <p><b>ผู้รับมอบ:</b> ${borrowerName}</p>
-              ${itemsHtml}
-              ${bookingPdfUrl ? `<p><b>เอกสาร:</b> <a href="${bookingPdfUrl}" target="_blank" rel="noopener">เปิดไฟล์</a></p>` : ''}
-              <p style="margin-top:10px;">กรุณาตรวจสอบอุปกรณ์และเก็บรักษาอย่างเหมาะสม</p>
-              <hr><p style="font-size:0.95em;color:#888;">Sport Complex – MFU</p>
-            </div>
+              <div>
+                <h2>สถานะการยืมอุปกรณ์: ส่งมอบเรียบร้อย</h2>
+                <p><b>ผู้รับมอบ:</b> ${borrowerName}</p>
+                ${itemsHtml}
+                ${bookingPdfUrl ? `<p><b>เอกสาร:</b> <a href="${bookingPdfUrl}" target="_blank" rel="noopener">เปิดไฟล์</a></p>` : ''}
+                <p style="margin-top:10px;">กรุณาตรวจสอบอุปกรณ์และเก็บรักษาอย่างเหมาะสม</p>
+                <hr><p style="font-size:0.95em;color:#888;">Sport Complex – MFU</p>
+              </div>
             `
                     );
                 }
@@ -2045,21 +2177,20 @@ app.patch('/api/history/:id/handover', async (req, res) => {
             console.error('handover: send mail to borrower error:', mailErr.message);
         }
 
+        // ===== ตอบกลับ =====
         return res.json({
             success: true,
-            matched,
-            modified,
+            matched: bulkSet.matchedCount ?? bulkSet.nMatched ?? ids.length,
+            modified: bulkSet.modifiedCount ?? bulkSet.nModified ?? ids.length,
             handoverBy: { id: handoverById, name: finalName },
-            items: docs,
+            items: itemsForMail,
+            note: 'status ไม่ถูกเปลี่ยน ยังคงเป็น approved',
         });
     } catch (err) {
         console.error('handover error:', err);
         res.status(500).json({ message: err.message });
     }
 });
-
-
-
 
 app.get('/api/history/file/:id', async (req, res) => {
     try {
@@ -2770,42 +2901,91 @@ app.patch('/api/history/:id/disapprove_equipment', async (req, res) => {
 });
 
 // ========== Approve/Disapprove Field ==========
+// ตัวอย่างใน Express/Mongoose
 app.get('/api/history/approve_field', async (req, res) => {
     try {
-        // 1. เอาทั้ง field และ equipment (pending)
-        const all = await History.find({
-            status: 'pending',
+        const mode = String(req.query.mode || '').toLowerCase();
+
+        // ===== โหมดสำหรับหัวหน้า (super) =====
+        if (mode === 'super') {
+            const finalStatuses = [
+                'approved', 'rejected', 'disapproved', 'cancel', 'cancelled',
+                'returned', 'done', 'complete'
+            ];
+
+            const adminApproved = { role: /admin/i, approve: true };
+            const superApproved = { role: /super/i, approve: true };
+
+            // 1) type: field เท่านั้น
+            // 2) ยังไม่จบงาน (status ไม่นับจบ)
+            // 3) ผ่านเลขาฯ/แอดมินแล้ว (มี step admin approve = true) **หรือ** มี approvedBy/approvedAt (fallback ของระบบเก่า)
+            // 4) และยังไม่มี step ของ super อนุมัติ
+            const superPendingQuery = {
+                type: 'field',
+                status: { $nin: finalStatuses },
+                $or: [
+                    { step: { $elemMatch: adminApproved } },
+                    { approvedBy: { $exists: true, $ne: '' }, approvedAt: { $exists: true, $ne: null } }
+                ],
+                $nor: [
+                    { step: { $elemMatch: superApproved } }
+                ]
+            };
+
+            const rows = await History.find(superPendingQuery)
+                .lean()
+                .sort({ updatedAt: -1, createdAt: -1 });
+
+            return res.json(rows);
+        }
+
+        // ===== โหมดเดิม (ไม่ใส่ mode) — ไม่แตะต้องของเดิม =====
+        const empty = v => v === undefined || v === null || v === '';
+        const adminNotApproved = { role: 'admin', $or: [{ approve: { $exists: false } }, { approve: null }, { approve: false }] };
+        const staffApproved = { role: 'staff', approve: true };
+
+        const rows = await History.find({
+            type: { $in: ['field', 'equipment'] },
             $or: [
-                { type: 'field' },
-                { type: 'equipment' }
+                {
+                    type: 'field',
+                    step: { $elemMatch: adminNotApproved },
+                    status: { $nin: ['disapproved', 'cancel', 'cancelled'] }
+                },
+                {
+                    type: 'equipment',
+                    since: { $nin: [null, ''] },
+                    uptodate: { $nin: [null, ''] },
+                    step: { $elemMatch: adminNotApproved },
+                    status: { $nin: ['disapproved', 'cancel', 'cancelled', 'returned'] }
+                },
+                {
+                    type: 'equipment',
+                    $and: [
+                        { $or: [{ since: { $exists: false } }, { since: null }, { since: '' }] },
+                        { $or: [{ uptodate: { $exists: false } }, { uptodate: null }, { uptodate: '' }] }
+                    ],
+                    step: {
+                        $all: [
+                            { $elemMatch: staffApproved },
+                            { $elemMatch: adminNotApproved }
+                        ]
+                    },
+                    status: { $nin: ['disapproved', 'cancel', 'cancelled', 'returned'] }
+                }
             ]
-        }).lean();
+        })
+            .lean()
+            .sort({ updatedAt: -1, createdAt: -1 });
 
-        // 2. เหลือเฉพาะ field หรือ equipment ที่ยืมหลายวัน
-        const multiDayItems = all.filter(f =>
-            (f.type === 'field') ||
-            (f.type === 'equipment' && !isSingleDay(f))
-        );
-
-        // 3. join user name
-        const userIds = multiDayItems.map(f => f.user_id);
-        const users = await User.find({ user_id: { $in: userIds } }).lean();
-        const userMap = {};
-        users.forEach(u => userMap[u.user_id] = u.name);
-
-        const result = multiDayItems.map(f => ({
-            ...f,
-            requester_name: userMap[f.user_id] || f.user_id,
-            booking_id: f.booking_id ? f.booking_id.toString() : "",
-        }));
-        res.send(result);
+        return res.json(rows);
     } catch (err) {
-        res.status(500).send({ message: err.message });
+        console.error('approve_field list error:', err);
+        res.status(500).json({ message: err.message });
     }
 });
 
 // Cancel field booking (admin/staff ยกเลิก)
-// PATCH /api/history/:id/cancel_field
 // PATCH /api/history/:id/cancel_field
 app.patch('/api/history/:id/cancel_field', async (req, res) => {
     try {
@@ -2897,31 +3077,32 @@ app.patch('/api/history/:id/cancel_field', async (req, res) => {
 
 // --------- PATCH APPROVE ------------
 // ================== PATCH /api/history/:id/approve_equipment ==================
+// ====================== APPROVE EQUIPMENT (ADMIN) ======================
 app.patch('/api/history/:id/approve_equipment', async (req, res) => {
     try {
-        // 0) ผู้กดอนุมัติ (รองรับทั้ง admin_id / staff_id)
-        const actorId = req.body.admin_id || req.body.staff_id;
+        // 0) ใครเป็นคนกด?
+        const actorId = (
+            req.body.admin_id ?? req.body.staff_id ?? req.body.actor_id ?? ''
+        ).toString().trim();
         if (!actorId) {
-            return res.status(400).json({ success: false, message: 'ต้องระบุ admin_id หรือ staff_id' });
+            return res.status(400).json({ success: false, message: 'ต้องระบุ staff_id หรือ admin_id (หรือ actor_id)' });
         }
-        const actor = await User.findOne({ user_id: String(actorId) });
-        const actorName =
-            (actor?.thaiName && String(actor.thaiName)) ||
-            (actor?.name && String(actor.name)) ||
-            (actor?.email && String(actor.email)) ||
-            String(actorId);
 
-        // 1) โหลดเอกสารต้นทาง + ตรวจว่าเป็นอุปกรณ์
+        const actor = await User.findOne({ user_id: actorId }).lean();
+        const actorName =
+            (actor?.thaiName && String(actor.thaiName).trim()) ||
+            (actor?.name && String(actor.name).trim()) ||
+            (actor?.email && String(actor.email).trim()) ||
+            actorId;
+
+        // 1) โหลด seed + ตรวจชนิด
         const seed = await History.findById(req.params.id);
         if (!seed) return res.status(404).json({ success: false, message: 'not found' });
         if (String(seed.type).toLowerCase() !== 'equipment') {
             return res.status(400).json({ success: false, message: 'ไม่ใช่รายการอุปกรณ์' });
         }
 
-        // ระบุว่าเป็น “วันเดียว” ไหม
-        const isOneDay = isEquipmentOneDay(seed);
-
-        // กลุ่มรายการ pending ใน booking เดียวกัน (ถ้ามี)
+        // 2) กำหนดขอบเขต "กลุ่ม pending" (ทั้ง booking หรือเดี่ยว)
         const pendingQuery = seed.booking_id
             ? { type: 'equipment', booking_id: String(seed.booking_id), status: { $in: ['pending', 'Pending'] } }
             : { _id: seed._id, type: 'equipment', status: { $in: ['pending', 'Pending'] } };
@@ -2933,22 +3114,102 @@ app.patch('/api/history/:id/approve_equipment', async (req, res) => {
 
         const now = new Date();
 
-        // 2) เซ็ต approved + เก็บ PDF ถ้ามี
-        const pdfUrl =
-            [req.body.bookingPdfUrl, req.body.booking_pdf_url, req.body.fileUrl]
-                .map(v => (typeof v === 'string' ? v.trim() : ''))
-                .find(Boolean) || '';
+        // 3) จะอนุมัติ role ไหนใน step?
+        // 3.1 รับจาก body (ถ้ามี)
+        let rolesToApprove = [];
+        if (Array.isArray(req.body.step)) {
+            rolesToApprove = req.body.step
+                .filter(s => s && (s.approve === true || String(s.approve).toLowerCase() === 'true'))
+                .map(s => String(s.role || '').toLowerCase())
+                .filter(Boolean);
+        }
+        // 3.2 ถ้าไม่ได้ส่งมา → เดาตามเอกสาร (มี admin ให้รอ admin)
+        if (rolesToApprove.length === 0) {
+            const roleSet = new Set();
+            for (const it of pendingItems) {
+                (Array.isArray(it.step) ? it.step : []).forEach(s => roleSet.add(String(s.role || '').toLowerCase()));
+            }
+            if (roleSet.has('admin')) rolesToApprove = ['staff', 'admin']; // เราจะติ๊กได้เฉพาะบทบาทของผู้กดจริงด้านล่าง
+            else if (roleSet.has('staff')) rolesToApprove = ['staff'];
+        }
 
-        const baseSet = {
-            status: 'approved',
-            approvedBy: actorName,
-            approvedById: String(actorId),
-            approvedAt: now,
-            ...(pdfUrl ? { bookingPdfUrl: pdfUrl, booking_pdf_url: pdfUrl } : {}),
+        // 4) ระบุบทบาทของ "ผู้กด" จากชนิด id ที่ส่งมา
+        const actorRole = req.body.admin_id ? 'admin'
+            : req.body.staff_id ? 'staff'
+                : (rolesToApprove.includes('admin') ? 'admin' : 'staff');
+
+        // 5) ติ๊ก approve ให้ role ของผู้กดก่อน (ถ้ามีใน rolesToApprove)
+        const ids = pendingItems.map(x => x._id);
+        const applyApproveForRole = async (role) => {
+            // set ใน element ที่มีอยู่
+            await History.updateMany(
+                { _id: { $in: ids }, 'step.role': role },
+                {
+                    $set: {
+                        'step.$[el].approve': true,
+                        'step.$[el].actorName': actorName,
+                        'step.$[el].approvedAt': now,
+                        'step.$[el].updatedAt': now,
+                    }
+                },
+                { arrayFilters: [{ 'el.role': role }] }
+            );
+            // ถ้าไม่มี element ของ role นี้ → push ใหม่
+            const missing = pendingItems.filter(it => !(Array.isArray(it.step) ? it.step : [])
+                .some(s => String(s.role || '').toLowerCase() === role)).map(it => it._id);
+            if (missing.length) {
+                await History.updateMany(
+                    { _id: { $in: missing } },
+                    { $push: { step: { role, approve: true, actorName, approvedAt: now, updatedAt: now } } }
+                );
+            }
         };
-        await History.updateMany(pendingQuery, { $set: baseSet });
 
-        // 2.1 แนบไฟล์ (optional)
+        if (rolesToApprove.includes(actorRole)) {
+            await applyApproveForRole(actorRole);
+        } else {
+            // ถ้าไม่ได้อยู่ใน rolesToApprove ก็ยังอนุญาตให้ติ๊กตาม role ของผู้กด (ปลอดภัยดี)
+            await applyApproveForRole(actorRole);
+        }
+
+        // 6) ตัดสินใจเปลี่ยน status เป็น approved หรือยังคง pending
+        // เกณฑ์: ถ้า "ใน step ของรายการเหล่านี้มี admin" → ต้องรอ admin ให้ครบก่อนถึงจะ approved
+        //       ถ้า "ไม่มี admin ใน step (staff-only)" → อนุมัติจบได้เลย
+        const groupHasAdmin = pendingItems.some(it =>
+            (Array.isArray(it.step) ? it.step : []).some(s => String(s.role || '').toLowerCase() === 'admin')
+        );
+
+        let finalized = false;
+        if (!groupHasAdmin) {
+            // ✅ เคส staff-only → อนุมัติจบทันที
+            await History.updateMany(pendingQuery, {
+                $set: {
+                    status: 'approved',
+                    approvedBy: actorName,
+                    approvedById: actorId,
+                    approvedAt: now,
+                }
+            });
+            finalized = true;
+        } else {
+            // มีกำหนดให้ต้องมี admin → จะจบก็ต่อเมื่อคนกดคือ admin (หรือ body ขออนุมัติ admin)
+            if (actorRole === 'admin') {
+                await History.updateMany(pendingQuery, {
+                    $set: {
+                        status: 'approved',
+                        approvedBy: actorName,
+                        approvedById: actorId,
+                        approvedAt: now,
+                    }
+                });
+                finalized = true;
+            } else {
+                // staff กดก่อน → รอ admin ต่อไป (status คง pending)
+                finalized = false;
+            }
+        }
+
+        // 7) แนบไฟล์ (เหมือนเดิม) — ทำเฉพาะถ้ามี
         const attachments = Array.isArray(req.body.attachment)
             ? req.body.attachment.filter(u => typeof u === 'string' && u.trim())
             : (typeof req.body.attachment === 'string' && req.body.attachment.trim()
@@ -2956,13 +3217,11 @@ app.patch('/api/history/:id/approve_equipment', async (req, res) => {
                 : []);
         const fileNames = Array.isArray(req.body.fileName) ? req.body.fileName : [];
         const fileTypes = Array.isArray(req.body.fileType) ? req.body.fileType : [];
-
         if (attachments.length || fileNames.length || fileTypes.length) {
             for (const it of pendingItems) {
                 const doc = await History.findById(it._id);
                 if (!doc) continue;
                 let changed = false;
-
                 if (attachments.length) {
                     doc.attachment = Array.isArray(doc.attachment) ? doc.attachment : (doc.attachment ? [doc.attachment] : []);
                     for (const u of attachments) if (!doc.attachment.includes(u)) { doc.attachment.push(u); changed = true; }
@@ -2985,154 +3244,72 @@ app.patch('/api/history/:id/approve_equipment', async (req, res) => {
             }
         }
 
-        // 3) อัปเดต step
-        const ids = pendingItems.map(x => x._id);
+        // 8) ส่งอีเมลเฉพาะตอน “อนุมัติจบแล้ว (finalized)”
+        if (finalized) {
+            try {
+                const pdfUrl = [req.body.bookingPdfUrl, req.body.booking_pdf_url, req.body.fileUrl]
+                    .map(v => (typeof v === 'string' ? v.trim() : ''))
+                    .find(Boolean) || '';
+                const borrowerId = pendingItems[0]?.user_id;
+                let borrower = await User.findOne({ user_id: borrowerId }).lean();
+                if (!borrower) borrower = await User.findById(borrowerId).lean().catch(() => null);
 
-        if (isOneDay) {
-            // ✅ วันเดียว → บังคับ step ให้เหลือเฉพาะ staff และอนุมัติ = true
-            await History.updateMany(
-                { _id: { $in: ids } },
-                {
-                    $pull: { step: { role: 'admin' } }, // กัน admin ติดมาจาก hook/ของเก่า
-                }
-            );
-            await History.updateMany(
-                { _id: { $in: ids } },
-                {
-                    $set: {
-                        step: [
-                            { role: 'staff', approve: true, createdAt: now, updatedAt: now }
-                        ]
-                    }
-                }
-            );
-        } else {
-            // หลายวัน → ให้ admin เป็นคนอนุมัติใน step
-            for (const it of ids) {
-                try {
-                    await updateHistoryStep(
-                        { id: it, role: 'admin', approve: true, actorName },
-                        { syncStatus: false }
-                    );
-                } catch (e) {
-                    console.error('update step (approve_equipment) error:', e.message);
-                }
-            }
-        }
+                const itemsHtml = listToHtml(pendingItems); // ฟังก์ชันเดิมของคุณ
+                const borrowerName = borrower?.thaiName || borrower?.name || borrower?.email || borrower?.user_id || '';
 
-        // 3.1 ย้ำสถานะ approved ให้ชัวร์
-        await History.updateMany(
-            { _id: { $in: ids } },
-            { $set: { status: 'approved' } }
-        );
-
-        // 4) หักสต็อก/บันทึก usage
-        const usageMap = {};
-        for (const it of pendingItems) {
-            const nm = (it.name || '').trim();
-            const qty = Math.abs(Number(it.quantity) || 0);
-            if (!nm || !qty) continue;
-            usageMap[nm] = (usageMap[nm] || 0) + qty;
-        }
-        const year = now.getFullYear();
-        const month = now.getMonth() + 1;
-
-        for (const [equipName, usageQty] of Object.entries(usageMap)) {
-            const equipment = await Equipment.findOne({ name: equipName });
-            if (!equipment) continue;
-
-            equipment.usageByMonthYear = equipment.usageByMonthYear || [];
-            const found = equipment.usageByMonthYear.find(x => x.year === year && x.month === month);
-            if (found) found.usage += usageQty;
-            else equipment.usageByMonthYear.push({ year, month, usage: usageQty });
-
-            equipment.quantity = (Number(equipment.quantity) || 0) - usageQty;
-            if (equipment.quantity < 0) equipment.quantity = 0;
-
-            equipment.usageCount = (Number(equipment.usageCount) || 0) + usageQty;
-            equipment.markModified('usageByMonthYear');
-            await equipment.save();
-        }
-
-        // 5) ส่งเมล (คงเดิม)
-        // 5) ส่งเมล (แยกตามวันเดียว/หลายวัน)
-        try {
-            const borrowerId = pendingItems[0]?.user_id;
-            let borrower = await User.findOne({ user_id: borrowerId });
-            if (!borrower) borrower = await User.findById(borrowerId).catch(() => null);
-
-            const itemsHtml = listToHtml(pendingItems);
-
-            if (isOneDay) {
-                // ✅ ยืมวันเดียว: ส่งเมลอนุมัติให้ผู้ใช้ทันที และไม่แจ้ง staff ว่ารอส่งมอบ
-                if (borrower?.email) {
-                    await sendApproveEquipmentEmailImmediate({
-                        to: borrower.email,
-                        name: borrower?.thaiName || borrower?.name || borrower?.email || borrower?.user_id || '',
-                        itemsHtml,
-                        fileUrl: pdfUrl || ''
-                    });
-                }
-            } else {
-                // 🟡 ยืมหลายวัน: พฤติกรรมเดิม — แจ้งผู้ใช้ว่า "รอการส่งมอบ" และแจ้ง staff
+                // ผู้ยืม
                 if (borrower?.email) {
                     await sendBulk(
                         borrower.email,
                         'แจ้งเตือน: อนุมัติคำขอยืมอุปกรณ์แล้ว (รอการส่งมอบ)',
                         `
-        <div>
-          <h2>อนุมัติคำขอยืมอุปกรณ์ของคุณแล้ว</h2>
-          <p><b>ชื่อผู้ยืม:</b> ${borrower?.thaiName || borrower?.name || borrower?.email || borrower?.user_id || ''}</p>
-          ${itemsHtml}
-          <p style="margin-top:10px;">สถานะปัจจุบัน: <b>รอการส่งมอบ</b></p>
-          <hr><p style="font-size:0.95em;color:#888;">Sport Complex – MFU</p>
-        </div>
-        `
+            <div>
+              <h2>อนุมัติคำขอยืมอุปกรณ์ของคุณแล้ว</h2>
+              <p><b>ชื่อผู้ยืม:</b> ${borrowerName}</p>
+              ${itemsHtml}
+              ${pdfUrl ? `<p><b>เอกสาร:</b> <a href="${pdfUrl}" target="_blank" rel="noopener">เปิดไฟล์</a></p>` : ''}
+              <p style="margin-top:10px;">สถานะปัจจุบัน: <b>รอการส่งมอบจากเจ้าหน้าที่</b></p>
+              <hr><p style="font-size:0.95em;color:#888;">Sport Complex – MFU</p>
+            </div>
+            `
                     );
                 }
 
+                // Staff
                 const staffEmails = await getStaffEmails();
                 if (staffEmails.length) {
-                    const borrowerName = borrower?.thaiName || borrower?.name || borrower?.email || borrower?.user_id || borrowerId || '';
                     await sendBulk(
                         staffEmails,
                         'แจ้งเตือน: มีรายการอุปกรณ์รอการส่งมอบ',
                         `
-        <div>
-          <h2>มีรายการอุปกรณ์รอการส่งมอบ</h2>
-          <p><b>ผู้ยืม:</b> ${borrowerName}</p>
-          ${itemsHtml}
-          <p style="margin-top:10px;">สถานะ: <b>รอการส่งมอบ</b></p>
-          <hr><p style="font-size:0.95em;color:#888;">Sport Complex – MFU</p>
-        </div>
-        `
+            <div>
+              <h2>มีรายการอุปกรณ์รอการส่งมอบ</h2>
+              <p><b>ผู้ยืม:</b> ${borrowerName}</p>
+              ${itemsHtml}
+              <p style="margin-top:10px;">สถานะ: <b>รอการส่งมอบ</b></p>
+              <hr><p style="font-size:0.95em;color:#888;">Sport Complex – MFU</p>
+            </div>
+            `
                     );
                 }
+            } catch (mailErr) {
+                console.error('approve_equipment notify mail error:', mailErr.message);
             }
-        } catch (mailErr) {
-            console.error('approve_equipment notify mail error:', mailErr.message);
         }
 
-
-        // 6) ตอบกลับ
-        return res.send({
+        // 9) ตอบกลับ
+        return res.json({
             success: true,
-            approved_by: { user_id: String(actorId), name: actorName },
+            approved_by: { user_id: actorId, name: actorName },
             approved_count: pendingItems.length,
-            ...(pdfUrl ? { bookingPdfUrl: pdfUrl } : {})
+            finalized,                    // true = เปลี่ยน status เป็น approved แล้ว, false = ยัง pending (รอ admin)
+            next_action: finalized ? 'handover' : 'wait-admin'
         });
     } catch (err) {
         console.error('approve_equipment error:', err);
-        res.status(500).send({ message: err.message });
+        res.status(500).json({ message: err.message });
     }
 });
-
-
-
-
-
-
-
 
 // Approve field booking
 // ================== PATCH /api/history/:id/approve_field ==================
@@ -3140,14 +3317,19 @@ app.patch('/api/history/:id/approve_field', async (req, res) => {
     try {
         const { id } = req.params;
 
-        const adminId = req.body.admin_id;
-        const admin = await User.findOne({ user_id: adminId });
-        const adminName = admin
-            ? (admin.name || `${admin?.firstname || ''} ${admin?.lastname || ''}`.trim())
-            : adminId;
+        // === 1) เตรียมข้อมูลผู้อนุมัติฝั่ง admin ===
+        const adminId = (req.body.admin_id || '').toString().trim();
+        const admin = adminId ? await User.findOne({ user_id: adminId }) : null;
 
-        const reasonAdmin = typeof req.body.reason_admin === 'string'
-            ? req.body.reason_admin.trim() : '';
+        const adminName =
+            (admin?.name && String(admin.name).trim()) ||
+            `${admin?.firstname || ''} ${admin?.lastname || ''}`.trim() ||
+            adminId || 'unknown';
+
+        const reasonAdmin =
+            typeof req.body.reason_admin === 'string'
+                ? req.body.reason_admin.trim()
+                : '';
 
         const sc = req.body.secretary_choice || {};
         const secretaryChoice = {
@@ -3171,48 +3353,162 @@ app.patch('/api/history/:id/approve_field', async (req, res) => {
 
         const bodyPdfUrl = (req.body.bookingPdfUrl || req.body.booking_pdf_url || '').trim();
 
-        // เฉพาะ field ที่ยัง pending
+        // === 2) โหลดเอกสารปัจจุบัน (ต้องเป็น field + pending เท่านั้น) ===
         const cond = { _id: id, type: 'field', status: 'pending' };
+        let doc = await History.findOne(cond).lean();
+        if (!doc) return res.status(404).send({ message: 'not found or not pending' });
 
-        const updateSet = {
-            status: 'pending', // คง pending จนกว่า super จะกด
+        // === 3) รับ "steps" จากหน้า UI แล้ว normalize ===
+        const rawSteps = req.body.steps || req.body.step || req.body.approval_steps || null;
+
+        const normalizeSteps = (input) => {
+            if (!input) return null;
+
+            // ['admin','super']
+            if (Array.isArray(input) && input.every(s => typeof s === 'string')) {
+                return input.map(role => ({ role: String(role).trim(), enabled: true }));
+            }
+
+            // [{ role, enabled?, required?, remark? }, ...]
+            if (Array.isArray(input)) {
+                return input
+                    .map(o => {
+                        const role = (o?.role || '').toString().trim();
+                        if (!role) return null;
+                        return {
+                            role,
+                            enabled: o.enabled !== false && o.checked !== false, // default = true
+                            required: o.required === true || o.must === true || undefined,
+                            remark: (o.remark || '').toString().trim() || undefined,
+                        };
+                    })
+                    .filter(Boolean);
+            }
+
+            if (typeof input === 'string') {
+                return [{ role: input.trim(), enabled: true }];
+            }
+            return null;
+        };
+
+        const incomingSteps = normalizeSteps(rawSteps);
+
+        // step เดิมใน DB (ถ้ามี)
+        const prevStepsArr = Array.isArray(doc.step) ? doc.step : [];
+        const prevByRole = new Map(prevStepsArr.map(s => [String(s.role || '').trim(), s]));
+
+        // ถ้าไม่ส่ง steps มา ใช้ลำดับเดิม หรือค่า default
+        const DEFAULT_ROLES = ['admin', 'super'];
+        const baseRoles = incomingSteps?.map(s => s.role) ||
+            (prevStepsArr.length ? prevStepsArr.map(s => String(s.role || '').trim()) : DEFAULT_ROLES);
+
+        // รวม role ทั้งหมดที่ควรพิจารณา
+        const allRoles = Array.from(new Set([
+            ...baseRoles,
+            ...prevStepsArr.map(s => String(s.role || '').trim())
+        ]));
+
+        const now = req.body.approvedAt ? new Date(req.body.approvedAt) : new Date();
+        const nextSteps = [];
+
+        for (const role of allRoles) {
+            const prev = prevByRole.get(role) || {};
+            const incoming = (incomingSteps || []).find(s => s.role === role);
+
+            // ถ้าไม่ได้ส่ง enabled มา ให้ถือว่า true
+            const isEnabled = incomingSteps
+                ? (incoming ? incoming.enabled !== false : true)
+                : true;
+
+            const item = {
+                role,
+                label: prev.label || role,
+                required: (incoming?.required ?? prev.required) ?? true,
+                approve: false,
+                actorName: prev.actorName || '',
+                actorId: prev.actorId || '',
+                actedAt: prev.actedAt || null,
+                remark: incoming?.remark ?? prev.remark ?? '',
+                status: prev.status || 'pending', // 'pending' | 'done' | 'skipped'
+                enabled: isEnabled,
+            };
+
+            if (!isEnabled) {
+                // ปิดขั้น → ข้าม
+                item.status = 'skipped';
+                item.approve = true;
+            }
+
+            // รอบนี้ admin เป็นคนกด → ทำให้ admin เสร็จสิ้นเท่านั้น
+            if (role === 'admin') {
+                item.enabled = true;          // admin ต้องมีเสมอ
+                item.status = 'done';
+                item.approve = true;
+                item.actorName = adminName;
+                item.actorId = adminId;
+                item.actedAt = now;
+                if (reasonAdmin) item.remark = reasonAdmin;
+            } else {
+                // ขั้นอื่นที่เปิดใช้งานอยู่ ต้องคงสถานะ pending และ approve=false
+                if (item.enabled) {
+                    item.status = 'pending';
+                    item.approve = false;
+                    item.actorName = prev.actorName || '';
+                    item.actorId = prev.actorId || '';
+                    item.actedAt = null; // ยังไม่อนุมัติ
+                }
+            }
+
+            nextSteps.push(item);
+        }
+
+        // กันกรณีไม่มี admin ในข้อมูลเก่า -> แทรก admin ที่อนุมัติแล้ว
+        if (!nextSteps.find(s => s.role === 'admin')) {
+            nextSteps.unshift({
+                role: 'admin',
+                label: 'admin',
+                required: true,
+                approve: true,
+                actorName: adminName,
+                actorId: adminId,
+                actedAt: now,
+                remark: reasonAdmin || '',
+                status: 'done',
+                enabled: true,
+            });
+        }
+
+        // === 4) สรุปว่าต้องรอต่อไหม ===
+        const hasRemainingEnabledNotApproved = nextSteps.some(s =>
+            (s.enabled !== false) && s.role !== 'admin' && s.approve !== true
+        );
+        const nextStatus = hasRemainingEnabledNotApproved ? 'pending' : 'approved';
+
+        // === 5) อัปเดตเอกสารหลัก ===
+        const setMain = {
+            status: nextStatus,
             approvedBy: adminName,
             approvedById: adminId,
-            approvedAt: req.body.approvedAt ? new Date(req.body.approvedAt) : new Date(),
+            approvedAt: now,
             ...(reasonAdmin ? { reason_admin: reasonAdmin } : {}),
             secretary_choice: secretaryChoice,
             thaiName_admin: fallbackThai,
             signaturePath_admin: fallbackSig,
+            step: nextSteps,
             updatedAt: new Date(),
         };
         if (bodyPdfUrl) {
-            updateSet.bookingPdfUrl = bodyPdfUrl;
-            updateSet.booking_pdf_url = bodyPdfUrl;
+            setMain.bookingPdfUrl = bodyPdfUrl;
+            setMain.booking_pdf_url = bodyPdfUrl;
         }
 
-        let updated = await History.findOneAndUpdate(cond, { $set: updateSet }, { new: true });
-        if (!updated) return res.status(404).send({ message: 'not found or not pending' });
+        let updated = await History.findOneAndUpdate(cond, { $set: setMain }, { new: true });
+        if (!updated) return res.status(404).send({ message: 'not found or not pending (update phase)' });
 
-        // ✅ step: admin อนุมัติ (approve=true)
+        // === 6) แจ้งเตือนอีเมลตามสถานะ ===
         try {
-            await updateHistoryStep(
-                {
-                    id,
-                    role: 'admin',
-                    approve: true,
-                    actorName: adminName,
-                    remark: reasonAdmin || ''
-                },
-                { syncStatus: true } // จะยังเป็น 'pending' เพราะ super ยังไม่ครบ
-            );
-            updated = await History.findById(id);
-        } catch (e) {
-            console.error('update step (approve_field) error:', e.message);
-        }
-
-        // แจ้ง super ต่อ…
-        try {
-            if (updated) {
+            if (nextStatus === 'pending') {
+                // ยังมี super ต้องอนุมัติ
                 const superEmails = await getSuperEmails();
                 if (superEmails.length) {
                     await sendBulk(
@@ -3230,9 +3526,28 @@ app.patch('/api/history/:id/approve_field', async (req, res) => {
             </div>`
                     );
                 }
+            } else {
+                // อนุมัติครบแล้ว → แจ้งผู้ใช้
+                const userEmail = await getUserEmailById(updated.user_id);
+                if (userEmail) {
+                    await sendBulk(
+                        [userEmail],
+                        'ผลการอนุมัติขอใช้สถานที่ (อนุมัติแล้ว)',
+                        `
+            <div>
+              <h2>คำขอใช้สถานที่ของคุณได้รับการอนุมัติ</h2>
+              <p><b>สนาม:</b> ${updated.name || '-'}</p>
+              <p><b>กิจกรรม:</b> ${updated.name_active || '-'}</p>
+              <p><b>วันที่:</b> ${formatDateRange(updated.since, updated.uptodate)}</p>
+              <p><b>เวลา:</b> ${(updated.startTime || '-')} ถึง ${(updated.endTime || '-')}</p>
+              <p><b>โซน:</b> ${updated.zone || '-'}</p>
+            </div>`
+                    );
+                }
             }
         } catch (mailErr) {
-            console.error('notify super (approve_field) error:', mailErr.message);
+            console.error('notify (approve_field) error:', mailErr.message);
+            // ไม่ throw ต่อ เพื่อไม่ให้ response ล้ม
         }
 
         return res.send(updated);
@@ -3241,8 +3556,6 @@ app.patch('/api/history/:id/approve_field', async (req, res) => {
         return res.status(500).send({ message: err.message });
     }
 });
-
-
 
 
 
@@ -4204,6 +4517,181 @@ app.post('/api/booking_field_upload', bookingFieldUpload.array('files'), async (
         res.status(500).json({ success: false, message: err.message });
     }
 });
+
+
+// บันทึก roles จากหน้า step.vue
+// ===== Utilities =====
+// ===== Allowed roles & cleaners =====
+const ALLOWED = new Set(['staff', 'admin', 'super']);
+
+const cleanRoles = (arr) =>
+    Array.from(
+        new Set(
+            (Array.isArray(arr) ? arr : [])
+                .map(v => String(v || '').trim().toLowerCase())
+                .filter(v => ALLOWED.has(v))
+        )
+    );
+
+function sanitizeIncomingStep(step) {
+    if (!Array.isArray(step)) return [];
+    const now = new Date();
+    const seen = new Set();
+    return step
+        .map(x => ({
+            role: String(x?.role || '').trim().toLowerCase(),
+            approve: (x?.approve === true) ? true : (x?.approve === false ? false : null),
+            createdAt: x?.createdAt ? new Date(x.createdAt) : now,
+            updatedAt: now,
+        }))
+        .filter(x => ALLOWED.has(x.role) && !seen.has(x.role) && seen.add(x.role));
+}
+
+// ===== Utils: single-day vs multi-day for equipment =====
+function isEquipmentMultiDay(body) {
+    const s = body?.since || body?.start_date;
+    const e = body?.uptodate || body?.end_date;
+    if (!s || !e) return false;
+    const d1 = new Date(s), d2 = new Date(e);
+    return d1.toDateString() !== d2.toDateString();
+}
+
+// ===== Get roles for a request type =====
+// type: 'field' | 'equipment' | 'equipment_one_day'
+async function getRolesFor(type, body = null) {
+    // อ่านทีละ key ตาม schema ใหม่ (3 เอกสาร)
+    const pick = async (key) => {
+        const doc = await Settings.findOne({ key }).lean();
+        return cleanRoles(doc?.value || []);
+    };
+
+    if (type === 'field') {
+        return await pick('approval_roles_field');
+    }
+
+    if (type === 'equipment_one_day') {
+        return await pick('approval_roles_equipment_one_day');
+    }
+
+    if (type === 'equipment') {
+        // ถ้ามี body ให้ตัดสิน single/multi จากวันที่
+        if (body && !isEquipmentMultiDay(body)) {
+            return await pick('approval_roles_equipment_one_day');
+        }
+        return await pick('approval_roles_equipment');
+    }
+
+    return [];
+}
+
+/* ================== SETTINGS API ================== */
+
+// ===== POST /api/settings/approval_roles =====
+// รองรับทั้งรูปแบบใหม่ (3 คีย์) และเก่า (2 คีย์ หรือ array เดี่ยว)
+app.post('/api/settings/approval_roles', async (req, res) => {
+    try {
+        const body = req.body || {};
+        const fromObj = (o, k) => (o && typeof o === 'object' ? o[k] : undefined);
+
+        // อ่านค่าจาก body หรือ body.value (รองรับทั้งสอง)
+        let field = cleanRoles(body.field ?? fromObj(body.value, 'field'));
+        let equipment = cleanRoles(body.equipment ?? fromObj(body.value, 'equipment'));
+        let eqOneDay = cleanRoles(
+            body.equipment_one_day
+            ?? fromObj(body.value, 'equipment_one_day')
+            ?? body.one_day
+            ?? fromObj(body.value, 'one_day')
+            ?? body.equipmentOneDay
+            ?? fromObj(body.value, 'equipmentOneDay')
+        );
+
+        // fallback legacy: ถ้าไม่มีสักอัน ลอง roles/value เป็น array เดียว
+        if (!field.length && !equipment.length && !eqOneDay.length) {
+            const legacyArr = Array.isArray(body.roles) ? body.roles :
+                (Array.isArray(body.value) ? body.value : []);
+            const cleaned = cleanRoles(legacyArr);
+            field = cleaned;
+            equipment = cleaned;
+            // สมเหตุผล: one-day ยังว่าง ให้กำหนด default = ['staff'] ถ้าต้องการ
+            eqOneDay = []; // หรือ ตั้งค่าเริ่มต้นที่ต้องการ เช่น: ['staff']
+        }
+
+        const now = new Date();
+        await Promise.all([
+            Settings.updateOne(
+                { key: 'approval_roles_field' },
+                { $set: { value: field, updatedAt: now }, $setOnInsert: { key: 'approval_roles_field', createdAt: now } },
+                { upsert: true }
+            ),
+            Settings.updateOne(
+                { key: 'approval_roles_equipment' },
+                { $set: { value: equipment, updatedAt: now }, $setOnInsert: { key: 'approval_roles_equipment', createdAt: now } },
+                { upsert: true }
+            ),
+            Settings.updateOne(
+                { key: 'approval_roles_equipment_one_day' },
+                { $set: { value: eqOneDay, updatedAt: now }, $setOnInsert: { key: 'approval_roles_equipment_one_day', createdAt: now } },
+                { upsert: true }
+            ),
+        ]);
+
+        return res.json({ message: 'saved', value: { field, equipment, equipment_one_day: eqOneDay } });
+    } catch (err) {
+        console.error('save approval_roles error:', err);
+        return res.status(500).json({ message: 'Failed to save approval roles', error: String(err?.message || err) });
+    }
+});
+
+// ===== GET /api/settings/approval_roles =====
+// ส่งกลับรูปแบบใหม่เสมอ { value: { field:[], equipment:[], equipment_one_day:[] } }
+// และรองรับอ่านค่ารูปแบบเก่าเป็น fallback
+app.get('/api/settings/approval_roles', async (req, res) => {
+    try {
+        // ลองอ่านแบบใหม่ (3 เอกสาร) ก่อน
+        const [docField, docEquip, docEquip1d] = await Promise.all([
+            Settings.findOne({ key: 'approval_roles_field' }).lean(),
+            Settings.findOne({ key: 'approval_roles_equipment' }).lean(),
+            Settings.findOne({ key: 'approval_roles_equipment_one_day' }).lean(),
+        ]);
+
+        let field = Array.isArray(docField?.value) ? docField.value : null;
+        let equipment = Array.isArray(docEquip?.value) ? docEquip.value : null;
+        let eqOneDay = Array.isArray(docEquip1d?.value) ? docEquip1d.value : null;
+
+        // ถ้ายังไม่ได้ → รองรับเอกสารเก่า key: approval_roles (อาจเป็น array เดี่ยว หรือ object {field,equipment})
+        if (!field || !equipment || !eqOneDay) {
+            const legacy = await Settings.findOne({ key: 'approval_roles' }).lean();
+            if (legacy?.value) {
+                if (Array.isArray(legacy.value)) {
+                    field = field ?? legacy.value;
+                    equipment = equipment ?? legacy.value;
+                    // one-day เดิมไม่มี ก็ให้ว่างหรือ default ที่ต้องการ
+                    eqOneDay = eqOneDay ?? [];
+                } else if (typeof legacy.value === 'object') {
+                    field = field ?? (Array.isArray(legacy.value.field) ? legacy.value.field : []);
+                    equipment = equipment ?? (Array.isArray(legacy.value.equipment) ? legacy.value.equipment : []);
+                    eqOneDay = eqOneDay ?? (
+                        Array.isArray(legacy.value.equipment_one_day) ? legacy.value.equipment_one_day :
+                            Array.isArray(legacy.value.one_day) ? legacy.value.one_day :
+                                Array.isArray(legacy.value.equipmentOneDay) ? legacy.value.equipmentOneDay :
+                                    []
+                    );
+                }
+            }
+        }
+
+        // final sanitize
+        field = cleanRoles(field || []);
+        equipment = cleanRoles(equipment || []);
+        eqOneDay = cleanRoles(eqOneDay || []);
+
+        return res.json({ value: { field, equipment, equipment_one_day: eqOneDay } });
+    } catch (err) {
+        console.error('load approval_roles error:', err);
+        return res.status(500).json({ message: 'Failed to load approval roles', error: String(err?.message || err) });
+    }
+});
+
 // ========== Start server ==========
 const PORT = process.env.PORT || 8020;
 app.listen(PORT, () => console.log('Backend running on port', PORT));

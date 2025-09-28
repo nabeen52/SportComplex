@@ -237,6 +237,7 @@ const WRAPPER_PADDING_PX = 0; // ใช้ 0 เพื่อไม่ซ้ำ�
 
 // ===== helpers (อยู่นอก export default) =====
 
+
 async function ensureHtml2pdf() {
   if (typeof window !== 'undefined' && window.html2pdf) return window.html2pdf;
   try {
@@ -539,142 +540,150 @@ export default {
   },
  computed: {
    groupedEquipments() {
-    const isEmpty = (v) => v === undefined || v === null || v === "" || v === "null";
-    const toLower = (s) => (s || "").toLowerCase();
-    const isHandedOver = (it) =>
-      !isEmpty(it.handoverById) || !isEmpty(it.handoverBy) || !isEmpty(it.handoverAt) || !isEmpty(it.handoverRemarkSender);
+  const isEmpty = (v) => v === undefined || v === null || v === "" || v === "null";
+  const toLower = (s) => (s || "").toLowerCase();
+  const isHandedOver = (it) =>
+    !isEmpty(it.handoverById) || !isEmpty(it.handoverBy) || !isEmpty(it.handoverAt) || !isEmpty(it.handoverRemarkSender);
 
-    // ---------- single-day ----------
-    let singleGroups = (this.equipmentGroups || []).filter(group =>
-      group.items.every(item =>
-        (!item.agency || item.agency === "") &&
-        isEmpty(item.since) && isEmpty(item.uptodate)
-      )
-    );
+  // ✅ กรองรายการที่ไม่มี role: 'staff' ใน step ออกตั้งแต่ต้นทาง
+  const baseGroups = (this.equipmentGroups || [])
+  .map(g => ({
+    booking_id: g.booking_id,
+    items: (g.items || []).filter(it =>
+      this.hasStaffStep(it) && !this.shouldHideOnStaffApprovePage(it)
+    )
+  }))
+  .filter(g => g.items.length > 0);
 
-    // คงกติกาเดิม: ไม่แสดงกลุ่มที่ทุกชิ้นเป็น returned หรือ disapproved ทั้งกลุ่ม
-    singleGroups = singleGroups.filter(group =>
-      !group.items.some(item =>
-        ['returned','disapproved'].includes(toLower(item.status))
-      )
-    );
 
-    // เก็บ booking_id ที่มี return-pending ไว้ก่อน
-    const idsWithReturnPending = new Set();
-    singleGroups.forEach(g => {
-      if (g.items.some(it => toLower(it.status) === "return-pending")) {
-        idsWithReturnPending.add(g.booking_id);
-      }
-    });
+  // ---------- single-day ----------
+  let singleGroups = baseGroups.filter(group =>
+    group.items.every(item =>
+      (!item.agency || item.agency === "") &&
+      isEmpty(item.since) && isEmpty(item.uptodate)
+    )
+  );
 
-    // ตัด item ที่เป็น cancel/cancelled ออกจากกลุ่ม (ถ้ากลุ่มว่างก็หลุดเอง)
-    singleGroups = singleGroups
-      .map(g => {
-        const base = g.items.filter(it =>
-          !['cancel','cancelled'].includes(toLower(it.status))
-        );
-        const items = idsWithReturnPending.has(g.booking_id)
-          ? base.filter(it => toLower(it.status) === 'return-pending')
-          : base;
-        return { booking_id: g.booking_id, items, kind: "single" };
-      })
-      .filter(g => g.items.length > 0);
+  // ไม่แสดงกลุ่มที่ทุกชิ้นเป็น returned หรือ disapproved ทั้งกลุ่ม
+  singleGroups = singleGroups.filter(group =>
+    !group.items.some(item =>
+      ['returned','disapproved'].includes(toLower(item.status))
+    )
+  );
 
-    // ---------- ดัชนีสถานะ (หลายวัน) ----------
-    const multiStatusByBooking = new Map(); // booking_id -> { approved:boolean, returned:boolean, returnPending:boolean }
-    (this.equipmentGroups || []).forEach(g => {
-      const stats = (multiStatusByBooking.get(g.booking_id) || { approved:false, returned:false, returnPending:false });
-      (g.items || []).forEach(it => {
-        const multiDay = !isEmpty(it.since) && !isEmpty(it.uptodate);
-        const isEquip = toLower(it.type) !== "field";
-        if (!multiDay || !isEquip) return;
-        const st = toLower(it.status);
-        if (st === "approved") stats.approved = true;
-        if (st === "returned") stats.returned = true;
-        if (st === "return-pending") stats.returnPending = true;
-      });
-      multiStatusByBooking.set(g.booking_id, stats);
-    });
-
-    // ถ้า booking_id ใดมีทั้ง approved + returned → ซ่อนทั้ง booking_id
-    const excludeBooking = new Set(
-      [...multiStatusByBooking.entries()]
-        .filter(([, s]) => s.approved && s.returned)
-        .map(([id]) => id)
-    );
-
-    // ---------- multi-day: approved (ยังไม่ส่งมอบ) ----------
-    const multiApproved = (this.equipmentGroups || []).map(g => {
-      const items = (g.items || []).filter(it => {
-        const isEquip = toLower(it.type) !== "field";
-        const approved = toLower(it.status) === "approved";
-        const multiDay = !isEmpty(it.since) && !isEmpty(it.uptodate);
-        const hasApprover = !isEmpty(it.approvedAt) && !isEmpty(it.approvedBy) && !isEmpty(it.approvedById);
-        const notHandedOver = !isHandedOver(it);
-        return isEquip && approved && multiDay && hasApprover && notHandedOver;
-      });
-      return { booking_id: g.booking_id, items, kind: "multi-approved" };
-    }).filter(g => g.items.length > 0)
-      .sort((a, b) => {
-        const A = new Date(a.items[0]?.approvedAt || 0).getTime();
-        const B = new Date(b.items[0]?.approvedAt || 0).getTime();
-        return B - A;
-      });
-
-    // ---------- multi-day: return-pending ----------
-    const multiReturnPending = (this.equipmentGroups || []).map(g => {
-      const items = (g.items || []).filter(it => {
-        const isEquip = toLower(it.type) !== "field";
-        const multiDay = !isEmpty(it.since) && !isEmpty(it.uptodate);
-        return isEquip && multiDay && toLower(it.status) === "return-pending";
-      });
-      return { booking_id: g.booking_id, items, kind: "multi-return-pending" };
-    }).filter(g => g.items.length > 0)
-      .sort((a, b) => {
-        const A = new Date(a.items[0]?.updatedAt || a.items[0]?.uptodate || 0).getTime();
-        const B = new Date(b.items[0]?.updatedAt || b.items[0]?.uptodate || 0).getTime();
-        return B - A;
-      });
-
-    // ---------- multi-day: returned (ไม่มี approved ปะปน) ----------
-    const multiReturned = (this.equipmentGroups || []).map(g => {
-      const items = (g.items || []).filter(it => {
-        const isEquip = toLower(it.type) !== "field";
-        const multiDay = !isEmpty(it.since) && !isEmpty(it.uptodate);
-        return isEquip && multiDay && toLower(it.status) === "returned";
-      });
-      return { booking_id: g.booking_id, items, kind: "multi-returned" };
-    }).filter(g => g.items.length > 0)
-      .sort((a, b) => {
-        const A = new Date(a.items[0]?.updatedAt || a.items[0]?.uptodate || 0).getTime();
-        const B = new Date(b.items[0]?.updatedAt || b.items[0]?.uptodate || 0).getTime();
-        return B - A;
-      });
-
-    // ---------- บังคับกติกาการแสดง ----------
-    let multiApprovedFiltered      = multiApproved.filter(g => !excludeBooking.has(g.booking_id));
-    let multiReturnPendingFiltered = multiReturnPending.filter(g => !excludeBooking.has(g.booking_id));
-    let multiReturnedFiltered      = multiReturned.filter(g => !excludeBooking.has(g.booking_id));
-
-    // ถ้ามี return-pending ของ booking เดียวกัน → ตัด approved ออก
-    const setRetPending = new Set(multiReturnPendingFiltered.map(g => g.booking_id));
-    multiApprovedFiltered = multiApprovedFiltered.filter(g => !setRetPending.has(g.booking_id));
-
-    // รวมลำดับการโชว์
-    let combined = [
-      ...multiApprovedFiltered,         // ส่งมอบ
-      ...multiReturnPendingFiltered,    // รอรับคืน
-      ...multiReturnedFiltered,         // รับคืนแล้ว
-      ...singleGroups                   // single-day
-    ];
-
-    if (this.filterStatus) {
-      combined = combined.filter(group =>
-        group.items.every(item => toLower(item.status) === this.filterStatus)
-      );
+  // เก็บ booking_id ที่มี return-pending ไว้ก่อน
+  const idsWithReturnPending = new Set();
+  singleGroups.forEach(g => {
+    if (g.items.some(it => toLower(it.status) === "return-pending")) {
+      idsWithReturnPending.add(g.booking_id);
     }
-    return combined;
-  },
+  });
+
+  // ตัด cancel/cancelled ออก
+  singleGroups = singleGroups
+    .map(g => {
+      const base = g.items.filter(it =>
+        !['cancel','cancelled'].includes(toLower(it.status))
+      );
+      const items = idsWithReturnPending.has(g.booking_id)
+        ? base.filter(it => toLower(it.status) === 'return-pending')
+        : base;
+      return { booking_id: g.booking_id, items, kind: "single" };
+    })
+    .filter(g => g.items.length > 0);
+
+  // ---------- ดัชนีสถานะ (หลายวัน) ----------
+  const multiStatusByBooking = new Map();
+  baseGroups.forEach(g => {
+    const stats = (multiStatusByBooking.get(g.booking_id) || { approved:false, returned:false, returnPending:false });
+    (g.items || []).forEach(it => {
+      const multiDay = !isEmpty(it.since) && !isEmpty(it.uptodate);
+      const isEquip = toLower(it.type) !== "field";
+      if (!multiDay || !isEquip) return;
+      const st = toLower(it.status);
+      if (st === "approved") stats.approved = true;
+      if (st === "returned") stats.returned = true;
+      if (st === "return-pending") stats.returnPending = true;
+    });
+    multiStatusByBooking.set(g.booking_id, stats);
+  });
+
+  const excludeBooking = new Set(
+    [...multiStatusByBooking.entries()]
+      .filter(([, s]) => s.approved && s.returned)
+      .map(([id]) => id)
+  );
+
+  // ---------- multi-day: approved (ยังไม่ส่งมอบ) ----------
+  const multiApproved = baseGroups.map(g => {
+    const items = (g.items || []).filter(it => {
+      const isEquip = toLower(it.type) !== "field";
+      const approved = toLower(it.status) === "approved";
+      const multiDay = !isEmpty(it.since) && !isEmpty(it.uptodate);
+      const hasApprover = !isEmpty(it.approvedAt) && !isEmpty(it.approvedBy) && !isEmpty(it.approvedById);
+      const notHandedOver = !isHandedOver(it);
+      return isEquip && approved && multiDay && hasApprover && notHandedOver;
+    });
+    return { booking_id: g.booking_id, items, kind: "multi-approved" };
+  }).filter(g => g.items.length > 0)
+    .sort((a, b) => {
+      const A = new Date(a.items[0]?.approvedAt || 0).getTime();
+      const B = new Date(b.items[0]?.approvedAt || 0).getTime();
+      return B - A;
+    });
+
+  // ---------- multi-day: return-pending ----------
+  const multiReturnPending = baseGroups.map(g => {
+    const items = (g.items || []).filter(it => {
+      const isEquip = toLower(it.type) !== "field";
+      const multiDay = !isEmpty(it.since) && !isEmpty(it.uptodate);
+      return isEquip && multiDay && toLower(it.status) === "return-pending";
+    });
+    return { booking_id: g.booking_id, items, kind: "multi-return-pending" };
+  }).filter(g => g.items.length > 0)
+    .sort((a, b) => {
+      const A = new Date(a.items[0]?.updatedAt || a.items[0]?.uptodate || 0).getTime();
+      const B = new Date(b.items[0]?.updatedAt || b.items[0]?.uptodate || 0).getTime();
+      return B - A;
+    });
+
+  // ---------- multi-day: returned ----------
+  const multiReturned = baseGroups.map(g => {
+    const items = (g.items || []).filter(it => {
+      const isEquip = toLower(it.type) !== "field";
+      const multiDay = !isEmpty(it.since) && !isEmpty(it.uptodate);
+      return isEquip && multiDay && toLower(it.status) === "returned";
+    });
+    return { booking_id: g.booking_id, items, kind: "multi-returned" };
+  }).filter(g => g.items.length > 0)
+    .sort((a, b) => {
+      const A = new Date(a.items[0]?.updatedAt || a.items[0]?.uptodate || 0).getTime();
+      const B = new Date(b.items[0]?.updatedAt || b.items[0]?.uptodate || 0).getTime();
+      return B - A;
+    });
+
+  // ---------- บังคับกติกาการแสดง ----------
+  let multiApprovedFiltered      = multiApproved.filter(g => !excludeBooking.has(g.booking_id));
+  let multiReturnPendingFiltered = multiReturnPending.filter(g => !excludeBooking.has(g.booking_id));
+  let multiReturnedFiltered      = multiReturned.filter(g => !excludeBooking.has(g.booking_id));
+
+  const setRetPending = new Set(multiReturnPendingFiltered.map(g => g.booking_id));
+  multiApprovedFiltered = multiApprovedFiltered.filter(g => !setRetPending.has(g.booking_id));
+
+  let combined = [
+    ...multiApprovedFiltered,
+    ...multiReturnPendingFiltered,
+    ...multiReturnedFiltered,
+    ...singleGroups
+  ];
+
+  if (this.filterStatus) {
+    combined = combined.filter(group =>
+      group.items.every(item => toLower(item.status) === this.filterStatus)
+    );
+  }
+  return combined;
+},
 },
 
 
@@ -682,6 +691,76 @@ export default {
 
 
   methods: {
+    // === ช่วยเช็ค step และชนิดรายการ ===
+isSingleDayEquipment(h) {
+  if (String(h?.type || '').toLowerCase() !== 'equipment') return false;
+
+  // ยืมวันเดียว: ไม่มี since/uptodate หรือ วันที่เท่ากัน
+  const toDateStr = (v) => {
+    if (!v) return '';
+    const s = String(v);
+    // รองรับ { $date: ... } ด้วย
+    const raw = typeof v === 'object' && v.$date ? String(v.$date) : s;
+    return raw.slice(0, 10); // YYYY-MM-DD
+  };
+
+  const s = toDateStr(h.since);
+  const u = toDateStr(h.uptodate);
+
+  // บางระบบ single-day จะเก็บไว้ที่ h.date อย่างเดียว
+  // ถ้าไม่มี since/uptodate ให้ถือว่าเป็นวันเดียว
+  if (!s && !u) return true;
+
+  return s === u;
+},
+
+hasRoleInStep(h, role) {
+  const arr = Array.isArray(h?.step) ? h.step
+            : Array.isArray(h?.steps) ? h.steps
+            : [];
+  const want = String(role).toLowerCase();
+  return arr.find(x => String(x?.role || '').toLowerCase() === want) || null;
+},
+
+// ซ่อน “อุปกรณ์-วันเดียว” ที่ staff อนุมัติแล้ว และ admin ยังไม่อนุมัติ
+shouldHideOnStaffApprovePage(h) {
+  if (String(h?.type || '').toLowerCase() !== 'equipment') return false;
+  if (!this.isSingleDayEquipment(h)) return false;
+
+  const staff = this.hasRoleInStep(h, 'staff');
+  const admin = this.hasRoleInStep(h, 'admin');
+
+  // ต้องมีทั้ง staff และ admin ใน step
+  if (!staff || !admin) return false;
+
+  const staffApproved = staff.approve === true;
+  const adminApproved = admin.approve === true;
+  const adminPending  = admin.approve === null || admin.approve === undefined;
+
+  // staff ผ่านแล้ว และ admin ยังไม่ผ่าน -> ให้ซ่อนจากหน้าของ staff
+  return staffApproved && !adminApproved && adminPending;
+},
+
+
+    hasOnlyStaffStep(it) {
+    const st = Array.isArray(it?.step) ? it.step : [];
+    if (st.length === 0) return false;
+    return st.every(s => String(s.role || '').toLowerCase() === 'staff');
+  },
+
+    hasStaffStep(it) {
+  const st = it?.step;
+  return Array.isArray(st) && st.some(s => String(s.role || '').toLowerCase() === 'staff');
+},
+
+// ✅ ใหม่: true = มี step ของ staff และ approve แล้ว
+isStaffApproved(it) {
+  const st = it?.step;
+  if (!Array.isArray(st)) return false;
+  const staff = st.find(s => String(s.role || '').toLowerCase() === 'staff');
+  return !!(staff && staff.approve === true);
+},
+
 
     isValidImageSrc(src) {
   if (!src || typeof src !== 'string') return false;
@@ -1107,8 +1186,8 @@ async handoverGroup(group) {
   }
 },
 
-    async approveGroup(group) {
-  // กันกดย้ำขณะทำงาน
+   async approveGroup(group) {
+  // กันกดย้ำระหว่างประมวลผล
   if (this.processingGroups.has(group.booking_id)) return;
 
   const ask = await Swal.fire({
@@ -1123,10 +1202,39 @@ async handoverGroup(group) {
   });
   if (!ask.isConfirmed) return;
 
-  const staffId = localStorage.getItem('user_id');
+  const staffId = localStorage.getItem('user_id') || this.userId || '';
   this.processingGroups.add(group.booking_id);
 
-  // ฟังก์ชันเช็คข้อความ error ที่ถือว่า "อนุมัติไปแล้ว" เพื่อทำงานแบบ idempotent
+  // ช่วยเช็ก step
+  const getSteps = (it) => (Array.isArray(it?.step) ? it.step : []);
+  const isPending = (it) => (it?.status || '').toLowerCase() === 'pending';
+  const hasAdminInAny = (items) =>
+    items.some(it => getSteps(it).some(s => String(s.role || '').toLowerCase() === 'admin'));
+  const hasOnlyStaff = (it) => {
+    const st = getSteps(it);
+    return st.length > 0 && st.every(s => String(s.role || '').toLowerCase() === 'staff');
+  };
+
+  // เลือกเฉพาะตัวที่ยัง pending
+  const pendingItems = (group.items || []).filter(isPending);
+  if (!pendingItems.length) {
+    this.processingGroups.delete(group.booking_id);
+    return;
+  }
+
+  // ตรวจลักษณะกลุ่ม
+  const groupHasAdmin = hasAdminInAny(pendingItems);
+  const groupStaffOnly = pendingItems.every(hasOnlyStaff);
+
+  // ยิง API: ให้ติ๊ก staff.approve=true เสมอเมื่อ staff เป็นคนกด
+  const nowISO = new Date().toISOString();
+  const payload = {
+    staff_id: staffId,
+    // บอก backend ว่านี่คือการอนุมัติในขั้น staff
+    step: [{ role: 'staff', approve: true, approvedAt: nowISO, updatedAt: nowISO }]
+  };
+
+  // ฟังก์ชันเช็ค error ที่ถือว่า "อนุมัติไปแล้ว" เพื่อความ idempotent
   const isAlreadyApprovedError = (err) => {
     const code = err?.response?.status;
     const msg  = (err?.response?.data?.message || err?.message || '').toLowerCase();
@@ -1135,47 +1243,76 @@ async handoverGroup(group) {
   };
 
   try {
-    // เอาเฉพาะที่ยัง pending
-    const pendingItems = group.items.filter(
-      it => (it.status || '').toLowerCase() === 'pending'
-    );
-    if (!pendingItems.length) {
-      // ไม่มีอะไรต้องอนุมัติแล้ว (เช่น list รีเฟรชช้า)
-      return;
-    }
-
-    // ✅ ยิงครั้งเดียวพอ: ให้ backend อนุมัติทั้ง booking_id
-    // (กรณี single รายการ key จะเป็น 'single_<id>' ก็ยังยิงเพียงครั้งเดียวถูกต้อง)
+    // ยิงครั้งเดียวพอ (เลือกตัวแรกในกลุ่ม)
     const target = pendingItems[0];
+    let finalized = false;
 
     try {
-      await axios.patch(
+      const resp = await axios.patch(
         `${API_BASE}/api/history/${target.id}/approve_equipment`,
-        { staff_id: staffId }
+        payload
       );
+      // ถ้า backend ใหม่ มีคีย์ finalized ส่งกลับมา ใช้ค่าจริงจาก backend
+      if (resp?.data && typeof resp.data.finalized === 'boolean') {
+        finalized = resp.data.finalized; // true = สถานะ approved แล้ว, false = ยัง pending (รอ admin)
+      }
     } catch (err) {
-      // ถ้าอนุมัติไปแล้วจากการกดซ้ำ/รีเฟรชช้า ถือว่าสำเร็จเชิงตรรกะ
       if (!isAlreadyApprovedError(err)) throw err;
     }
 
-    // อัปเดตสถานะฝั่ง UI ให้ทั้งกลุ่ม (เฉพาะที่เดิมเป็น pending)
-    group.items.forEach(it => {
-      if ((it.status || '').toLowerCase() === 'pending') {
-        it.status = 'Approved';
+    // ✅ อัปเดตสถานะ/step ฝั่ง UI
+    (group.items || []).forEach(it => {
+      if (!isPending(it)) return;
+
+      // ติ๊ก staff.approve ในหน่วยความจำให้เห็นผลทันที
+      const st = getSteps(it);
+      const staffStep = st.find(x => String(x.role || '').toLowerCase() === 'staff');
+      if (staffStep) {
+        staffStep.approve    = true;
+        staffStep.updatedAt  = nowISO;
+        staffStep.approvedAt = staffStep.approvedAt || nowISO;
+      } else {
+        it.step = [...st, { role:'staff', approve:true, updatedAt: nowISO, approvedAt: nowISO }];
+      }
+
+      // กำหนด status ตามเงื่อนไข
+      if (typeof finalized === 'boolean') {
+        // เชื่อ backend ถ้ามี reaction ชัดเจน
+        it.status = finalized ? 'Approved' : 'Pending';
+      } else {
+        // fallback: ตัดสินใจที่ฝั่ง UI
+        if (groupStaffOnly) {
+          it.status = 'Approved';           // staff-only ⇒ จบทันที
+        } else if (groupHasAdmin) {
+          it.status = 'Pending';            // มี admin ⇒ รอ admin
+        }
       }
     });
 
-    Swal.fire({
-      title: 'สำเร็จ',
-      text: 'รายการถูกอนุมัติแล้ว',
-      icon: 'success',
-      timer: 1500,
-      showConfirmButton: false
-    });
+    // Toast ตามสถานะ
+    if (groupStaffOnly || finalized === true) {
+      await Swal.fire({
+        title: 'สำเร็จ',
+        text: 'รายการถูกอนุมัติแล้ว',
+        icon: 'success',
+        timer: 1500,
+        showConfirmButton: false
+      });
+    } else {
+      await Swal.fire({
+        icon: 'info',
+        title: 'บันทึกการอนุมัติของเจ้าหน้าที่แล้ว',
+        text: 'กำลังรอผู้ดูแล (admin) อนุมัติจึงจะเสร็จสมบูรณ์',
+        timer: 1600,
+        showConfirmButton: false
+      });
+    }
 
     // รีเฟรชข้อมูล
-    this.fetchPendingEquipments?.();
-    this.fetchAllEquipments?.();
+    await Promise.all([
+      this.fetchPendingEquipments?.(),
+      this.fetchAllEquipments?.()
+    ]);
 
   } catch (err) {
     console.error(err);
@@ -1183,67 +1320,9 @@ async handoverGroup(group) {
   } finally {
     this.processingGroups.delete(group.booking_id);
   }
-}
-,
-
-
-    async cancelGroup(group) {
-  const { value: remark } = await Swal.fire({
-    title: 'ไม่อนุมัติรายการ',
-    html: `
-      <div style="text-align:center;margin-bottom:8px;">
-        กรุณาระบุหมายเหตุที่ไม่อนุมัติ
-      </div>
-    `,
-    input: 'textarea',
-    inputAttributes: { 'aria-label': 'remark' },
-    showCancelButton: true,
-    confirmButtonText: 'ไม่อนุมัติ',
-    cancelButtonText: 'ยกเลิก',
-    inputPlaceholder: 'ระบุหมายเหตุ (จำเป็นต้องกรอก)',
-    confirmButtonColor: '#ff4d4f',
-    cancelButtonColor: '#999',
-    preConfirm: (val) => {
-      const v = (val || '').trim();
-      if (!v) {
-        Swal.showValidationMessage('กรุณากรอกหมายเหตุ');
-        return false;
-      }
-      return v;
-    }
-  });
-
-  if (remark === undefined) return; // กดยกเลิก
-
-  const staffId = localStorage.getItem('user_id');
-
-  try {
-    await Promise.all(
-      group.items.map(item =>
-        axios.patch(`${API_BASE}/api/history/${item.id}/disapprove_equipment`, {
-          staff_id: staffId,
-          remark   // ✅ ส่ง remark ไปด้วย
-        })
-      )
-    );
-
-    // อัปเดตสถานะฝั่ง UI
-    group.items.forEach(item => { item.status = 'Disapproved'; });
-
-    await Swal.fire({
-      icon: 'error',
-      title: 'ดำเนินการสำเร็จ',
-      text: 'ยกเลิกรายการเรียบร้อยแล้ว',
-      timer: 1500,
-      showConfirmButton: false
-    });
-
-    this.fetchPendingEquipments(); // refresh รายการ
-  } catch (err) {
-    console.error(err);
-    Swal.fire('Error', 'ไม่สามารถบันทึกการไม่อนุมัติได้', 'error');
-  }
 },
+
+
 
    async detailGroup(group) {
   const esc = (s) =>
@@ -1711,13 +1790,15 @@ async handoverGroup(group) {
     async fetchAllEquipments() {
   try {
     const res = await axios.get(`${API_BASE}/api/history`);
-    const allList = res.data
+    const allList = (Array.isArray(res.data) ? res.data : [])
       .filter(h => h.type !== 'field')
-      // 🔴 ตัด cancel/cancelled ออกตั้งแต่ต้นทาง
+      // 🔴 ตัด cancel/cancelled ออก
       .filter(h => {
         const s = String(h.status || '').toLowerCase();
         return s !== 'cancel' && s !== 'cancelled';
       })
+      // ✅ แสดงเฉพาะที่มี step และมี role 'staff'
+      .filter(h => Array.isArray(h.step) && h.step.some(s => String(s.role || '').toLowerCase() === 'staff'))
       .map(h => ({
         id: h._id?.$oid || h._id,
         name: h.name || "-",
@@ -1734,6 +1815,9 @@ async handoverGroup(group) {
         attachment: h.attachment || h.returnPhoto || null,
         fileName: h.fileName || null,
         type: h.type,
+
+        // ⬇️ ดึง step มาด้วยเพื่อใช้ซ้ำฝั่ง UI
+        step: Array.isArray(h.step) ? h.step : [],
 
         approvedBy: h.approvedBy || h.approved_by || h.approvedStaffName || "",
         approvedById: h.approvedById || h.approved_by_id || h.approvedStaffId || "",
@@ -1771,6 +1855,7 @@ async handoverGroup(group) {
     console.error('โหลดข้อมูล booking ไม่สำเร็จ:', err);
   }
 },
+
 
 
 
@@ -2508,6 +2593,12 @@ function buildEquipmentReturnPreviewHTML(ctx) {
 .cancel-btn[disabled]{
   opacity: .6;
   cursor: not-allowed;
+}
+
+.swal2-popup.swal-equip-approve{
+  max-width:1100px !important;
+  width:auto !important;
+  padding:26px !important;
 }
 
 

@@ -7,133 +7,148 @@
         <p class="sidebar-title">ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง</p>
       </div>
       <nav class="nav-links">
-         <router-link to="/dashboard" exact-active-class="active"><i class="pi pi-chart-pie"></i> แดชบอร์ด</router-link>
-        <router-link to="/home_admin" exact-active-class="active"><i class="pi pi-megaphone"></i> แก้ไขข่าว</router-link>
-        <router-link to="/edit_field" active-class="active"><i class="pi pi-map-marker"></i> แก้ไขสนาม</router-link>
-        <router-link to="/edit_equipment" active-class="active"><i class="pi pi-clipboard"></i> แก้ไขอุปกรณ์ </router-link>
+        <router-link to="/dashboard" exact-active-class="active">
+          <i class="pi pi-chart-pie"></i> แดชบอร์ด
+        </router-link>
+        <router-link to="/home_admin" exact-active-class="active">
+          <i class="pi pi-megaphone"></i> แก้ไขข่าว
+        </router-link>
+        <router-link to="/edit_field" active-class="active">
+          <i class="pi pi-map-marker"></i> แก้ไขสนาม
+        </router-link>
+        <router-link to="/edit_equipment" active-class="active">
+          <i class="pi pi-clipboard"></i> แก้ไขอุปกรณ์
+        </router-link>
          <router-link to="/step" active-class="active"><i class="pi pi-sitemap"></i> แก้ไขขั้นตอนการอนุมัติ </router-link>
-        <router-link to="/booking_field_admin" active-class="active"><i class="pi pi-map-marker"></i> จองสนาม</router-link>
-        <router-link to="/approve_field" active-class="active"><i class="pi pi-verified"></i> อนุมัติ</router-link>
-        <!-- <router-link to="/return_admin" active-class="active"><i class="pi pi-box"></i> รับคืนอุปกรณ์ </router-link> -->
-         <router-link to="/agency_admin" active-class="active"><i class="pi pi-briefcase"></i> หน่วยงาน </router-link>
-        <router-link to="/members" active-class="active"><i class="pi pi-user-edit"></i> พนักงาน/ผู้ดูแล </router-link>
-        <router-link to="/history_admin" active-class="active"><i class="pi pi-history"></i> ระบบประวัติการทำรายการ</router-link>
+        <router-link to="/booking_field_admin" active-class="active">
+          <i class="pi pi-map-marker"></i> จองสนาม
+        </router-link>
+        <router-link to="/approve_field" active-class="active">
+          <i class="pi pi-verified"></i> อนุมัติ
+        </router-link>
+        <router-link to="/agency_admin" active-class="active">
+          <i class="pi pi-briefcase"></i> หน่วยงาน
+        </router-link>
+        <router-link to="/members" active-class="active">
+          <i class="pi pi-user-edit"></i> พนักงาน/ผู้ดูแล
+        </router-link>
+        <router-link to="/history_admin" active-class="active">
+          <i class="pi pi-history"></i> ระบบประวัติการทำรายการ
+        </router-link>
       </nav>
     </aside>
-<div
-  v-if="isMobile && !isSidebarClosed"
-  class="sidebar-overlay"
-  @click="toggleSidebar"
-></div>
+
+    <!-- Overlay (มือถือ) -->
+    <div
+      v-if="isMobile && !isSidebarClosed"
+      class="sidebar-overlay"
+      @click="toggleSidebar"
+    ></div>
+
     <!-- Main Content -->
     <div class="main">
       <header class="topbar">
         <button class="menu-toggle" @click="toggleSidebar">☰</button>
         <div class="topbar-actions">
           <div style="position: relative; display: inline-block;">
-  <div
-    v-if="showNotifications"
-    class="notification-backdrop"
-    @click="closeNotifications"
-  ></div>
+            <div
+              v-if="showNotifications"
+              class="notification-backdrop"
+              @click="closeNotifications"
+            ></div>
 
-  <button class="notification-btn" @click="toggleNotifications">
-    <i class="pi pi-bell"></i>
-    <span v-if="unreadCount > 0" class="badge">{{ unreadCount }}</span>
-  </button>
+            <button class="notification-btn" @click="toggleNotifications">
+              <i class="pi pi-bell"></i>
+              <span v-if="unreadCount > 0" class="badge">{{ unreadCount }}</span>
+            </button>
 
-  <div v-if="showNotifications" class="notification-dropdown">
-    <ul>
-      <li
-        v-for="(noti, idx) in notifications.slice(0, 10)"
-        :key="noti.id || idx"
-        :class="['notification-item', noti.type || '', { unread: noti.timestamp > lastSeenTimestamp }]"
-      >
-        {{ noti.message }}
-      </li>
-      <li v-if="notifications.length === 0" class="no-noti">ไม่มีแจ้งเตือน</li>
-    </ul>
-  </div>
-</div>
+            <div v-if="showNotifications" class="notification-dropdown">
+              <ul>
+                <li
+                  v-for="(noti, idx) in notifications.slice(0, 10)"
+                  :key="noti.id || idx"
+                  :class="[
+                    'notification-item',
+                    noti.type || '',
+                    { unread: noti.timestamp > lastSeenTimestamp }
+                  ]"
+                >
+                  {{ noti.message }}
+                </li>
+                <li v-if="notifications.length === 0" class="no-noti">
+                  ไม่มีแจ้งเตือน
+                </li>
+              </ul>
+            </div>
+          </div>
           <router-link to="/profile_admin"><i class="pi pi-user"></i></router-link>
         </div>
       </header>
 
-      
-      <main class="content">
-        <div class="title-row">
-  <h2>Management</h2>
+      <!-- ================= MAIN CONTENT ================= -->
+      <main class="content step-page">
+  <!-- Field Section -->
+  <section class="role-section">
+    <h2>ขั้นตอนอนุมัติสนาม (Field)</h2>
+    <div class="checkbox-group">
+      <!-- <label><input type="checkbox" value="staff" v-model="selectedRoles.field" /> Staff</label> -->
+      <label><input type="checkbox" value="admin" v-model="selectedRoles.field" /> Admin</label>
+      <label><input type="checkbox" value="super" v-model="selectedRoles.field" /> Supervisor</label>
+    </div>
+  </section>
 
-  <div class="filter-group">
-    <button :class="['filter-btn', { active: filter === 'all' }]" @click="filter = 'all'">All</button>
-    <button :class="['filter-btn', { active: filter === 'Staff' }]" @click="filter = 'Staff'">Staff</button>
-    <button :class="['filter-btn', { active: filter === 'Admin' }]" @click="filter = 'Admin'">Admin</button>
-    <button :class="['filter-btn', { active: filter === 'Super' }]" @click="filter = 'Super'">Super</button>
+  <!-- One-Day Equipment Section -->
+<section class="role-section">
+  <h2>ขั้นตอนอนุมัติอุปกรณ์ยืมวันเดียว (Equipment – One Day)</h2>
+  <div class="checkbox-group">
+    <label><input type="checkbox" value="staff" v-model="selectedRoles.equipment_one_day" /> Staff</label>
+    <label><input type="checkbox" value="admin" v-model="selectedRoles.equipment_one_day" /> Admin</label>
+    <!-- <label><input type="checkbox" value="super" v-model="selectedRoles.equipment_one_day" /> Supervisor</label> -->
   </div>
+</section>
 
-  <!-- NEW: รวมปุ่มค้นหา + ปุ่มบวก ไว้ด้านขวา -->
-  <div class="right-actions">
-    <button class="icon-btn search-btn" @click="openUserLookup" title="ค้นหาผู้ใช้ทั้งหมด">
-      <i class="pi pi-search"></i>
-    </button>
-    <button class="add-btn" @click="addMember">＋</button>
+
+  <!-- Equipment Section -->
+  <!-- <section class="role-section">
+    <h2>ขั้นตอนอนุมัติอุปกรณ์หลายวัน(Equipment)</h2>
+    <div class="checkbox-group">
+      <label><input type="checkbox" value="staff" v-model="selectedRoles.equipment" /> Staff</label>
+      <label><input type="checkbox" value="admin" v-model="selectedRoles.equipment" /> Admin</label>
+       <label><input type="checkbox" value="super" v-model="selectedRoles.equipment" /> Supervisor</label>
+    </div>
+  </section> -->
+
+  <div class="save-wrap">
+    <button class="save-btn" @click="saveRoles">บันทึก</button>
   </div>
-</div>
+</main>
 
-
-        <!-- ตารางสมาชิก -->
-        <div class="member-table-container">
-          <table class="member-table">
-            <thead>
-              <tr>
-                <!-- <th>ID</th> -->
-                <th>Name</th>
-                <th>Email</th>
-                <th>Role</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="(Member, index) in filteredMembers" :key="index">
-                <!-- <td>{{ Member.id }}</td> -->
-                <td>{{ Member.name }}</td>
-                <td>
-                  {{ Member.email }}
-                  <span v-if="normalizeEmail(Member.email) === normalizeEmail(currentUserEmail)" style="color:blue;">(me)</span>
-                </td>
-                <td>{{ Member.position }}</td>
-                <td>
-                  <!-- ปุ่ม Edit -->
-                  <button
-                    class="edit-btn"
-                    @click="editMember(index)"
-                    v-if="normalizeEmail(Member.email) !== normalizeEmail(currentUserEmail)"
-                  >Edit</button>
-                  <span v-else style="color: #888; font-size: 0.95em;">(คุณ)</span>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </main>
-
+      <!-- ================= END MAIN CONTENT ================= -->
       <!-- Footer -->
       <footer class="foot">
         <div class="footer-left">
           <p>
-            Sport Complex – Mae Fah Luang University |
-            Tel: 0-5391-7820 and 0-5391-7821 | Facebook:
-            <a href="https://www.facebook.com/mfusportcomplex" target="_blank">MFU Sports Complex Center</a>
-            |
-            Email:
+            Sport Complex – Mae Fah Luang University | Tel: 0-5391-7820 and
+            0-5391-7821 | Facebook:
+            <a
+              href="https://www.facebook.com/mfusportcomplex"
+              target="_blank"
+              >MFU Sports Complex Center</a
+            >
+            | Email:
             <a href="mailto:sport-complex@mfu.ac.th">sport-complex@mfu.ac.th</a>
           </p>
-          <p>© 2025 Center for Information Technology Services, Mae Fah Luang University. All rights reserved.</p>
+          <p>
+            © 2025 Center for Information Technology Services, Mae Fah Luang
+            University. All rights reserved.
+          </p>
         </div>
       </footer>
     </div>
   </div>
 </template>
+
+
 
 <script>
 import axios from 'axios';
@@ -146,6 +161,13 @@ const ADMIN_LAST_SEEN_KEY = 'admin_lastSeenTimestamp'
 function isValidEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
+
+const cleanRoles = (arr) =>
+  Array.from(new Set(
+    (Array.isArray(arr) ? arr : [])
+      .map(r => String(r).trim().toLowerCase())
+      .filter(r => r === 'staff' || r === 'admin' || r === 'super')
+  ));
 
 export default {
   data() {
@@ -160,6 +182,10 @@ export default {
       polling: null,
       isMobile: window.innerWidth <= 600,
       lastSeenTimestamp: 0,
+      availableRoles: ["staff", "admin", "super"],
+      selectedRoles: { field: [], equipment: [], equipment_one_day: [] },
+      
+        
     };
   },
   computed: {
@@ -176,17 +202,54 @@ export default {
       }
     }
   },
-  mounted() {
-  this.lastSeenTimestamp = parseInt(localStorage.getItem(ADMIN_LAST_SEEN_KEY) || '0'); // << เพิ่ม
 
-  this.loadMembers();
-  this.fetchNotifications();
+  async mounted() {
+  // โหลด timestamp ที่เคยเปิดดูแจ้งเตือนล่าสุด (สำหรับ badge)
+  this.lastSeenTimestamp = parseInt(localStorage.getItem(ADMIN_LAST_SEEN_KEY) || '0') || 0;
+
+  // ดึงข้อมูลเริ่มต้น (สมาชิก + แจ้งเตือน) พร้อมกัน
+  await Promise.allSettled([
+    this.loadMembers(),
+    this.fetchNotifications()
+  ]);
+
+  // ตั้ง polling แจ้งเตือนทุก 30 วินาที
   this.polling = setInterval(this.fetchNotifications, 30000);
 
+  // ตั้ง event listeners
   document.addEventListener('mousedown', this.handleClickOutside);
   window.addEventListener('resize', this.handleResize);
-  this.handleResize();
+  this.handleResize(); // เซ็ต isMobile / sidebar ตามขนาดจอปัจจุบัน
+
+  // โหลด roles ปัจจุบันจาก backend (แยก field / equipment หลายวัน / equipment วันเดียว)
+  try {
+    const res = await axios.get(`${API_BASE}/api/settings/approval_roles`, { timeout: 15000 });
+
+    // backend ใหม่: { value: { field:[], equipment:[], equipment_one_day:[] } }
+    // เผื่อกรณีเก่า ให้รองรับ alias: one_day / equipmentOneDay
+    const raw =
+      (res && res.data && typeof res.data.value === 'object')
+        ? res.data.value
+        : (res?.data || {});
+
+    this.selectedRoles = {
+      field:             cleanRoles(raw.field || []),
+      equipment:         cleanRoles(raw.equipment || []),
+      equipment_one_day: cleanRoles(raw.equipment_one_day || raw.one_day || raw.equipmentOneDay || []),
+    };
+  } catch (err) {
+    console.error("โหลด approval_roles ไม่สำเร็จ:", err);
+    this.selectedRoles = { field: [], equipment: [], equipment_one_day: [] };
+  }
+
+  // เคลียร์ localStorage เวอร์ชันเก่า (ถ้ามี)
+  localStorage.removeItem("APPROVAL_ROLES");
 },
+
+
+
+
+
 
   beforeUnmount() {
     if (this.polling) clearInterval(this.polling);
@@ -195,6 +258,38 @@ export default {
 
   },
   methods: {
+
+     // === methods.saveRoles() (แก้แล้ว) ===
+  async saveRoles() {
+  try {
+    const roles = {
+      field:             cleanRoles(this.selectedRoles.field),
+      equipment:         cleanRoles(this.selectedRoles.equipment),
+      equipment_one_day: cleanRoles(this.selectedRoles.equipment_one_day),
+    };
+    const resp = await axios.post(`${API_BASE}/api/settings/approval_roles`, roles);
+    // backend ตอบ { value: {...} }
+    const val = resp?.data?.value || roles;
+    this.selectedRoles = {
+      field:             cleanRoles(val.field || []),
+      equipment:         cleanRoles(val.equipment || []),
+      equipment_one_day: cleanRoles(val.equipment_one_day || []),
+    };
+    Swal.fire('บันทึกสำเร็จ', 'บันทึกขั้นตอนอนุมัติเรียบร้อยแล้ว', 'success');
+  } catch (err) {
+    Swal.fire('ผิดพลาด', 'บันทึกไม่สำเร็จ', 'error');
+  }
+},
+
+
+
+
+
+    saveSteps() {
+//   localStorage.setItem("APPROVAL_ROLES", JSON.stringify(this.selectedRoles));
+//   Swal.fire("บันทึกสำเร็จ", "ขั้นตอนอนุมัติถูกบันทึกแล้ว", "success");
+    },
+
     normalizeEmail(email) {
       return (email || '').trim().toLowerCase();
     },
@@ -660,141 +755,13 @@ const getSearchNames = this._getSearchNames.bind(this);
     try { Swal.close(); } catch {}
     Swal.fire('โหลดข้อมูลไม่สำเร็จ', err?.response?.data?.message || 'ไม่สามารถดึงรายชื่อผู้ใช้ได้', 'error');
   }
-}
-,
-
-// ---------- Helpers สำหรับ modal ผู้ใช้ ----------
-_getDisplayName(u = {}) {
-  // โชว์เฉพาะฟิลด์ name จาก collection users
-  return u?.name || '';
 },
-_getSearchNames(u = {}) {
-  // ไว้สำหรับค้นหา: รวมชื่อไทย/ทางเลือก + name
-  const alt = [
-    u.thaiName, u.name_th, u.nameTh,
-    u.displayName, u.fullName,
-    (u.firstName && u.lastName ? `${u.firstName} ${u.lastName}` : '')
-  ].filter(Boolean).join(' ');
-  return [alt, u.name].filter(Boolean).join(' ');
-},
-
-_escapeHtml(s = '') {
-  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;').replace(/>/g,'&gt;');
-},
-_absUrl(p = '') {
-  if (!p) return '';
-  if (/^https?:\/\//i.test(p)) return p;
-  return `${API_BASE}${p.startsWith('/') ? '' : '/'}${p}`;
-},
-_getUserId(u = {}) {
-  return (
-    u.user_id || u.studentId || u.student_id ||
-    u.employeeId || u.employee_id ||
-    (typeof u._id === 'object' ? (u._id?.$oid || '') : u._id) ||
-    ''
-  );
-},
-_getUserName(u = {}) {
-  return (
-    u.thaiName || u.name_th || u.nameTh ||
-    u.displayName || u.fullName ||
-    (u.firstName && u.lastName ? `${u.firstName} ${u.lastName}` : u.name) ||
-    ''
-  );
-},
-_getUserAvatar(u = {}) {
-  // ใช้ picture จาก collection users เป็นหลัก
-  if (u.picture) return this._absUrl(u.picture);
-
-  // สำรอง: รองรับชื่อฟิลด์อื่น ๆ เผื่อมี
-  const alt =
-    u.photoUrl || u.avatar || u.profileImage || u.image || u.avatarUrl || '';
-  return alt ? this._absUrl(alt) : '';
-}
-,
-_getUserPhone(u = {}) {
-  return u.phone || u.tel || u.mobile || u.phoneNumber || '';
-}
-,
-_buildUsersTableHTML() {
-  return `
-    <div class="user-lookup">
-      <div class="lookup-bar">
-        <input id="user-search" type="text" placeholder="พิมพ์เพื่อค้นหา (ไอดี, ชื่อ, อีเมล, เบอร์โทร, บทบาท)" />
-        <span id="user-count" class="count"></span>
-      </div>
-      <div class="lookup-wrap">
-        <table class="lookup-table">
-          <colgroup>
-            <col style="width: 84px;">   <!-- picture -->
-            <!-- ตัด user_id ออก -->
-            <col style="width: 30%;">    <!-- name -->
-            <col style="width: 36%;">    <!-- email -->
-            <col style="width: 18%;">    <!-- phone -->
-            <col style="width: 110px;">  <!-- role -->
-          </colgroup>
-          <thead>
-            <tr>
-              <th>picture</th>
-              <!-- ตัด user_id ออก -->
-              <th>name</th>
-              <th>email</th>
-              <th>phone</th>
-              <th>role</th>
-            </tr>
-          </thead>
-          <tbody id="user-tbody"></tbody>
-        </table>
-      </div>
-      <div class="lookup-pagination">
-        <button id="user-prev" class="page-btn" aria-label="Previous">‹</button>
-        <span id="user-page-info" class="page-info">1/1</span>
-        <button id="user-next" class="page-btn" aria-label="Next">›</button>
-      </div>
-    </div>
-  `;
-}
-
-
-
-,
-
-
-
-
   }
 };
 </script>
 
 
 <style scoped>
-.right-actions{
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.icon-btn {
-  width: 48px;
-  height: 48px;
-  border: none;
-  border-radius: 50%;
-  background: #e2e8f0;
-  color: #1e3a8a;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.icon-btn:hover {
-  background: #1e3a8a;
-  color: #fff;
-}
-
-@media (max-width: 600px) {
-  .right-actions { align-self: flex-end; }
-  .icon-btn { width: 44px; height: 44px; font-size: 1.1em; }
-}
 
 .add-btn {
   width: 60px;
@@ -808,26 +775,6 @@ _buildUsersTableHTML() {
   display: flex;
   align-items: center;
   justify-content: center;
-}
-.card-list {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-.Member-card {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  background: rgb(230, 230, 230);
-  padding: 1rem;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-  gap: 5rem;
-}
-.Member-info {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
 }
 .Member-name {
   flex: 1;
@@ -882,19 +829,6 @@ _buildUsersTableHTML() {
   background: #1e3a8a;
   color: white;
 }
-.card-actions {
-  margin-left: auto;
-  display: flex;
-  gap: 1rem;
-  align-items: center;
-}
-.Member-row {
-  display: flex;
-  justify-content: flex-start;
-  align-items: center;
-  width: 100%;
-}
-
 .member-table-container {
   overflow-x: auto;
   margin-bottom: 2rem;
@@ -1024,6 +958,67 @@ _buildUsersTableHTML() {
   z-index: 1001;
 }
 .notification-dropdown { position: absolute; right: 0; top: 38px; background: #fff; border-radius: 18px 0 18px 18px; box-shadow: 0 8px 24px 0 rgba(27, 50, 98, 0.14), 0 2px 4px 0 rgba(33, 125, 215, 0.06); min-width: 330px; max-width: 370px; max-height: 420px; overflow-y: auto; z-index: 1002; padding: 0; border: none; animation: fadeDown 0.22s; }
+
+/* ===== Step Page Style ===== */
+.step-page {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 20px;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.role-section {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+}
+
+.role-section h2 {
+  font-size: 1.3rem;
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: #1e3a8a;
+}
+
+.checkbox-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.checkbox-group label {
+  font-size: 1rem;
+  color: #374151;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.save-wrap {
+  text-align: center;
+  margin-top: 10px;
+}
+
+.save-btn {
+  padding: 10px 28px;
+  font-size: 1.05rem;
+  background: #1e3a8a;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background 0.2s;
+}
+
+.save-btn:hover {
+  background: #274cb0;
+}
+
 </style>
 
 

@@ -56,23 +56,24 @@
         </div>
       </header>
 
-      <!-- Stepper -->
-      <div class="headStepper" role="navigation" aria-label="ขั้นตอน">
-        <div class="stepper">
-          <div v-for="(step, index) in steps" :key="index" class="step">
-            <div
-              class="circle"
-              :class="{ active: index === currentStep, completed: index < currentStep }"
-              @click="goStep(index)"
-              :style="{ cursor: canStepTo(index) ? 'pointer' : 'not-allowed', opacity: canStepTo(index) ? 1 : 0.5 }"
-            ></div>
-            <div class="label">{{ step }}</div>
-            <div v-if="index < steps.length - 1" class="line" :class="{ filled: index < currentStep }"></div>
-          </div>
-        </div>
-      </div>
-      <!-- spacer กันเนื้อหาโดนทับ (จะถูกซ่อนไว้ใน CSS) -->
-      <div class="headStepper-spacer"></div>
+   <!-- Stepper -->
+<div class="headStepper" role="navigation" aria-label="ขั้นตอน">
+  <div class="stepper">
+    <div v-for="(step, index) in steps" :key="index" class="step">
+      <div
+        class="circle"
+        :class="{ active: index === currentStep, completed: index < currentStep }"
+        style="cursor:pointer"
+        @click="goStep(index)"
+      ></div>
+      <div class="label">{{ step }}</div>
+      <div v-if="index < steps.length - 1" class="line" :class="{ filled: index < currentStep }"></div>
+    </div>
+  </div>
+</div>
+<!-- spacer กันเนื้อหาโดนทับ (ถูกซ่อนไว้ใน CSS) -->
+<div class="headStepper-spacer"></div>
+
 
       <div class="scroll-x-container">
         <div class="form-container">
@@ -97,24 +98,35 @@
               />
             </div>
 
-            <!-- Student ID -->
-            <div class="form-row">
-              <label>
-                รหัสนักศึกษา/รหัสพนักงาน
-                <span v-if="touched && (showError && !id_form)" style="color:red">*</span>
-              </label>
-              <input
-  type="text"
-  class="custom-input"
-  v-model="form.id_form"
-  :class="{ 'is-invalid': touched && showError && !form.id_form }"
-  :readonly="false"
-  inputmode="numeric"
-  pattern="\d*"
-  maxlength="10"
-  @input="onIdInput"
-/>
-            </div>
+           <!-- Student ID -->
+<div class="form-row">
+  <label>
+    รหัสนักศึกษา/รหัสพนักงาน
+    <span v-if="touched && (showError && !id_form)" style="color:red">*</span>
+  </label>
+
+  <input
+    type="text"
+    class="custom-input"
+    v-model="form.id_form"
+    :class="{
+      'is-invalid':
+        touched &&
+        (showError && (!form.id_form || form.id_form.length !== requiredIdLen))
+    }"
+    :readonly="false"
+    inputmode="numeric"
+    pattern="\d*"
+    :maxlength="requiredIdLen"
+    @input="onIdInput"
+  />
+
+  <small class="note-text">
+    ต้องเป็นตัวเลข {{ requiredIdLen }} หลัก
+    <span v-if="emailDomain === 'lamduan'">(บัญชี @lamduan.mfu.ac.th)</span>
+    <span v-else-if="emailDomain === 'mfu'">(บัญชี @mfu.ac.th)</span>
+  </small>
+</div>
 
             <!-- Agency -->
             <div class="form-row" style="position:relative;">
@@ -417,7 +429,6 @@
     </div> <!-- /.main -->
   </div> <!-- /.layout -->
 </template>
-
 <script setup>
 import { ref, reactive, onMounted, onBeforeUnmount, watch, computed, nextTick } from 'vue'
 import axios from 'axios'
@@ -428,7 +439,7 @@ import VueDatePicker from '@vuepic/vue-datepicker'
 import '@vuepic/vue-datepicker/dist/main.css'
 import dayjs from 'dayjs'
 
-// ==== เพิ่มตัวแปรชั่วคราวสำหรับไฟล์ (ระดับ window) ====
+// ==== ตัวแปรชั่วคราวไฟล์ (ระดับ window) ====
 if (!window._equipTempFiles) window._equipTempFiles = []  // File[] จริง
 const API_BASE = import.meta.env.VITE_API_BASE
 const products = ref([])
@@ -442,21 +453,20 @@ const LS_FORM_KEY = 'equipmentFormData'
 const isFormLocked = ref(false)
 const selectedFiles = ref([])
 const fileError = ref(false)
-const agencySearch = ref('');
-const agencyDropdownOpen = ref(false);
+const agencySearch = ref('')
+const agencyDropdownOpen = ref(false)
 const agencyInputEl = ref(null)
 const isAgencyEditing = ref(false)
 const fileUploadInput = ref(null)
 
+const MAX_REASON = 100
+const MAX_LOCATION = 100
 
-const MAX_REASON = 100;
-const MAX_LOCATION = 100;
-
-const reasonCount   = computed(() => (form.reason   || '').length);
-const locationCount = computed(() => (form.location || '').length);
+const reasonCount   = computed(() => (form.reason   || '').length)
+const locationCount = computed(() => (form.location || '').length)
 
 /* ===== Date variables ===== */
-const dpRange = ref(null)     // [Date, Date] | null   (ช่วงวันที่)
+const dpRange = ref(null)     // [Date, Date] | null
 const dpReceive = ref(null)   // Date | null
 
 const lastSeenTimestamp = ref(parseInt(localStorage.getItem('lastSeenTimestamp') || '0'))
@@ -494,12 +504,12 @@ function maybeEnterEdit() {
 }
 
 const filteredAgencyOptions = computed(() => {
-  const search = agencySearch.value.trim().toLowerCase();
-  if (!search) return agencyOptions.value;
+  const search = agencySearch.value.trim().toLowerCase()
+  if (!search) return agencyOptions.value
   return agencyOptions.value.filter(option =>
     option.toLowerCase().includes(search)
-  );
-});
+  )
+})
 
 function filterAgency() {
   agencyDropdownOpen.value = true
@@ -529,11 +539,24 @@ function onAgencyBlur() {
   }, 180)
 }
 
-function onIdInput(e) {
-  let digits = e.target.value.replace(/\D/g, '').slice(0, 10);
-  form.id_form = digits;
-}
+/* ========= กติกาความยาวรหัสตามโดเมนอีเมล =========
+   - @lamduan.mfu.ac.th  => รหัสนักศึกษา 10 หลัก
+   - @mfu.ac.th          => รหัสพนักงาน   8 หลัก
+*/
+const userEmail = ref('')  // จะตั้งค่าจาก API ผู้ใช้ใน onMounted
+const emailDomain = computed(() => {
+  const s = (userEmail.value || '').toLowerCase()
+  if (s.endsWith('@lamduan.mfu.ac.th')) return 'lamduan'
+  if (s.endsWith('@mfu.ac.th')) return 'mfu'
+  return '' // โดเมนอื่น ๆ (กรณีไม่ตรงสองแบบนี้)
+})
+const requiredIdLen = computed(() => (emailDomain.value === 'lamduan' ? 10 : 8))
 
+function onIdInput(e) {
+  // รับเฉพาะตัวเลข และจำกัดตาม requiredIdLen
+  let digits = e.target.value.replace(/\D/g, '').slice(0, requiredIdLen.value)
+  form.id_form = digits
+}
 
 const form = reactive({
   name: '',
@@ -576,7 +599,7 @@ const isAgencySelected = computed(() =>
   !!agencyInput.value &&
   agencyOptions.value.includes(agencyInput.value) &&
   agencyInput.value !== 'อื่นๆ'
-);
+)
 
 function clearAgency() {
   agencyInput.value = ''
@@ -676,7 +699,13 @@ function validateFields() {
   if (!form.receive_time) fields['receive_time'] = true
 
   if (!form.username_form) fields['username_form'] = true
-  if (!form.id_form) fields['id_form'] = true
+
+  // ✅ บังคับความยาวรหัสตามโดเมนอีเมลผู้ใช้:
+  //    lamduan.mfu.ac.th -> 10 หลัก (นักศึกษา)
+  //    mfu.ac.th         -> 8 หลัก (พนักงาน)
+  if (!form.id_form || form.id_form.length !== requiredIdLen.value) {
+    fields['id_form'] = true
+  }
 
   let invalidQty = false
   for (const name in cartMap) {
@@ -729,27 +758,41 @@ async function uploadSelectedFiles() {
   return uploadedFiles
 }
 
-function canStepTo(index) {
-  if (index <= currentStep.value) return true
-  if (index === 1) return validateFields() && hasUploadedFile()
-  if (index === 2) return false
-  return false
-}
+// ลบฟังก์ชัน canStepTo ทั้งหมด
 
-function goStep(index) {
-  if (index === currentStep.value) return
-  if (!canStepTo(index)) {
+// แทน goStep ด้วยอันนี้
+async function goStep(targetStep) {
+  // บันทึก/รักษาไฟล์แนบชั่วคราวไว้เหมือนเดิม (ถ้าต้องการ)
+  if (targetStep === currentStep.value) return
+
+  // กันกดข้ามไปสำเร็จเลยจาก step แรก
+  if (targetStep === 2 && currentStep.value === 0) {
     Swal.fire({
-      icon: 'warning',
-      title: 'กรุณาทำขั้นตอนก่อนหน้าให้ครบถ้วนก่อน',
+      icon: 'info',
+      title: 'โปรดดำเนินการทีละขั้นตอน',
+      text: 'กรุณายืนยันข้อมูลก่อนข้ามไปขั้นตอนสุดท้าย',
       confirmButtonText: 'ตกลง'
     })
     return
   }
-  if (index === 0) router.push('/form_equipment')
-  else if (index === 1) router.push('/form_equipment3')
-  else if (index === 2) router.push('/form_equipment4')
+
+  if (targetStep === 0) {
+    router.push('/form_equipment')
+    return
+  }
+
+  if (targetStep === 1) {
+    // ทำเหมือนกด Next: validate ก่อน แล้วค่อย submit/route ไปหน้าถัดไป
+    touched.value = true
+    if (!validateFields() || !validateBeforeSubmit()) {
+      Swal.fire('กรุณากรอกข้อมูลให้ครบถ้วน', '', 'warning')
+      return
+    }
+    await submitBooking() // จะ push ไป /form_equipment3 เองเมื่อสำเร็จ
+    return
+  }
 }
+
 
 function closeNotifications() {
   showNotifications.value = false
@@ -893,6 +936,7 @@ onMounted(async () => {
     agencyOptions.value = ['อื่นๆ']
   }
 
+  // โหลดตะกร้าจากพารามิเตอร์ (ถ้ามี)
   if (route.query.items) {
     try {
       const items = JSON.parse(route.query.items)
@@ -930,15 +974,13 @@ onMounted(async () => {
 
   loadUploadedFiles()
 
-  // โหลด user_id เดิม
+  // โหลดข้อมูลผู้ใช้ และดึงอีเมลเพื่อกำหนดความยาวรหัสตามโดเมน
   form.user_id = localStorage.getItem('user_id') || ''
   if (form.user_id) {
     try {
       const resUser = await axios.get(`${API_BASE}/api/users/${form.user_id}`)
       form.name = resUser.data.name || ''
-      // (คงโค้ดเดิมไว้ ไม่ยุ่งส่วนอื่น)
-      // username_form.value = form.name
-      // id_form.value = form.user_id
+      userEmail.value = resUser.data.email || ''   // ใช้ตัดสินโดเมน lamduan/mfu
     } catch (err) {
       console.error('โหลดชื่อผู้ใช้ไม่สำเร็จ', err)
     }
@@ -1118,23 +1160,41 @@ watch(
   { deep: true }
 )
 
-watch(agencyInput, (v) => { agencySearch.value = v || '' });
+watch(agencyInput, (v) => { agencySearch.value = v || '' })
 watch(agencySearch, (v) => {
   if (v !== agencyInput.value && agencyOptions.value.includes(v)) {
-    agencyInput.value = v;
+    agencyInput.value = v
   }
 })
 
-/* map dpRange -> form.start_date / form.end_date */
 watch(dpRange, (val) => {
   if (Array.isArray(val) && val[0] && val[1]) {
-    form.start_date = toISO(val[0])
-    form.end_date   = toISO(val[1])
+    const start = toISO(val[0])
+    const end   = toISO(val[1])
+
+    if (start === end) {
+      Swal.fire({
+  icon: 'warning',
+  title: 'ไม่อนุญาตให้จองวันเดียว',
+  html: '<div style="text-align:center;">กรุณาเลือกช่วงวันที่อย่างน้อย 2 วัน</div>',
+  confirmButtonText: 'ตกลง'
+})
+
+      // reset ค่ากลับไป
+      dpRange.value = null
+      form.start_date = ''
+      form.end_date   = ''
+      return
+    }
+
+    form.start_date = start
+    form.end_date   = end
   } else {
     form.start_date = ''
     form.end_date   = ''
   }
 })
+
 
 watch(dpReceive, (d) => {
   form.receive_date = (!d || isNaN(d)) ? '' : toISO(d)
@@ -1203,7 +1263,26 @@ watch(dpReceive, (d) => {
   transition: background 0.3s;
 }
 .line.filled { background-color: #ff4d4f; }
+/* วางเพิ่มไว้ใน <style scoped> ของ form_equipment */
+.layout{
+  background: #e7f2fb;
+  min-height: 100vh;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
 
+/* ใช้ตัวแปรระยะห่างด้านบนแบบเดียวกัน */
+:root{
+  --topbar-h: 64px;
+  --subbar-h: 0px;
+  --gap: 12px;
+}
+
+.main{
+  padding-top: calc(var(--topbar-h));
+}
+ 
 .form-container {
   background-color: white;
   margin: 30px auto;

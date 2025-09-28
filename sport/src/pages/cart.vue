@@ -152,6 +152,34 @@ const lastCheckedIds = new Set()
 const lastSeenTimestamp = ref(parseInt(localStorage.getItem('lastSeenTimestamp') || '0'))
 let polling = null
 
+// ดึงขั้นตอนอนุมัติสำหรับ "อุปกรณ์ยืมวันเดียว" จาก settings
+async function fetchApprovalRolesOneDay() {
+  try {
+    const res = await axios.get(`${API_BASE}/api/settings/approval_roles`, { timeout: 15000 });
+    const val = res?.data?.value || {};
+    // รองรับชื่อคีย์หลายแบบเพื่อ backward-compat
+    const roles = val.equipment_one_day || val.one_day || val.equipmentOneDay || [];
+    // กรองให้เหลือเฉพาะ role ที่อนุญาตและ unique
+    const ALLOWED = new Set(['staff', 'admin', 'super']);
+    return Array.from(new Set((Array.isArray(roles) ? roles : [])
+      .map(r => String(r || '').trim().toLowerCase())
+      .filter(r => ALLOWED.has(r))));
+  } catch {
+    return []; // จะไป fallback เป็น ['staff'] ต่อ
+  }
+}
+
+function buildStepFromRoles(roles) {
+  const nowISO = new Date().toISOString();
+  return (Array.isArray(roles) ? roles : []).map(r => ({
+    role: r,
+    approve: null,
+    createdAt: nowISO,
+    updatedAt: nowISO,
+  }));
+}
+
+
 function toggleSidebar() {
   isSidebarClosed.value = !isSidebarClosed.value
 }
@@ -299,13 +327,13 @@ async function removeItem(product) {
 async function handleCheckout() {
   if (products.value.length === 0) return;
 
-  // รวมจำนวนอุปกรณ์ชื่อเดียวกันในตะกร้า
+  // 1) รวมจำนวนอุปกรณ์ชื่อเดียวกันในตะกร้า
   const itemMap = {};
   products.value.forEach((p) => {
     itemMap[p.name] = (itemMap[p.name] || 0) + p.quantity;
   });
 
-  // จำกัดตามสต็อกปัจจุบัน
+  // 2) จำกัดตามสต็อกปัจจุบัน
   const resultItems = Object.entries(itemMap)
     .map(([name, qty]) => ({
       name,
@@ -314,11 +342,11 @@ async function handleCheckout() {
     .filter(it => it.quantity > 0);
 
   if (resultItems.length === 0) {
-    Swal.fire('Out of stock', 'No available quantity to request.', 'warning');
+    await Swal.fire('Out of stock', 'No available quantity to request.', 'warning');
     return;
   }
 
-  // ถามเลือกยืมวันเดียว/หลายวัน
+  // 3) เลือกแบบยืมวันเดียว / หลายวัน
   const { value: borrowType } = await Swal.fire({
     title: 'Do you want to borrow for one day or several days?',
     icon: 'question',
@@ -335,7 +363,7 @@ async function handleCheckout() {
 
   if (!borrowType) return;
 
-  // ===== หลายวัน → ไปกรอกฟอร์ม =====
+  // 4) หลายวัน → ไปกรอกฟอร์ม
   if (borrowType === 'multiDay') {
     router.push({
       path: '/form_equipment',
@@ -344,7 +372,7 @@ async function handleCheckout() {
     return;
   }
 
-  // ===== วันเดียว → ส่งคำขอไปให้ staff เลย (step เฉพาะ staff) =====
+  // 5) วันเดียว → ส่งคำขอเข้า History โดยสร้าง step ตามที่ตั้งไว้ในหน้า step.vue
   const uid = localStorage.getItem('user_id') || '';
   if (!uid) {
     await Swal.fire({ icon: 'warning', title: 'Please log in before using', confirmButtonText: 'OK' });
@@ -355,19 +383,30 @@ async function handleCheckout() {
   const booking_id = `${Date.now()}_${uid}`;
   const nowISO = new Date().toISOString();
 
-  // พayload พื้นฐาน: ไม่ใส่ since/uptodate = ยืมวันเดียว
+  // 5.1) ดึง roles ของ "equipment_one_day" จาก settings
+  let roles = [];
+  try {
+    roles = await fetchApprovalRolesOneDay(); // คืนค่าเช่น ['staff','admin'] ตามที่ติ้กในหน้า step
+  } catch (_) {
+    roles = [];
+  }
+  if (!roles.length) roles = ['staff']; // fallback
+
+  // 5.2) แปลง roles -> step array
+  const stepArr = buildStepFromRoles(roles);
+
+  // 5.3) Payload พื้นฐาน (ไม่ใส่ since/uptodate = ยืมวันเดียว)
   const basePayload = {
     user_id: uid,
     type: 'equipment',
     status: 'pending',
     booking_id,
     date: nowISO,
-    step: [
-      { role: 'staff', approve: null, createdAt: nowISO, updatedAt: nowISO }
-    ],
+    step: stepArr,
   };
 
   try {
+    // 5.4) สร้าง 1 history ต่อ 1 รายการอุปกรณ์
     await Promise.all(
       resultItems.map(item =>
         axios.post(`${API_BASE}/api/history`, {
@@ -378,7 +417,7 @@ async function handleCheckout() {
       )
     );
 
-    // เคลียร์ตะกร้า
+    // 5.5) เคลียร์ตะกร้า
     await axios.delete(`${API_BASE}/api/cart?user_id=${uid}`);
     products.value = [];
 

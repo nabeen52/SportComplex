@@ -10,6 +10,7 @@
         <router-link to="/home_admin" exact-active-class="active"><i class="pi pi-megaphone"></i> แก้ไขข่าว</router-link>
         <router-link to="/edit_field" active-class="active"><i class="pi pi-map-marker"></i> แก้ไขสนาม</router-link>
         <router-link to="/edit_equipment" active-class="active"><i class="pi pi-clipboard"></i> แก้ไขอุปกรณ์ </router-link>
+        <router-link to="/step" active-class="active"><i class="pi pi-sitemap"></i> แก้ไขขั้นตอนการอนุมัติ </router-link>
         <router-link to="/booking_field_admin" active-class="active"><i class="pi pi-map-marker"></i> จองสนาม</router-link>
         <router-link to="/approve_field" active-class="active"><i class="pi pi-verified"></i> อนุมัติ</router-link>
         <!-- <router-link to="/return_admin" active-class="active"><i class="pi pi-box"></i> รับคืนอุปกรณ์ </router-link> -->
@@ -211,6 +212,69 @@ export default {
   },
   methods: {
 
+
+    // ถือว่า "อนุมัติครบจริง" อย่างไร
+isFullyApproved(item) {
+  const typ = String(item?.type || '').toLowerCase();
+
+  // ถ้าเป็นอุปกรณ์และ workflow มี admin ใน step → ต้องดูว่า admin อนุมัติแล้วจริงไหม
+  if (typ === 'equipment' && this.hasRoleIn(item, 'admin')) {
+    const arr = Array.isArray(item?.step) ? item.step
+              : Array.isArray(item?.steps) ? item.steps
+              : [];
+    const admin = arr.find(s => String(s?.role || '').toLowerCase() === 'admin');
+    return !!(admin && admin.approve === true);
+  }
+
+  // กรณีอื่น ๆ (เช่น field หรือ equipment ที่ไม่มี admin) ใช้เงื่อนไขเดิม
+  const st = String(item?.status || '').toLowerCase();
+  return this.isApprovedRec(item) || st === 'approved';
+}
+,
+    // อุปกรณ์ "ยืมวันเดียว" = ไม่มี since/uptodate
+isSingleDayItem(it) {
+  const empty = (v) => v === undefined || v === null || v === "" || v === "null";
+  return empty(it.since) && empty(it.uptodate);
+},
+
+// ใน step มี role ที่ระบุไหม
+hasRoleIn(item, role) {
+  const arr = Array.isArray(item?.step) ? item.step
+            : Array.isArray(item?.steps) ? item.steps
+            : [];
+  const want = String(role || '').toLowerCase();
+  return arr.some(s => String(s?.role || '').toLowerCase() === want);
+},
+
+// staff อนุมัติแล้วหรือยัง
+isStaffApprovedInStep(item) {
+  const arr = Array.isArray(item?.step) ? item.step
+            : Array.isArray(item?.steps) ? item.steps
+            : [];
+  const ent = arr.find(s => String(s?.role || '').toLowerCase() === 'staff');
+  return !!(ent && ent.approve === true);
+},
+
+// admin ยังไม่อนุมัติใช่ไหม
+isAdminNotApprovedInStep(item) {
+  const arr = Array.isArray(item?.step) ? item.step
+            : Array.isArray(item?.steps) ? item.steps
+            : [];
+  const ent = arr.find(s => String(s?.role || '').toLowerCase() === 'admin');
+  // ต้องมี admin ใน step และ approve ยังไม่ true
+  return !!ent && ent.approve !== true;
+},
+
+
+    hasRoleInStep(item, role = 'admin') {
+  const arr = Array.isArray(item?.step) ? item.step
+            : Array.isArray(item?.steps) ? item.steps
+            : [];
+  const want = String(role).toLowerCase();
+  return arr.some(s => String(s?.role || '').toLowerCase() === want);
+},
+
+
     // สร้าง DOM ฟอร์มสนามสำหรับแคปเจอร์ PDF
 // สร้าง DOM ฟอร์มสนามสำหรับแคปเจอร์ PDF (อัปเดตให้ใส่ค่า 'อื่นๆ' แบบ contenteditable)
 _buildFieldPdfNode(b, secretary_choice = {}, reason_admin = '', secThaiName = '', secSignUrl = '') {
@@ -242,30 +306,31 @@ _buildFieldPdfNode(b, secretary_choice = {}, reason_admin = '', secThaiName = ''
   if (chk) chk.checked = wantOther;
 
   if (box) {
-    // รองรับทั้ง input และ contenteditable
-    const text = wantOther ? (reason_admin || '') : '';
-    // ถ้าเป็น input/textarea
+    // ให้มีค่าแน่ ๆ: ถ้าติ๊กแต่ไม่กรอก ให้เป็น '-'
+    const text = wantOther ? ((reason_admin || '').trim() || '-') : '';
+
+    // input/textarea
     if ('value' in box) box.value = text;
 
-    // ถ้าเป็น contenteditable div
+    // contenteditable div
     const isCE = box.isContentEditable || box.getAttribute('contenteditable') === 'true';
     if (isCE) {
       box.textContent = text;
-      // ซ่อน placeholder ถ้ามี
       try { box.setAttribute('data-ph', ''); } catch (_){}
     } else if (!('value' in box)) {
-      // เผื่อเป็น element ธรรมดา
+      // element ธรรมดา
       box.textContent = text;
     }
   }
 
-  // แช่แข็ง input/checkbox/contenteditable ให้เป็นตัวหนังสือก่อนจับภาพ
+  // แช่แข็งฟอร์มให้เป็นตัวหนังสือก่อนจับภาพ
   if (typeof this._freezeFormForPdf === 'function') {
     this._freezeFormForPdf(holder);
   }
 
   return holder;
 },
+
 
 
 
@@ -414,9 +479,11 @@ async _makeA4OnePageBlob(element) {
   if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch {} }
 
   // --- เก็บ style เดิมไว้ ---
-  const orig = { width: element.style.width, margin: element.style.margin, padding: element.style.padding,
+  const orig = {
+    width: element.style.width, margin: element.style.margin, padding: element.style.padding,
     boxSizing: element.style.boxSizing, transform: element.style.transform, transformOrigin: element.style.transformOrigin,
-    position: element.style.position, left: element.style.left, top: element.style.top, display: element.style.display };
+    position: element.style.position, left: element.style.left, top: element.style.top, display: element.style.display
+  };
 
   // wrapper กว้าง A4 (สูงตามเนื้อหา)
   const wrapper = document.createElement('div');
@@ -438,12 +505,63 @@ async _makeA4OnePageBlob(element) {
   wrapper.appendChild(element);
   await new Promise(r => requestAnimationFrame(r));
 
+  // ---- helper: ให้ URL เป็น absolute และ protocol เดียวกับหน้า ----
+  const toAbsUrlSafe = (url) => {
+    if (!url) return '';
+    if (/^(data:|https?:)/i.test(url)) return url;
+    const base = location.origin.replace(/^http:/, location.protocol); // ป้องกัน http/https ไม่ตรงกัน
+    if (url.startsWith('/')) return base + url;
+    return base + '/' + url.replace(/^\.\//,'');
+  };
+
+  // ---------- อินไลน์รูปลายเซ็นก่อนจับภาพ ----------
+  try {
+    const imgs = Array.from(wrapper.querySelectorAll('img.sigimg'));
+    await Promise.all(imgs.map(async (img) => {
+      // ตั้ง crossOrigin ให้ html2canvas วาดได้แบบไม่ taint
+      try { img.setAttribute('crossorigin', 'anonymous'); } catch {}
+
+      const raw = img.getAttribute('src') || '';
+      if (!raw || /^data:/i.test(raw)) return; // ข้ามถ้าเป็น data: อยู่แล้ว
+
+      const abs = toAbsUrlSafe(raw);
+
+      // fetch แล้วอ่านเป็น blob -> dataURL
+      try {
+        const res = await fetch(abs, { mode: 'cors', credentials: 'omit', cache: 'no-cache' });
+        if (!res.ok) throw new Error('fetch failed: ' + res.status + ' ' + abs);
+        const blob = await res.blob();
+
+        await new Promise((resolve, reject) => {
+          const fr = new FileReader();
+          fr.onload = () => { try { img.src = fr.result; resolve(); } catch (e) { reject(e); } };
+          fr.onerror = reject;
+          fr.readAsDataURL(blob);
+        });
+      } catch (e) {
+        console.warn('inline signature failed', e);
+      }
+    }));
+
+    // รอให้รูปทั้งหมดโหลดเสร็จก่อน
+    await Promise.all(
+      Array.from(wrapper.querySelectorAll('img'))
+        .map(img => (img.decode ? img.decode().catch(() => {}) : Promise.resolve()))
+    );
+  } catch (e) {
+    console.warn('inline images block error', e);
+  }
+  // --------------------------------------------------
+
   // DOM -> canvas
-  const worker = html2pdf().set({ html2canvas: { scale: 3, useCORS: true, backgroundColor: '#ffffff' } }).from(wrapper).toCanvas();
+  const worker = html2pdf().set({
+    html2canvas: { scale: 3, useCORS: true, backgroundColor: '#ffffff' }
+  }).from(wrapper).toCanvas();
+
   const canvas = await worker.get('canvas');
   const imgData = canvas.toDataURL('image/jpeg', 0.98);
 
-  // ---- วางรูปลง PDF: ไม่มี margin PDF และ "ชิดมุมซ้ายบน" ----
+  // วางรูปลง PDF แบบเต็มหน้า
   const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
   const pageW = pdf.internal.pageSize.getWidth();
   const pageH = pdf.internal.pageSize.getHeight();
@@ -451,19 +569,18 @@ async _makeA4OnePageBlob(element) {
   const imgRatio = canvas.width / canvas.height;
   const pageRatio = pageW / pageH;
 
-  let drawW, drawH;
+  let drawW, drawH, offsetX = 0, offsetY = 0;
   if (imgRatio > pageRatio) {
-    // จับตามความกว้างหน้า (เหลือพื้นที่ด้านล่างเล็กน้อยได้)
     drawW = pageW;
     drawH = drawW / imgRatio;
+    offsetY = (pageH - drawH) / 2;
   } else {
-    // จับตามความสูงหน้า
     drawH = pageH;
     drawW = drawH * imgRatio;
+    offsetX = (pageW - drawW) / 2;
   }
 
-  // วางชิดซ้ายบน เพื่อตัดช่องว่างบน/ล่างจากการ "จัดกึ่งกลาง"
-  pdf.addImage(imgData, 'JPEG', 0, 0, drawW, drawH);
+  pdf.addImage(imgData, 'JPEG', offsetX, offsetY, drawW, drawH);
 
   const pdfBlob = pdf.output('blob');
 
@@ -474,7 +591,6 @@ async _makeA4OnePageBlob(element) {
 
   return pdfBlob;
 },
-
 
 
 
@@ -850,7 +966,7 @@ async downloadBookingPdf(target) {
    // โหลด/จัดกลุ่มข้อมูลที่ต้องอนุมัติ (Field + Equipment)
 async fetchAndGroup() {
   try {
-    // 1) โหลด users ครั้งแรก เพื่อ map user_id -> display name
+    // 1) users map
     if (!Object.keys(this.userMap || {}).length) {
       const userRes = await axios.get(`${API_BASE}/api/users`);
       this.userMap = {};
@@ -860,20 +976,14 @@ async fetchAndGroup() {
       });
     }
 
-    // 2) โหลดรายการที่ต้องอนุมัติทั้งหมดจาก backend
+    // 2) โหลดทั้งหมด
     const res = await axios.get(`${API_BASE}/api/history/approve_field`);
     const raw = Array.isArray(res.data) ? res.data : [];
 
-    // 3) map ให้ฟิลด์ครบ + รวมชื่อกิจกรรม (แก้ "จะดำเนินกิจกรรม/โครงการ" ไม่ขึ้น)
+    // 3) map field
     const bookings = raw.map((h, idx) => {
-      // ---- รวมชื่อกิจกรรม/โครงการ ไว้ก้อนเดียว แล้วกระจายกลับสองคีย์ ----
       const activityName =
-        h.name_active ||
-        h.name_activity ||
-        h.activity ||
-        h.activity_name ||
-        h.project_name ||
-        "";
+        h.name_active || h.name_activity || h.activity || h.activity_name || h.project_name || "";
 
       return {
         id: h._id?.$oid || h._id || idx + 1,
@@ -897,7 +1007,6 @@ async fetchAndGroup() {
         startTime: h.startTime || "",
         endTime: h.endTime || "",
 
-        // ------ ฟิลด์ขอใช้สถานที่ (field form) ------
         aw: h.aw || "",
         tel: h.tel || "",
         reasons: h.reasons || h.reason || "",
@@ -911,13 +1020,9 @@ async fetchAndGroup() {
         amphitheater: h.amphitheater || "",
         need_equipment: h.need_equipment || "",
         participants: h.participants || "",
-
         agency: h.agency || "",
-
-        // ✅ กระจายกลับให้ทั้งสองคีย์ เพื่อให้พรีวิว/ PDF หาเจอแน่ ๆ
         name_active: activityName,
         name_activity: activityName,
-
         restroom: h.restroom || "",
 
         attachment: Array.isArray(h.attachment) ? h.attachment : [],
@@ -928,7 +1033,7 @@ async fetchAndGroup() {
         createdAt: h.createdAt?.$date || h.createdAt || h.created_at?.$date || h.created_at || null,
         updatedAt: h.updatedAt?.$date || h.updatedAt || h.updated_at?.$date || h.updated_at || null,
 
-        // ฟิลด์อนุมัติ (ใช้เช็กว่าถูกอนุมัติแล้วหรือยัง)
+        // อนุมัติ
         approvedAt: h.approvedAt?.$date || h.approvedAt || null,
         approvedBy: h.approvedBy || '',
         approvedById: h.approvedById || '',
@@ -938,31 +1043,49 @@ async fetchAndGroup() {
         receive_date:  h.receive_date?.$date || h.receive_date || null,
         receive_time:  h.receive_time || null,
 
+        // step/steps
+        step: Array.isArray(h.step) ? h.step : (Array.isArray(h.steps) ? h.steps : []),
       };
     });
 
-    // 4) de-duplicate ตาม id
-    const dedupMap = new Map();
-    for (const b of bookings) {
-      const key = String(b.id);
-      if (!dedupMap.has(key)) dedupMap.set(key, b);
-    }
-    const bookingsClean = Array.from(dedupMap.values());
+    // 4) de-dup
+    const bookingsClean = Array.from(
+      new Map(bookings.map(b => [String(b.id), b])).values()
+    );
 
-    // 5) กรองเฉพาะที่ "ยังไม่อนุมัติ"
-    const pendingOnly = bookingsClean.filter(b => !this.isApprovedRec(b));
+    // 5) ยังไม่อนุมัติ
+    const pendingOnlyRaw = bookingsClean.filter(b => !this.isFullyApproved(b));
 
-    // 6) จัดกลุ่ม
-    // 6.1 สนาม: 1 แถว = 1 กลุ่ม
+    // 6) คัดเฉพาะที่ควรให้โผล่ในหน้า admin (REQUIRED_ROLE = 'admin')
+    const REQUIRED_ROLE = 'admin';
+const pendingOnly = pendingOnlyRaw.filter(b => {
+  if (b.type === 'field') {
+    // สนาม: ตามเดิม (ให้เห็นเฉพาะที่มี role admin ใน step)
+    return this.hasRoleInStep(b, REQUIRED_ROLE);
+  }
+
+  // อุปกรณ์:
+  const isSingle = this.isSingleDayItem(b);
+  if (!isSingle) {
+    // หลายวัน: ตามเดิม (มี admin ใน step)
+    return this.hasRoleInStep(b, REQUIRED_ROLE);
+  }
+
+  // ยืมวันเดียว: แสดงเมื่อ "staff อนุมัติแล้ว" และ "admin ยังไม่อนุมัติ"
+  const hasStaff = this.hasRoleIn(b, 'staff');
+  const hasAdmin = this.hasRoleIn(b, 'admin');
+  const staffOk  = this.isStaffApprovedInStep(b);
+  const adminWait = this.isAdminNotApprovedInStep(b);
+
+  // (สำคัญ) ไม่ต้องเช็ค status ว่า pending เสมอ — บางแบ็กเอนด์เซ็ต approved ไปก่อน
+  return hasStaff && hasAdmin && staffOk && adminWait;
+});
+
+    // 7) จัดกลุ่ม
     const fieldGroups = pendingOnly
       .filter(b => b.type === 'field')
-      .map(f => ({
-        type: 'field',
-        booking_id: f.booking_id || '',
-        items: [f]
-      }));
+      .map(f => ({ type: 'field', booking_id: f.booking_id || '', items: [f] }));
 
-    // 6.2 อุปกรณ์: รวมตาม booking_id
     const equipBuckets = {};
     pendingOnly
       .filter(b => b.type === 'equipment')
@@ -971,14 +1094,13 @@ async fetchAndGroup() {
         if (!equipBuckets[key]) equipBuckets[key] = [];
         equipBuckets[key].push(eq);
       });
-
     const equipmentGroups = Object.entries(equipBuckets).map(([booking_id, items]) => ({
       type: 'equipment',
       booking_id,
       items
     }));
 
-    // 7) รวม + เรียงล่าสุดอยู่บน
+    // 8) รวม + เรียงเวลา
     const combined = [...fieldGroups, ...equipmentGroups];
 
     const safeToTime = (v) => {
@@ -991,7 +1113,6 @@ async fetchAndGroup() {
       const t = new Date(s).getTime();
       return isNaN(t) ? 0 : t;
     };
-
     combined.sort((A, B) => {
       const a0 = A.items?.[0] || {};
       const b0 = B.items?.[0] || {};
@@ -1000,7 +1121,7 @@ async fetchAndGroup() {
       return tb - ta;
     });
 
-    // 8) อัปเดต state เฉพาะเมื่อข้อมูลเปลี่ยนจริง
+    // 9) อัปเดต state เมื่อเปลี่ยนจริง
     const snap = this._makeSnapshot(combined);
     if (snap !== this._lastSnapshot) {
       this.grouped = combined;
@@ -1010,9 +1131,6 @@ async fetchAndGroup() {
     console.error('โหลด/จัดกลุ่มข้อมูลอนุมัติไม่สำเร็จ:', err);
   }
 },
-
-
-
 
 async approveAll() {
   const targets = (this.filteredGrouped || []).filter(g =>
@@ -1139,11 +1257,29 @@ async approveAll() {
   try { await this.fetchAndGroup(); } catch(e){}
 
   if (!failed.length) {
-    Swal.fire('สำเร็จ', 'อนุมัติรายการทั้งหมดเรียบร้อย', 'success');
-  } else {
-    Swal.fire('สำเร็จบางส่วน', `อนุมัติสำเร็จ ${results.length - failed.length} รายการ, ล้มเหลว ${failed.length} รายการ`, 'warning');
+  Swal.fire({
+    icon: 'success',
+    title: 'สำเร็จ',
+    html: 'อนุมัติรายการทั้งหมดเรียบร้อย',
+    width: 900,
+    customClass: {
+    popup: 'swal-success-wide',
+    htmlContainer: 'swal-center-below',  // <-- ทำให้ข้อความอยู่กลางและต่ำลง
+    title: 'swal-center-below'           // (ไม่ใส่ก็ได้ ถ้าอยากให้หัวข้อกลางด้วย)
   }
+  });
+} else {
+  Swal.fire({
+    icon: 'warning',
+    title: 'สำเร็จบางส่วน',
+    html: `อนุมัติสำเร็จ ${results.length - failed.length} รายการ, ล้มเหลว ${failed.length} รายการ`,
+    width: 900,
+    customClass: { popup: 'swal-success-wide' }
+  });
+}
+
 },
+
 
 
 // วางแทนที่เฉพาะฟังก์ชัน approveGroup ได้เลย
@@ -1153,12 +1289,46 @@ async approveGroup(group) {
   const isEquipment = groupType === "equipment";
   const MAX_CH = 110;
 
-  // เคลียร์ค่าจากรอบก่อน
+  // โหลด roles (optional)
+  let selectedRoles = [];
+  try {
+    const rs = await axios.get(`${API_BASE}/api/settings/approval_roles`);
+    selectedRoles = Array.isArray(rs.data?.value)
+      ? rs.data.value.map(r => String(r).toLowerCase())
+      : [];
+  } catch (e) {
+    console.warn("โหลด approval_roles ไม่สำเร็จ:", e);
+  }
+
+  // role ปัจจุบัน
+  const currentRole =
+    (localStorage.getItem("position") ||
+     localStorage.getItem("role") ||
+     "admin").toLowerCase();
+
+  const buildBaseStep = () => selectedRoles.map(r => ({ role: r, approve: null }));
+
+  // helper ตรวจค่าว่างและแปลงวันที่
+  const norm = v => (v == null ? "" : String(v).trim());
+  const isEmptyDate = v => {
+    const s = norm(v).toLowerCase();
+    return s === "" || s === "-" || s === "null" || s === "undefined";
+  };
+  const sameDay = (a, b) => {
+    const da = this.parseToDate(norm(a));
+    const db = this.parseToDate(norm(b));
+    if (!da || !db || isNaN(+da) || isNaN(+db)) return false;
+    return da.getFullYear()===db.getFullYear() &&
+           da.getMonth()===db.getMonth() &&
+           da.getDate()===db.getDate();
+  };
+
+  // reset ฟิลด์ที่ใช้กับสนาม
   this.secretary_choice = null;
   this.reason_admin = '';
 
+  // ===== FIELD: ทำงานตามเดิม (พรีวิว + สร้าง PDF) =====
   if (isField) {
-    // ===== FIELD: พรีวิว =====
     const it = group.items?.[0] || {};
     const reqKey = it.user_id || it.id_form || '';
     const reqSig = this.userSigMap?.[reqKey] || '';
@@ -1172,7 +1342,11 @@ async approveGroup(group) {
       showCancelButton: true,
       confirmButtonText: "ยืนยันอนุมัติ",
       cancelButtonText: "ยกเลิก",
-      customClass: { popup: "swal-form-approve" },
+      customClass: {
+    popup: 'swal-form-approve',
+    htmlContainer: 'swal-center-below',  // <-- ทำให้ข้อความอยู่กลางและต่ำลง
+    title: 'swal-center-below'           // (ไม่ใส่ก็ได้ ถ้าอยากให้หัวข้อกลางด้วย)
+  },
       didOpen: () => {
         const p = Swal.getPopup();
         const chk = p.querySelector('#sec_other_chk');
@@ -1190,7 +1364,7 @@ async approveGroup(group) {
             try {
               const r = document.createRange(); r.selectNodeContents(el); r.collapse(false);
               const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
-            } catch (_) {}
+            } catch (_){}
           }
         };
 
@@ -1204,9 +1378,8 @@ async approveGroup(group) {
           if (allowed.includes(e.key) || e.ctrlKey || e.metaKey) return;
           const cur = getVal(box);
           let hasSelection = false;
-          if (isTextarea) {
-            hasSelection = (box.selectionStart !== box.selectionEnd);
-          } else {
+          if (isTextarea) hasSelection = (box.selectionStart !== box.selectionEnd);
+          else {
             const sel = window.getSelection();
             if (sel && sel.rangeCount) hasSelection = sel.toString().length > 0;
           }
@@ -1244,7 +1417,88 @@ async approveGroup(group) {
     if (!result.isConfirmed) return;
 
   } else {
-    // ===== EQUIPMENT: พรีวิว =====
+    // ===== EQUIPMENT =====
+    const items = Array.isArray(group.items) ? group.items : [];
+
+    // ตรวจ "ยืมวันเดียว" ให้ robust: ว่าง/ขีด/หรือ since==uptodate
+    const isSingleDay = items.every(it => {
+      const s = norm(it.since), u = norm(it.uptodate);
+      if (isEmptyDate(s) && isEmptyDate(u)) return true;
+      if (!isEmptyDate(s) && !isEmptyDate(u) && sameDay(s, u)) return true;
+      return false;
+    });
+
+    if (isSingleDay) {
+      // ---- ยืมวันเดียว: SweetAlert สั้น ๆ ----
+      const ask = await Swal.fire({
+        title: 'ยืนยันอนุมัติยืมอุปกรณ์ (วันเดียว)',
+        text: 'ต้องการอนุมัติรายการนี้ใช่ไหม?',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'อนุมัติ',
+        cancelButtonText: 'ยกเลิก',
+        confirmButtonColor: '#10b981',
+        cancelButtonColor: '#999'
+      });
+      if (!ask.isConfirmed) return;
+
+      const adminUserId = localStorage.getItem("user_id") || "";
+      const approveDate = new Date().toISOString();
+      Swal.fire({ title: "กำลังดำเนินการ...", didOpen: () => Swal.showLoading(), allowOutsideClick: false });
+
+      // กันซ้ำ
+      const seen = new Set(), uniqItems = [];
+      for (const it of items) {
+        const key = String(it.id ?? it._id ?? "") || `${it.name}-${it.booking_id}-${it.startTime}-${it.endTime}`;
+        if (!seen.has(key)) { seen.add(key); uniqItems.push(it); }
+      }
+
+      // step: จาก settings และติ๊กเฉพาะ role ผู้กด
+      const baseStep = buildBaseStep();
+      const step = baseStep.map(s => ({ ...s }));
+      const meIdx = step.findIndex(s => s.role === currentRole);
+      if (meIdx > -1) step[meIdx].approve = true;
+
+      const results = await Promise.allSettled(uniqItems.map(item => {
+        const url = `${API_BASE}/api/history/${item.id}/approve_equipment`;
+        const headers = { "X-Idempotency-Key": `${item.id}-${item.booking_id || ""}-${approveDate}` };
+        const payload = {
+          admin_id: adminUserId,     // ทำให้สถานะไปต่อขั้น admin บน backend
+          approvedAt: approveDate,
+          step
+        };
+        return axios.patch(url, payload, { headers });
+      }));
+
+      const failed = results.filter(r => r.status === 'rejected');
+      try { await this.fetchAndGroup(); } catch (_) {}
+
+      if (!failed.length) {
+  Swal.fire({
+    icon: 'success',
+    title: 'สำเร็จ',
+    html: 'อนุมัติเรียบร้อย',
+    width: 900,
+    customClass: {
+    popup: 'swal-success-wide',
+    htmlContainer: 'swal-center-below',  // <-- ทำให้ข้อความอยู่กลางและต่ำลง
+    title: 'swal-center-below'           // (ไม่ใส่ก็ได้ ถ้าอยากให้หัวข้อกลางด้วย)
+  }
+  });
+} else {
+  Swal.fire({
+    icon: 'warning',
+    title: 'สำเร็จบางส่วน',
+    html: `อนุมัติสำเร็จ ${results.length - failed.length} รายการ, ล้มเหลว ${failed.length} รายการ`,
+    width: 900,
+    customClass: { popup: 'swal-success-wide' }
+  });
+}
+
+      return;
+    }
+
+    // ---- ยืมหลายวัน: พรีวิว + gen/upload PDF (เหมือนเดิม) ----
     const ctx = await this._buildEquipmentCtxFromGroup(group);
     const html = buildEquipmentApprovePreviewHTML(ctx);
 
@@ -1260,7 +1514,6 @@ async approveGroup(group) {
     });
     if (!result.isConfirmed) return;
 
-    // เตรียม PDF ของกลุ่มอุปกรณ์ไว้ล่วงหน้า (ครั้งเดียว)
     let pdfHost = document.getElementById('pdf-capture-approve');
     if (!pdfHost) {
       pdfHost = document.createElement('div');
@@ -1282,19 +1535,17 @@ async approveGroup(group) {
     }
   }
 
-  // ===== เริ่มบันทึกอนุมัติ =====
+  // ===== บันทึกอนุมัติ (สนาม + อุปกรณ์หลายวัน) =====
   const adminUserId = localStorage.getItem("user_id") || "";
   const approveDate = new Date().toISOString();
   Swal.fire({ title: "กำลังดำเนินการ...", didOpen: () => Swal.showLoading(), allowOutsideClick: false });
 
-  // กันซ้ำในกลุ่ม
   const seen = new Set(), uniqItems = [];
   for (const it of group.items || []) {
     const key = String(it.id ?? it._id ?? "") || `${it.name}-${it.booking_id}-${it.startTime}-${it.endTime}`;
     if (!seen.has(key)) { seen.add(key); uniqItems.push(it); }
   }
 
-  // host เผื่อ field/equipment render pdf
   let pdfHost = document.getElementById('pdf-capture-approve');
   if (!pdfHost) {
     pdfHost = document.createElement('div');
@@ -1310,10 +1561,15 @@ async approveGroup(group) {
       ? `${API_BASE}/api/history/${item.id}/approve_field`
       : `${API_BASE}/api/history/${item.id}/approve_equipment`;
 
+    const baseStep = buildBaseStep();
+    const step = baseStep.map(s => ({ ...s }));
+    const meIdx = step.findIndex(s => s.role === currentRole);
+    if (meIdx > -1) step[meIdx].approve = true;
+
     let payload;
 
     if (isFieldItem) {
-      // Field: render + upload PDF ต่อรายการ แล้วอัปเดต bookingPdfUrl แต่ "ไม่ส่ง attachment"
+      // FIELD: gen+upload PDF รายการละ 1
       let pdfUrl = '';
       try {
         const node = this._buildFieldPdfNode(
@@ -1323,27 +1579,19 @@ async approveGroup(group) {
           this.loggedThaiName || '',
           this.loggedSignatureUrl || ''
         );
-
-        // ใส่ข้อความเหตุผลลง DOM ให้ renderer อ่านได้สม่ำเสมอ
-        const reason = String(this.reason_admin || '').slice(0, MAX_CH);
         const boxPdf = node.querySelector('#sec_other_reason') ||
                        node.querySelector('[name="sec_other_reason"]') ||
                        node.querySelector('.sec_other_reason');
         if (boxPdf) {
-          if ('value' in boxPdf) {
-            boxPdf.value = reason;
-          } else {
+          const reason = String(this.reason_admin || '').slice(0, MAX_CH);
+          if ('value' in boxPdf) boxPdf.value = reason;
+          else {
             const repl = document.createElement('div');
             repl.className = 'mfu-input';
             repl.style.cssText = [
-              'border:1px solid #cbd5e1',
-              'border-radius:6px',
-              'padding:6px 8px',
-              'line-height:1.6',
-              'min-height:36px',
-              'white-space:pre-wrap',
-              'word-break:break-word',
-              'overflow-wrap:anywhere'
+              'border:1px solid #cbd5e1','border-radius:6px','padding:6px 8px',
+              'line-height:1.6','min-height:36px','white-space:pre-wrap',
+              'word-break:break-word','overflow-wrap:anywhere'
             ].join(';');
             repl.textContent = reason || '-';
             boxPdf.replaceWith(repl);
@@ -1351,7 +1599,6 @@ async approveGroup(group) {
         }
         const chkPdf = node.querySelector('#sec_other_chk');
         if (chkPdf) chkPdf.checked = true;
-        node.querySelectorAll('[data-ph]').forEach(n => n.setAttribute('data-ph',''));
 
         pdfHost.appendChild(node);
         const pdfBlob = await this._makeA4OnePageBlob(node);
@@ -1362,8 +1609,6 @@ async approveGroup(group) {
         try { pdfHost.innerHTML = ''; } catch(_) {}
       }
 
-      // ✅ อัปเดต bookingPdfUrl / booking_pdf_url เหมือนเดิม
-      // ⛔️ ไม่ส่ง attachment สำหรับ field
       payload = {
         admin_id: adminUserId,
         approvedAt: approveDate,
@@ -1372,16 +1617,17 @@ async approveGroup(group) {
         thaiName_admin: this.loggedThaiName || '',
         signaturePath_admin: this.loggedSignatureUrl || '',
         bookingPdfUrl: pdfUrl || '',
-        booking_pdf_url: pdfUrl || ''
+        booking_pdf_url: pdfUrl || '',
+        step
       };
     } else {
-      // Equipment: ใช้ PDF เดียวกันทั้งกลุ่ม + ส่ง attachment ตามเดิม
+      // อุปกรณ์ (เส้นทางนี้คือ “ยืมหลายวัน”)
       payload = {
-        staff_id: adminUserId,
+        admin_id: adminUserId,
         approvedAt: approveDate,
         bookingPdfUrl: this.__eqPdfUrl || '',
         booking_pdf_url: this.__eqPdfUrl || '',
-        // attachment: this.__eqPdfUrl ? [this.__eqPdfUrl] : []
+        step
       };
     }
 
@@ -1397,13 +1643,28 @@ async approveGroup(group) {
   try { await this.fetchAndGroup(); } catch (_) {}
 
   if (ok.length) {
-    Swal.fire("สำเร็จ", isEquipment ? "อนุมัติอุปกรณ์และบันทึก PDF เรียบร้อย" : "อนุมัติเรียบร้อยแล้ว", "success");
-  } else {
-    const e = fail[0]?.err;
-    const status = e?.response?.status;
-    const msg = e?.response?.data?.message || e?.message || "ไม่สามารถอนุมัติได้";
-    Swal.fire("ผิดพลาด", `${msg}${status ? ` (รหัส ${status})` : ""}`, "error");
+  Swal.fire({
+    icon: 'success',
+    title: 'สำเร็จ',
+    html: isEquipment ? 'อนุมัติอุปกรณ์เรียบร้อย' : 'อนุมัติเรียบร้อยแล้ว',
+    width: 900,
+    customClass: {
+    popup: 'swal-success-wide',
+    htmlContainer: 'swal-center-below',  // <-- ทำให้ข้อความอยู่กลางและต่ำลง
+    title: 'swal-center-below'           // (ไม่ใส่ก็ได้ ถ้าอยากให้หัวข้อกลางด้วย)
   }
+  });
+} else {
+  const e = fail[0]?.err;
+  const status = e?.response?.status;
+  const msg = e?.response?.data?.message || e?.message || 'ไม่สามารถอนุมัติได้';
+  Swal.fire({
+    icon: 'error',
+    title: 'ผิดพลาด',
+    html: `${msg}${status ? ` (รหัส ${status})` : ''}`,
+    width: 700  // error ไม่ต้องกว้างมากก็ได้
+  });
+}
 },
 
 async cancelGroup(group) {
@@ -1556,13 +1817,19 @@ pruneOldNotifications() {
     const cutoff = Date.now() - (7 * 24 * 60 * 60 * 1000);
     this.pruneOldNotifications();
 
-    // ดึง pending field/equipment
     const res = await axios.get(`${API_BASE}/api/history/approve_field`);
     const data = Array.isArray(res.data) ? res.data : [];
 
+    // role ที่ต้องการสำหรับ noti
+    const REQUIRED_ROLE = 'admin';
+    // ถ้าอยากอิงบทบาทผู้ล็อกอิน ให้ใช้:
+    // const REQUIRED_ROLE = (localStorage.getItem('position') || localStorage.getItem('role') || 'admin').toLowerCase();
+
+    // กรอง pending + type ถูกต้อง + step มี role ที่ต้องการ
     const pendings = data.filter(item =>
-      item.status === 'pending' &&
-      (item.type === 'field' || item.type === 'equipment')
+      String(item.status || '').toLowerCase() === 'pending' &&
+      (String(item.type || '').toLowerCase() === 'field' || String(item.type || '').toLowerCase() === 'equipment') &&
+      this.hasRoleInStep(item, REQUIRED_ROLE)
     );
 
     if (pendings.length) {
@@ -1577,7 +1844,7 @@ pruneOldNotifications() {
           id,
           type: 'pending',
           timestamp: ts,
-          message: item.type === 'field'
+          message: String(item.type || '').toLowerCase() === 'field'
             ? `สนาม '${item.name}' กำลังรอการอนุมัติ`
             : `อุปกรณ์ '${item.name}' กำลังรอการอนุมัติ`,
         };
@@ -1591,12 +1858,13 @@ pruneOldNotifications() {
       this.pruneOldNotifications();
     }
 
-    // นับ unread จาก timestamp > lastSeenTimestamp (sync ทุกหน้า)
+    // นับ unread จาก timestamp > lastSeenTimestamp
     this.unreadCount = this.notifications.filter(n => n.timestamp > this.lastSeenTimestamp).length;
   } catch (err) {
-    // ไม่ต้องแจ้ง error
+    // เงียบได้ ไม่ต้องแจ้ง error
   }
 },
+
 
 handleResize() {
     this.isMobile = window.innerWidth <= 800;
@@ -2576,8 +2844,17 @@ doc.text(`โทร ${data.tel || '-'}`, 430, 100);
      window.removeEventListener('resize', this.handleResize);
   }
 }
+
+function toAbsUrl(u) {
+  if (!u) return '';
+  if (/^(data:|blob:|https?:|file:)/i.test(u)) return u;
+  const a = document.createElement('a');
+  a.href = u.startsWith('/') ? u : '/' + u;
+  return a.href;
+}
+
+
 // --- Field detail popup helpers (module-scope) ---
-// ใช้เวลาปัจจุบันตอนกดอนุมัติในช่อง 1. เลขานุการศูนย์กีฬา
 function buildFieldFormPreviewV2(
   b = {},
   secThaiName = '',
@@ -2585,6 +2862,15 @@ function buildFieldFormPreviewV2(
   reqSignUrl = '',
   secApprovedAt
 ) {
+  // --- helpers ---
+  const toAbsUrlLocal = (url) => {
+    if (typeof toAbsUrl === 'function') return toAbsUrl(url);
+    if (!url) return '';
+    if (/^(data:|https?:)/i.test(url)) return url;
+    const base = location.origin.replace(/^http:/, location.protocol);
+    if (url.startsWith('/')) return base + url;
+    return base + '/' + url.replace(/^\.\//, '');
+  };
   const dash = v => { const s = (v ?? '').toString().trim(); return s ? s : '-'; };
   const d = v => (v ?? '-') + '';
   const fmtDate = s => {
@@ -2651,12 +2937,12 @@ function buildFieldFormPreviewV2(
   return `
   <div class="mfu-form">
     <style>
-      .mfu-form{ font-family:'THSarabunNew','Sarabun','Noto Sans Thai',system-ui,sans-serif; color:#111; line-height:1.35; }
+      .mfu-form{ font-family:'THSarabunNew','Sarabun','Noto Sans Thai',system-ui,sans-serif; color:#111; line-height:1.35; font-size:14px; }
       .mfu-head{text-align:center;margin-bottom:10px;}
       .mfu-title{font-size:22px;font-weight:700;}
       .mfu-sub{font-size:14px;margin-top:4px;}
-      .mfu-meta{display:flex;gap:18px;flex-wrap:wrap;font-size:16px;margin:10px 0 4px;}
-      .mfu-sec{margin-top:14px;font-size:16px;display:block;}
+      .mfu-meta{display:flex;gap:18px;flex-wrap:wrap;font-size:14px;margin:10px 0 4px;}
+      .mfu-sec{margin-top:14px;font-size:14px;display:block;}
       .mfu-sec h4{margin:0;padding:0 0 10px;line-height:1.35;font-weight:700;}
       .mfu-par{text-indent:2em;margin-top:6px;}
       .mfu-list{list-style:none;margin:4px 0 0;padding:0;}
@@ -2671,7 +2957,7 @@ function buildFieldFormPreviewV2(
       .mfu-yn .choice.on .dot{color:currentColor;}
       .mfu-boxes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:12px;}
       @media (max-width:720px){.mfu-boxes{grid-template-columns:1fr;}}
-      .mfu-box{border:1px solid #333;padding:10px 12px;min-height:200px;position:relative;}
+      .mfu-box{border:1px solid #333;padding:10px 12px;min-height:200px;position:relative; font-size:14px; }
       .mfu-box h5{margin:0 0 8px;font-size:16px;font-weight:700;text-align:center;}
       .mfu-box .row{ display:flex; align-items:baseline; gap:8px; min-height:36px; flex-wrap:nowrap; }
       .mfu-box .chk{ display:flex; align-items:center; gap:8px; cursor:pointer; white-space:nowrap; }
@@ -2692,14 +2978,29 @@ function buildFieldFormPreviewV2(
       .mfu-sign.mfu-signline .dots{ height:1.15em; border-bottom:1px dotted #888; position:relative; }
       .mfu-sign.mfu-signline .sigimg{ position:absolute; top:-34px; left:0; right:0; margin:0 auto; max-height:48px; width:auto; opacity:.95; pointer-events:none; }
       .mfu-sign.mfu-signline .name,.mfu-sign.mfu-signline .role{ grid-column:2; text-align:center; display:block; margin-top:6px; }
-      .mfu-sign.mfu-signline .date{ grid-column:2; text-align:center; display:block; margin-top:6px; }
+      .mfu-sign.mfu-signline .date{ 
+        grid-column:2; 
+        text-align:center; 
+        display:block; 
+        margin-top:6px; 
+        font-size:11px;  
+      }
+
       .mfu-box .row.center{ justify-content: center; }
-      .mfu-box .row.center .date{ text-align: center; display: inline-block; }
+      .mfu-box .row.center .date{ 
+        text-align: center; 
+        display: inline-block; 
+        font-size:11px;  
+      }
       .mfu-box .paren-row{ justify-content: center; }
       .mfu-box .sig-row.spacer{ height:56px; }
-
-      /* จำกัดช่อง ‘อื่นๆ’ ให้ไม่เกิน 3 บรรทัดจริง ๆ และไม่โชว์สกรอลล์บาร์ */
       .limit-3lines{ max-height: calc(1.6em * 3); overflow: hidden; }
+      .mfu-list-loc b { display:inline-block; min-width: 90px; white-space: nowrap; } 
+      .mfu-tbl { border-collapse: collapse; margin-top:4px; }
+      .mfu-tbl td { padding: 4px 6px; font-size:14px; vertical-align: top; }
+      .mfu-tbl .lbl   { min-width: 80px; white-space: nowrap; font-weight:700; }
+      .mfu-tbl .colon { width: 10px; text-align:center; }
+      .mfu-tbl .val   { width:auto; padding-left:4px; }
     </style>
 
     <div class="mfu-head">
@@ -2726,10 +3027,18 @@ function buildFieldFormPreviewV2(
 
     <div class="mfu-sec">
       <h4>1. ขออนุมัติใช้สถานที่</h4>
-      <ul class="mfu-list">
-        <li><b>อาคาร:</b> ${d(b?.name)}</li>
-        <li><b>พื้นที่/ห้อง:</b> ${dash(b?.zone)}</li>
-      </ul>
+      <table class="mfu-tbl mfu-tbl-loc" style="margin-left:31px;">
+        <tr>
+          <td class="lbl"><b>อาคาร</b></td>
+          <td class="colon">:</td>
+          <td class="val">${d(b?.name)}</td>
+        </tr>
+        <tr>
+          <td class="lbl"><b>พื้นที่/ห้อง</b></td>
+          <td class="colon">:</td>
+          <td class="val">${dash(b?.zone)}</td>
+        </tr>
+      </table>
     </div>
 
     <div class="mfu-sec">
@@ -2738,10 +3047,19 @@ function buildFieldFormPreviewV2(
         <span class="choice yes ${u.yOn ? 'on' : ''}"><span class="dot">${u.yChar}</span> เลือก</span>
         <span class="choice no  ${u.nOn ? 'on' : ''}"><span class="dot">${u.nChar}</span> ไม่เลือก</span>
       </div>
-      <ul class="mfu-list mfu-list-util" style="margin-left:31px;">
-        <li><b>2.1 ไฟฟ้าส่องสว่าง:</b> ตั้งแต่ ${fmtTime(b?.turnon_lights)} - ${fmtTime(b?.turnoff_lights)}</li>
-        <li><b>2.2 สุขา:</b> ${restroomText}</li>
-      </ul>
+      <table class="mfu-tbl mfu-tbl-util" style="margin-left:31px;">
+        <tr>
+          <td class="lbl"><b>2.1 ไฟฟ้าส่องสว่าง</b></td>
+          <td class="colon">:</td>
+          <td class="val">ตั้งแต่ ${fmtTime(b?.turnon_lights)} - ${fmtTime(b?.turnoff_lights)}</td>
+        </tr>
+        <tr>
+          <td class="lbl"><b>2.2 สุขา</b></td>
+          <td class="colon">:</td>
+          <td class="val">${restroomText}</td>
+        </tr>
+      </table>
+
       <div class="mfu-note">
         *ต้องได้รับการอนุมัติจากรองอธิการบดีผู้กำกับดูแล และสำเนาเอกสารถึงฝ่ายอนุรักษ์พลังงาน
       </div>
@@ -2753,10 +3071,19 @@ function buildFieldFormPreviewV2(
         <span class="choice ${f.yOn ? 'on' : ''}"><span class="dot">${f.yOn ? '●' : '○'}</span> เลือก</span>
         <span class="choice ${f.nOn ? 'on' : ''}"><span class="dot">${f.nOn ? '●' : '○'}</span> ไม่เลือก</span>
       </div>
-      <ul class="mfu-list" style="margin-left:31px;">
-        <li><b>3.1 ดึงอัฒจันทร์ภายในอาคารเฉลิมพระเกียรติฯ:</b> ${dash(b?.amphitheater)}</li>
-        <li><b>3.2 อุปกรณ์กีฬา (โปรดระบุ):</b> ${dash(b?.need_equipment)}</li>
-      </ul>
+      <table class="mfu-tbl mfu-tbl-fac" style="margin-left:31px;">
+        <tr>
+          <td class="lbl"><b>3.1 ดึงอัฒจันทร์ภายในอาคารเฉลิมพระเกียรติฯ</b></td>
+          <td class="colon">:</td>
+          <td class="val">${dash(b?.amphitheater)}</td>
+        </tr>
+        <tr>
+          <td class="lbl"><b>3.2 อุปกรณ์กีฬา (โปรดระบุรายการและจำนวน)</b></td>
+          <td class="colon">:</td>
+          <td class="val">${dash(b?.need_equipment)}</td>
+        </tr>
+      </table>
+
       <div class="mfu-note">
         ทั้งนี้ต้องแนบเอกสารโครงการหรือกิจกรรมที่ได้รับการอนุมัติแล้วพร้อมกำหนดการจัดกิจกรรมหากเป็นการเรียนการสอน <br>
         ต้องแนบตารางการเรียนการสอน (Class schedule) พร้อมทั้งรายชื่อนักศึกษา
@@ -2767,7 +3094,7 @@ function buildFieldFormPreviewV2(
     <div class="mfu-sign mfu-signline" style="margin-top: 50px">
       <span class="lab">ลงชื่อ</span>
       <span class="dots">
-        ${reqSignUrl ? `<img class="sigimg" src="${reqSignUrl}" crossorigin="anonymous" alt="signature">` : ``}
+        ${reqSignUrl ? `<img class="sigimg" src="${toAbsUrlLocal(reqSignUrl)}" alt="signature">` : ``}
       </span>
       <span class="name">( ${d(b?.username_form || b?.requester)} )</span>
       <span class="role">ผู้รับผิดชอบ</span>
@@ -2781,7 +3108,6 @@ function buildFieldFormPreviewV2(
           <label class="chk" style="padding-left:30px"><span>เรียน หัวหน้าศูนย์กีฬาฯ</span></label>
         </div>
 
-        <!-- ช่อง “อื่นๆ” แบบ contenteditable: จำกัดจริง 3 บรรทัด + 255 ตัว -->
         <div class="row">
           <label class="chk">
             <input type="checkbox" id="sec_other_chk" />
@@ -2814,7 +3140,7 @@ function buildFieldFormPreviewV2(
         </div>
 
         <div class="row sig-row">
-          ${secSignUrl ? `<img class="sigimg" src="${secSignUrl}" crossorigin="anonymous" alt="signature">` : ``}
+          ${secSignUrl ? `<img class="sigimg" src="${toAbsUrlLocal(secSignUrl)}" alt="signature">` : ``}
         </div>
         <div class="row paren-row"><span class="paren">(</span><span style="flex:1;text-align:center;">${(secThaiName ?? '-') + ''}</span><span class="paren">)</span></div>
         <div class="row center"><span></span><span class="date">${fmtDateTimeTH(secNow)}</span></div>
@@ -2826,19 +3152,24 @@ function buildFieldFormPreviewV2(
           <label class="chk"><input type="checkbox" id="head_to_vice" disabled /><span>เห็นชอบ</span></label>
         </div>
 
-        <!-- textarea (แม้ disabled ก็กัน input ให้แน่นอนถ้าเปิดใช้): 3 บรรทัด -->
         <div class="row">
-          <label class="chk"><input type="checkbox" id="head_other_chk" disabled /><span>อื่นๆ :</span></label>
-          <textarea id="head_other_reason"
-                    class="mfu-input limit-3lines"
-                    placeholder="โปรดระบุ"
-                    rows="3"
-                    disabled
-                    style="resize:none;"
-                    oninput="var v=this.value.replace(/\r/g,''); v=v.split('\n').slice(0,3).join('\n'); if(v.length>255)v=v.slice(0,255); if(v!==this.value)this.value=v;"
-                    onkeydown="if(event.key==='Enter' && (this.value.split('\n').length>=3)){event.preventDefault();}"
-                    onpaste="setTimeout(()=>{var v=this.value.replace(/\r/g,''); v=v.split('\n').slice(0,3).join('\n'); if(v.length>255)v=v.slice(0,255); if(v!==this.value)this.value=v;},0)"></textarea>
-        </div>
+  <label class="chk">
+    <input type="checkbox" id="head_other_chk" disabled />
+    <span>อื่นๆ :</span>
+  </label>
+
+  <textarea id="head_other_reason"
+            class="mfu-input limit-3lines"
+            placeholder="โปรดระบุ"
+            rows="1"
+            disabled
+            style="resize:none;"
+            oninput="var v=this.value.replace(/\r/g,''); v=v.split('\n').slice(0,3).join('\n'); if(v.length>255)v=v.slice(0,255); if(v!==this.value)this.value=v;"
+            onkeydown="if(event.key==='Enter' && (this.value.split('\n').length>=3)){event.preventDefault();}"
+            onpaste="setTimeout(()=>{var v=this.value.replace(/\r/g,''); v=v.split('\n').slice(0,3).join('\n'); if(v.length>255)v=v.slice(0,255); if(v!==this.value)this.value=v;},0)">
+  </textarea>
+</div>
+
 
         <div class="row sig-row spacer"></div>
         <div class="row paren-row"><span class="paren">(</span><span style="flex:1;text-align:center;"></span><span class="paren">)</span></div>
@@ -2847,9 +3178,6 @@ function buildFieldFormPreviewV2(
     </div>
   </div>`;
 }
-
-
-
 
 
 // === Equipment approve preview (HTML แสดงใน Swal) ===
@@ -3193,6 +3521,21 @@ function buildEquipmentApprovePreviewHTML(ctx) {
 .swal2-popup.swal-form-approve .swal2-html-container{ max-height:70vh; overflow:auto; margin:10px 0 0 !important; }
 .swal2-popup.swal-form-approve .swal2-actions{ margin:18px 0 0 !important; }
 .swal2-popup.swal-form-approve .mfu-form .mfu-list li.tight b{ min-width:60px !important; }
+
+/* GLOBAL (ไม่ scoped) */
+/* ใช้เฉพาะ success popup ของ approve_field */
+.swal-success-wide .swal2-html-container{
+  width: 100%;
+  display: flex;              /* จัดกลางแนวนอนด้วย flex */
+  justify-content: center;
+  text-align: center !important;
+  margin: 8px auto 0 !important; /* ขยับลงเล็กน้อยตามที่ต้องการ */
+}
+.swal-success-wide .swal2-title{
+  text-align: center !important;
+}
+
+
 </style>
 
 
@@ -3342,4 +3685,28 @@ function buildEquipmentApprovePreviewHTML(ctx) {
 .mfu-box .chk{ white-space:nowrap; }
 .mfu-box .sig-row{ height:56px; display:flex; align-items:flex-end; }
 .mfu-box .sig-row + .row{ margin-top:0; align-items:center; }
+
+/* === SweetAlert: success popup ให้กว้างขึ้น === */
+.swal-success-wide.swal2-popup{
+  max-width: 900px !important;   /* กว้างขึ้นจากค่าเริ่มต้น ~32em */
+  width: 900px !important;        /* เผื่อบางธีมอิง width */
+}
+@media (max-width: 980px){
+  .swal-success-wide.swal2-popup{ max-width: 92vw !important; width: 92vw !important; }
+}
+
+/* จัดข้อความ HTML ของ SweetAlert ให้อยู่กลาง และเลื่อนลงนิด */
+.swal-center-below{ 
+  text-align: center !important;
+  margin: 8px auto 0 !important;   /* ดันลงด้านล่างเล็กน้อย */
+  width: 100%;
+}
+
+
+
+/* ให้ไอคอนกับหัวข้อมีระยะห่างที่พอดี */
+.swal-success-wide .swal2-icon{ margin: 10px auto 6px !important; }
+
+.swal-success-wide .swal2-title{ text-align: center !important; }
+
 </style>

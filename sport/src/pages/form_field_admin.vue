@@ -11,6 +11,7 @@
         <router-link to="/home_admin" exact-active-class="active"><i class="pi pi-megaphone"></i> แก้ไขข่าว</router-link>
         <router-link to="/edit_field" active-class="active"><i class="pi pi-map-marker"></i> แก้ไขสนาม</router-link>
         <router-link to="/edit_equipment" active-class="active"><i class="pi pi-clipboard"></i> แก้ไขอุปกรณ์ </router-link>
+         <router-link to="/step" active-class="active"><i class="pi pi-sitemap"></i> แก้ไขขั้นตอนการอนุมัติ </router-link>
         <router-link to="/booking_field_admin" active-class="active"><i class="pi pi-map-marker"></i> จองสนาม</router-link>
         <router-link to="/approve_field" active-class="active"><i class="pi pi-verified"></i> อนุมัติ</router-link>
         <!-- <router-link to="/return_admin" active-class="active"><i class="pi pi-box"></i> รับคืนอุปกรณ์ </router-link> -->
@@ -543,6 +544,7 @@ import '@vuepic/vue-datepicker/dist/main.css'
 import dayjs from 'dayjs'
 
 const API_BASE = import.meta.env.VITE_API_BASE
+const ADMIN_LAST_SEEN_KEY = 'admin_lastSeenTimestamp'
 
 const agencyInputEl = ref(null)
 
@@ -575,7 +577,7 @@ const id_form = ref(localStorage.getItem('id_form') || '')
 const MAX_FILE_SIZE = 100 * 1024 * 1024;   // 100MB ต่อไฟล์
 const MAX_TOTAL_SIZE = 100 * 1024 * 1024;  // รวมสูงสุด 100MB
 
-const lastSeenTimestamp = ref(parseInt(localStorage.getItem('admin_lastSeenTimestamp') || '0'))
+const lastSeenTimestamp = ref(0)
 let polling = null
 
 
@@ -710,8 +712,8 @@ const filteredAgencyOptions = computed(() => {
   )
 })
 
-function pruneOldNotifications() {
-  const cutoff = Date.now() - (7 * 24 * 60 * 60 * 1000) // เก็บแค่ 7 วัน
+function pruneOldNotifications () {
+  const cutoff = Date.now() - (7 * 24 * 60 * 60 * 1000) // เก็บ 7 วัน
   notifications.value = notifications.value.filter(n => (n?.timestamp ?? 0) >= cutoff)
 }
 
@@ -818,33 +820,50 @@ function toggleSidebar() {
 const telError = ref(false)
 
 // Notification functions
-function toggleNotifications() {
+function toggleNotifications () {
   showNotifications.value = !showNotifications.value
   if (showNotifications.value) {
-    // เปิด dropdown → เคลียร์ badge
     lastSeenTimestamp.value = Date.now()
-    localStorage.setItem('admin_lastSeenTimestamp', String(lastSeenTimestamp.value))
-    unreadCount.value = 0
+    localStorage.setItem(ADMIN_LAST_SEEN_KEY, String(lastSeenTimestamp.value))
+    unreadCount.value = 0 // เคลียร์ badge เมื่อเปิด dropdown
   }
 }
 
-function closeNotifications() {
+function closeNotifications () {
   showNotifications.value = false
 }
 
-async function fetchNotifications() {
+/** ปิด dropdown เมื่อคลิกรอบนอก */
+function handleClickOutside (event) {
+  const dropdown = document.querySelector('.notification-dropdown')
+  const btn = document.querySelector('.notification-btn')
+  if (
+    dropdown &&
+    !dropdown.contains(event.target) &&
+    btn &&
+    !btn.contains(event.target)
+  ) {
+    closeNotifications()
+  }
+}
+
+/** ดึงแจ้งเตือน pending เฉพาะ field / equipment */
+async function fetchNotifications () {
   try {
     pruneOldNotifications()
+
     const res = await axios.get(`${API_BASE}/api/history/approve_field`)
     const data = Array.isArray(res.data) ? res.data : []
 
-    const pendings = data.filter(item =>
-      item?.status === 'pending' &&
-      (item?.type === 'field' || item?.type === 'equipment')
+    const pendings = data.filter(
+      (item) =>
+        String(item.status || '').toLowerCase() === 'pending' &&
+        (String(item.type || '').toLowerCase() === 'field' ||
+         String(item.type || '').toLowerCase() === 'equipment')
     )
 
     if (pendings.length) {
-      const newMessages = pendings.map(item => {
+      const newMessages = pendings.map((item) => {
         const id = item._id?.$oid || item._id
         const ts =
           (item.updatedAt && new Date(item.updatedAt).getTime()) ??
@@ -856,12 +875,13 @@ async function fetchNotifications() {
           id,
           type: 'pending',
           timestamp: ts,
-          message: item.type === 'field'
+          message: String(item.type || '').toLowerCase() === 'field'
             ? `สนาม '${item.name}' กำลังรอการอนุมัติ`
             : `อุปกรณ์ '${item.name}' กำลังรอการอนุมัติ`
         }
       })
 
+      // รวม-ตัดซ้ำ-เรียงใหม่สุดก่อน
       notifications.value = [...notifications.value, ...newMessages]
         .filter((v, i, arr) => arr.findIndex(x => (x.id || i) === (v.id || i)) === i)
         .sort((a, b) => b.timestamp - a.timestamp)
@@ -869,10 +889,10 @@ async function fetchNotifications() {
       pruneOldNotifications()
     }
 
-    // อัปเดตจำนวน unread
+    // badge = จำนวนรายการที่ timestamp > lastSeenTimestamp
     unreadCount.value = notifications.value.filter(n => n.timestamp > lastSeenTimestamp.value).length
   } catch {
-    /* error → เงียบไว้ */
+    // เงียบได้
   }
 }
 
@@ -1479,8 +1499,6 @@ async function handleSubmit() {
     })
 
     localStorage.setItem('bookingId', res.data.bookingId)
-    localStorage.setItem('username_form', username_form.value || '')
-    localStorage.setItem('id_form', id_form.value || '')
 
     // เก็บไฟล์จริงไว้สำหรับกด Back/Next อีกรอบ
     window._tempSelectedFiles = selectedFiles.value
@@ -1646,9 +1664,8 @@ function onlyAwInput(e) {
 }
 
 // onMounted: โหลดข้อมูลเริ่มต้น
-// onMounted: โหลดข้อมูลเริ่มต้น
 onMounted(async () => {
-  // ======= ตั้งค่า loginName, proxyUserId, loginStudentId =======
+  /* ====== ตั้งค่าผู้ใช้/ผู้ยื่น ====== */
   if (studentId.value) {
     loginStudentId.value = studentId.value
     proxyUserId.value = studentId.value
@@ -1670,6 +1687,8 @@ onMounted(async () => {
       if (res.data && res.data.name) {
         formData.value.requester = res.data.name
         loginName.value = res.data.name
+      } else {
+        loginName.value = 'ชื่อผู้ใช้ระบบ'
       }
     } catch {
       loginName.value = 'ชื่อผู้ใช้ระบบ'
@@ -1678,23 +1697,30 @@ onMounted(async () => {
     loginName.value = 'ชื่อผู้ใช้ระบบ'
   }
 
-  if (!username_form.value) {
-  username_form.value = localStorage.getItem('username_form') || ''
-  }
-  if (!id_form.value) {
-    id_form.value = localStorage.getItem('id_form') || ''
-  }
+  // กู้ชื่อ/รหัสผู้ขอจาก localStorage ถ้ามี
+  username_form.value = ''
+  id_form.value = ''
+  localStorage.removeItem('username_form')
+  localStorage.removeItem('id_form')
 
-  // ======= กรณี restore form จาก session =======
-  if (route.query.restore === 'true') {
+
+  /* ====== restore ฟอร์ม/อาคาร/โซน ====== */
+  const restore = route.query.restore === 'true'
+  if (restore) {
     loadFormFromSession()
     loadFilesFromGlobal()
     if (!formData.value.building) {
-      const storedBuilding = sessionStorage.getItem('fieldName') || localStorage.getItem('fieldName') || localStorage.getItem('buildingSelected')
+      const storedBuilding =
+        sessionStorage.getItem('fieldName') ||
+        localStorage.getItem('fieldName') ||
+        localStorage.getItem('buildingSelected')
       if (storedBuilding) formData.value.building = storedBuilding
     }
     if (!formData.value.zone) {
-      const storedZone = sessionStorage.getItem('zone') || localStorage.getItem('zone') || localStorage.getItem('zoneSelected')
+      const storedZone =
+        sessionStorage.getItem('zone') ||
+        localStorage.getItem('zone') ||
+        localStorage.getItem('zoneSelected')
       if (storedZone) formData.value.zone = storedZone
     }
     if (route.query.fieldName) formData.value.building = route.query.fieldName
@@ -1702,51 +1728,60 @@ onMounted(async () => {
   } else {
     if (route.query.fieldName) formData.value.building = route.query.fieldName
     if (route.query.zone) formData.value.zone = route.query.zone
+
     if (!formData.value.building) {
-      const storedBuilding = sessionStorage.getItem('fieldName') || localStorage.getItem('fieldName') || localStorage.getItem('buildingSelected')
+      const storedBuilding =
+        sessionStorage.getItem('fieldName') ||
+        localStorage.getItem('fieldName') ||
+        localStorage.getItem('buildingSelected')
       if (storedBuilding) formData.value.building = storedBuilding
     }
     if (!formData.value.zone) {
-      const storedZone = sessionStorage.getItem('zone') || localStorage.getItem('zone') || localStorage.getItem('zoneSelected')
+      const storedZone =
+        sessionStorage.getItem('zone') ||
+        localStorage.getItem('zone') ||
+        localStorage.getItem('zoneSelected')
       if (storedZone) formData.value.zone = storedZone
     }
   }
 
-  // ======= โหลดตัวเลือกหน่วยงาน =======
+  /* ====== โหลดตัวเลือกหน่วยงาน ====== */
   try {
     const res = await axios.get(`${API_BASE}/api/information?type=equipment`)
     const uniqueUnits = [...new Set(res.data.map(item => item.unit))]
     agencyOptions.value = uniqueUnits
-    if (!agencyOptions.value.includes('อื่นๆ')) agencyOptions.value.push('อื่นๆ')
-  } catch (e) {
+    if (!agencyOptions.value.includes('อื่นๆ')) {
+      agencyOptions.value.push('อื่นๆ')
+    }
+  } catch {
     agencyOptions.value = ['อื่นๆ']
   }
 
-   lastSeenTimestamp.value = parseInt(localStorage.getItem('lastSeenTimestamp') || '0')
+  /* ====== ตั้งค่า DatePicker ให้ตรงกับค่าที่มี ====== */
+  dpDate.value  = safeDate(formData.value.date)
 
-  // ======= โหลดแจ้งเตือน + รถเข็น =======
+  const s = safeDate(formData.value.since)
+  const e = safeDate(formData.value.uptodate)
+  dpStart.value = s
+  dpEnd.value   = e
+  dpRange.value = (s && e) ? [s, e] : null
+
+  /* ====== แจ้งเตือน (กระดิ่ง) ====== */
+  lastSeenTimestamp.value = parseInt(
+    localStorage.getItem(ADMIN_LAST_SEEN_KEY) ||
+    localStorage.getItem('lastSeenTimestamp') || // เผื่อเคยใช้คีย์เก่า
+    '0'
+  )
+
   await fetchNotifications()
   polling = setInterval(fetchNotifications, 30000)
-  loadCart()
+  document.addEventListener('mousedown', handleClickOutside)
 
-  // ======= โหลดข้อมูลฟอร์มที่เคยกรอก =======
+  /* ====== โหลดฟอร์ม/ไฟล์ค้างไว้ (ซ้ำอีกรอบเพื่อความชัวร์หลังทุกอย่างตั้งค่าแล้ว) ====== */
   loadFormFromSession()
   loadFilesFromGlobal()
-
-  // ======= เซ็ตค่า DatePicker ให้ตรงกับข้อมูลเดิม =======
-  dpDate.value  = safeDate(formData.value.date)
-  dpStart.value = safeDate(formData.value.since)
-  dpEnd.value   = safeDate(formData.value.uptodate)
-  // ======= เซ็ตค่า DatePicker ให้ตรงกับข้อมูลเดิม =======
-dpDate.value  = safeDate(formData.value.date)
-
-const s = safeDate(formData.value.since)
-const e = safeDate(formData.value.uptodate)
-dpStart.value = s
-dpEnd.value   = e
-dpRange.value = (s && e) ? [s, e] : null     // <-- ถ้าไม่มีค่าจริง ให้เป็น null
-
 })
+
 
 // ✅ โหลดคืนไฟล์ทุกครั้งเมื่อ component ถูก activate (เช่น Back จากหน้า 3)
 onActivated(() => {
@@ -1761,6 +1796,7 @@ watch(() => route.fullPath, () => {
 
 onBeforeUnmount(() => {
   if (polling) clearInterval(polling)
+  document.removeEventListener('mousedown', handleClickOutside)
 })
 
 

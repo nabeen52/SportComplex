@@ -360,28 +360,73 @@ async _downloadApprovePreviewPdf(group) {
   if (u.startsWith('/')) return base + u;                  // /uploads/...
   return base + '/' + u.replace(/^\.?\//,'');              // uploads/..., ./uploads/...
 },
-
-    
-
     // 👇 วางไว้ใน methods
-  hasSecretaryMeta(h) {
+  // ผ่อนเงื่อนไข: ถือว่า "ผ่านเลขาฯแล้ว" ถ้ามีสัญญาณใดสัญญาณหนึ่งด้านล่าง
+
+  buildUserSigIndex(users = []) {
+  const idx = {};
+  const put = (k, v) => {
+    const key = (k ?? '').toString().trim();
+    if (key) idx[key] = v;
+  };
+
+  users.forEach(u => {
+    const sig = this.resolveSignUrl(u?.signaturePath || u?.signature_url || '');
+    if (!sig) return;
+
+    // กุญแจที่มักใช้หาเจ้าของคำขอ
+    put(u?.user_id, sig);
+    put(u?.id_form, sig);
+    put(u?.email,   sig);
+
+    const fullname =
+      ((u?.firstname || '') + ' ' + (u?.lastname || '')).trim() || u?.name || '';
+    put(fullname, sig);
+  });
+
+  return idx; // คืน object สำหรับ map ค่าลายเซ็น
+},
+
+
+hasSecretaryMeta(h) {
   const hasBy   = typeof h?.approvedBy === 'string'
     ? h.approvedBy.trim() !== ''
     : !!h?.approvedBy;
-
   const hasById = typeof h?.approvedById === 'string'
     ? h.approvedById.trim() !== ''
     : !!h?.approvedById;
-
   const hasAt   = !!h?.approvedAt;
+  return hasBy && hasById && hasAt;
+},
 
-  return hasBy && hasById && hasAt;   // ✅ พอแค่นี้
+hasAdminApprovedStep(h) {
+  const steps = Array.isArray(h?.step) ? h.step : [];
+  const admin = steps.find(s => String(s?.role).toLowerCase() === 'admin');
+  const superv = steps.find(s => String(s?.role).toLowerCase() === 'super');
+  const adminApproved = !!admin && admin.approve === true;
+  const superNotApproved = !superv || superv.approve !== true;
+  return adminApproved && superNotApproved;
 },
+
+// งานที่ "รอหัวหน้า" = field + status:pending + ผ่านเลขาฯแล้ว + (super ยังไม่อนุมัติ)
 isSuperPending(h) {
-  return String(h?.type || '').toLowerCase() === 'field'
-      && String(h?.status || '').toLowerCase() === 'pending'
-      && this.hasSecretaryMeta(h);
+  const typeOk = String(h?.type || '').toLowerCase() === 'field';
+
+  // ดู step ก่อน: admin ผ่านแล้ว แต่ super ยัง
+  const byStep = this.hasAdminApprovedStep(h) || this.hasSecretaryMeta(h);
+
+  // สถานะที่ถือว่า "ปิดงานแล้ว"
+  const finalStatuses = new Set(['approved','rejected','cancelled','canceled','returned','done','complete']);
+
+  const st = String(h?.status || '').toLowerCase().trim();
+
+  // ถ้าไม่มีสถานะ ให้ถือว่ายังเปิดอยู่
+  const stillOpen = !st || !finalStatuses.has(st);
+
+  return typeOk && byStep && stillOpen;
 },
+
+
 
 
     // แปลง string เป็น Date แบบปลอดภัย (กัน timezone เพี้ยนกรณี 'YYYY-MM-DD')
@@ -567,41 +612,40 @@ async downloadBookingPdf(target) {
   },
 
    // ===== methods: fetchAndGroup() =====
+// ===== methods: fetchAndGroup() =====
 async fetchAndGroup() {
   try {
-    // โหลด users ครั้งแรกถ้ายังไม่มี (เก็บทั้งชื่อ และ URL ลายเซ็น)
+    // โหลด users ครั้งแรกถ้ายังไม่มี (ชื่อ + ลายเซ็น)
     if (!Object.keys(this.userMap || {}).length) {
       const userRes = await axios.get(`${API_BASE}/api/users`);
       this.userMap = {};
-      this.userSigMap = {}; // 👈 เก็บลายเซ็นผู้ใช้
+      this.userSigMap = {};
 
       (userRes.data || []).forEach(u => {
-        // ชื่อที่จะแสดง
         this.userMap[u.user_id] =
           (u.firstname && u.lastname)
             ? `${u.firstname} ${u.lastname}`
             : (u.name || u.user_id);
 
-        // URL ลายเซ็น (absolute) — ใช้เมธอด resolveSignUrl ที่มีอยู่ใน component
         const sig = this.resolveSignUrl(u.signaturePath || u.signature_url || '');
         this.userSigMap[u.user_id] = sig || '';
       });
     }
 
-    // 1) ดึงข้อมูลทั้งหมดจาก backend
-    const res  = await axios.get(`${API_BASE}/api/history/approve_field`);
+    // 1) ดึงข้อมูล “รอหัวหน้า” เท่านั้น
+    const res  = await axios.get(`${API_BASE}/api/history/approve_field`, { params: { mode: 'super' } });
     const raw  = Array.isArray(res.data) ? res.data : [];
 
-    // 2) กรองเฉพาะ field ที่ pending และผ่านเลขาฯ มาแล้ว
+    // 2) เผื่อ safety อีกชั้น (กันหลุด) — กรองเฉพาะ field ที่ pending และผ่านเลขาฯ/แอดมินแล้ว
     const rawFiltered = raw.filter(h => this.isSuperPending(h));
 
-    // 3) map รายการ field (+ participants + ชื่อ/ลายเซ็นเลขาฯ)
-    const bookings = rawFiltered.map((h, idx) => ({
+    // 3) map ให้เป็นรูปแบบที่หน้าตารางใช้
+    const bookings = rawFiltered.map(h => ({
       id:         this.getMongoId(h),
       type:       'field',
       booking_id: h.booking_id || '',
 
-      // ——— ฟิลด์พรีวิวหัวกระดาษ / เนื้อเรื่อง ———
+      // meta จดหมาย/หัวฟอร์ม
       aw:            h.aw ?? h.aw_no ?? h.reference ?? h.ref_no ?? '-',
       tel:           h.tel ?? h.phone ?? h.telephone ?? '-',
       agency:        h.agency ?? h.department ?? h.org ?? h.organization ?? '-',
@@ -609,11 +653,11 @@ async fetchAndGroup() {
       name_activity: h.name_active ?? h.name_activity ?? h.activity ?? h.activity_name ?? h.project_name ?? '-',
       reasons:       h.reasons ?? h.reason ?? '-',
 
-      // เวลา (รองรับทั้งแบบฟอร์มเก่า/ใหม่)
+      // เวลา
       since_time:     h.since_time ?? h.startTime ?? '',
       until_thetime:  h.until_thetime ?? h.endTime   ?? '',
 
-      // ——— ฟิลด์จองสนาม ———
+      // ข้อมูลสนาม
       name:       h.name ?? '-',
       zone:       h.zone ?? '-',
       requester:  h.requester ?? '-',
@@ -629,13 +673,12 @@ async fetchAndGroup() {
       startTime: h.startTime || '',
       endTime:   h.endTime   || '',
 
-      // จำนวนผู้เข้าร่วม (รองรับหลายชื่อคีย์)
       participants:  h.participants ?? h.participant ?? h.participant_count
                    ?? h.numParticipants ?? h.num_participants ?? '-',
 
       status:    (h.status || '').toLowerCase(),
 
-      // ===== ระบบสาธารณูปโภค =====
+      // สาธารณูปโภค
       utilityRequest:  h.utilityRequest ?? h.utility_request ?? h.utilities ?? h.utility ?? '',
       turnon_air:      h.turnon_air ?? h.turnOnAir ?? h.air_on ?? '',
       turnoff_air:     h.turnoff_air ?? h.turnOffAir ?? h.air_off ?? '',
@@ -644,7 +687,7 @@ async fetchAndGroup() {
       restroom:        h.restroom ?? h.restroom_text ?? h.use_restroom ?? '',
       other:           h.other ?? h.other_text ?? '',
 
-      // ===== รายการประกอบอาคาร =====
+      // รายการประกอบอาคาร
       facilityRequest: h.facilityRequest ?? h.facility_request ?? h.facility ?? '',
       amphitheater:    h.amphitheater ?? h.pull_grandstand ?? '',
       need_equipment:  h.need_equipment ?? h.sport_equipment ?? h.equipment ?? '',
@@ -659,12 +702,12 @@ async fetchAndGroup() {
       reason_admin:     h.reason_admin,
       secretary_choice: h.secretary_choice,
 
-      // ชื่อ/ลายเซ็นเลขาฯ (สำหรับกล่องที่ 1)
+      // ชื่อ/ลายเซ็นเลขาฯ (กล่องที่ 1)
       secThaiName: h.thaiName_admin ?? h.thainame_admin ?? h.thaiName ?? h.approvedBy ?? '',
       secSignUrl:  h.signaturePath_admin ?? h.signaturePath ?? h.signature_url ?? '',
     }));
 
-    // 4) กลุ่ม field
+    // 4) จัดเป็นกลุ่ม field
     const fieldGroups = bookings.map(f => ({
       type: 'field',
       booking_id: f.booking_id || '',
@@ -690,7 +733,7 @@ async fetchAndGroup() {
       return tb - ta;
     });
 
-    // 6) set state เมื่อข้อมูลเปลี่ยนจริง
+    // 6) set state เมื่อข้อมูลเปลี่ยน
     const snap = this._makeSnapshot(fieldGroups);
     if (snap !== this._lastSnapshot) {
       this.grouped = fieldGroups;
@@ -706,24 +749,30 @@ async fetchAndGroup() {
 
 
 
+
+// ===== อนุมัติรายการ (สำหรับ SUPER) =====
 async approveGroup(group) {
   const groupType = String(group.type || group.items?.[0]?.type || '').toLowerCase().trim();
 
-  // ====== เตรียมชื่อ/ลายเซ็นหัวหน้า ======
+  // ====== เตรียมชื่อ/ลายเซ็นหัวหน้า (super) ======
   let headThaiName = this.loggedThaiName || '';
   let headSignUrl  = this.resolveSignUrl(this.loggedSignatureUrl || '');
   try {
-    const uid = (localStorage.getItem('user_id') || '').trim();
+    const uid   = (localStorage.getItem('user_id') || '').trim();
+    const email = (localStorage.getItem('email') || '').trim();
     const resAll = await axios.get(`${API_BASE}/api/users`);
     const users  = Array.isArray(resAll.data) ? resAll.data : [];
+
     const me = users.find(u => String(u.user_id || '').trim() === uid)
-             || users.find(u => (u.email && u.email === (localStorage.getItem('email') || '').trim()))
-             || null;
+            || users.find(u => (u.email && String(u.email).trim() === email))
+            || null;
+
     headThaiName = (me?.thaiName || me?.thainame
       || ((me?.firstname && me?.lastname) ? `${me.firstname} ${me.lastname}` : me?.name) || ''
     ).toString().trim() || headThaiName;
+
     headSignUrl = this.resolveSignUrl(me?.signaturePath || me?.signature_url || headSignUrl);
-  } catch (_) {}
+  } catch (_) { /* เงียบไว้ */ }
 
   // ====== เปิดพรีวิว (เฉพาะ field) เพื่อเลือก/กรอกก่อนอนุมัติ ======
   let uploadedUrl = '';
@@ -734,6 +783,7 @@ async approveGroup(group) {
     const reqKey     = it.user_id || it.id_form || '';
     const reqSignUrl = this.resolveSignUrl(this.userSigMap?.[reqKey] || '');
 
+    // HTML ฟอร์มพรีวิว
     const html = buildFieldFormPreviewV2(
       { ...it, approvedAt: it.approvedAt || it.updatedAt || it.createdAt },
       it.secThaiName || it.thaiName_admin || it.thainame_admin || it.approvedBy || '',
@@ -743,6 +793,7 @@ async approveGroup(group) {
       reqSignUrl
     );
 
+    // SweetAlert
     const result = await Swal.fire({
       title: "ยืนยันอนุมัติใช้งานสถานที่",
       html,
@@ -754,55 +805,45 @@ async approveGroup(group) {
       confirmButtonColor: "#695CF7",
       customClass: { popup: "swal-form-approve", title: "swal-center-title", confirmButton: "btn-violet" },
 
-      // ===== แก้จุดนี้: คุม textarea "อื่นๆ" ให้ไม่เกิน 3 บรรทัด =====
       didOpen: () => {
         const p = Swal.getPopup();
 
-        // เปิดใช้งาน element ฝั่งหัวหน้า
+        // เปิด element ฝั่งหัวหน้า
         ['head_to_vice','head_for_consider','head_other_chk','head_other_reason']
           .forEach(id => { const el = p.querySelector('#'+id); if (el) el.disabled = false; });
 
         const chkOther = p.querySelector('#head_other_chk');
         const boxOther = p.querySelector('#head_other_reason');
 
-        // ตัดข้อความให้เหลือไม่เกิน 3 บรรทัด (นับจาก '\n')
+        // จำกัด 3 บรรทัด + 110 ตัวอักษร + auto-grow
         const capTo3Lines = () => {
           if (!boxOther) return;
           let v = (boxOther.value || '').replace(/\r/g,'');
           const parts = v.split('\n');
-          if (parts.length > 3) {
-            boxOther.value = parts.slice(0, 3).join('\n');
-          }
+          if (parts.length > 3) boxOther.value = parts.slice(0, 3).join('\n');
         };
-
-        // Auto-grow แต่ไม่เกิน 3 บรรทัด + คุม overflow
         const autoGrow = () => {
           if (!boxOther) return;
           boxOther.style.height = 'auto';
           const cs   = window.getComputedStyle(boxOther);
           const lh   = parseFloat(cs.lineHeight) || 22;
-          const maxH = lh * 3;                       // สูงสุด 3 บรรทัด
+          const maxH = lh * 3;
           const h    = Math.min(boxOther.scrollHeight, maxH);
           boxOther.style.height = h + 'px';
           boxOther.style.overflowY = (boxOther.scrollHeight > maxH) ? 'auto' : 'hidden';
         };
-
-        // Auto-check เมื่อโฟกัส/คลิก/พิมพ์ + จำกัด 110 ตัว
         const ensureChecked = () => { if (chkOther && !chkOther.checked) chkOther.checked = true; };
+
         boxOther?.addEventListener('focus', ensureChecked);
         boxOther?.addEventListener('click', ensureChecked);
         boxOther?.addEventListener('input', () => {
           if (boxOther.value.length > 110) boxOther.value = boxOther.value.slice(0,110);
-          capTo3Lines();
-          ensureChecked();
-          autoGrow();
+          capTo3Lines(); ensureChecked(); autoGrow();
         });
 
-        // ตั้งค่าความสูงเริ่มต้น
-        capTo3Lines();
-        autoGrow();
+        capTo3Lines(); autoGrow();
 
-        // คุมปุ่มยืนยันด้วย "เห็นชอบ"
+        // ต้องติ๊ก "เห็นชอบ" ก่อนถึงกดยืนยันได้
         const okChk = p.querySelector('#head_to_vice');
         const syncConfirm = () => okChk?.checked ? Swal.enableConfirmButton() : Swal.disableConfirmButton();
         Swal.disableConfirmButton();
@@ -810,7 +851,6 @@ async approveGroup(group) {
         syncConfirm();
       },
 
-      // ===== แก้จุดนี้: ตัดเหลือ 3 บรรทัดก่อนส่งจริง =====
       preConfirm: () => {
         const p = Swal.getPopup();
         const q = (id) => p.querySelector('#'+id);
@@ -824,6 +864,7 @@ async approveGroup(group) {
         const rawOther = cap3(q('head_other_reason')?.value || '').slice(0,110).trim();
         const otherChecked = (q('head_other_chk')?.checked) || rawOther !== '';
 
+        // เก็บไว้ใช้ตอนส่ง payload
         this.head_reason_supervisor = rawOther;
         this.head_choice_supervisor = {
           to_vice_supervisor:       true,
@@ -833,9 +874,10 @@ async approveGroup(group) {
         return true;
       }
     });
+
     if (!result.isConfirmed) return;
 
-    // ====== สร้าง PDF จากพรีวิว แล้วอัปโหลดไฟล์ (ถ้าทำได้) ======
+    // ====== สร้าง/อัปโหลด PDF จากพรีวิว (ทำได้ก็ดี ไม่ได้ก็ไปต่อ) ======
     try {
       const p = Swal.getPopup();
       const formEl = p?.querySelector('.mfu-form');
@@ -844,7 +886,6 @@ async approveGroup(group) {
         const bid  = group?.booking_id || it.booking_id || 'booking';
         const fd = new FormData();
         fd.append('file', blob, `field_form_${bid}.pdf`);
-
         const up = await axios.post(`${API_BASE}/api/upload`, fd, {
           headers: { 'Content-Type': 'multipart/form-data' }
         });
@@ -859,6 +900,7 @@ async approveGroup(group) {
   const adminUserId = localStorage.getItem("user_id") || "";
   const approveDate = new Date().toISOString();
 
+  // กันรายการซ้ำใน group.items
   const seen = new Set();
   const uniqItems = [];
   for (const it of (group.items || [])) {
@@ -875,7 +917,7 @@ async approveGroup(group) {
       ? `${API_BASE}/api/history/${item.id}/approve_field_super`
       : `${API_BASE}/api/history/${item.id}/approve_equipment`;
 
-    // ✅ ส่งเฉพาะ bookingPdfUrl (ถ้ามี) ไม่แตะ attachment/fileName
+    // ✅ ระบุว่า super อนุมัติแล้วผ่าน step[] (และคง status: 'approved' ไว้ตามระบบเดิม)
     const payload = isFieldItem
       ? {
           admin_id: adminUserId,
@@ -894,6 +936,9 @@ async approveGroup(group) {
             for_consider_supervisor:  this.head_choice_supervisor?.for_consider_supervisor || false,
             other_checked_supervisor: this.head_choice_supervisor?.other_checked_supervisor || false
           },
+
+          // 👇 สำคัญ: mark ว่า super อนุมัติแล้ว
+          step: [{ role: 'super', approve: true, actedAt: approveDate }],
 
           ...(uploadedUrl ? { bookingPdfUrl: uploadedUrl } : {})
         }
@@ -915,118 +960,36 @@ async approveGroup(group) {
     }
   }
 
+  // รีเฟรชตาราง
   try { await this.fetchAndGroup(); } catch (_) {}
 
   if (ok.length) {
-    Swal.fire("สำเร็จ", "อนุมัติเรียบร้อยแล้ว", "success");
-  } else {
-    const e = fail[0]?.err;
-    const msg = e?.response?.data?.message || e?.message || "ไม่สามารถอนุมัติได้";
-    const status = e?.response?.status;
-    Swal.fire("ผิดพลาด", `${msg}${status ? ` (รหัส ${status})` : ""}`, "error");
+  Swal.fire({
+    icon: 'success',
+    title: 'สำเร็จ',
+    text: 'อนุมัติเรียบร้อยแล้ว',
+    width: 520,                        // ← ปรับตัวเลขตามต้องการ
+    customClass: {
+    popup: 'swal-success-wide',      // ใช้อยู่แล้ว
+    title: 'swal-center-title',      // จัดกลางหัวข้อ
+    htmlContainer: 'swal-center-text'// จัดกลางข้อความบรรทัดล่าง
   }
+  });
+} else {
+  const e = fail[0]?.err;
+  const msg = e?.response?.data?.message || e?.message || "ไม่สามารถอนุมัติได้";
+  const status = e?.response?.status;
+  Swal.fire({
+    icon: 'error',
+    title: 'ผิดพลาด',
+    text: `${msg}${status ? ` (รหัส ${status})` : ""}`,
+    width: 520,
+    customClass: { popup: 'swal-success-wide' }  // จะได้กว้างเท่ากัน
+  });
+}
+
 },
 
-async cancelGroup(group) {
-  // กล่องยืนยัน + ช่องกรอกหมายเหตุ (บังคับกรอก)
-  const { isConfirmed, value } = await Swal.fire({
-    title: 'ไม่อนุมัติรายการนี้',
-    html: 'ยืนยันการไม่อนุมัติสำหรับรายการนี้',
-    icon: 'warning',
-    input: 'textarea',
-    inputPlaceholder: 'ระบุหมายเหตุ (จำเป็นต้องกรอก)',
-    inputAttributes: { 'aria-label': 'หมายเหตุ', rows: 4 },
-    inputValidator: (v) => {
-      if (!v || !v.trim()) return 'กรุณากรอกหมายเหตุ';
-    },
-    showCancelButton: true,
-    confirmButtonText: 'ยืนยันไม่อนุมัติ',
-    cancelButtonText: 'กลับ',
-    confirmButtonColor: '#ff4d4f',
-    cancelButtonColor: '#999',
-    customClass: {
-      htmlContainer: 'swal-center-text',
-      title: 'swal-center-title',
-    },
-  });
-  if (!isConfirmed) return;
-
-  const remark = value.trim();
-
-  // ผู้ปฏิเสธ
-  const adminId = localStorage.getItem('user_id') || '';
-  const adminName =
-    (localStorage.getItem('firstname') && localStorage.getItem('lastname'))
-      ? `${localStorage.getItem('firstname')} ${localStorage.getItem('lastname')}`
-      : (localStorage.getItem('name') || this.userMap?.[adminId] || adminId);
-
-  const disapprovedAt = new Date().toISOString();
-
-  Swal.fire({
-    title: 'กำลังดำเนินการ...',
-    didOpen: () => Swal.showLoading(),
-    allowOutsideClick: false,
-    allowEscapeKey: false,
-  });
-
-  try {
-    // ส่ง patch ให้ทุกแถวใน group (กรณี equipment มีหลายชิ้น)
-    const calls = group.items.map(item => {
-      const isField = (item.type || group.type) === 'field';
-      const url = isField
-        ? `${API_BASE}/api/history/${item.id}/disapprove_field`
-        : `${API_BASE}/api/history/${item.id}/disapprove_equipment`;
-
-      // แนบ remark ไปกับ payload ของทั้งสองประเภท
-      const payload = isField
-        ? {
-            admin_id: adminId,
-            disapprovedBy: adminName,   // เก็บชื่อผู้ปฏิเสธ (ไม่บังคับ ลบได้ถ้าไม่ต้องการ)
-            disapprovedById: adminId,
-            disapprovedAt,
-            remark,                     // ⬅️ สำคัญ: เก็บหมายเหตุ
-          }
-        : {
-            staff_id: adminId,
-            disapprovedBy: adminName,   // ตามที่กำหนดสำหรับ equipment
-            disapprovedById: adminId,
-            disapprovedAt,
-            remark,                     // ⬅️ สำคัญ: เก็บหมายเหตุ
-          };
-
-      return axios.patch(url, payload)
-        .then(res => ({ ok: true, res, item }))
-        .catch(err => ({ ok: false, err, item }));
-    });
-
-    const results = await Promise.all(calls);
-    const ok = results.filter(r => r.ok);
-    const fail = results.filter(r => !r.ok);
-
-    try { await this.fetchAndGroup(); } catch (e) {}
-
-    if (ok.length > 0) {
-      Swal.fire('สำเร็จ', 'บันทึกการไม่อนุมัติเรียบร้อยแล้ว', 'success');
-      if (fail.length) {
-        console.warn('บางรายการไม่อนุมัติไม่สำเร็จ:', fail.map(f => ({
-          id: f.item?.id,
-          name: f.item?.name,
-          status: f.err?.response?.status,
-          msg: f.err?.response?.data?.message || f.err?.message
-        })));
-      }
-    } else {
-      const e = fail[0]?.err;
-      const status = e?.response?.status;
-      const msg = e?.response?.data?.message || e?.message || 'ไม่สามารถทำรายการไม่อนุมัติได้';
-      Swal.fire('ผิดพลาด', `${msg}${status ? ` (รหัส ${status})` : ''}`, 'error');
-    }
-  } catch (err) {
-    console.error('cancelGroup error:', err);
-    Swal.fire('ผิดพลาด', 'ไม่สามารถทำรายการไม่อนุมัติได้', 'error');
-  }
-}
-,
 
 
   // วันที่แบบไทย: วัน/เดือน/ปี พ.ศ. และใช้เลขอารบิก
@@ -1968,17 +1931,17 @@ doc.text(`โทร ${data.tel || '-'}`, 430, 100);
   },
   // ===== lifecycle: mounted() =====
 // ===== lifecycle: mounted() =====
+// ===== lifecycle: mounted() =====
 async mounted() {
   // responsive
   window.addEventListener('resize', this.handleResize);
   this.handleResize();
 
-  // 1) โหลด users -> ทั้งชื่อไว้โชว์ และดัชนีลายเซ็นหลายคีย์
+  // 1) โหลด users (ชื่อ + ดัชนีลายเซ็นหลายคีย์)
   try {
     const userRes = await axios.get(`${API_BASE}/api/users`);
     const users = Array.isArray(userRes.data) ? userRes.data : [];
 
-    // ชื่อที่จะแสดง
     this.userMap = {};
     users.forEach(u => {
       this.userMap[u.user_id] =
@@ -1987,7 +1950,6 @@ async mounted() {
           : (u.name || u.user_id);
     });
 
-    // 👇 ทำดัชนีลายเซ็นให้ครอบคลุมหลายคีย์ (user_id, id_form, email, ชื่อ-สกุล ฯลฯ)
     this.userSigMap = this.buildUserSigIndex(users);
   } catch (err) {
     this.userMap = {};
@@ -1995,9 +1957,9 @@ async mounted() {
     console.error('โหลด users ไม่สำเร็จ:', err);
   }
 
-  // 2) โหลดรอบแรกจาก /approve_field (เฉพาะที่ผ่านเลขาฯแล้วและสถานะ pending)
+  // 2) โหลดรอบแรกจาก /approve_field?mode=super (เฉพาะรายการ “รอหัวหน้า”)
   try {
-    const res = await axios.get(`${API_BASE}/api/history/approve_field`);
+    const res = await axios.get(`${API_BASE}/api/history/approve_field`, { params: { mode: 'super' } });
     const raw = Array.isArray(res.data) ? res.data : [];
     const rawFiltered = raw.filter(h => this.isSuperPending(h));
 
@@ -2010,7 +1972,7 @@ async mounted() {
 
         booking_id: h.booking_id || '',
 
-        // ——— ฟิลด์พรีวิวหัวกระดาษ / เนื้อเรื่อง ———
+        // meta ฟอร์ม
         aw:            h.aw ?? h.aw_no ?? h.reference ?? h.ref_no ?? '-',
         tel:           h.tel ?? h.phone ?? h.telephone ?? '-',
         agency:        h.agency ?? h.department ?? h.org ?? h.organization ?? '-',
@@ -2021,7 +1983,6 @@ async mounted() {
         since_time:     h.since_time ?? h.startTime ?? '',
         until_thetime:  h.until_thetime ?? h.endTime   ?? '',
 
-        // ——— ฟิลด์จองสนาม ———
         name:       h.name ?? '-',
         zone:       h.zone ?? '-',
         requester:  h.requester ?? '-',
@@ -2037,13 +1998,12 @@ async mounted() {
         startTime: h.startTime || '',
         endTime:   h.endTime   || '',
 
-        // จำนวนผู้เข้าร่วม
         participants:  h.participants ?? h.participant ?? h.participant_count
                      ?? h.numParticipants ?? h.num_participants ?? '-',
 
         status:    (h.status || '').toLowerCase(),
 
-        // ===== ข้อ 2 ระบบสาธารณูปโภค =====
+        // สาธารณูปโภค + รายการประกอบอาคาร
         utilityRequest:  h.utilityRequest ?? h.utility_request ?? h.utilities ?? h.utility ?? '',
         turnon_air:      h.turnon_air ?? h.turnOnAir ?? h.air_on ?? '',
         turnoff_air:     h.turnoff_air ?? h.turnOffAir ?? h.air_off ?? '',
@@ -2052,7 +2012,6 @@ async mounted() {
         restroom:        h.restroom ?? h.restroom_text ?? h.use_restroom ?? '',
         other:           h.other ?? h.other_text ?? '',
 
-        // ===== ข้อ 3 รายการประกอบอาคาร =====
         facilityRequest: h.facilityRequest ?? h.facility_request ?? h.facility ?? '',
         amphitheater:    h.amphitheater ?? h.pull_grandstand ?? '',
         need_equipment:  h.need_equipment ?? h.sport_equipment ?? h.equipment ?? '',
@@ -2067,7 +2026,6 @@ async mounted() {
         reason_admin:     h.reason_admin,
         secretary_choice: h.secretary_choice,
 
-        // ชื่อ/ลายเซ็นเลขาฯ (สำหรับกล่องที่ 1)
         secThaiName: h.thaiName_admin ?? h.thainame_admin ?? h.thaiName ?? h.approvedBy ?? '',
         secSignUrl:  h.signaturePath_admin ?? h.signaturePath ?? h.signature_url ?? '',
       }]
@@ -2099,11 +2057,11 @@ async mounted() {
     console.error('โหลดข้อมูล booking ไม่สำเร็จ:', err);
   }
 
-  // 3) sync ต่อเนื่อง (จะโหลด users/ลายเซ็นซ้ำเมื่อจำเป็น และกรองเฉพาะที่รอหัวหน้า)
+  // 3) sync ต่อเนื่อง (จะเรียกด้วย mode=super เสมอ)
   await this.fetchAndGroup();
 
   // 4) Notifications + Polling
-  this.lastSeenTimestamp = parseInt(localStorage.getItem(ADMIN_LAST_SEEN_KEY) || '0', 10) || 0;
+  this.lastSeenTimestamp = parseInt(localStorage.getItem('admin_lastSeenTimestamp') || '0', 10) || 0;
   await this.fetchNotifications();
   this.polling = setInterval(this.fetchNotifications, 30000);
 
@@ -2115,11 +2073,6 @@ async mounted() {
   // 6) ปิด dropdown เมื่อคลิคนอก
   document.addEventListener('mousedown', this.handleClickOutside);
 },
-
-
-
-
-
 
   beforeUnmount() {
     clearInterval(this.polling)
@@ -2392,6 +2345,77 @@ function buildFieldFormPreviewV2(
 .mfu-box{ display:flex; flex-direction:column; }           /* มีอยู่แล้วก็ซ้ำได้ */
 .mfu-box .row.sig-row{ margin-top:auto !important; }       /* ดันบล็อกลายเซ็นลงล่าง */
 .mfu-box .row.sig-row ~ .row{ margin-top:6px; }            /* ระยะห่างใต้รูปเซ็นเล็กน้อย */
+
+
+.mfu-list-loc b {
+      display: inline-block;
+      min-width: 90px;  /* ปรับตามต้องการ */
+      white-space: nowrap;
+      } 
+
+      .mfu-tbl { border-collapse: collapse; margin-top:4px; }
+      .mfu-tbl td { padding: 4px 6px; font-size:16px; vertical-align: top; }
+      .mfu-tbl .lbl   { min-width: 140px; white-space: nowrap; font-weight:700; }
+      .mfu-tbl .colon { width: 12px; text-align:center; }
+      .mfu-tbl .val   { width:auto; }
+
+      /* เดิมอยู่ท้าย <style> ของ buildFieldFormPreviewV2 */
+/* เพิ่ม/แก้ใหม่ */
+.mfu-tbl-loc .lbl {
+  min-width: 90px;   /* ลดจาก 140px ให้แคบลง */
+  white-space: nowrap;
+  font-weight: 700;
+}
+
+/* ปรับขนาดฟอนต์เฉพาะตอนแสดงใน SweetAlert */
+.swal2-html-container .mfu-form {
+  font-size: 14px;       /* ลดลงจาก 16px */
+  line-height: 1.3;
+}
+
+.swal2-html-container .mfu-title {
+  font-size: 18px;       /* ลดหัวเรื่องลง */
+}
+
+.swal2-html-container .mfu-sec h4 {
+  font-size: 15px;       /* ลดหัวข้อย่อยลง */
+}
+
+.swal2-html-container .mfu-tbl td {
+  font-size: 14px;
+}
+
+.mfu-sign .date {
+  font-size: 11px;
+}
+
+.mfu-box .row.center .date {
+  font-size: 11px;
+}
+.mfu-box .row.center .date .time {
+  font-size: 11px;
+}
+
+/* ✅ แก้ช่องห่างของ "อาคาร / พื้นที่ห้อง" */
+.mfu-tbl-util .lbl {
+  min-width: 60px !important;   /* ลดจาก 140px เหลือ 60px */
+  width: auto !important;       /* ใช้ขนาดเท่าข้อความจริง */
+}
+
+.mfu-tbl-util .colon {
+  width: 8px !important;        /* ลดจาก 12px */
+  padding: 0 2px !important;    /* ลดช่องว่างซ้ายขวา */
+}
+
+.mfu-tbl-util .val {
+  padding-left: 0 !important;   /* เอาช่องว่างออก ให้ชิดขึ้น */
+}
+
+.mfu-tbl-util td,
+.mfu-tbl-loc td,
+.mfu-tbl-fac td {
+  vertical-align: middle !important;
+}
     </style>
 
     <div class="mfu-head">
@@ -2416,46 +2440,68 @@ function buildFieldFormPreviewV2(
       </div>
     </div>
 
-    <!-- 1) รายละเอียดสถานที่ -->
     <div class="mfu-sec">
-      <h4>1. ขออนุมัติใช้สถานที่</h4>
-      <ul class="mfu-list" style="margin-left: 31px;">
-        <li class="no-sep"><b>อาคาร:</b> ${d(b?.name)}</li>
-        <li><b>พื้นที่/ห้อง:</b> ${dash(b?.zone)}</li>
-      </ul>
-    </div>
+  <h4>1. ขออนุมัติใช้สถานที่</h4>
+  <table class="mfu-tbl mfu-tbl-util" style="margin-left:31px;">
+    <tr>
+      <td class="lbl"><b>อาคาร</b></td>
+      <td class="colon">:</td>
+      <td class="val">${d(b?.name)}</td>
+    </tr>
+    <tr>
+      <td class="lbl"><b>พื้นที่/ห้อง</b></td>
+      <td class="colon">:</td>
+      <td class="val">${dash(b?.zone)}</td>
+    </tr>
+  </table>
+</div>
 
-    <!-- 2) ระบบสาธารณูปโภค -->
+
+
+
     <div class="mfu-sec">
       <h4>2. ขออนุญาตใช้ระบบสาธารณูปโภค</h4>
       <div class="mfu-yn">
         <span class="choice yes ${u.yOn ? 'on' : ''}"><span class="dot">${u.yChar}</span> เลือก</span>
         <span class="choice no  ${u.nOn ? 'on' : ''}"><span class="dot">${u.nChar}</span> ไม่เลือก</span>
       </div>
-      <ul class="mfu-list mfu-list-util" style="margin-left: 31px;">
-        <li class="no-sep"><b>2.1 ไฟฟ้าส่องสว่าง:</b> ตั้งแต่ ${fmtTime(b?.turnon_lights)} - ${fmtTime(b?.turnoff_lights)}</li>
-        <li><b>2.2 สุขา:</b> ${restroomText}</li>
-      </ul>
+      <table class="mfu-tbl mfu-tbl-util" style="margin-left:31px;">
+  <tr>
+    <td class="lbl"><b>2.1 ไฟฟ้าส่องสว่าง</b></td>
+    <td class="colon">:</td>
+    <td class="val">ตั้งแต่ ${fmtTime(b?.turnon_lights)} - ${fmtTime(b?.turnoff_lights)}</td>
+  </tr>
+  <tr>
+    <td class="lbl"><b>2.2 สุขา</b></td>
+    <td class="colon">:</td>
+    <td class="val">${restroomText}</td>
+  </tr>
+</table>
+
       <div class="mfu-note">
-            *ต้องได้รับการอนุมัติจากรองอธิการบดีผู้กำกับดูแล และสำเนาเอกสารถึงฝ่ายอนุรักษ์พลังงาน
+        *ต้องได้รับการอนุมัติจากรองอธิการบดีผู้กำกับดูแล และสำเนาเอกสารถึงฝ่ายอนุรักษ์พลังงาน
       </div>
     </div>
 
-    <!-- 3) รายการประกอบอาคาร -->
     <div class="mfu-sec">
       <h4>3. ขออนุมัติรายการประกอบอาคาร</h4>
       <div class="mfu-yn">
         <span class="choice ${f.yOn ? 'on' : ''}"><span class="dot">${f.yOn ? '●' : '○'}</span> เลือก</span>
         <span class="choice ${f.nOn ? 'on' : ''}"><span class="dot">${f.nOn ? '●' : '○'}</span> ไม่เลือก</span>
       </div>
-      <ul class="mfu-list" style="margin-left: 31px;">
-        <li class="no-sep">
-          <b>3.1 ดึงอัฒจันทร์ภายในอาคารเฉลิมพระเกียรติฯ:</b> ${dash(b?.amphitheater)}
-        </li>
-        <li>
-          <div><b>3.2 อุปกรณ์กีฬา (โปรดระบุ):</b> ${d(b?.need_equipment)}</div>
-        </li>
-      </ul>
+      <table class="mfu-tbl mfu-tbl-fac" style="margin-left:31px;">
+  <tr>
+    <td class="lbl"><b>3.1 ดึงอัฒจันทร์ภายในอาคารเฉลิมพระเกียรติฯ</b></td>
+    <td class="colon">:</td>
+    <td class="val">${dash(b?.amphitheater)}</td>
+  </tr>
+  <tr>
+    <td class="lbl"><b>3.2 อุปกรณ์กีฬา (โปรดระบุรายการและจำนวน)</b></td>
+    <td class="colon">:</td>
+    <td class="val">${dash(b?.need_equipment)}</td>
+  </tr>
+</table>
+
       <div class="mfu-note">
         ทั้งนี้ต้องแนบเอกสารโครงการหรือกิจกรรมที่ได้รับการอนุมัติแล้วพร้อมกำหนดการจัดกิจกรรมหากเป็นการเรียนการสอน <br>
         ต้องแนบตารางการเรียนการสอน (Class schedule) พร้อมทั้งรายชื่อนักศึกษา
@@ -2540,7 +2586,6 @@ function buildFieldFormPreviewV2(
     </div>
   </div>`;
 }
-
 </script>
 
 
@@ -2659,9 +2704,33 @@ function buildFieldFormPreviewV2(
     white-space: nowrap;
     padding: 6px 10px;      /* ย่อ padding นิดหน่อยให้พอดีคอลัมน์ */
   }
-
-
 }
+
+/* กว้างขึ้นเฉพาะ sweetalert ของหน้าปัจจุบัน */
+.swal2-popup.swal-success-wide{
+  max-width: 520px !important;  /* ต้องมี !important เพื่อชนของ SweetAlert */
+  width: 520px !important;
+  padding: 24px 22px !important;
+}
+
+/* จัดกลางเฉพาะกล่องที่เราติดคลาส swal-success-wide */
+.swal2-popup.swal-success-wide .swal2-title,
+.swal2-popup.swal-success-wide .swal2-html-container{
+  text-align: center !important;
+}
+
+/* ถ้ามี utility class อยู่แล้วก็โอเค */
+.swal-center-title{ text-align:center !important; }
+.swal-center-text { text-align:center !important; }
+
+.swal-success-wide .swal2-icon{ 
+  margin: 10px auto 6px !important; 
+}
+.swal-success-wide .swal2-title{ 
+  text-align: center !important; 
+}
+
+
 </style>
 
 <style>
@@ -2843,4 +2912,6 @@ function buildFieldFormPreviewV2(
   .mfu-approve .info-grid{ grid-template-columns:1fr; }
   .mfu-approve .cols{ grid-template-columns:1fr; }
 }
+
+
 </style>

@@ -492,42 +492,82 @@ hasPrimaryAction(group) {
 
     // --- helpers เดิมคงไว้ ---
     normalizePdfUrl(raw) {
-      if (!raw) return null;
-      let u = String(raw).trim();
+  if (!raw) return null;
+  let u = String(raw).trim();
+  if (/^(data:|https?:\/\/)/i.test(u)) return u;
+  const base = (API_BASE || '').replace(/\/+$/,'') || window.location.origin.replace(/\/+$/,'');
+  return `${base}${u.startsWith('/') ? '' : '/'}${u.replace(/^\.\//,'')}`;
+},
 
-      // ทำ absolute ให้หมด
-      if (!/^https?:\/\//i.test(u)) {
-        u = new URL(u.startsWith('/') ? u : `/${u}`, window.location.origin).href;
-      }
-      // อัปเกรดเป็น https ถ้าหน้าเป็น https
-      if (location.protocol === 'https:' && u.startsWith('http://')) {
-        u = 'https://' + u.slice('http://'.length);
-      }
-      return u;
-    },
 
-    pickPdfUrlFromGroupItems(items) {
-      if (!Array.isArray(items)) return null;
+   pickPdfUrlFromGroupItems(items) {
+  // ถ้า set group ปัจจุบันไว้ให้เช็คก่อน
+  if (this._lastOpenGroup && (this._lastOpenGroup.bookingPdfUrl || this._lastOpenGroup.booking_pdf_url)) {
+    return this._lastOpenGroup.bookingPdfUrl || this._lastOpenGroup.booking_pdf_url;
+  }
+  if (!Array.isArray(items)) return null;
 
-      // 1) ฟิลด์ตรง ๆ
-      const hitDirect = items.find(h => h?.bookingPdfUrl || h?.booking_pdf_url);
-      if (hitDirect) return hitDirect.bookingPdfUrl || hitDirect.booking_pdf_url;
+  const direct = items.find(h => h?.bookingPdfUrl || h?.booking_pdf_url);
+  if (direct) return direct.bookingPdfUrl || direct.booking_pdf_url;
 
-      // 2) แนบไฟล์ (ทั้ง array และ string เดี่ยว)
-      const hitAttach = items.find(h =>
-        (Array.isArray(h?.attachment) && h.attachment.length > 0) ||
-        (typeof h?.attachment === 'string' && h.attachment)
-      );
-      if (hitAttach) {
-        return Array.isArray(hitAttach.attachment) ? hitAttach.attachment[0] : hitAttach.attachment;
-      }
+  const fromFiles = (h) => {
+    const arr = Array.isArray(h?.attachedFiles) ? h.attachedFiles
+              : Array.isArray(h?.files)        ? h.files : null;
+    if (!arr || !arr.length) return null;
+    const hitPdf = arr.find(f => /\.(pdf)(\?.*)?$/i.test(f?.fileUrl || f?.url || ''));
+    if (hitPdf) return hitPdf.fileUrl || hitPdf.url;
+    return arr[0].fileUrl || arr[0].url || null;
+  };
+  for (const h of items) {
+    const u = fromFiles(h);
+    if (u) return u;
+  }
 
-      // (เผื่อบางระบบใช้ฟิลด์อื่น)
-      const hitAlt = items.find(h => h?.pdfUrl || h?.pdf_url || h?.fileUrl);
-      if (hitAlt) return hitAlt.pdfUrl || hitAlt.pdf_url || hitAlt.fileUrl;
+  const alt = items.find(h => h?.pdfUrl || h?.pdf_url || h?.fileUrl);
+  if (alt) return alt.pdfUrl || alt.pdf_url || alt.fileUrl;
 
-      return null;
-    },
+  const hitAttach = items.find(h =>
+    (Array.isArray(h?.attachment) && h.attachment.length > 0) ||
+    (typeof h?.attachment === 'string' && h.attachment)
+  );
+  if (hitAttach) return Array.isArray(hitAttach.attachment) ? hitAttach.attachment[0] : hitAttach.attachment;
+
+  return null;
+},
+
+openPdfFromGroup(group) {
+  try {
+    this._lastOpenGroup = group; // ให้ pick... เห็น bookingPdfUrl ที่ระดับ group
+
+    const picked = this.pickPdfUrlFromGroupItems(group?.items || []);
+    const finalUrl = this.normalizePdfUrl(picked);
+
+    if (!finalUrl) {
+      this.$swal?.fire('ผิดพลาด', 'ไม่พบลิงก์ไฟล์ของรายการนี้', 'error');
+      return;
+    }
+
+    // data: base64 → แปลงเป็น blob URL แล้วเปิด
+    if (/^data:/i.test(finalUrl)) {
+      const [meta, b64] = finalUrl.split(',');
+      const mime = (meta.match(/data:(.*?);/) || [,'application/pdf'])[1];
+      const bin = atob(b64);
+      const u8  = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+      const blobUrl = URL.createObjectURL(new Blob([u8], { type: mime || 'application/pdf' }));
+      window.open(blobUrl, '_blank', 'noopener');  // แค่เปิดดู
+      // ไม่ revoke ทันที เพื่อให้แท็บใหม่อ่านไฟล์ได้
+      return;
+    }
+
+    // ลิงก์ http(s)/uploads เปิดตรง—ไม่ใช้ XHR/axios จึงไม่ติด CORS
+    window.open(finalUrl, '_blank', 'noopener');
+  } finally {
+    // ไม่ต้องล้างก็ได้ ถ้าจะใช้ซ้ำ
+  }
+},
+
+
 
     pickPdfUrl(list) {
       if (!Array.isArray(list)) return null;
@@ -590,36 +630,101 @@ hasPrimaryAction(group) {
     },
 
     async downloadPdfFromGroup(group) {
+  try {
+    if (!group?.booking_id) {
+      await Swal.fire('ผิดพลาด', 'ไม่พบ booking_id', 'error');
+      return;
+    }
+
+    // --- จดจำ group ปัจจุบันไว้ เพื่อให้ pickPdfUrlFromGroupItems อ่าน group.bookingPdfUrl ได้ ---
+    this._lastOpenGroup = group;
+
+    // 1) ลองหยิบ URL จากของที่แสดงอยู่
+    const picked = this.pickPdfUrlFromGroupItems(group.items || []);
+    const finalUrl = this.normalizePdfUrl(picked);
+
+    const fallbackApi = async () => {
+      // ยิง endpoint ฝั่ง backend ที่เตรียม blob ให้แล้ว (คุณมี /api/history/pdf)
       try {
-        const bookingId = group?.booking_id;
-        if (!bookingId) {
-          await Swal.fire('ผิดพลาด', 'ไม่พบ booking_id', 'error');
-          return;
-        }
-
-        // 1) ดึง URL จาก items ในกลุ่มที่แสดงบนหน้า
-        const picked = this.pickPdfUrlFromGroupItems(group.items || []);
-        const finalUrl = this.normalizePdfUrl(picked);
-
-        // 2) ถ้ามี URL → ดาวน์โหลดตรง (บังคับเซฟไฟล์)
-        if (finalUrl) {
-          try {
-            await this._downloadFromUrl(finalUrl, `booking_${bookingId}.pdf`);
-            return;
-          } catch {
-            // 3) ถ้า URL ใช้ไม่ได้ (404/403/CORS) → fallback API
-            await this._downloadFromApi(bookingId);
-            return;
-          }
-        }
-
-        // 4) ไม่มี URL ในกลุ่มเลย → fallback API
-        await this._downloadFromApi(bookingId);
+        const r = await axios.get(`${API_BASE}/api/history/pdf`, {
+          params: { booking_id: group.booking_id },
+          responseType: 'blob'
+        });
+        const url = URL.createObjectURL(new Blob([r.data], { type: 'application/pdf' }));
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `booking_${group.booking_id}.pdf`;
+        document.body.appendChild(a); a.click(); a.remove();
+        URL.revokeObjectURL(url);
       } catch (e) {
-        await Swal.fire('ผิดพลาด', 'ไม่สามารถดาวน์โหลดไฟล์ได้', 'error');
-        console.error(e);
+        // เผื่อมีแบบ path ตรง
+        const r2 = await axios.get(`${API_BASE}/api/history/pdf/${group.booking_id}`, { responseType:'blob' });
+        const url2 = URL.createObjectURL(new Blob([r2.data], { type: 'application/pdf' }));
+        const a2 = document.createElement('a');
+        a2.href = url2; a2.download = `booking_${group.booking_id}.pdf`;
+        document.body.appendChild(a2); a2.click(); a2.remove();
+        URL.revokeObjectURL(url2);
       }
-    },
+    };
+
+    // 2) ไม่มี URL เลย → fallback API
+    if (!finalUrl) {
+      await fallbackApi();
+      return;
+    }
+
+    // 3) data: base64 → สร้าง blob แล้วเซฟ
+    if (/^data:/i.test(finalUrl)) {
+      const [meta, b64] = finalUrl.split(',');
+      const mime = (meta.match(/data:(.*?);/) || [,'application/pdf'])[1];
+      const bin = atob(b64);
+      const u8 = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+      const blob = new Blob([u8], { type: mime || 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `booking_${group.booking_id}.pdf`;
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+      return;
+    }
+
+    // 4) ลิงก์ภายนอกบางโดเมน (Google Drive/Docs) มักบล็อคดาวน์โหลดแบบ XHR -> เปิดแท็บแทน
+    const isExt = /^https?:\/\//i.test(finalUrl);
+    const isGDrive = /(^https?:\/\/)?(drive\.google\.com|docs\.google\.com)\//i.test(finalUrl);
+    if (isExt && isGDrive) {
+      window.open(finalUrl, '_blank', 'noopener');
+      return;
+    }
+
+    // 5) พยายามดาวน์โหลดเป็น blob (ข้ามโดเมน — คุณตั้ง CORS ที่ /uploads แล้ว)
+    try {
+      const res = await axios.get(finalUrl, { responseType: 'blob' });
+      const ct = res.headers['content-type'] || 'application/pdf';
+      const cd = res.headers['content-disposition'] || '';
+      const m = cd.match(/filename\*=UTF-8''([^;]+)|filename="?([^"]+)"?/i);
+      let filename = `booking_${group.booking_id}.pdf`;
+      if (m) filename = decodeURIComponent(m[1] || m[2] || filename);
+      const blobUrl = URL.createObjectURL(new Blob([res.data], { type: ct }));
+      const a = document.createElement('a');
+      a.href = blobUrl; a.download = filename;
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(blobUrl);
+      return;
+    } catch (err) {
+      // 6) ถ้าดาวน์โหลด blob fail (403/404/CORS) -> fallback API
+      await fallbackApi();
+      return;
+    }
+  } catch (e) {
+    console.error(e);
+    await Swal.fire('ผิดพลาด', 'ไม่สามารถดาวน์โหลดไฟล์ได้', 'error');
+  } finally {
+    // ล้าง group ชั่วคราว
+    this._lastOpenGroup = null;
+  }
+},
+
 
     // ====== ปุ่ม Download PDF form -> ใช้ logic เหมือน form_field4 ======
     async downloadBookingPdfLikeField4(bookingId, type) {
@@ -1032,6 +1137,13 @@ async cancelItem(itemId) {
 
     // ====== แก้ไขแล้ว: เพิ่มคอลัมน์ Remark ในทั้ง field/equipment ======
     detailGroup(group) {
+  // จดจำ group ปัจจุบันไว้ เพื่อให้ pickPdfUrlFromGroupItems มองเห็น bookingPdfUrl ที่ระดับ group ได้
+  this._lastOpenGroup = group;
+
+  // ลองดูว่ามีลิงก์ไฟล์ให้เปิดไหม เพื่อใช้ตัดสินใจแสดง/disable ปุ่ม
+  const pickedUrl  = this.pickPdfUrlFromGroupItems(group?.items || []);
+  const hasPdfLink = !!this.normalizePdfUrl(pickedUrl);
+
   const esc = this.esc;
 
   const fmtDate = (d) => this.formatDateOnly(d);
@@ -1120,7 +1232,7 @@ async cancelItem(itemId) {
         </table>
       </div>
       <div class="swal-actions">
-        <button id="pdf-btn" class="pdfmake-btn">Download PDF form</button>
+        <button id="pdf-btn" class="pdfmake-btn" ${hasPdfLink ? '' : 'disabled'}>Open PDF form</button>
       </div>
     `;
   } else {
@@ -1136,7 +1248,6 @@ async cancelItem(itemId) {
     const shown = group.items.filter(i => i.status === statusToShow);
     const first = group.items[0] || {};
     const isMultiDayBorrow = Boolean(first.since || first.uptodate);  // หลายวัน?
-    const showPdfButton  = isMultiDayBorrow ? true : false;
 
     const rows = shown.map((it, idx) => {
       const retDate = it.returnedAt ? fmtDate(it.returnedAt) : '-';
@@ -1145,11 +1256,11 @@ async cancelItem(itemId) {
         (group.items?.[0]?.username_form) ||
         it.requester || '-';
 
-      // ✅ ดึงรูปจาก returnPhoto ก่อน "เสมอ" (วันเดียวก็ใช้)
+      // ดึงรูปคืนของก่อน
       let photoList = toArr(it.returnPhoto || it.return_photo)
         .map(pickUrl).map(absolutize).filter(Boolean);
 
-      // ถ้ายังไม่มี -> fallback ไป attachment
+      // ถ้าไม่มี -> fallback ไป attachment
       if (photoList.length === 0) {
         photoList = toArr(it.attachment).map(pickUrl).map(absolutize).filter(Boolean);
       }
@@ -1157,19 +1268,19 @@ async cancelItem(itemId) {
       const firstUrl = photoList[0] || '';
 
       const retPhotoCell =
-        (['Returned','Return-pending'].includes(it.status) && firstUrl)
-          ? `
-            <img
-              src="${firstUrl}"
-              alt="return-photo"
-              class="swal-thumb"
-              onclick="window.__showFullReturnPhoto && window.__showFullReturnPhoto('${firstUrl}')"
-            />
-            <div class="swal-thumb-hint">${
-              photoList.length > 1 ? '(+รูปเพิ่ม)' : '(คลิกเพื่อดูรูปเต็ม)'
-            }</div>
-          `
-          : '-';
+  (['Returned','Return-pending'].includes(it.status) && firstUrl)
+    ? `
+      <img
+        src="${esc(firstUrl)}"
+        alt="return-photo"
+        class="swal-thumb"
+        data-src="${esc(firstUrl)}"
+      />
+      <div class="swal-thumb-hint">${
+        photoList.length > 1 ? '(+รูปเพิ่ม)' : '(คลิกเพื่อดูรูปเต็ม)'
+      }</div>
+    `
+    : '-';
 
       const dateCell = (it.since || it.uptodate) ? fmtDateRange(it.since, it.uptodate) : fmtDate(it.date);
 
@@ -1220,7 +1331,12 @@ async cancelItem(itemId) {
           </tbody>
         </table>
       </div>
-      ${showPdfButton ? `<div class="swal-actions"><button id="pdf-btn" class="pdfmake-btn">Download PDF form</button></div>` : ``}
+      ${
+        // แสดงปุ่มเฉพาะยืมหลายวัน (ตาม logic เดิม) และมีลิงก์ไฟล์
+        (isMultiDayBorrow && hasPdfLink)
+          ? `<div class="swal-actions"><button id="pdf-btn" class="pdfmake-btn">Open PDF form</button></div>`
+          : (isMultiDayBorrow ? `<div class="swal-actions"><button id="pdf-btn" class="pdfmake-btn" disabled>Open PDF form</button></div>` : ``)
+      }
     `;
   }
 
@@ -1235,34 +1351,36 @@ async cancelItem(itemId) {
       htmlContainer: 'hist-swal-html'
     },
     didOpen: () => {
-      const pdfBtn = document.getElementById('pdf-btn');
-      if (pdfBtn) pdfBtn.addEventListener('click', () => this.downloadPdfFromGroup(group));
+  // ปุ่ม PDF (คงไว้)
+  const pdfBtn = document.getElementById('pdf-btn');
+  if (pdfBtn && hasPdfLink) pdfBtn.addEventListener('click', () => this.openPdfFromGroup(group));
 
-      // ตัวแสดงรูปเต็ม
-      window.__showFullReturnPhoto = (src) => {
-        if (!src) return;
-        Swal.fire({
-          html: `
-            <div class="img-viewer-wrap">
-              <img src="${src}" alt="photo" class="img-viewer"/>
-              <div class="img-viewer-actions">
-                <a href="${src}" target="_blank" rel="noopener">เปิดในแท็บใหม่</a>
-              </div>
+  // คลิกดูรูปเต็ม แบบไม่เอา URL ไปยัดใน inline JS
+  document.querySelectorAll('.swal-thumb').forEach(img => {
+    img.addEventListener('click', () => {
+      const src = img.getAttribute('data-src');
+      if (!src) return;
+      Swal.fire({
+        html: `
+          <div class="img-viewer-wrap">
+            <img src="${esc(src)}" alt="photo" class="img-viewer"/>
+            <div class="img-viewer-actions">
+              <a href="${esc(src)}" target="_blank" rel="noopener">เปิดในแท็บใหม่</a>
             </div>
-          `,
-          showConfirmButton: false,
-          showCloseButton: true,
-          background: '#000',
-          customClass: { popup: 'img-swal' }
-        });
-      };
-    },
+          </div>
+        `,
+        showConfirmButton: false,
+        showCloseButton: true,
+        background: '#000',
+        customClass: { popup: 'img-swal' }
+      });
+    });
+  });
+}
+,
     willClose: () => { window.__showFullReturnPhoto = undefined; }
   });
 },
-
-
-
     async returnItemGroup(group) {
       this.showCamera = true;
       this.returnGroupBookingId = group.booking_id;

@@ -47,23 +47,21 @@
         </div>
       </header>
 
-      <!-- Stepper -->
+      <!-- เดิมใน form_equipment3 -->
 <div class="headStepper" role="navigation" aria-label="ขั้นตอน">
   <div class="stepper">
     <div v-for="(step, index) in steps" :key="index" class="step">
       <div
         class="circle"
         :class="{ active: index === currentStep, completed: index < currentStep }"
-        @click="tryGoStep(index)"
-        :style="{ cursor: canGoToStep(index) ? 'pointer' : 'not-allowed', opacity: canGoToStep(index) ? 1 : 0.5 }"
+        @click="goStep(index)"
+        :style="{ cursor: canStepTo(index) ? 'pointer' : 'not-allowed', opacity: canStepTo(index) ? 1 : 0.5 }"
       ></div>
       <div class="label">{{ step }}</div>
       <div v-if="index < steps.length - 1" class="line" :class="{ filled: index < currentStep }"></div>
     </div>
   </div>
 </div>
-<!-- spacer กันเนื้อหาโดนทับ (ซ่อนไว้ใน CSS) -->
-<div class="headStepper-spacer"></div>
 
 
       <div class="scroll-x-container">
@@ -120,9 +118,10 @@
         <!-- ========== ข้าพเจ้า ... รหัสนักศึกษา ... หน่วยงาน ========== -->
         <div class="form-row mt-30"
           style="text-indent: 80px; text-align: left; line-height: 2.0;">
-          ข้าพเจ้า {{ booking && booking.username_form || "-" }}
-          รหัสนักศึกษา {{ booking && booking.id_form || "-" }}
-           {{ booking && booking.agency || "-" }}
+         ข้าพเจ้า {{ booking && booking.username_form || "-" }}
+{{ idLabel }} {{ booking && booking.id_form || "-" }}
+{{ booking && booking.agency || "-" }}
+
           โทร {{ booking && booking.number || "-" }}
           มีความประสงค์ขอยืมอุปกรณ์ของศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง เพื่อใช้ในงาน {{ booking && booking.reason || "-" }}
           สถานที่ใช้งาน {{ booking && booking.location || "-" }}
@@ -156,26 +155,15 @@
           </table>
         </div>
 
-<!-- ========= ลายเซ็นผู้ยืม (ชิดขวา, วันที่อยู่ “ระหว่างคำว่าลงชื่อกับผู้ยืม” และกึ่งกลางใต้ชื่อ) ========= -->
+<!-- ========= ลายเซ็นผู้ยืม (แบบรูปที่ 2) ========= -->
 <div class="sigX">
   <div class="sigX-row">
     <span class="sigX-left">ลงชื่อ</span>
-
-    <!-- กล่องกลาง = สมอของวันที่ -->
-    <span class="sigX-nameAnchor">
-      <span class="sigX-name">{{ booking && booking.username_form || "-" }}</span>
-      <!-- ใช้วันที่วันนี้แทนจุด -->
-      <span class="sigX-date">
-  <span class="dots">{{ nowThai }}</span>
-</span>
-
-    </span>
-
+    <span class="sigX-name">{{ booking && booking.username_form || "-" }}</span>
     <span class="sigX-right">ผู้ยืม</span>
   </div>
+  <div class="sigX-date">{{ nowThai }}</div>
 </div>
-<!-- ========= /ลายเซ็นผู้ยืม ========= -->
-
 
         <!-- ================= ส่วนลายเซ็น/ความเห็น ================= -->
         <div class="form-row" style="padding-top: 10px;">
@@ -289,13 +277,49 @@ const userId = localStorage.getItem('user_id') || ''
 const tempFiles = ref([])
 
 // ✅ roles สำหรับ flow ยืมอุปกรณ์ (admin อนุมัติ / staff ส่งมอบ)
-const EQUIP_APPROVAL_ROLES = ['admin', 'staff'];
+const EQUIP_APPROVAL_ROLES = ref([])
+
+const idLabel = ref('รหัส') // ค่า default
+
+onMounted(() => {
+  const email =
+    (booking.value?.email || localStorage.getItem('email') || '').toLowerCase()
+
+  if (email.endsWith('@lamduan.mfu.ac.th')) {
+    idLabel.value = 'รหัสนักศึกษา'
+  } else if (email.endsWith('@mfu.ac.th')) {
+    idLabel.value = 'รหัสพนักงาน'
+  } else {
+    idLabel.value = 'รหัส' // fallback กรณีไม่ตรงเงื่อนไข
+  }
+})
 
 /** ✅ สร้างค่าเริ่มต้นของ step ให้ครบทุก role */
 const buildInitialEquipmentStep = () =>
-  EQUIP_APPROVAL_ROLES.map(r => ({ role: r, approve: null }));
+  (EQUIP_APPROVAL_ROLES.value || []).map(r => ({ role: r, approve: null }))
 
+const stepRoutes = ['/form_equipment', '/form_equipment3', '/form_equipment4']
 
+async function loadEquipRoles() {
+  try {
+    const res = await axios.get(`${API_BASE}/api/settings/approval_roles`)
+    EQUIP_APPROVAL_ROLES.value = res.data.value?.equipment || []
+  } catch {
+    EQUIP_APPROVAL_ROLES.value = ['admin', 'staff'] // fallback
+  }
+}
+
+function canStepTo(idx) {
+  return idx <= currentStep.value
+}
+function goStep(idx) {
+  if (!canStepTo(idx) || idx === currentStep.value) return
+  if (idx === 0) {
+    router.push({ path: stepRoutes[0], query: { restore: 'true' } })
+  } else {
+    router.push(stepRoutes[idx])
+  }
+}
 
 /* >>> ใช้วันที่วันนี้ (ไทย) สำหรับลายเซ็นผู้ยืม */
 const todayThai = ref(new Date().toLocaleDateString('th-TH'))
@@ -610,18 +634,10 @@ function handleBack() {
   router.push('/form_equipment')
 }
 
-function canGoToStep(index) {
-  return index <= currentStep.value
-}
-function tryGoStep(index) {
-  if (canGoToStep(index)) {
-    if (index === 0) router.push('/form_equipment')
-    else if (index === 1) router.push('/form_equipment3')
-    else if (index === 2) router.push('/form_equipment4')
-  }
-}
+
+
 async function handleNext() {
-  if (!booking.value || equipmentList.value.length === 0) {
+  if (!booking.value || !Array.isArray(equipmentList.value) || equipmentList.value.length === 0) {
     alert('ไม่มีข้อมูลจะบันทึก');
     return;
   }
@@ -633,6 +649,14 @@ async function handleNext() {
     return;
   }
 
+  // helper: ล้าง role ให้เหลือเฉพาะที่รองรับและไม่ซ้ำ
+  const cleanRoles = (arr) =>
+    Array.from(new Set(
+      (Array.isArray(arr) ? arr : [])
+        .map(r => String(r || '').trim().toLowerCase())
+        .filter(r => r === 'staff' || r === 'admin' || r === 'super')
+    ));
+
   isLoading.value = true;
   try {
     // 1) ทำ PDF เป็น Blob
@@ -642,60 +666,83 @@ async function handleNext() {
     const pdfUrl = await uploadPdfBlob(pdfBlob);
 
     // 3) อัปโหลดไฟล์แนบชั่วคราว (ถ้ามี)
-    const uploaded = await uploadTempFiles();
+    const uploaded = await uploadTempFiles(); // ควรคืน [{fileUrl,fileId,fileName,mimeType}, ...]
 
-    // 4) บันทึกเข้า history (หนึ่งแถวต่อหนึ่งรายการอุปกรณ์)
-    //    ✅ ส่งค่า `step` เริ่มต้น: [{ role:'admin', approve:null }, { role:'staff', approve:null }]
+    // 4) โหลด roles สำหรับ "equipment" จาก settings แล้วแปลงเป็น step array
+    let stepTemplate = [];
+    try {
+      const res = await axios.get(`${API_BASE}/api/settings/approval_roles`);
+      const value = res?.data?.value || {}; // { field: [...], equipment: [...] }
+      const roles = Array.isArray(value.equipment) ? value.equipment : [];
+      stepTemplate = cleanRoles(roles).map(r => ({ role: r, approve: null }));
+    } catch (e) {
+      console.warn('โหลด approval_roles (equipment) ไม่สำเร็จ:', e);
+      stepTemplate = []; // ถ้าโหลดไม่ได้ก็ปล่อยว่าง (ไปกำหนดต่อที่ backend ตามฟลว์)
+    }
+
+    // 5) บันทึกเข้า history (หนึ่งแถวต่อหนึ่งอุปกรณ์)
     for (const item of equipmentList.value) {
       await axios.post(`${API_BASE}/api/history`, {
+        // ชนิด
         type: 'equipment',
+        status: 'pending',
+
+        // ระบุ booking/user
         booking_id: bookingIdFromServer,
         user_id: booking.value.user_id,
 
+        // ข้อมูลฟอร์มผู้ขอ
         username_form: booking.value.username_form || '',
-        id_form: booking.value.id_form || '',
+        id_form: (booking.value.id_form ?? '').toString().trim(),
         number: (booking.value.number ?? '').toString().trim(),
 
+        // รายการอุปกรณ์
         name: item.name,
         quantity: item.quantity,
-        status: 'pending',
+
+        // หน่วยงาน/สังกัด
         agency: booking.value.agency || booking.value.school_of || '',
 
+        // ไฟล์แนบ
         attachment: uploaded.map(u => u.fileUrl || u.fileId).filter(Boolean),
-        fileName: uploaded.map(u => u.fileName),
-        fileType: uploaded.map(u => u.mimeType),
+        fileName: uploaded.map(u => u.fileName).filter(Boolean),
+        fileType: uploaded.map(u => u.mimeType).filter(Boolean),
 
+        // รายละเอียดช่วงเวลาการยืม
         reasons: booking.value.reason || '',
         since: booking.value.start_date || '',
         uptodate: booking.value.end_date || '',
 
-        // วันเวลาที่กำหนดให้มารับของ
-        receive_date: booking.value.receive_date || '',
+        // วันเวลานัดรับอุปกรณ์
+        receive_date: booking.value.receive_date || null,
         receive_time: booking.value.receive_time || '',
 
+        // PDF ที่อัปโหลด
         bookingPdfUrl: pdfUrl,
 
-        // ✅ สำคัญ: บันทึก step ลง DB
-        step: buildInitialEquipmentStep(),
+        // ⬅️ สำคัญ: แนบ step ที่ได้จาก settings (equipment)
+        step: stepTemplate,
       });
     }
 
-    // 5) เคลียร์รถเข็น/ไฟล์ชั่วคราว แล้วไปหน้าสำเร็จ
-    await axios.delete(`${API_BASE}/api/cart`, {
-      data: { user_id: booking.value.user_id },
-    });
+    // 6) เคลียร์รถเข็น/ไฟล์ชั่วคราว แล้วไปหน้าสำเร็จ
+    try {
+      await axios.delete(`${API_BASE}/api/cart`, { data: { user_id: booking.value.user_id } });
+    } catch (e) {
+      console.warn('ล้างตะกร้าไม่สำเร็จ (ข้ามได้):', e?.message || e);
+    }
+
     window._equipTempFiles = [];
     localStorage.removeItem('equipmentFormData');
     localStorage.setItem('equipment_booking_id', bookingIdFromServer);
 
     router.push('/form_equipment4');
   } catch (err) {
-    alert('เกิดข้อผิดพลาด: ' + (err.response?.data?.message || err.message));
+    alert('เกิดข้อผิดพลาด: ' + (err?.response?.data?.message || err.message));
   } finally {
     isLoading.value = false;
   }
 }
-
 
 
 </script>
@@ -703,7 +750,7 @@ async function handleNext() {
 <style scoped>
 .headStepper {
   position: sticky;
-  top: 60px;                 /* ปรับให้พอดีกับความสูง topbar ของคุณ */
+  top: 60px;
   z-index: 10;
   width: 90%;
   max-width: 900px;
@@ -718,53 +765,22 @@ async function handleNext() {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 20px 20px 52px;   /* เพิ่ม padding ล่างให้ label อยู่ในกรอบ */
+  padding: 20px 20px 52px;
   border-radius: 20px;
 }
 
-/* spacer ไม่ต้องใช้จริง */
 .headStepper-spacer { display: none; }
 
 .main { padding-top: var(--topbar-h); }
 
-.step {
-  display: flex;
-  align-items: center;
-  position: relative;
-}
-.circle {
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  background-color: #ccc;
-  z-index: 1;
-}
-.circle.active {
-  background-color: #ff4d4f;
-}
-.circle.completed {
-  background-color: #ff4d4f;
-  opacity: 0.5;
-}
-.label{
-  position: absolute;
-  top: 45px;                 
-  left: 15px;                
-  transform: translateX(-50%);
-  font-size: 12px;
-  white-space: nowrap;
-  text-align: center;
-}
-.line {
-  height: 4px;
-  width: 80px;
-  background-color: #ccc;
-  margin: 0 5px;
-  z-index: 0;
-}
-.line.filled {
-  background-color: #ff4d4f;
-}
+.step { display: flex; align-items: center; position: relative; }
+.circle { width: 30px; height: 30px; border-radius: 50%; background-color: #ccc; z-index: 1; }
+.circle.active { background-color: #ff4d4f; }
+.circle.completed { background-color: #ff4d4f; opacity: 0.5; }
+
+.line { height: 4px; width: 80px; background-color: #ccc; margin: 0 5px; z-index: 0; }
+.line.filled { background-color: #ff4d4f; }
+
 .form-container {
   background-color: white;
   margin: 30px auto;
@@ -774,10 +790,8 @@ async function handleNext() {
   border-radius: 20px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
 }
-.form-header {
-  text-align: center;
-  margin-bottom: 20px;
-}
+.form-header { text-align: center; margin-bottom: 20px; }
+
 #btnNext {
   padding: 0.5rem 1rem;
   background-color: #048ace;
@@ -805,35 +819,27 @@ async function handleNext() {
   text-decoration: none;
   display: inline-block;
 }
-#btnBack:hover {
-  background-color: #5a6268;
-}
+#btnBack:hover { background-color: #5a6268; }
+
 .form-header-section {
   display: flex;
   justify-content: flex-end;
   gap: 40px;
   margin-top: 30px;
 }
-.left-form,
-.right-form {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  flex: 1;
-}
+.left-form, .right-form { display: flex; flex-direction: column; gap: 10px; flex: 1; }
+
 .form-row {
   display: flex;
   align-items: center;
-  gap: 12px; /* ระยะห่าง */
+  gap: 12px;
   margin-bottom: 16px;
   flex-wrap: wrap;
-  justify-content: flex-start; /* ทำให้ชิดซ้าย */
+  justify-content: flex-start;
 }
 
-.form-row-title {
-  font-weight: bold;
-  margin-bottom: 10px;
-}
+.form-row-title { font-weight: bold; margin-bottom: 10px; }
+
 .line-field,
 .line-field.block-text,
 .line-field.block-expanding,
@@ -852,11 +858,8 @@ async function handleNext() {
   vertical-align: bottom;
   box-sizing: border-box;
 }
-.line-field.block-expanding {
-  width: 100%;
-  min-width: 160px;
-  margin-bottom: 6px;
-}
+.line-field.block-expanding { width: 100%; min-width: 160px; margin-bottom: 6px; }
+
 .equipment-table {
   width: 100%;
   border-collapse: collapse;
@@ -873,10 +876,10 @@ async function handleNext() {
   word-break: break-word;
   max-width: 350px;
 }
-.equipment-table th {
-  background-color: #f0f0f0;
-  text-align: center; /* จัดหัวข้อกลาง */
-}
+.equipment-table th { background-color: #f0f0f0; text-align: center; }
+.equipment-table td:nth-child(1),
+.equipment-table td:nth-child(3) { text-align: center; }
+
 .approval-table {
   width: 100%;
   border-collapse: collapse;
@@ -893,26 +896,44 @@ async function handleNext() {
   word-break: break-word;
   overflow-wrap: break-word;
 }
-.approval-table th {
-  background: #f7f7f7;
-  font-weight: bold;
+.approval-table th { background: #f7f7f7; font-weight: bold; text-align: center; }
+
+.page-break { page-break-before: always; break-before: page; }
+/* ให้ป้ายชื่อไปอยู่ใต้จุด (เหมือนหน้าแรก) */
+.label{
+  position: absolute;
+  top: 45px;
+  left: 15px;
+  transform: translateX(-50%);
+  font-size: 12px;
+  white-space: nowrap;
   text-align: center;
 }
 
-.page-break {
-  page-break-before: always;
-  break-before: page;
+/* วงกลมที่ผ่านแล้วให้เป็นสีเทา (ไม่แดงจาง) */
+.circle.completed{
+  background-color: #ccc;   /* เดิม #ff4d4f + opacity */
+  opacity: 1;
 }
-/* ===== CSS แจ้งเตือนแบบ history ===== */
+
+/* เส้นที่ผ่านแล้วให้เป็นสีเทา (ไม่แดง) */
+.line.filled{
+  background-color: #ccc;   /* เดิม #ff4d4f */
+}
+
+/* เผื่อให้มีพื้นที่ใต้สเต็ปเปอร์สำหรับป้ายชื่อ */
+.stepper{
+  padding: 20px 20px 52px;  /* ถ้ายังไม่ได้ตั้งแบบนี้ ให้ใส่ค่า bottom 52px */
+}
+
+/* ===== Dropdown แจ้งเตือน ===== */
 .notification-dropdown {
   position: absolute;
   right: 0;
   top: 38px;
   background: #fff;
   border-radius: 18px 0 18px 18px;
-  box-shadow:
-    0 8px 24px 0 rgba(27, 50, 98, 0.14),
-    0 2px 4px 0 rgba(33, 125, 215, 0.06);
+  box-shadow: 0 8px 24px 0 rgba(27, 50, 98, 0.14), 0 2px 4px 0 rgba(33, 125, 215, 0.06);
   min-width: 330px;
   max-width: 370px;
   max-height: 420px;
@@ -922,15 +943,8 @@ async function handleNext() {
   border: none;
   animation: fadeDown 0.22s;
 }
-@keyframes fadeDown {
-  0% { opacity: 0; transform: translateY(-24px);}
-  100% { opacity: 1; transform: translateY(0);}
-}
-.notification-dropdown ul {
-  padding: 0;
-  margin: 0;
-  list-style: none;
-}
+@keyframes fadeDown { 0%{opacity:0;transform:translateY(-24px);} 100%{opacity:1;transform:translateY(0);} }
+.notification-dropdown ul { padding: 0; margin: 0; list-style: none; }
 .notification-dropdown li {
   background: linear-gradient(90deg, #f6fafd 88%, #e2e7f3 100%);
   margin: 0.2em 0.8em;
@@ -948,365 +962,110 @@ async function handleNext() {
   cursor: default;
   transition: background 0.2s;
 }
-.notification-dropdown li:not(:last-child) {
-  margin-bottom: 0.15em;
-}
-.notification-dropdown li::before {
-  content: "🔔";
-  font-size: 1.2em;
-  margin-right: 7px;
-  color: #1976d2;
-  opacity: 0.80;
-}
-.notification-dropdown li.no-noti {
-  background: #f2f3f6;
-  color: #a7aab7;
-  justify-content: center;
-  font-style: italic;
-}
-.notification-dropdown::-webkit-scrollbar {
-  width: 7px;
-}
-.notification-dropdown::-webkit-scrollbar-thumb {
-  background: #e1e7f5;
-  border-radius: 10px;
-}
-.notification-dropdown::-webkit-scrollbar-track {
-  background: transparent;
-}
-.notification-item.approved {
-  background: linear-gradient(90deg, #e9fbe7 85%, #cbffdb 100%);
-  border-left: 4px solid #38b000;
-  color: #228c22;
-}
-.notification-item.disapproved {
-  background: linear-gradient(90deg, #ffeaea 85%, #ffd6d6 100%);
-  border-left: 4px solid #ff6060;
-  color: #b91423;
-}
-.notification-item.canceled,
-.notification-item.cancel {
-  background: linear-gradient(90deg, #f9d7d7 80%, #e26a6a 100%);
-  border-left: 4px solid #bb2124;
-  color: #91061a;
-}
-.notification-item.returned {
-  background: linear-gradient(90deg, #e0f0ff 85%, #b6e0ff 100%);
-  border-left: 4px solid #1976d2;
-  color: #1976d2;
-}
-.notification-item {
-  transition: background 0.3s, border-color 0.3s, color 0.3s;
-}
+.notification-dropdown li:not(:last-child){ margin-bottom: .15em; }
+.notification-dropdown li::before { content: "🔔"; font-size: 1.2em; margin-right: 7px; color: #1976d2; opacity: .80; }
+.notification-dropdown li.no-noti { background: #f2f3f6; color: #a7aab7; justify-content: center; font-style: italic; }
+.notification-dropdown::-webkit-scrollbar { width: 7px; }
+.notification-dropdown::-webkit-scrollbar-thumb { background: #e1e7f5; border-radius: 10px; }
+.notification-dropdown::-webkit-scrollbar-track { background: transparent; }
+.notification-item.approved { background: linear-gradient(90deg, #e9fbe7 85%, #cbffdb 100%); border-left: 4px solid #38b000; color: #228c22; }
+.notification-item.disapproved { background: linear-gradient(90deg, #ffeaea 85%, #ffd6d6 100%); border-left: 4px solid #ff6060; color: #b91423; }
+.notification-item.canceled, .notification-item.cancel { background: linear-gradient(90deg, #f9d7d7 80%, #e26a6a 100%); border-left: 4px solid #bb2124; color: #91061a; }
+.notification-item.returned { background: linear-gradient(90deg, #e0f0ff 85%, #b6e0ff 100%); border-left: 4px solid #1976d2; color: #1976d2; }
+.notification-item { transition: background .3s, border-color .3s, color .3s; }
+.notification-backdrop { position: fixed; inset: 0; background: transparent; z-index: 1001; }
 
-.notification-backdrop {
-  position: fixed;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: transparent;
-  z-index: 1001; /* ต้องน้อยกว่า .notification-dropdown (1002) */
-}
-
-.badge {
-  background-color: red;
-  color: white;
-  border-radius: 50%;
-  padding: 2px 6px;
-  font-size: 0.75rem;
-  vertical-align: top;
-  margin-left: 4px;
-}
+.badge { background-color: red; color: white; border-radius: 50%; padding: 2px 6px; font-size: .75rem; vertical-align: top; margin-left: 4px; }
 
 @media (max-width: 540px) {
-  .scroll-x-container {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    width: 100vw;
-    padding: 0;
+  .scroll-x-container { overflow-x: auto; -webkit-overflow-scrolling: touch; width: 100vw; padding: 0; }
+  .form-container { min-width: 900px; width: 900px; max-width: 900px; padding: 16px 24px !important; border-radius: 10px !important; box-sizing: border-box; }
+  .form-row { width: 100% !important; min-width: 0 !important; box-sizing: border-box !important; }
+  .custom-input, .custom-textarea, input[type="text"], input[type="date"], input[type="time"], select, textarea {
+    width: 100% !important; min-width: 0 !important; max-width: 100% !important; box-sizing: border-box !important; overflow-x: auto;
   }
-  .form-container {
-    min-width: 900px;
-    width: 900px;
-    max-width: 900px;
-    padding: 16px 24px !important;
-    border-radius: 10px !important;
-    box-sizing: border-box;
-  }
-  .form-row {
-    width: 100% !important;
-    min-width: 0 !important;
-    box-sizing: border-box !important;
-  }
-  .custom-input,
-  .custom-textarea,
-  input[type="text"],
-  input[type="date"],
-  input[type="time"],
-  select,
-  textarea {
-    width: 100% !important;
-    min-width: 0 !important;
-    max-width: 100% !important;
-    box-sizing: border-box !important;
-    overflow-x: auto;
-  }
-  .equipment-table,
-  .approval-table {
-    min-width: 600px;
-  }
+  .equipment-table, .approval-table { min-width: 600px; }
 }
+/* ให้ตำแหน่ง label อยู่กึ่งกลางจุด */
+.label{
+  position: absolute;
+  top: 45px;
+  left: calc(30px / 2);
+  transform: translateX(-50%);
+  font-size: 12px;
+  white-space: nowrap;
+  text-align: center;
+}
+
+/* สีจุด/เส้นเหมือน form_field3 */
+.circle { width: 30px; height: 30px; border-radius: 50%; background: #ccc; transition: background .3s; cursor: pointer; }
+.circle.active { background: #ff4d4f; }
+.circle.completed { background: #ff4d4f; opacity: .5; }
+
+.line { width: 80px; height: 4px; background: #ccc; margin: 0 5px; transition: background .3s; }
+.line.filled { background: #ff4d4f; }
+
+/* เผื่อพื้นที่ใต้ stepper สำหรับ label */
+.stepper{ padding: 20px 20px 52px; border-radius: 20px; }
+
+/* กันคอนเทนต์โดนบาร์บน */
+.main{ padding-top: calc(var(--topbar-h)); }
+
 /* ลบเส้นใต้เฉพาะในโซนฟอร์ม */
 .form-container .line-field,
-.form-container .reason-underline {
-  border-bottom: none !important;
-  background: none !important;
-  padding-bottom: 0 !important;
-}
-.form-row-align {
-  display: flex;
-  align-items: center;
-  gap: 8px; /* ระยะห่างแต่ละช่อง */
-  flex-wrap: wrap;
-}
+.form-container .reason-underline { border-bottom: none !important; background: none !important; padding-bottom: 0 !important; }
+
+/* จัดแถวข้อมูลผู้ใช้ */
+.form-row-align { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .align-field {
-  min-width: 120px;
-  max-width: 220px;
-  display: inline-block;
-  vertical-align: middle;
-  margin-right: 18px;
-  /* ไม่มีเส้นใต้ */
-  border-bottom: none !important;
-  background: none !important;
-  padding-bottom: 0 !important;
-  font-weight: 500;
+  min-width: 120px; max-width: 220px; display: inline-block; vertical-align: middle; margin-right: 18px;
+  border-bottom: none !important; background: none !important; padding-bottom: 0 !important; font-weight: 500;
 }
-.form-row-align > span:not(.align-field) {
-  min-width: 80px;
-  text-align: right;
-  font-weight: 400;
-}
+.form-row-align > span:not(.align-field) { min-width: 80px; text-align: right; font-weight: 400; }
 @media (max-width: 540px) {
-  .form-row-align {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0;
-  }
-  .align-field {
-    margin-right: 0;
-    min-width: 120px;
-    max-width: 100%;
-  }
+  .form-row-align { flex-direction: column; align-items: flex-start; gap: 0; }
+  .align-field { margin-right: 0; min-width: 120px; max-width: 100%; }
 }
-.form-user-row {
-  margin-left: 30px !important;      /* ให้ชิดซ้ายสุด */
-  padding-left: 0px !important;
-  gap: 10px;
-  margin-top: 4px;                 /* ลดความห่าง */
-  margin-bottom: 8px;              /* ลดความห่าง */
-  font-size: 16px;                 /* ขนาดตัวอักษร */
-  line-height: 1.35;               /* ความสูงแต่ละบรรทัด */
-}
-.form-row, .form-row-align {
-  margin-bottom: 6px !important;   /* ลดความห่างระหว่างบรรทัด */
-  line-height: 1.5;
-}
+
+.form-user-row { margin-left: 30px !important; padding-left: 0 !important; gap: 10px; margin-top: 4px; margin-bottom: 8px; font-size: 16px; line-height: 1.35; }
+.form-row, .form-row-align { margin-bottom: 6px !important; line-height: 1.5; }
+
 .user-info-row {
-  margin-top: 24px;
-  margin-bottom: 8px;
-  font-size: 16px;
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px;
-  line-height: 1.4;
+  margin-top: 24px; margin-bottom: 8px; font-size: 16px; display: flex; align-items: center; flex-wrap: wrap; gap: 10px; line-height: 1.4;
 }
-.user-info-row > span {
-  /* เพิ่ม spacing เฉพาะตัวหัวข้อให้โดดเด่น */
-  margin-right: 8px;
-}
-.user-info-row > span[style*="font-weight: bold"] {
-  font-size: 18px;
-  margin-right: 20px;
-}
-.form-row {
-  display: flex;
-  align-items: center;
-  gap: 12px; /* ระยะห่างระหว่าง "ลงชื่อ" กับชื่อ */
-  margin-bottom: 16px;
-  flex-wrap: wrap;
-  justify-content: flex-start; /* ชิดซ้าย */
-}
-.form-row-sign {
-  display: flex;
-  align-items: center;
-  gap: 10px;           /* ระยะห่างระหว่าง "ลงชื่อ" กับชื่อ */
-  justify-content: flex-end; /* ชิดขวา */
-}
+.user-info-row > span { margin-right: 8px; }
+.user-info-row > span[style*="font-weight: bold"] { font-size: 18px; margin-right: 20px; }
 
-.form-row-sign .label {
-  white-space: nowrap; /* ป้องกันคำว่า "ลงชื่อ" หักบรรทัด */
-}
-/* PDF ONLY */
-.pdf-export-font-size {
-  font-size: 16px !important;   /* ฟอนต์ปกติ */
-}
+/* หมายเหตุ */
+.note-block { display: block; margin: 6px 0 0 0; font-size: 12.5px; font-style: italic; text-align: left; width: 100%; color: #000; }
 
+/* กรอบความเห็น (บีบระยะ) */
+.approval-table td { padding: 6px 6px 8px 6px !important; }
+.approval-cell { padding: 0 !important; vertical-align: top !important; }
+.approval-content { min-height: unset !important; padding: 8px 8px 2px 8px !important; gap: 4px !important; justify-content: flex-start !important; display:flex; flex-direction:column; align-items:center; text-align:center; }
+.approval-lines { line-height: 1.5 !important; margin-bottom: 2px !important; }
+.approval-sign { line-height: 1.25 !important; margin-top: 3px !important; margin-bottom: 0 !important; }
+.approval-content > *:last-child { margin-bottom: 0 !important; }
+
+:root { --topbar-h: 64px; --subbar-h: 0px; --gap: 12px; }
+
+@media (max-width: 540px){ .sigX{ max-width:520px; } }
+
+/* PDF ONLY – ลดขนาดตัวอักษรเวลา export */
+.pdf-export-font-size { font-size: 16px !important; }
 .pdf-export-font-size h1,
 .pdf-export-font-size h2,
 .pdf-export-font-size h3,
 .pdf-export-font-size .form-row-title,
-.pdf-export-font-size .form-header h3 {
-  font-size: 18px !important;   /* ฟอนต์หัวข้อ */
-  font-weight: bold;
-}
+.pdf-export-font-size .form-header h3 { font-size: 18px !important; font-weight: bold; }
 
-.pdf-export-header {
-  font-size: 18px !important;
-  font-weight: bold;
-}
+.pdf-export-header { font-size: 18px !important; font-weight: bold; }
 
-.equipment-table td:nth-child(1),
-.equipment-table td:nth-child(3) {
-  text-align: center; /* จัดข้อความกลาง */
-}
-
-/* ==================== ลายเซ็น (เฉพาะที่แก้) ==================== */
-/* กล่องลายเซ็นรวม – ชิดขวาเหมือนเดิม และเผื่อพื้นที่สำหรับวันที่ */
-.sigX{
-  width:100%;
-  max-width:700px;
-  margin:12px 0 2px auto;  /* ชิดขวา */
-  padding-bottom:26px;     /* กันพื้นที่สำหรับวันที่ */
-}
-
-/* ใช้ grid 3 คอลัมน์: ซ้าย(ลงชื่อ) | กลาง(ชื่อ+วันที่) | ขวา(ผู้ยืม) */
-.sigX-row{
-  display:grid;
-  grid-template-columns:auto max-content auto;
-  justify-content:end;     /* ดันทั้งชุดไปชิดขวา */
-  align-items:baseline;    /* ให้ baseline เท่ากัน */
-  column-gap:12px;
-  white-space:nowrap;
-  line-height:1.2;
-}
-
-.sigX-left,.sigX-right{ font-weight:400; }
-
-/* สมอของ “ชื่อ + วันที่” */
-.sigX-nameAnchor{
-  position: relative;
-  display: inline-block;
-  width: max-content;          /* ให้กว้างพอรองรับวันที่ */
-}
-
-.sigX-name{
-  display:inline-block;
-  white-space:nowrap;
-}
-
-/* วันที่อยู่ “ใต้ชื่อ” กึ่งกลาง และไม่แตกบรรทัด */
-/* นิดเดียว: เลื่อนซ้าย ~8px */
-.sigX-date{
-  position: absolute;
-  top: 100%;
-  left: calc(50% - 20px);   /* เดิม 50% -> ขยับซ้าย 8px */
-  transform: translateX(-50%);
-  margin-top: 10px;
-  display: inline-flex;
-  align-items: baseline;
-  gap: 4px;
-  white-space: nowrap;
-  line-height: 1;
-  font-size: 0.9em;
-  z-index: 1;
-}
-
-/* =============================================================== */
-
-/* หมายเหตุ: ให้เป็นบล็อกธรรมดา ชิดซ้ายเต็มความกว้าง */
-.note-block{
-  display: block;
-  margin: 6px 0 0 0;
-  font-size: 12.5px;
-  font-style: italic;
-  text-align: left;
-  width: 100%;
-  color: #000;
-}
-
-/* จัดเนื้อหาในช่องความเห็นให้อยู่กึ่งกลางกรอบ */
-.approval-cell { padding: 0; vertical-align: middle; }
-
-.approval-content{
-  min-height: 210px;              /* ปรับความสูงกรอบได้ */
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;  /* ดันลายเซ็นไปล่างของกรอบ */
-  align-items: center;
-  text-align: center;
-  padding: 12px 12px 16px;
-}
-.approval-lines{ 
-  line-height: 1.9; 
-  margin-bottom: 8px; 
-}
-.approval-sign{ 
-  line-height: 1.8; 
-  margin-top: 12px;    
-}
-:root{
-  --topbar-h: 64px;
-  --subbar-h: 0px;
-  --gap: 12px;
-}
-
-/* ตัดช่องว่างส่วนอื่นให้กระชับ (เดิมของคุณ) */
-.equipment-table{
-  margin-top: 6px !important;
-  margin-bottom: 10px !important;
-}
-/* ===== บีบช่องว่างเฉพาะกรอบความเห็น (ซ้าย/ขวา) ===== */
-/* 1) ระยะ padding ล่างของเซลล์ในตารางความเห็น */
-.approval-table td{
-  /* เดิม 3px */
-  padding: 6px 6px 8px 6px !important; /* ↑ เพิ่มช่องว่างจากเส้นกรอบล่าง */
-}
-
-.approval-cell { 
-  padding: 0 !important; 
-  vertical-align: top !important;   /* ไม่ต้องดันเนื้อหาลงกลางเซลล์ */
-}
-
-.approval-content{
-  /* เอาความสูงขั้นต่ำออก และลด padding ล่างสุด */
-  min-height: unset !important;
-  padding: 8px 8px 2px 8px !important;   /* เดิม 10 10 12 */
-  gap: 4px !important;                   /* ลดช่องไฟภายใน */
-  justify-content: flex-start !important;
-}
-
-.approval-lines{
-  line-height: 1.5 !important;
-  margin-bottom: 2px !important;
-}
-
-.approval-sign{
-  line-height: 1.25 !important;
-  margin-top: 3px !important;            /* ลดช่องไฟก่อนบล็อกล่าง */
-  margin-bottom: 0 !important;           /* กันระยะล่างเกิน */
-}
-
-/* กัน element สุดท้ายในกรอบมี margin ล่าง */
-.approval-content > *:last-child {
-  margin-bottom: 0 !important;
-}
-
-@media (max-width: 540px){
-  .sigX{ max-width:520px; }
-}
+/* ช่องไฟตารางให้กระชับขึ้นเล็กน้อย */
+.equipment-table { margin-top: 6px !important; margin-bottom: 10px !important; }
 </style>
-<!-- วางบล็อกนี้ท้ายไฟล์ SFC เลย -->
 <style>
-/* โหลดฟอนต์ TH Sarabun New */
+/* ฟอนต์ TH Sarabun New */
 @font-face{
   font-family: 'THSarabunNew';
   src: url('/fonts/THSarabunNew.woff2') format('woff2'),
@@ -1324,12 +1083,10 @@ async function handleNext() {
   font-display: swap;
 }
 
-/* ใช้ฟอนต์เฉพาะในเอกสาร PDF ตั้งแต่หัวข้อฟอร์มถึงชื่อในวงเล็บท้าย */
+/* ใช้ฟอนต์ในเอกสาร PDF */
 #pdf-section, #pdf-section *{
   font-family: 'THSarabunNew', 'Sarabun', Tahoma, sans-serif !important;
 }
-
-/* ทำตัวหนาให้ส่วนหัว/หัวตาราง/ตัวหนาในเอกสารดูถูกน้ำหนักฟอนต์ */
 #pdf-section h1,
 #pdf-section h2,
 #pdf-section h3,
@@ -1339,6 +1096,46 @@ async function handleNext() {
 #pdf-section .form-header h3{
   font-weight: 700;
 }
+
+/* ===== ลายเซ็นแบบอยู่ขวา + วันที่กึ่งกลางชื่อ ===== */
+/* ===== ลายเซ็น: เว้นนิดเดียวทั้งสองข้าง + วันที่อยู่ใต้ชื่อ ===== */
+#pdf-section .sigX{
+  /* ใช้ grid 3 คอลัมน์: ลงชื่อ | ชื่อ | ผู้ยืม */
+  display: grid;
+  grid-template-columns: auto auto auto;
+  column-gap: 12px;                /* ← ระยะห่าง “ลงชื่อ–ชื่อ–ผู้ยืม” (ปรับได้) */
+  justify-content: end;            /* ทั้งบรรทัดชิดขวา */
+  align-items: baseline;
+  width: 100%;
+  max-width: 700px;
+  margin: 12px 0 0 auto;           /* ชิดขวา */
+  padding-bottom: 6px;             /* เผื่อที่เล็กน้อย */
+}
+
+/* ทำให้ .sigX-row กระจายเป็น 3 ช่อง (ไม่ต้องมี wrapper เพิ่ม) */
+#pdf-section .sigX-row{ display: contents; }
+
+#pdf-section .sigX-left{  grid-column: 1; white-space: nowrap; }
+#pdf-section .sigX-name{  grid-column: 2; white-space: nowrap; }
+#pdf-section .sigX-right{ grid-column: 3; white-space: nowrap; }
+
+/* วันที่ให้อยู่คอลัมน์กลาง และกึ่งกลางพอดีใต้ชื่อ */
+#pdf-section .sigX-date{
+  grid-column: 2;
+  justify-self: center;            /* กลางคอลัมน์ชื่อ */
+  margin-top: 6px;                 /* เว้นลงมาหน่อย */
+  font-size: 12px;
+  line-height: 1;
+  white-space: nowrap;
+
+  /* กันค่า absolute ที่เคยตั้งไว้ก่อนหน้า */
+  position: static !important;
+  left: auto !important;
+  right: auto !important;
+  top: auto !important;
+  transform: none !important;
+}
+
 
 @import '../css/style.css';
 </style>

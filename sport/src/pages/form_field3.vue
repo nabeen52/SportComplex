@@ -389,6 +389,7 @@
     </div>
   </div>
 </template>
+
 <script setup>
 import { ref, onMounted, onBeforeUnmount, nextTick  } from 'vue'
 import { useRouter } from 'vue-router'
@@ -864,55 +865,69 @@ function normTime(t) {
 
 async function handleNext() {
   try {
-    nowTH.value = getNowTH()   // อัปเดตไทม์แสตมป์ก่อนสร้าง PDF
+    nowTH.value = getNowTH(); // อัปเดตไทม์แสตมป์ก่อนทำ PDF
 
-    const bookingId = localStorage.getItem('bookingId')
-    if (!bookingId) { Swal.fire('ไม่พบ bookingId'); return }
+    const bookingId = localStorage.getItem('bookingId');
+    if (!bookingId) {
+      Swal.fire('ไม่พบ bookingId');
+      return;
+    }
 
-    // 0) เอา draft จากหน้า form_field มารวมกับที่โหลดจาก DB
+    // 0) รวม draft กับข้อมูลที่โหลดมา
     const draft = (() => {
-      try { return JSON.parse(sessionStorage.getItem('form_field_save') || 'null') || {} }
-      catch { return {} }
-    })()
-    let bookingData = preferFilled(info.value || {}, draft || {})
+      try { return JSON.parse(sessionStorage.getItem('form_field_save') || 'null') || {}; }
+      catch { return {}; }
+    })();
+    let bookingData = preferFilled(info.value || {}, draft || {});
 
-    // ✅ normalize radio/เวลา (รวม restroom)
-    bookingData.utilityRequest  = normalizeYesNo(bookingData.utilityRequest)
-    bookingData.restroom        = normalizeYesNo(bookingData.restroom)
-    bookingData.facilityRequest = normalizeYesNo(bookingData.facilityRequest)
-    bookingData.turnon_air      = normTime(bookingData.turnon_air)
-    bookingData.turnoff_air     = normTime(bookingData.turnoff_air)
-    bookingData.turnon_lights   = normTime(bookingData.turnon_lights)
-    bookingData.turnoff_lights  = normTime(bookingData.turnoff_lights)
-    bookingData.since_time      = normTime(bookingData.since_time)
-    bookingData.until_thetime   = normTime(bookingData.until_thetime)
+    // 1) normalize yes/no + เวลา
+    bookingData.utilityRequest  = normalizeYesNo(bookingData.utilityRequest);
+    bookingData.restroom        = normalizeYesNo(bookingData.restroom);
+    bookingData.facilityRequest = normalizeYesNo(bookingData.facilityRequest);
+    const norm = (t) => (t && String(t).trim()) || '';
+    bookingData.turnon_air      = norm(bookingData.turnon_air);
+    bookingData.turnoff_air     = norm(bookingData.turnoff_air);
+    bookingData.turnon_lights   = norm(bookingData.turnon_lights);
+    bookingData.turnoff_lights  = norm(bookingData.turnoff_lights);
+    bookingData.since_time      = norm(bookingData.since_time);
+    bookingData.until_thetime   = norm(bookingData.until_thetime);
 
-    // === (ใหม่) สร้าง/ดึง step approvals ===
-    // ลำดับความสำคัญ: draft.step > info.value.step > ค่าเริ่มต้น
-    const stepArray = buildInitialStep(draft?.step || info.value?.step)
+    // 2) โหลด step จาก settings → ใช้เฉพาะ value.field
+    const cleanRoles = (arr) =>
+      Array.from(new Set(
+        (Array.isArray(arr) ? arr : [])
+          .map(r => String(r || '').trim().toLowerCase())
+          .filter(r => r === 'staff' || r === 'admin' || r === 'super')
+      ));
+    let stepArray = [];
+    try {
+      const resStep = await axios.get(`${API_BASE}/api/settings/approval_roles`);
+      const value = resStep?.data?.value || {};             // { field: [...], equipment: [...] }
+      const roles = Array.isArray(value.field) ? value.field : [];
+      stepArray = cleanRoles(roles).map(r => ({ role: r, approve: null }));
+    } catch (e) {
+      console.warn('โหลด approval_roles (field) ไม่สำเร็จ:', e);
+      stepArray = [];
+    }
 
-    // 1) ทำ PDF 1 หน้า
-    const pdfBlob = await htmlToPdfBlob('pdf-section')
+    // 3) ทำ PDF 1 หน้า + อัปโหลด
+    const pdfBlob = await htmlToPdfBlob('pdf-section');
+    const pdfUrl  = await uploadPdfBlob(pdfBlob);
 
-    // 2) อัปโหลด PDF -> ได้ URL
-    const pdfUrl = await uploadPdfBlob(pdfBlob)
-
-    // 3) อัปโหลดไฟล์แนบชั่วคราว (ถ้ามี)
-    const hasTemp = Array.isArray(window._tempSelectedFiles) && window._tempSelectedFiles.length > 0
-    const uploadedNow = hasTemp ? await uploadTempFilesAndGetUrls() : []
-
-    // 4) รวมไฟล์แนบทั้งหมดเป็น URL/ชื่อไฟล์
-    const multerFiles    = Array.isArray(bookingData.files) ? bookingData.files : []
+    // 4) อัปโหลดไฟล์แนบ (ถ้ามี) + รวมไฟล์
+    const hasTemp     = Array.isArray(window._tempSelectedFiles) && window._tempSelectedFiles.length > 0;
+    const uploadedNow = hasTemp ? await uploadTempFilesAndGetUrls() : [];
+    const multerFiles = Array.isArray(bookingData.files) ? bookingData.files : [];
     const allAttachments = [
       ...multerFiles.map(f => f.fileUrl || f.url).filter(Boolean),
       ...uploadedNow.map(f => f.url),
-    ]
+    ];
     const allFileNames = [
       ...multerFiles.map(f => f.originalName || f.fileName || 'ไฟล์แนบ'),
       ...uploadedNow.map(f => f.fileName || 'ไฟล์แนบ'),
-    ]
+    ];
 
-    // 5) payload (เพิ่ม field 'step')
+    // 5) payload – แนบ step ที่ดึงมาจาก settings (field)
     const payload = {
       user_id: bookingData.user_id,
       name: bookingData.building,
@@ -935,15 +950,12 @@ async function handleNext() {
       username_form: bookingData.username_form || localStorage.getItem('username_form') || '',
       id_form:       bookingData.id_form       || localStorage.getItem('id_form')       || '',
 
-      // --- เพิ่มเพื่อเก็บสถานะอนุมัติราย role ---
-      step: stepArray,   // <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+      step: stepArray, // ⬅⬅ สำคัญ
 
-      // ----- เพิ่ม restroom -----
+      // อื่น ๆ
       utilityRequest:  bookingData.utilityRequest || '',
       restroom:        bookingData.restroom || '',
       facilityRequest: bookingData.facilityRequest || '',
-
-      // รายละเอียดสาธารณูปโภค/รายการประกอบอาคาร
       turnon_air:      bookingData.turnon_air || '',
       turnoff_air:     bookingData.turnoff_air || '',
       turnon_lights:   bookingData.turnon_lights || '',
@@ -951,41 +963,36 @@ async function handleNext() {
       other:           bookingData.other || '',
       amphitheater:    bookingData.amphitheater || '',
       need_equipment:  bookingData.need_equipment || '',
+      aw:              bookingData.aw || '',
+      tel:             bookingData.tel || '',
+      reasons:         bookingData.reasons || '',
+      participants:    bookingData.participants || '',
+      requester:       bookingData.requester || '',
+      no_receive:      bookingData.no_receive || '',
+      date_receive:    bookingData.date_receive || null,
+      receiver:        bookingData.receiver || '',
+      fileUrl:         bookingData.fileUrl || '',
+    };
 
-      // อื่น ๆ
-      aw:           bookingData.aw || '',
-      tel:          bookingData.tel || '',
-      reasons:      bookingData.reasons || '',
-      participants: bookingData.participants || '',
-      requester:    bookingData.requester || '',
-      no_receive:   bookingData.no_receive || '',
-      date_receive: bookingData.date_receive || null,
-      receiver:     bookingData.receiver || '',
-      fileUrl:      bookingData.fileUrl || '',
-    }
-
-    await axios.post(`${API_BASE}/api/history`, payload)
+    await axios.post(`${API_BASE}/api/history`, payload);
 
     // 6) เคลียร์และไปหน้าถัดไป
-    sessionStorage.removeItem('form_field_save')
-    window._tempSelectedFiles = []
-    localStorage.removeItem('username_form')
-    localStorage.removeItem('id_form')
-    router.push('/form_field4')
+    sessionStorage.removeItem('form_field_save');
+    window._tempSelectedFiles = [];
+    localStorage.removeItem('username_form');
+    localStorage.removeItem('id_form');
+    router.push('/form_field4');
   } catch (err) {
     if (err?.response?.status === 413) {
-      Swal.fire({ icon: 'error', title: 'ไฟล์รวมใหญ่เกินไป', text: 'กรุณาลดจำนวน/ขนาดไฟล์ หรือบีบอัดก่อน แล้วลองอีกครั้ง' })
+      Swal.fire({ icon: 'error', title: 'ไฟล์รวมใหญ่เกินไป', text: 'กรุณาลดจำนวน/ขนาดไฟล์ หรือบีบอัดก่อน แล้วลองอีกครั้ง' });
     } else if (err?.response?.status === 409) {
-      Swal.fire({ icon: 'warning', title: 'คำขอซ้ำ', text: err.response.data.message || 'คุณมีรายการที่รออนุมัติอยู่แล้ว' })
+      Swal.fire({ icon: 'warning', title: 'คำขอซ้ำ', text: err.response.data.message || 'คุณมีรายการที่รออนุมัติอยู่แล้ว' });
     } else {
-      Swal.fire('เกิดข้อผิดพลาดในการบันทึกข้อมูล', err?.response?.data?.message || err.message, 'error')
+      Swal.fire('เกิดข้อผิดพลาดในการบันทึกข้อมูล', err?.response?.data?.message || err.message, 'error');
     }
-    console.error(err)
+    console.error(err);
   }
 }
-
-
-
 
 function formatTimeTH(timeStr) {
   if (!timeStr || typeof timeStr !== 'string') return '-'
@@ -994,6 +1001,7 @@ function formatTimeTH(timeStr) {
   return t + ' น.'
 }
 </script>
+
 <style scoped>
 .headStepper {
   position: sticky;
@@ -1713,7 +1721,102 @@ function formatTimeTH(timeStr) {
    display: inline-block;
   min-width: 240px;
 }
+/* ลดขนาดไทม์แสตมป์ใต้ลายเซ็น */
+#pdf-section .sig-under .sig-date { 
+  font-size: 13px !important;   /* ลอง 12–13px ตามชอบ */
+  line-height: 1.2;
+}
 
+/* ขณะ export (มี .pdf-export ครอบ) ให้เล็กเท่าเดิม */
+.pdf-export .sig-under .sig-date {
+  font-size: 13px !important;
+  line-height: 1.2;
+}
+/* ชิดขวาสุดภายในพื้นที่เอกสาร */
+.sign-header-table.single-right td{
+  padding-right: 0 !important;
+}
+.sign-header-table.single-right .sig-box{
+  display: block !important;
+  margin-left: auto !important;   /* ดันไปชิดขวา */
+  margin-right: 0 !important;
+  padding-right: 0 !important;
+}
+
+/* ลดช่องว่างคำว่า "ลงชื่อ" กับเส้นจุด/ลายเซ็น */
+.sign-line{
+  --sign-gap: 8px !important;     /* เดิม 20px → แน่นขึ้น (ปรับได้ 4–12px) */
+  column-gap: var(--sign-gap) !important;
+}
+.sign-text{ margin-right: 0 !important; }
+.signature-wrap{ margin-left: 0 !important; }
+
+/* ถ้าเส้นจุดยาวไป ทำให้เริ่มใกล้ "ลงชื่อ" ขึ้นอีกนิด */
+.dot-line-inline{
+  min-width: 200px !important;    /* เดิม 240px → ปรับตามสายตา 180–220 ก็ได้ */
+}
+
+/* ตารางเซ็นชื่อ (แบบมีช่องเดียว) */
+.sign-header-table.single-right td {
+  width: 100%;
+  text-align: right !important;   /* ดันกล่องไปขวาสุด */
+  padding-right: 0 !important;
+}
+
+/* กล่องลายเซ็น → ยกไปชิดขวา แต่ข้อความภายในยัง center */
+.sign-header-table.single-right .sig-box {
+  display: block !important;
+  margin-left: auto !important;   /* ✅ ดันไปชิดขวา */
+  margin-right: 0 !important;
+  text-align: center !important;  /* ✅ ภายในยัง center */
+  min-width: 320px;               /* กำหนดความกว้างพอเหมาะ (ปรับได้) */
+}
+/* ===== บังคับบล็อกเซ็นชื่อเดียวไปชิดขวาสุด ===== */
+.sign-header-table.single-right {
+  width: 100%;
+}
+
+.sign-header-table.single-right td {
+  text-align: right !important;   /* ดันคอลัมน์ไปขวาสุด */
+  padding-right: 0 !important;
+}
+
+.sign-header-table.single-right .sig-box {
+  display: inline-block !important; /* ใช้ inline-block แทน block */
+  text-align: center !important;    /* ภายในยัง center */
+  margin-left: auto !important;     /* ดันไปขวา */
+  margin-right: 0 !important;
+  min-width: 300px;                 /* กำหนดความกว้างพอดี */
+}
+/* ✅ ดันบล็อกเซ็นชื่อไปขอบขวาสุด */
+.sign-header-table.single-right td {
+  padding-right: 0 !important;   /* ไม่เหลือช่องว่างด้านขวา */
+}
+
+.sign-header-table.single-right .sig-box {
+  margin-left: auto !important;  /* ดันไปขวาสุด */
+  margin-right: 0 !important;
+  text-align: center !important; /* ภายในยังจัดกึ่งกลาง */
+  min-width: 280px;              /* ปรับกว้างตามสายตา */
+}
+
+/* ถ้าอยากให้แทบจะติดขอบกระดาษจริง ๆ */
+#pdf-section .sign-header-table.single-right .sig-box {
+  padding-right: 0 !important;
+  transform: translateX(10px);   /* ปรับ +5 ถึง +15px เพื่อเลื่อนเพิ่ม */
+}
+/* ===== ดันกล่องเซ็นชื่อไปชิดขวาสุดแบบสุด ๆ ===== */
+.sign-header-table.single-right td {
+  padding-right: 0 !important;
+}
+
+.sign-header-table.single-right .sig-box {
+  margin-left: auto !important;
+  margin-right: 0 !important;
+  text-align: center !important;
+  min-width: 280px;
+  transform: translateX(30px);   /* ✅ เลื่อนเพิ่มไปทางขวาอีก (ปรับเลขได้ 10–50px) */
+}
 
 </style>
 

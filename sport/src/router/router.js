@@ -48,6 +48,7 @@ import History_super from '@/pages/history_super.vue'
 
 // *** ต้อง import LoginSuccess ด้วย ***
 import LoginSuccess from '@/pages/login-success.vue'
+import Step from '@/pages/step.vue'
 
 const routes = [
     // { path: '/', component: Select_role },
@@ -96,7 +97,8 @@ const routes = [
     { path: '/agency_admin', component: Agency_admin, meta: { requiresAuth: true } },
     { path: '/approve_field_super', component: Approve_field_super, meta: { requiresAuth: true } },
     { path: '/profile_super', component: Profile_super, meta: { requiresAuth: true } },
-    { path: '/history_super', component: History_super, meta: { requiresAuth: true } }
+    { path: '/history_super', component: History_super, meta: { requiresAuth: true } },
+    { path: '/step', component: Step, meta: { requiresAuth: true } }
 
 
 ]
