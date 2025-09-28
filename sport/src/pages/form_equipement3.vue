@@ -230,9 +230,30 @@
 </div>
 
       <div class="button-wrapper">
-        <button id="btnBack" @click="handleBack">Back</button>
-        <button id="btnNext" @click="handleNext" :disabled="isLoading">Next</button>
-      </div>
+  <button id="btnBack" @click="handleBack" :disabled="isLoading">Back</button>
+
+  <button
+    id="btnNext"
+    @click="handleNext"
+    :disabled="isLoading"
+    :aria-busy="isLoading ? 'true' : 'false'"
+  >
+    <span v-if="!isLoading">Next</span>
+    <span v-else class="btn-spinner-wrap">
+      <span class="btn-spinner" aria-hidden="true"></span>
+      <span class="btn-text">กำลังบันทึก…</span>
+    </span>
+  </button>
+</div>
+
+<!-- Overlay กันกดซ้ำระหว่างบันทึก -->
+<div v-if="isLoading" class="saving-overlay" role="alert" aria-live="polite">
+  <div class="saving-card">
+    <div class="saving-spinner"></div>
+    <div class="saving-text">กำลังบันทึกข้อมูล โปรดรอสักครู่…</div>
+  </div>
+</div>
+
     </div>
     </div>
     <footer class="foot">
@@ -637,6 +658,8 @@ function handleBack() {
 
 
 async function handleNext() {
+   if (isLoading.value) return; 
+
   if (!booking.value || !Array.isArray(equipmentList.value) || equipmentList.value.length === 0) {
     alert('ไม่มีข้อมูลจะบันทึก');
     return;
@@ -1063,6 +1086,67 @@ async function handleNext() {
 
 /* ช่องไฟตารางให้กระชับขึ้นเล็กน้อย */
 .equipment-table { margin-top: 6px !important; margin-bottom: 10px !important; }
+
+/* ปุ่ม: disabled ตอนโหลด */
+#btnNext[disabled],
+#btnBack[disabled]{
+  opacity: .7;
+  cursor: not-allowed;
+}
+
+/* ปุ่ม Next – ขณะโหลดแสดงสปินเนอร์เล็ก */
+.btn-spinner-wrap{
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.btn-spinner{
+  width: 14px; height: 14px;
+  border: 2px solid rgba(255,255,255,.6);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+.btn-text{ display: inline-block; }
+
+/* Overlay กันกดซ้ำทั้งหน้า (เฉพาะหน้านี้ เพราะ style เป็น scoped) */
+.saving-overlay{
+  position: fixed;
+  inset: 0;
+  background: rgba(255,255,255,.5);
+  backdrop-filter: blur(1px);
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.saving-card{
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 12px 30px rgba(0,0,0,.12);
+  padding: 22px 26px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid #eef1f6;
+}
+.saving-spinner{
+  width: 22px; height: 22px;
+  border: 3px solid #1976d2;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin .8s linear infinite;
+}
+.saving-text{
+  font-weight: 600;
+  color: #1e2c48;
+}
+
+/* reuse */
+@keyframes spin{
+  to{ transform: rotate(360deg); }
+}
+
 </style>
 <style>
 /* ฟอนต์ TH Sarabun New */

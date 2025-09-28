@@ -365,9 +365,30 @@
             </div>
 
             <div class="button-wrapper mt-30">
-              <button id="btnBack" @click="goBack">Back</button>
-              <button id="btnNext" @click="handleNext">Next</button>
-            </div>
+  <button id="btnBack" @click="goBack" :disabled="isLoading">Back</button>
+
+  <button
+    id="btnNext"
+    @click="handleNext"
+    :disabled="isLoading"
+    :aria-busy="isLoading ? 'true' : 'false'"
+  >
+    <span v-if="!isLoading">Next</span>
+    <span v-else class="btn-spinner-wrap">
+      <span class="btn-spinner" aria-hidden="true"></span>
+      <span class="btn-text">กำลังบันทึก…</span>
+    </span>
+  </button>
+</div>
+
+<!-- Overlay กันกดซ้ำทั้งหน้า -->
+<div v-if="isLoading" class="saving-overlay" role="alert" aria-live="polite">
+  <div class="saving-card">
+    <div class="saving-spinner"></div>
+    <div class="saving-text">กำลังบันทึกข้อมูล โปรดรอสักครู่…</div>
+  </div>
+</div>
+
           </div>
         
       </div>
@@ -420,6 +441,10 @@ let polling = null
 const signatureUrl = ref('')  // URL รูปลายเซ็นของผู้ยื่น
 
 const REQUIRED_APPROVAL_ROLES = ['admin', 'super'];
+
+// ด้านบนไฟล์ (ใกล้ ๆ state อื่น)
+const isLoading = ref(false);
+
 
 function buildInitialStep(existingStep) {
   if (Array.isArray(existingStep) && existingStep.length > 0) {
@@ -864,6 +889,9 @@ function normTime(t) {
 
 
 async function handleNext() {
+    if (isLoading.value) return;        // ✅ กันการกดรัว ๆ ตั้งแต่ต้น
+  isLoading.value = true;
+
   try {
     nowTH.value = getNowTH(); // อัปเดตไทม์แสตมป์ก่อนทำ PDF
 
@@ -991,6 +1019,8 @@ async function handleNext() {
       Swal.fire('เกิดข้อผิดพลาดในการบันทึกข้อมูล', err?.response?.data?.message || err.message, 'error');
     }
     console.error(err);
+  }finally {
+    isLoading.value = false;       // ✅ ปล่อยโหลดไม่ว่าผลจะสำเร็จ/พัง
   }
 }
 
@@ -1401,6 +1431,65 @@ function formatTimeTH(timeStr) {
 #pdf-section .form-row[style*="text-indent"] {
   line-height: 1.6 !important;
 }
+
+
+/* ปุ่ม disable ระหว่างโหลด */
+#btnNext[disabled],
+#btnBack[disabled]{
+  opacity: .7;
+  cursor: not-allowed;
+}
+
+/* ปุ่ม Next – ขณะโหลดแสดงสปินเนอร์เล็ก */
+.btn-spinner-wrap{
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.btn-spinner{
+  width: 14px; height: 14px;
+  border: 2px solid rgba(255,255,255,.6);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin .8s linear infinite;
+}
+.btn-text{ display: inline-block; }
+
+/* Overlay กันกดซ้ำทั้งหน้า */
+.saving-overlay{
+  position: fixed;
+  inset: 0;
+  background: rgba(255,255,255,.5);
+  backdrop-filter: blur(1px);
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.saving-card{
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 12px 30px rgba(0,0,0,.12);
+  padding: 22px 26px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid #eef1f6;
+}
+.saving-spinner{
+  width: 22px; height: 22px;
+  border: 3px solid #1976d2;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin .8s linear infinite;
+}
+.saving-text{
+  font-weight: 600;
+  color: #1e2c48;
+}
+
+@keyframes spin{ to{ transform: rotate(360deg); } }
+
 
 </style>
 

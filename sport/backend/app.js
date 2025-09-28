@@ -10,7 +10,7 @@ const path = require('path');
 const favicon = require('serve-favicon');
 
 // โฟลเดอร์ public ของ frontend (อยู่คนละโฟลเดอร์กับ backend)
-const PUBLIC_DIR = path.join(__dirname, '..', 'public');
+const PUBLIC_DIR = path.join(__dirname, 'public'); // เดิมเป็น '..'
 
 const axios = require('axios');
 const mime = require('mime-types');
@@ -946,7 +946,7 @@ app.get('/api/history/booked', async (req, res) => {
 // ใช้ PNG เป็น favicon ตรง ๆ ได้เลย
 // ใส่ไว้แทนบรรทัด favicon เดิม
 // ชี้ไปยังไฟล์ PNG ใน dist/img ของคุณ
-// app.use(favicon(path.join(PUBLIC_DIR, 'favicon.ico')));
+app.use(favicon(path.join(PUBLIC_DIR, 'favicon.ico')));
 
 // static อื่น ๆ
 app.use(express.static(PUBLIC_DIR, { maxAge: '7d' })); // เผื่อเสิร์ฟไฟล์ public ตรงๆ
