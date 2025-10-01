@@ -333,9 +333,9 @@
                 </label>
                 <input type="text" class="custom-input" :value="formData.zone" readonly />
               </div>
+
               <!-- ============== 2. ขอใช้ระบบสาธารณูปโภค (ตามรูป) ============= -->
 <div class="form-section-title">2.ขอใช้ระบบสาธารณูปโภค</div>
-
 <!-- แถว: ต้องการ/ไม่ต้องการ -->
 <div class="form-row" style="grid-column: span 2;">
   <div>
@@ -350,59 +350,60 @@
   </div>
 </div>
 
-<!-- แถว: ห้องสุขา (อยู่ใต้ปุ่ม ต้องการ/ไม่ต้องการ) -->
+<!-- แสดงรายละเอียดเฉพาะเมื่อเลือก ต้องการ -->
 <template v-if="formData.utilityRequest === 'yes'">
+  <!-- ห้องสุขา -->
   <div class="form-row" style="grid-column: span 2;">
     <label>
       ห้องสุขา
       <span v-if="showValidate && missingFields.restroomChoice" class="required-star">*</span>
     </label>
-
     <div class="radio-inline" style="margin-top:4px;">
-      <label>
-        <input type="radio" value="yes" v-model="formData.restroom" />
-        ต้องการ
-      </label>
-      <label>
-        <input type="radio" value="no" v-model="formData.restroom" />
-        ไม่ต้องการ
-      </label>
+      <label><input type="radio" value="yes" v-model="formData.restroom" /> ต้องการ</label>
+      <label><input type="radio" value="no"  v-model="formData.restroom" /> ไม่ต้องการ</label>
     </div>
-
-    <!-- ข้อความเตือนถ้ายังไม่เลือก -->
     <div v-if="showValidate && missingFields.restroomChoice" class="input-error-message" style="margin-top:6px;">
-      กรุณาเลือก “ต้องการ” หรือ “ไม่ต้องการ” ห้องสุขา
+      กรุณาเลือก “ต้องการ/ไม่ต้องการ” ห้องสุขา
     </div>
   </div>
 
-  <!-- แถว: ไฟฟ้าส่องสว่าง ตั้งแต่เวลา - ถึงเวลา -->
+  <!-- ไฟฟ้าส่องสว่าง: ต้องเลือกก่อน -->
   <div class="form-row" style="grid-column: span 2;">
-    <label>ไฟฟ้าส่องสว่าง</label>
-    <div class="inline-range">
-      <input
-        type="time"
-        :class="inputClass('turnon_lights')"
-        v-model="formData.turnon_lights"
-      />
-      <span class="range-dash">-</span>
-      <input
-        type="time"
-        :class="inputClass('turnoff_lights')"
-        v-model="formData.turnoff_lights"
-        :min="formData.turnon_lights || ''"
-      />
+    <label>
+      ไฟฟ้าส่องสว่าง
+      <span v-if="showValidate && missingFields.lightsChoice" class="required-star">*</span>
+    </label>
+    <div class="radio-inline" style="margin-top:4px;">
+      <label><input type="radio" value="yes" v-model="formData.lights" /> ต้องการ</label>
+      <label><input type="radio" value="no"  v-model="formData.lights"  /> ไม่ต้องการ</label>
+    </div>
+    <div v-if="showValidate && missingFields.lightsChoice" class="input-error-message" style="margin-top:6px;">
+      กรุณาเลือก “ต้องการ/ไม่ต้องการ” ไฟฟ้าส่องสว่าง
     </div>
   </div>
 
-  <!-- แจ้งเตือนกรณีไม่กรอกอะไรเลยในหัวข้อ 2 -->
-  <div
-    class="form-row"
-    style="grid-column: span 2;"
-    v-if="showValidate && missingFields.utilityGroup"
-  >
-    <span class="input-error-message">กรุณากรอกอย่างน้อย 1 รายการในหัวข้อนี้</span>
+  <!-- ช่องเวลา โผล่เฉพาะเมื่อเลือกไฟ = ต้องการ -->
+  <!-- ช่องเวลา โผล่เฉพาะเมื่อเลือกไฟ = ต้องการ -->
+<div class="form-row" style="grid-column: span 2;" v-if="formData.lights === 'yes'">
+  <label>ตั้งแต่เวลา - ถึงเวลา</label>
+  <div class="inline-range">
+    <input type="time" :class="inputClass('turnon_lights')"  v-model="formData.turnon_lights" />
+    <span class="range-dash">-</span>
+    <input type="time" :class="inputClass('turnoff_lights')" v-model="formData.turnoff_lights" :min="formData.turnon_lights || ''" />
   </div>
+
+  <!-- ✅ ข้อความเตือนเฉพาะเวลาของไฟฟ้าส่องสว่าง -->
+  <div
+    v-if="showValidate && (missingFields.turnon_lights || missingFields.turnoff_lights)"
+    class="input-error-message"
+    style="margin-top:6px;"
+  >
+    กรุณากรอกเวลาสำหรับระยะเวลาในการใช้งานไฟฟ้าส่องสว่าง
+  </div>
+</div>
+
 </template>
+
 
               <!-- ============== 3. ขอใช้รายการประกอบอาคาร ============= -->
               <div class="form-section-title">3.ขออนุมัติรายการประกอบอาคาร</div>
@@ -432,7 +433,7 @@
                   ดึงอัฒจันทร์ภายในอาคารเฉลิมพระเกียรติ 72 พรรษา
                   <span v-if="showValidate && missingFields.amphitheater" class="required-star">*</span>
                 </label>
-                <input type="text" class="custom-input" v-model="formData.amphitheater" placeholder="เฉพาะอาคาร 72 พรรษา" />
+                <input type="text" class="custom-input" v-model="formData.amphitheater" placeholder="เลือกฝั่งของอัฒจันทร์" />
               </div>
               <div class="form-row" v-if="formData.facilityRequest === 'yes'">
                 <label>อุปกรณ์กีฬา (โปรดระบุรายการและจำนวน)</label>
@@ -603,6 +604,34 @@ const conflictDays = ref([])
 
 
 const dpRange = ref(null)
+
+// วางไว้บนสุดแถวๆ ฟังก์ชัน helper อื่นๆ
+function normalizeUtilityBeforeSubmit() {
+  // ไม่ใช้ระบบสาธารณูปโภค -> เคลียร์ทุกค่าเกี่ยวข้อง
+  if (formData.value.utilityRequest !== 'yes') {
+    formData.value.restroom = ''
+    formData.value.lights = ''
+    formData.value.turnon_lights = ''
+    formData.value.turnoff_lights = ''
+    return
+  }
+
+  // ใช้ระบบสาธารณูปโภค
+  const hasLightTimes =
+    !!formData.value.turnon_lights && !!formData.value.turnoff_lights
+
+  // ถ้ากรอกเวลาครบแต่ radio ยังไม่ใช่ 'yes' ให้บังคับเป็น 'yes'
+  if (hasLightTimes && formData.value.lights !== 'yes') {
+    formData.value.lights = 'yes'
+  }
+
+  // ถ้าเลือกไฟฟ้า = 'no' ให้ลบเวลาทิ้งเพื่อไม่ให้สับสน
+  if (formData.value.lights === 'no') {
+    formData.value.turnon_lights = ''
+    formData.value.turnoff_lights = ''
+  }
+}
+
 
 function formatRangeBE(value) {
   if (!value) return ''
@@ -922,7 +951,8 @@ const formData = ref({
   utilityRequest: 'no',
   facilityRequest: 'no',
   proxyStudentName: '',
-  proxyStudentId: ''
+  proxyStudentId: '',
+  lights:'',
 })
 
 // Zone
@@ -1148,6 +1178,38 @@ watch(agencySearch, (v) => {
   }
 })
 
+watch(() => formData.value.lights, (v) => {
+  if (v !== 'yes') {
+    // เคลียร์ค่าเวลา
+    formData.value.turnon_lights  = ''
+    formData.value.turnoff_lights = ''
+    // เคลียร์ error ที่ค้าง
+    if (missingFields.value) {
+      delete missingFields.value.turnon_lights
+      delete missingFields.value.turnoff_lights
+      delete missingFields.value.lightsChoice
+      delete missingFields.value.utilityGroup
+    }
+  }
+})
+
+watch(() => formData.value.utilityRequest, (v) => {
+  if (v !== 'yes') {
+    formData.value.restroom = ''
+    formData.value.lights = ''
+    formData.value.turnon_lights = ''
+    formData.value.turnoff_lights = ''
+    if (missingFields.value) {
+      delete missingFields.value.restroomChoice
+      delete missingFields.value.lightsChoice
+      delete missingFields.value.turnon_lights
+      delete missingFields.value.turnoff_lights
+      delete missingFields.value.utilityGroup
+    }
+  }
+})
+
+
 watch(dpDate, (d) => {
   formData.value.date = (!d || isNaN(d)) ? '' : toISO(d)
 })
@@ -1324,88 +1386,108 @@ function validateTel() {
   // เบอร์ต้องมี 3-10 หลัก ตัวเลขเท่านั้น
   telError.value = !(tel.length >= 3 && tel.length <= 10 && /^\d{3,10}$/.test(tel))
 }
-function validateFields() {
+function validateFields () {
   const fields = {}
 
+  // === ฟิลด์บังคับหลัก ===
   const required = [
     'aw','date','tel','name_activity','reasons',
     'since','uptodate','since_time','until_thetime',
     'participants','building'
   ]
   required.forEach(k => {
-    if (!formData.value[k] || String(formData.value[k]).trim()==='') fields[k]=true
+    if (!formData.value[k] || String(formData.value[k]).trim() === '') {
+      fields[k] = true
+    }
   })
 
-  // ผู้ขอใช้ + รหัสพนักงาน (รหัสต้องเป็นตัวเลข ≤ 8 หลัก)
-  if (!username_form.value || username_form.value.trim() === '') fields['username_form'] = true
-  if (!id_form.value || !/^\d{1,8}$/.test(id_form.value)) fields['id_form'] = true
+  // ผู้ขอใช้ / รหัสพนักงาน
+  if (!username_form.value || username_form.value.trim() === '') {
+    fields['username_form'] = true
+  }
+  if (!id_form.value || !/^\d{1,8}$/.test(id_form.value)) {
+    fields['id_form'] = true
+  }
 
-  // หน่วยงาน (+ กรณี 'อื่นๆ')
-  if (!finalAgency.value || String(finalAgency.value).trim() === '') fields['agency'] = true
+  // หน่วยงาน
+  if (!finalAgency.value || String(finalAgency.value).trim() === '') {
+    fields['agency'] = true
+  }
   if (agencyInput.value === 'อื่นๆ' &&
-      (!customAgency.value || String(customAgency.value).trim()==='')) {
+      (!customAgency.value || String(customAgency.value).trim() === '')) {
     fields['agencyOther'] = true
   }
 
-  // โซน (ถ้าอาคารนั้นมีโซน)
-  if (hasZone.value && (!formData.value.zone || String(formData.value.zone).trim()==='')) {
+  // โซน (ถ้ามีโซน)
+  if (hasZone.value &&
+      (!formData.value.zone || String(formData.value.zone).trim() === '')) {
     fields['zone'] = true
   }
 
-  // ต้องมี user_id (คนล็อกอิน)
-  if (!proxyUserId.value || String(proxyUserId.value).trim() === '') fields['userId']=true
+  // ต้องมี user_id ผู้ที่ทำรายการ
+  if (!proxyUserId.value || String(proxyUserId.value).trim() === '') {
+    fields['userId'] = true
+  }
 
-  // ไฟล์แนบ >= 1
+  // แนบไฟล์อย่างน้อย 1
   if (selectedFiles.value.length === 0) {
-    fields['files']=true
-    fileError.value=true
+    fields['files'] = true
+    fileError.value = true
   } else {
-    fileError.value=false
+    fileError.value = false
   }
 
-  // ระบบสาธารณูปโภค
+  // เบอร์โทร 3–10 หลัก (ตัวเลขล้วน)
+  const tel = formData.value.tel || ''
+  if (!/^\d{3,10}$/.test(tel)) {
+    fields['tel'] = true
+    telError.value = true
+  } else {
+    telError.value = false
+  }
+
+  // === กลุ่ม 2: ระบบสาธารณูปโภค ===
   if (formData.value.utilityRequest === 'yes') {
-    // ต้องเลือก restroom yes/no เสมอ
-    if (!['yes','no'].includes(formData.value.restroom)) fields['restroomChoice'] = true
+    // ห้องสุขา ต้องเลือก yes/no
+    if (!['yes', 'no'].includes(formData.value.restroom)) {
+      fields['restroomChoice'] = true
+    }
 
+    // ไฟฟ้าส่องสว่าง ต้องเลือก yes/no
+    if (!['yes', 'no'].includes(formData.value.lights)) {
+      fields['lightsChoice'] = true
+    }
+
+    // ถ้าเลือกไฟฟ้า = ต้องการ → ต้องกรอกเวลาทั้งคู่
+    if (formData.value.lights === 'yes') {
+      if (!formData.value.turnon_lights)  fields['turnon_lights']  = true
+      if (!formData.value.turnoff_lights) fields['turnoff_lights'] = true
+    }
+
+    // ✅ ปรับเงื่อนไขรวม: ให้ "ไฟฟ้า = ไม่ต้องการ" ผ่านได้
     const lightsOK =
-      !!formData.value.turnon_lights && !!formData.value.turnoff_lights &&
-      String(formData.value.turnon_lights).trim() !== '' &&
-      String(formData.value.turnoff_lights).trim() !== ''
+      formData.value.lights === 'yes' &&
+      !!formData.value.turnon_lights &&
+      !!formData.value.turnoff_lights
+
     const restroomYES = formData.value.restroom === 'yes'
+    const lightsNO    = formData.value.lights === 'no'   // <-- เพิ่มบรรทัดนี้
 
-    if (!(lightsOK || restroomYES)) fields['utilityGroup'] = true
-  }
-
-  // รายการประกอบอาคาร
-  if (formData.value.facilityRequest === 'yes') {
-    const facilityFilled =
-      (formData.value.amphitheater && String(formData.value.amphitheater).trim() !== '') ||
-      (formData.value.need_equipment && String(formData.value.need_equipment).trim() !== '')
-    if (!facilityFilled) fields['facilityGroup'] = true
-
-    // เฉพาะอาคาร 72 พรรษา → บังคับ amphitheater ต้องมีค่า
-    if ((formData.value.building || '').includes('72') &&
-        !(formData.value.amphitheater && String(formData.value.amphitheater).trim() !== '')) {
-      fields['amphitheater'] = true
+    // เดิม: if (!(lightsOK || restroomYES)) fields['utilityGroup'] = true
+    // ใหม่: ถ้าไฟฟ้า = ไม่ต้องการ ก็ไม่ต้องบังคับอย่างอื่น
+    if (!(lightsOK || restroomYES || lightsNO)) {
+      fields['utilityGroup'] = true
     }
   }
 
-  // เบอร์โทร 3–10 หลัก
-  const tel = formData.value.tel || ''
-  if (!/^\d{3,10}$/.test(tel)) {
-    fields['tel']=true
-    telError.value=true
-  } else {
-    telError.value=false
-  }
-
-  // กันเวลาชน
-  // if (hasTimeConflict.value) fields['timeConflict'] = true
+  // (Admin อนุญาตจองทับเวลาได้ จึงไม่บังคับ time conflict ที่นี่)
 
   missingFields.value = fields
   return Object.keys(fields).length === 0
 }
+
+
+
 
 
 function fileToBase64(file) {
@@ -1417,51 +1499,74 @@ function fileToBase64(file) {
   })
 }
 async function handleSubmit() {
-  showValidate.value = true
+  showValidate.value = true;
 
-  // ตรวจความครบถ้วนก่อน
-  const isValid = validateFields()
+  // 1) ตรวจความครบถ้วนเบื้องต้น
+  const isValid = validateFields();
 
-  // ถ้าไม่ผ่าน และสาเหตุไม่ใช่แค่ชนเวลา -> แจ้งเตือนและหยุด
+  // ถ้าไม่ผ่าน และสาเหตุไม่ได้มีแค่ 'timeConflict' → เตือนแล้วหยุด
   if (!isValid) {
-    const keys = Object.keys(missingFields.value || {})
-    const onlyTimeConflict = keys.length === 1 && keys[0] === 'timeConflict'
+    const keys = Object.keys(missingFields.value || {});
+    const onlyTimeConflict = keys.length === 1 && keys[0] === 'timeConflict';
     if (!onlyTimeConflict) {
       Swal.fire({
         icon: 'warning',
         title: 'กรอกข้อมูลไม่ครบถ้วน',
         text: 'กรุณากรอกข้อมูลให้ครบถ้วนและแนบไฟล์ก่อนดำเนินการต่อ',
         confirmButtonText: 'ตกลง'
-      })
-      return
+      });
+      return;
     }
-    // ถ้าไม่ผ่านเพราะ "ชนเวลาอย่างเดียว" ให้ไปต่อได้ (จะถามยืนยันด้านล่าง)
+    // ถ้า “ไม่ผ่านเพราะชนเวลาอย่างเดียว” ให้ไปต่อได้ (จะถามยืนยันด้านล่าง)
   }
 
-  // ✅ ใช้ไฟล์จริงเท่านั้น
-  const realFiles = selectedFiles.value.filter(f => f instanceof File || f instanceof Blob)
+  // 2) เงื่อนไขเฉพาะหัวข้อ "ไฟฟ้าส่องสว่าง"
+  //    ถ้าเลือกไฟฟ้า = ต้องการ แต่ยังไม่กรอกเวลา → เตือนและไม่ไปต่อ
+  const needLights   = formData.value.utilityRequest === 'yes' && formData.value.lights === 'yes';
+  const noLightTimes = !formData.value.turnon_lights || !formData.value.turnoff_lights;
+  if (needLights && noLightTimes) {
+    const restroomYES = formData.value.restroom === 'yes';
+
+    // เซ็ตฟิลด์ที่ขาดให้แสดงแดงเฉพาะที่เกี่ยวข้อง
+    missingFields.value = {
+      ...missingFields.value,
+      turnon_lights:  !formData.value.turnon_lights,
+      turnoff_lights: !formData.value.turnoff_lights,
+      // ขึ้น utilityGroup เฉพาะกรณีที่ทั้งหัวข้อยังว่าง (ยังไม่ได้เลือกห้องสุขาเป็น "ต้องการ")
+      ...(restroomYES ? {} : { utilityGroup: true }),
+    };
+
+    await Swal.fire({
+      icon: 'warning',
+      title: 'กรุณากรอกเวลาไฟฟ้าส่องสว่าง',
+      text: 'เมื่อเลือก “ไฟฟ้าส่องสว่าง – ต้องการ” ต้องกรอกเวลาเริ่มและเวลาสิ้นสุด',
+      confirmButtonText: 'ตกลง'
+    });
+    return;
+  }
+
+  // 3) ตรวจไฟล์แนบ: ต้องเป็นไฟล์จริง (File/Blob) อย่างน้อย 1
+  const realFiles = selectedFiles.value.filter(f => f instanceof File || f instanceof Blob);
   if (realFiles.length === 0 && window._tempSelectedFiles?.length) {
-    // เผื่อ selectedFiles ถูกทับ ให้ดึงกลับจาก global
-    selectedFiles.value = window._tempSelectedFiles.filter(f => f instanceof File || f instanceof Blob)
+    // กู้คืนกรณีโดนรีเฟรช/กลับหน้าแล้ว state หาย
+    selectedFiles.value = window._tempSelectedFiles.filter(f => f instanceof File || f instanceof Blob);
   }
-
-  // ถ้ายังไม่มีไฟล์จริง ให้แจ้งเตือน
   if (selectedFiles.value.length === 0) {
-    fileError.value = true
-    Swal.fire({
+    fileError.value = true;
+    await Swal.fire({
       icon: 'warning',
       title: 'ไม่มีไฟล์แนบ',
       text: 'กรุณาเลือกไฟล์อีกครั้ง',
       confirmButtonText: 'ตกลง'
-    })
-    return
+    });
+    return;
   }
 
-  // 🚦 ถ้ามีชนเวลา ให้ถามยืนยันก่อน แต่ไม่บล็อก
+  // 4) ชนเวลาที่สนาม: แอดมิน “อนุญาตจองทับ” ได้ แต่ให้ยืนยันก่อน
   if (hasTimeConflict.value) {
     const listDays = (conflictDays.value || [])
       .map(d => dayjs(d).format('DD/MM/YYYY'))
-      .join(', ')
+      .join(', ');
     const confirm = await Swal.fire({
       icon: 'warning',
       title: 'ช่วงเวลาทับกับรายการจอง',
@@ -1471,49 +1576,51 @@ async function handleSubmit() {
       showCancelButton: true,
       confirmButtonText: 'จองทับ',
       cancelButtonText: 'ยกเลิก'
-    })
-    if (!confirm.isConfirmed) return
+    });
+    if (!confirm.isConfirmed) return;
   }
 
+  // 5) ส่งข้อมูล
   try {
-    localStorage.setItem('zoneSelected', formData.value.zone || '')
-    const fd = new FormData()
+    localStorage.setItem('zoneSelected', formData.value.zone || '');
+    const fd = new FormData();
 
-    // ✅ แนบเฉพาะไฟล์จริง
-    selectedFiles.value.forEach(f => fd.append('files', f))
+    // แนบเฉพาะไฟล์จริง
+    selectedFiles.value.forEach(f => fd.append('files', f));
 
     const payload = {
       ...formData.value,
       agency: (finalAgency.value ?? ''),
       agency_other_detail: (otherAgencyDetail.value ?? ''),
       user_id: (proxyUserId.value ?? ''),
-      proxyStudentName: (proxyStudentName.value ?? ''),
-      proxyStudentId: (proxyStudentId.value ?? ''),
+      proxyStudentName: (formData.value.proxyStudentName ?? ''),
+      proxyStudentId: (formData.value.proxyStudentId ?? ''),
       username_form: (username_form.value ?? ''),
       id_form: (id_form.value ?? '')
-    }
-    Object.entries(payload).forEach(([k, v]) => fd.append(k, v ?? ''))
+    };
+    Object.entries(payload).forEach(([k, v]) => fd.append(k, v ?? ''));
 
     const res = await axios.post(`${API_BASE}/api/booking_field`, fd, {
       withCredentials: true,
-    })
+    });
 
-    localStorage.setItem('bookingId', res.data.bookingId)
+    // เก็บสำหรับหน้าถัดไป/ย้อนกลับ
+    localStorage.setItem('bookingId', res.data.bookingId);
+    window._tempSelectedFiles = selectedFiles.value;
 
-    // เก็บไฟล์จริงไว้สำหรับกด Back/Next อีกรอบ
-    window._tempSelectedFiles = selectedFiles.value
-
-    router.push('/form_field_admin3')
+    router.push('/form_field_admin3');
   } catch (err) {
-    console.error(err?.response?.data || err)
+    console.error(err?.response?.data || err);
     Swal.fire({
       icon: 'error',
       title: 'ผิดพลาด',
       text: 'บันทึกข้อมูลไม่สำเร็จ',
       confirmButtonText: 'ตกลง'
-    })
+    });
   }
 }
+
+
 
 
 
@@ -1540,7 +1647,8 @@ function handleClear() {
     facilityRequest: 'no',
     restroom: '',
     proxyStudentName: '',
-    proxyStudentId: ''
+    proxyStudentId: '',
+    lights:'',
   }
 
   // ✅ ล้างค่าที่เกี่ยวกับหน่วยงาน/กล่องค้นหา

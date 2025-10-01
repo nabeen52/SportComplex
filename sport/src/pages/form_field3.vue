@@ -139,14 +139,14 @@
     <col />
   </colgroup>
   <tr>
-    <td class="util-label">อาคาร</td>
+    <td class="util-label">1.1 อาคาร</td>
     <td class="colon">:</td>
     <td class="restroom-text">
       {{ info.building && info.building.trim() !== '' ? info.building : '-' }}
     </td>
   </tr>
   <tr>
-    <td class="util-label">พื้นที่/ห้อง</td>
+    <td class="util-label">1.2 พื้นที่/ห้อง</td>
     <td class="colon">:</td>
     <td class="restroom-text">
       {{ info.zone && info.zone.trim() !== '' ? info.zone : '-' }}
@@ -182,10 +182,20 @@
    <tr>
   <td class="util-label">2.1 ไฟฟ้าส่องสว่าง</td>
   <td class="colon">:</td>
-  <td class="time"><span class="since">ตั้งแต่</span> {{ formatTimeTH(info.turnon_lights) }}</td>
-  <td class="sep"> - </td>
-  <td class="time">{{ formatTimeTH(info.turnoff_lights) }}</td>
+
+  <!-- ถ้าเลือก "ไม่ต้องการ" (หรือไม่กรอกเวลาเลย) ให้แสดงข้อความ -->
+  <template v-if="isLightsNo">
+    <td class="restroom-text" colspan="3">ไม่ต้องการใช้งาน</td>
+  </template>
+
+  <!-- ถ้าเลือกใช้งาน แสดงช่วงเวลา -->
+  <template v-else>
+    <td class="time"><span class="since">ตั้งแต่</span> {{ formatTimeTH(info.turnon_lights) }}</td>
+    <td class="sep">-</td>
+    <td class="time">{{ formatTimeTH(info.turnoff_lights) }}</td>
+  </template>
 </tr>
+
 
 
     <!-- 2.2 ห้องสุขา -->
@@ -217,14 +227,29 @@
   </div>
 
   <div v-if="isYes(info.facilityRequest)">
-    <div class="form-row block-row" style="margin-left: 80px;">
-      <span style="white-space: nowrap;">3.1 ดึงอัฒจันทร์ภายในอาคารเฉลิมพระเกียรติฯ :</span>
-      <span class="line-field block-text force-inline">{{ info.amphitheater && info.amphitheater.trim() !== '' ? info.amphitheater : '-' }}</span>
-    </div>
-    <div class="form-row block-row" style="margin-left: 80px;">
-      <span style="white-space: nowrap;">3.2 อุปกรณ์กีฬา (โปรดระบุรายการและจำนวน) :</span>
-      <span class="line-field block-text force-inline">{{ info.need_equipment && info.need_equipment.trim() !== '' ? info.need_equipment : '-' }}</span>
-    </div>
+
+    <!-- แสดงอัฒจันทร์เฉพาะเมื่อเป็นอาคาร 72 -->
+   <div
+     v-if="isBuilding72"
+     class="form-row block-row"
+     style="margin-left: 80px;"
+   >
+     <span style="white-space: nowrap;">3.1 ดึงอัฒจันทร์ภายในอาคารเฉลิมพระเกียรติฯ :</span>
+     <span class="line-field block-text force-inline">
+       {{ info.amphitheater?.trim() ? info.amphitheater : '-' }}
+     </span>
+   </div>
+
+   <!-- อุปกรณ์กีฬา: ถ้าไม่มี 72 ให้เลื่อนเป็น 3.1 -->
+   <div class="form-row block-row" style="margin-left: 80px;">
+     <span style="white-space: nowrap;">
+       {{ isBuilding72 ? '3.2' : '3.1' }} อุปกรณ์กีฬา (โปรดระบุรายการและจำนวน) :
+     </span>
+     <span class="line-field block-text force-inline">
+       {{ info.need_equipment?.trim() ? info.need_equipment : '-' }}
+     </span>
+   </div>
+
   </div>
 
   <div class="note-line">
@@ -412,7 +437,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onBeforeUnmount, nextTick  } from 'vue'
+import { ref, onMounted, onBeforeUnmount, nextTick, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 import Swal from 'sweetalert2'
@@ -444,6 +469,27 @@ const REQUIRED_APPROVAL_ROLES = ['admin', 'super'];
 
 // ด้านบนไฟล์ (ใกล้ ๆ state อื่น)
 const isLoading = ref(false);
+
+ // อาคาร 72? (ตัดช่องว่างและเทียบตัวพิมพ์เล็ก)
+ const isBuilding72 = computed(() => {
+   const name = (info.value?.building || '').replace(/\s+/g,'').toLowerCase()
+   // จะให้เข้มงวดขึ้นก็ใช้เฉพาะข้อความเต็ม; ตอนนี้ให้ครอบคลุมทั้ง "72" และชื่อยาว
+   return name.includes('72') ||
+          name.includes('อาคารเฉลิมพระเกียรติ72พรรษา') ||
+          name.includes('72พรรษา')
+ })
+
+ const isLightsNo = computed(() => {
+  const v =
+    norm(info.value?.lights ?? info.value?.light ?? info.value?.lighting ?? '')
+  if (v) return NO_TOKENS.includes(v) // 'no', 'ไม่ต้องการ', 'false', '0', ฯลฯ
+
+  const on  = (info.value?.turnon_lights  || '').trim()
+  const off = (info.value?.turnoff_lights || '').trim()
+  return !on && !off
+})
+
+
 
 
 function buildInitialStep(existingStep) {
@@ -885,42 +931,54 @@ function normTime(t) {
   return t.slice(0,5)
 }
 
-
-
-
 async function handleNext() {
-    if (isLoading.value) return;        // ✅ กันการกดรัว ๆ ตั้งแต่ต้น
+  if (isLoading.value) return;
   isLoading.value = true;
 
   try {
-    nowTH.value = getNowTH(); // อัปเดตไทม์แสตมป์ก่อนทำ PDF
+    nowTH.value = getNowTH();
 
     const bookingId = localStorage.getItem('bookingId');
     if (!bookingId) {
-      Swal.fire('ไม่พบ bookingId');
+      await Swal.fire('ไม่พบ bookingId');
       return;
     }
 
-    // 0) รวม draft กับข้อมูลที่โหลดมา
+    // รวม draft กับข้อมูลที่โหลดมา
     const draft = (() => {
       try { return JSON.parse(sessionStorage.getItem('form_field_save') || 'null') || {}; }
       catch { return {}; }
     })();
     let bookingData = preferFilled(info.value || {}, draft || {});
 
-    // 1) normalize yes/no + เวลา
+    // normalize yes/no + เวลา
     bookingData.utilityRequest  = normalizeYesNo(bookingData.utilityRequest);
     bookingData.restroom        = normalizeYesNo(bookingData.restroom);
     bookingData.facilityRequest = normalizeYesNo(bookingData.facilityRequest);
-    const norm = (t) => (t && String(t).trim()) || '';
-    bookingData.turnon_air      = norm(bookingData.turnon_air);
-    bookingData.turnoff_air     = norm(bookingData.turnoff_air);
-    bookingData.turnon_lights   = norm(bookingData.turnon_lights);
-    bookingData.turnoff_lights  = norm(bookingData.turnoff_lights);
-    bookingData.since_time      = norm(bookingData.since_time);
-    bookingData.until_thetime   = norm(bookingData.until_thetime);
 
-    // 2) โหลด step จาก settings → ใช้เฉพาะ value.field
+    const normStr = (t) => (t && String(t).trim()) || '';
+    bookingData.turnon_air      = normStr(bookingData.turnon_air);
+    bookingData.turnoff_air     = normStr(bookingData.turnoff_air);
+    bookingData.turnon_lights   = normStr(bookingData.turnon_lights);
+    bookingData.turnoff_lights  = normStr(bookingData.turnoff_lights);
+    bookingData.since_time      = normStr(bookingData.since_time);
+    bookingData.until_thetime   = normStr(bookingData.until_thetime);
+
+    // ✅ Logic: ไฟฟ้าส่องสว่าง "ไม่ต้องการใช้งาน" (หรือไม่กรอกเวลาเลย)
+    const toTime5 = (t) => (t || '').toString().trim().slice(0, 5);
+    if (isLightsNo.value) {
+      bookingData.turnon_lights = '';
+      bookingData.turnoff_lights = '';
+      bookingData.lights = 'no';
+      bookingData.lights_text = 'ไม่ต้องการใช้งาน';
+    } else {
+      const on  = toTime5(bookingData.turnon_lights);
+      const off = toTime5(bookingData.turnoff_lights);
+      bookingData.lights = 'yes';
+      bookingData.lights_text = (on && off) ? `ตั้งแต่ ${on} - ${off} น.` : '';
+    }
+
+    // โหลด step จาก settings (field)
     const cleanRoles = (arr) =>
       Array.from(new Set(
         (Array.isArray(arr) ? arr : [])
@@ -930,19 +988,24 @@ async function handleNext() {
     let stepArray = [];
     try {
       const resStep = await axios.get(`${API_BASE}/api/settings/approval_roles`);
-      const value = resStep?.data?.value || {};             // { field: [...], equipment: [...] }
-      const roles = Array.isArray(value.field) ? value.field : [];
+      const roles = Array.isArray(resStep?.data?.value?.field) ? resStep.data.value.field : [];
       stepArray = cleanRoles(roles).map(r => ({ role: r, approve: null }));
-    } catch (e) {
-      console.warn('โหลด approval_roles (field) ไม่สำเร็จ:', e);
+    } catch (_) {
       stepArray = [];
     }
 
-    // 3) ทำ PDF 1 หน้า + อัปโหลด
-    const pdfBlob = await htmlToPdfBlob('pdf-section');
-    const pdfUrl  = await uploadPdfBlob(pdfBlob);
+    // ทำ PDF + อัปโหลด (ไม่ให้บล็อก flow ถ้าพัง)
+    let pdfUrl = '';
+    try {
+      await nextTick(); // ให้ DOM เสถียรก่อนแคปเจอร์
+      const pdfBlob = await htmlToPdfBlob('pdf-section');
+      pdfUrl = await uploadPdfBlob(pdfBlob);
+    } catch (e) {
+      console.warn('PDF/Upload failed, continue without pdfUrl:', e);
+      pdfUrl = '';
+    }
 
-    // 4) อัปโหลดไฟล์แนบ (ถ้ามี) + รวมไฟล์
+    // อัปโหลดไฟล์แนบชั่วคราว (ถ้ามี) + รวมไฟล์ทั้งหมด
     const hasTemp     = Array.isArray(window._tempSelectedFiles) && window._tempSelectedFiles.length > 0;
     const uploadedNow = hasTemp ? await uploadTempFilesAndGetUrls() : [];
     const multerFiles = Array.isArray(bookingData.files) ? bookingData.files : [];
@@ -955,7 +1018,7 @@ async function handleNext() {
       ...uploadedNow.map(f => f.fileName || 'ไฟล์แนบ'),
     ];
 
-    // 5) payload – แนบ step ที่ดึงมาจาก settings (field)
+    // payload (เพิ่ม lights / lights_text)
     const payload = {
       user_id: bookingData.user_id,
       name: bookingData.building,
@@ -974,13 +1037,12 @@ async function handleNext() {
       date: new Date(),
       proxyStudentName: bookingData.proxyStudentName || '',
       proxyStudentId: bookingData.proxyStudentId || '',
-      bookingPdfUrl: pdfUrl,
+      bookingPdfUrl: pdfUrl, // ← ถ้า gen ไม่ได้ จะเป็น ''
+
       username_form: bookingData.username_form || localStorage.getItem('username_form') || '',
       id_form:       bookingData.id_form       || localStorage.getItem('id_form')       || '',
+      step: stepArray,
 
-      step: stepArray, // ⬅⬅ สำคัญ
-
-      // อื่น ๆ
       utilityRequest:  bookingData.utilityRequest || '',
       restroom:        bookingData.restroom || '',
       facilityRequest: bookingData.facilityRequest || '',
@@ -1000,29 +1062,36 @@ async function handleNext() {
       date_receive:    bookingData.date_receive || null,
       receiver:        bookingData.receiver || '',
       fileUrl:         bookingData.fileUrl || '',
+
+      // ฟิลด์ใหม่
+      lights:      bookingData.lights || '',
+      lights_text: bookingData.lights_text || '',
     };
 
     await axios.post(`${API_BASE}/api/history`, payload);
 
-    // 6) เคลียร์และไปหน้าถัดไป
+    // เคลียร์ & ไปหน้าถัดไป
     sessionStorage.removeItem('form_field_save');
     window._tempSelectedFiles = [];
     localStorage.removeItem('username_form');
     localStorage.removeItem('id_form');
+
     router.push('/form_field4');
   } catch (err) {
     if (err?.response?.status === 413) {
-      Swal.fire({ icon: 'error', title: 'ไฟล์รวมใหญ่เกินไป', text: 'กรุณาลดจำนวน/ขนาดไฟล์ หรือบีบอัดก่อน แล้วลองอีกครั้ง' });
+      await Swal.fire({ icon: 'error', title: 'ไฟล์รวมใหญ่เกินไป', text: 'กรุณาลดจำนวน/ขนาดไฟล์ หรือบีบอัดก่อน แล้วลองอีกครั้ง' });
     } else if (err?.response?.status === 409) {
-      Swal.fire({ icon: 'warning', title: 'คำขอซ้ำ', text: err.response.data.message || 'คุณมีรายการที่รออนุมัติอยู่แล้ว' });
+      await Swal.fire({ icon: 'warning', title: 'คำขอซ้ำ', text: err.response.data.message || 'คุณมีรายการที่รออนุมัติอยู่แล้ว' });
     } else {
-      Swal.fire('เกิดข้อผิดพลาดในการบันทึกข้อมูล', err?.response?.data?.message || err.message, 'error');
+      await Swal.fire('เกิดข้อผิดพลาดในการบันทึกข้อมูล', err?.response?.data?.message || err.message, 'error');
     }
     console.error(err);
-  }finally {
-    isLoading.value = false;       // ✅ ปล่อยโหลดไม่ว่าผลจะสำเร็จ/พัง
+  } finally {
+    isLoading.value = false;
   }
 }
+
+
 
 function formatTimeTH(timeStr) {
   if (!timeStr || typeof timeStr !== 'string') return '-'

@@ -260,7 +260,8 @@ function buildEquipmentHandoverPDFHTML(ctx) {
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
     .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 
-  const fmtDT = (x) => {
+  // เพิ่มพารามิเตอร์ withSuffix เพื่อควบคุมการใส่ "น."
+  const fmtDT = (x, withSuffix = true) => {
     const d = x ? new Date(x) : new Date();
     const date = new Intl.DateTimeFormat('th-TH-u-nu-latn', {
       timeZone:'Asia/Bangkok', day:'2-digit', month:'2-digit', year:'numeric'
@@ -268,21 +269,24 @@ function buildEquipmentHandoverPDFHTML(ctx) {
     const time = new Intl.DateTimeFormat('th-TH-u-nu-latn', {
       timeZone:'Asia/Bangkok', hour:'2-digit', minute:'2-digit', hour12:false
     }).format(d);
-    return `${date}  ${time} น.`;
+    return withSuffix ? `${date}  ${time} น.` : `${date}  ${time}`;
   };
 
   const todayDateOnly = new Intl.DateTimeFormat('th-TH-u-nu-latn', {
     timeZone:'Asia/Bangkok', day:'2-digit', month:'2-digit', year:'numeric'
   }).format(new Date());
 
-  const senderDT   = ctx.handoverAt ? fmtDT(ctx.handoverAt) : fmtDT();
-  const receiverDT = ctx.handoverReceiverDate ? fmtDT(ctx.handoverReceiverDate)
-                   : '........../........../..........  .......... น.';
+  // ผู้ส่งมอบ: ใส่ "น." ปกติ
+  const senderDT = ctx.handoverAt ? fmtDT(ctx.handoverAt, true) : fmtDT(undefined, true);
 
-  // ✅ ใช้ createdAt_old ใต้ลายเซ็นผู้ยืม ถ้ามี (fallback -> createdAt -> now)
+  // ผู้รับคืน: ถ้ามีวันที่ ให้ขึ้นรูปแบบเวลา; ถ้าไม่มีให้เว้นจุดไว้
+  const receiverDT = ctx.handoverReceiverDate
+    ? fmtDT(ctx.handoverReceiverDate, !ctx.noReceiverN)
+    : '........../........../..........  .......... ';
+
   const borrowerSigDT = (ctx.createdAt_old || ctx.createdAt)
-    ? fmtDT(ctx.createdAt_old || ctx.createdAt)
-    : fmtDT();
+    ? fmtDT(ctx.createdAt_old || ctx.createdAt, true)
+    : fmtDT(undefined, true);
 
   const splitRange = (s) => {
     if (!s) return ['-','-'];
@@ -301,6 +305,14 @@ function buildEquipmentHandoverPDFHTML(ctx) {
 
   const showReceiveDate = ctx.receive_date || ctx.dateBorrow || '-';
   const showReceiveTime = ctx.receive_time || ctx.timeBorrow || '-';
+
+  // ป้าย “รหัส...” จากอีเมล
+  const idLabel = (() => {
+    const email = String(ctx.email || '').toLowerCase();
+    if (/@mfu\.ac\.th$/.test(email)) return 'รหัสพนักงาน';
+    if (/@lamduan\.mfu\.ac\.th$/.test(email)) return 'รหัสนักศึกษา';
+    return 'รหัสนักศึกษา/รหัสพนักงาน';
+  })();
 
   const remarkBox = (text) => `
     <div class="eqp-remark"
@@ -325,12 +337,12 @@ function buildEquipmentHandoverPDFHTML(ctx) {
     </div>
 
     <div class="date" style="margin-top:30px">วันที่ ${todayDateOnly}</div>
-    <div style="margin-top:20px">ส่วนที่ 1 สำหรับผู้ขอใช้บริการ</div>
+    <div style="margin-top:20px">สำหรับผู้ขอใช้บริการ</div>
 
     <section class="eqp-section eqp-section--par">
       <div class="eqp-par" style="font-size:16px; line-height:1.75; text-indent:2em; word-break:break-word; margin:12px 0 18px;">
         ข้าพเจ้า ${esc(ctx.requester)}
-        รหัสนักศึกษา/รหัสพนักงาน ${esc(ctx.requesterId)}
+        ${idLabel} ${esc(ctx.requesterId)}
         ${ctx.tel ? 'โทร ' + esc(ctx.tel) : ''}
         มีความประสงค์ขอยืมอุปกรณ์/วัสดุ/ครุภัณฑ์ ของศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง
         เพื่อใช้ในงาน ${esc(ctx.reason)} สถานที่ใช้งาน ${esc(ctx.location)}
@@ -362,10 +374,11 @@ function buildEquipmentHandoverPDFHTML(ctx) {
           <span class="name" style="padding:0 6px;">${esc(ctx.requester)}</span>
         </span>
         <span class="role">ผู้ยืม</span>
-        <div class="date" style="grid-column:2; justify-self:center; margin-top:6px;"> ${borrowerSigDT}</div>
+        <div class="date" style="grid-column:2; justify-self:center; margin-top:6px; font-size:12px;"> ${borrowerSigDT}</div>
       </div>
 
       <div class="eqp-boxes" style="display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; margin-top:18px;">
+        <!-- กล่องซ้าย: ผู้ส่งมอบ -->
         <div class="box" style="border:1px solid #333; padding:12px 14px; min-height:176px; display:grid; grid-template-columns:auto 1fr auto; column-gap:8px;">
           <div class="title" style="grid-column:1/-1; font-weight:700; text-align:center; padding-bottom:6px; margin-bottom:10px; border-bottom:1px solid #9aa3b2;">
             ผลการดำเนินการ/ผลการปฏิบัติงาน
@@ -376,9 +389,10 @@ function buildEquipmentHandoverPDFHTML(ctx) {
             <span class="filltext" style="background:#fff; padding:0 4px; line-height:1;">${esc(ctx.staffThaiName || '')}</span>
           </span>
           <span class="role">ผู้ส่งมอบ</span>
-          <div class="date" style="grid-column:2; justify-self:center; margin-top:8px;">วันที่ ${senderDT}</div>
+          <div class="date" style="grid-column:2; justify-self:center; margin-top:8px; font-size:12px; line-height:1.2;"> ${senderDT}</div>
         </div>
 
+        <!-- กล่องขวา: ผู้รับคืน (ตัด "(ผู้รับคืน)" ออกจากหัวข้อ) -->
         <div class="box" style="border:1px solid #333; padding:12px 14px; min-height:176px; display:grid; grid-template-columns:auto 1fr auto; column-gap:8px;">
           <div class="title" style="grid-column:1/-1; font-weight:700; text-align:center; padding-bottom:6px; margin-bottom:10px; border-bottom:1px solid #9aa3b2;">
             ผลการดำเนินการ/ผลการปฏิบัติงาน
@@ -391,7 +405,7 @@ function buildEquipmentHandoverPDFHTML(ctx) {
             </span>
           </span>
           <span class="role">ผู้รับคืน</span>
-          <div class="date" style="grid-column:2; justify-self:center; margin-top:8px;">วันที่ ${receiverDT}</div>
+          <div class="date" style="grid-column:2; justify-self:center; margin-top:8px; font-size:12px; line-height:1.2;"> ${receiverDT}</div>
         </div>
       </div>
 
@@ -401,6 +415,10 @@ function buildEquipmentHandoverPDFHTML(ctx) {
     </div>
   </div>`;
 }
+
+
+
+
 
 const INLINE_EQP_CSS = `
   .eqp-preview{ font-family:'THSarabunNew','Sarabun','Noto Sans Thai',system-ui,sans-serif; color:#111; }
@@ -431,7 +449,12 @@ const INLINE_EQP_CSS = `
   .eqp-boxes .title{ font-weight:700; text-align:center; padding-bottom:6px; margin-bottom:10px; border-bottom:1px solid #9aa3b2; }
   .eqp-boxes .sign-inline{ display:grid; grid-template-columns:auto 1fr auto; column-gap:8px; align-items:center; margin-top:6px; }
   .eqp-boxes .dotfill{ height:1.2em; border-bottom:1px dotted #666; display:flex; align-items:flex-end; justify-content:center; }
-  .eqp-boxes .date{ text-align:center; margin-top:8px; }
+  .eqp-boxes .date{
+  text-align:center;
+  margin-top:8px;
+  font-size:12px;    
+  line-height:1.2;
+}
 
   .eqp-textarea{
     width:100%; min-height:96px; padding:8px 10px; border:1px solid #cfd5e6; border-radius:8px; font-size:15px; line-height:1.5;
@@ -814,11 +837,9 @@ async _buildEquipmentCtxFromGroup(group){
   let agency='-', reason='-', location='-', tel='';
   const remarkMap = {};
 
-  // เวลาต้นทาง + เวลาจากเอกสาร return-pending
   let createdAtISO = null;
   let createdAtOldISO = null;
 
-  // แสดงผลวันที่/เวลามารับของ
   let receiveDateText = '-';
   let receiveTimeText = '-';
 
@@ -848,7 +869,10 @@ async _buildEquipmentCtxFromGroup(group){
     return '';
   };
 
-  let be = null; // booking_equipment
+  // 🟢 จะใช้ค่านี้ไปหาอีเมล
+  let user_id = String(group.items?.[0]?.user_id || '').trim();
+
+  let be = null;
 
   if (bookingId){
     // 1) history
@@ -865,9 +889,14 @@ async _buildEquipmentCtxFromGroup(group){
     const recId = list.find(h => h?.id_form && String(h.id_form).trim());
     if (recId) requesterId = String(recId.id_form).trim();
 
+    // ถ้า history มี user_id ให้ใช้ก่อน
+    const recWithUid = list.find(h => (h?.user_id ?? '').toString().trim());
+    if (recWithUid) user_id = String(recWithUid.user_id).trim();
+    // ถ้ายังไม่มี ให้ลองใช้ requesterId (id_form) เป็น user_id (ระบบนี้ใช้เลขเดียวกัน)
+    if (!user_id && requesterId) user_id = String(requesterId).trim();
+
     const recDate = list[0];
     if (recDate) {
-      // createdAt (เอกสารต้นทาง)
       createdAtISO = recDate.createdAt || recDate.created_at || null;
 
       if (recDate.createdAt) {
@@ -884,20 +913,18 @@ async _buildEquipmentCtxFromGroup(group){
       dateRange   = `${since} - ${upto}`;
     }
 
-    // ✅ ถ้ามีเอกสาร return-pending ให้ดึง createdAt_old มาด้วย (เพื่อโชว์ใต้ "ลงชื่อ ผู้ยืม")
     const recReturnPending = list.find(h => (h?.status || '').toLowerCase() === 'return-pending');
     if (recReturnPending && recReturnPending.createdAt_old) {
       createdAtOldISO = recReturnPending.createdAt_old;
     }
 
-    // receive_* จาก history ก่อน
     const recReceive = list.find(h => h?.receive_date || h?.receive_time);
     if (recReceive) {
       if (recReceive.receive_date) receiveDateText = this.formatDate(recReceive.receive_date);
       if (recReceive.receive_time) receiveTimeText = formatTimeThai(recReceive.receive_time);
     }
 
-    // 2) booking_equipment (fallback และรายละเอียดอื่น)
+    // 2) booking_equipment
     const resB = await axios.get(`${API_BASE}/api/booking_equipment?id=${bookingId}`);
     be = Array.isArray(resB.data) ? resB.data[0] : resB.data;
     if (be){
@@ -911,6 +938,9 @@ async _buildEquipmentCtxFromGroup(group){
 
       if (receiveDateText === '-' && be?.receive_date) receiveDateText = this.formatDate(be.receive_date);
       if (receiveTimeText === '-' && be?.receive_time) receiveTimeText = formatTimeThai(be.receive_time);
+
+      // ถ้า booking มี user_id ก็ใช้
+      if (!user_id && be.user_id) user_id = String(be.user_id).trim();
     }
 
     // 3) TEL
@@ -931,17 +961,23 @@ async _buildEquipmentCtxFromGroup(group){
     remark: remarkMap[name] || ''
   }));
 
+  // ✅ อีเมลจาก users ตาม user_id
+  const email = this.usersEmailMap?.[user_id] || '';
+
   return {
     requester, requesterId, tel, agency, reason, location,
     dateBorrow, timeBorrow, dateRange,
     receive_date: receiveDateText,
     receive_time: receiveTimeText,
-    // ส่งทั้ง createdAt และ createdAt_old ไปใช้ที่พรีวิว/PDF
     createdAt: createdAtISO,
     createdAt_old: createdAtOldISO,
-    rows
+    rows,
+    // ส่งต่อให้ตัวพรีวิว/เอกสารตัดสินใจป้าย
+    user_id,
+    email
   };
 },
+
 
 
 
@@ -1321,6 +1357,66 @@ async handoverGroup(group) {
     this.processingGroups.delete(group.booking_id);
   }
 },
+
+async cancelGroup(group) {
+  const { value: remark } = await Swal.fire({
+    title: 'ไม่อนุมัติรายการ',
+    html: `
+      <div style="text-align:center;margin-bottom:8px;">
+        กรุณาระบุหมายเหตุที่ไม่อนุมัติ
+      </div>
+    `,
+    icon: 'question',
+    input: 'textarea',
+    inputAttributes: { 'aria-label': 'remark' },
+    showCancelButton: true,
+    confirmButtonText: 'ไม่อนุมัติ',
+    cancelButtonText: 'ยกเลิก',
+    inputPlaceholder: 'ระบุหมายเหตุ (จำเป็นต้องกรอก)',
+    confirmButtonColor: '#ff4d4f',
+    cancelButtonColor: '#999',
+    preConfirm: (val) => {
+      const v = (val || '').trim();
+      if (!v) {
+        Swal.showValidationMessage('กรุณากรอกหมายเหตุ');
+        return false;
+      }
+      return v;
+    }
+  });
+
+  if (remark === undefined) return; // กดยกเลิก
+
+  const staffId = localStorage.getItem('user_id');
+
+  try {
+    await Promise.all(
+      group.items.map(item =>
+        axios.patch(`${API_BASE}/api/history/${item.id}/disapprove_equipment`, {
+          staff_id: staffId,
+          remark   // ✅ ส่ง remark ไปด้วย
+        })
+      )
+    );
+
+    // อัปเดตสถานะฝั่ง UI
+    group.items.forEach(item => { item.status = 'Disapproved'; });
+
+    await Swal.fire({
+      icon: 'error',
+      title: 'ดำเนินการสำเร็จ',
+      text: 'ยกเลิกรายการยืมอุปกรณ์เรียบร้อยแล้ว',
+      timer: 1500,
+      showConfirmButton: false
+    });
+
+    this.fetchPendingEquipments(); // refresh รายการ
+  } catch (err) {
+    console.error(err);
+    Swal.fire('Error', 'ไม่สามารถบันทึกการไม่อนุมัติได้', 'error');
+  }
+},
+
 
 
 
@@ -1971,11 +2067,9 @@ function buildEquipmentApprovePreviewHTML(ctx) {
   };
   const [sinceStr, uptoStr] = splitRange(ctx.dateRange);
 
-  // วันที่/เวลามารับของ
   const showReceiveDate = ctx.receive_date || ctx.dateBorrow || '-';
   const showReceiveTime = ctx.receive_time || ctx.timeBorrow || '-';
 
-  // 🔴 ใช้ createdAt ถ้ามี ใต้เส้นเซ็นผู้ยืม (fallback เป็นวันนี้)
   const sigDT = ctx.createdAt ? fmtDT(ctx.createdAt) : fmtDT();
 
   const rows = (ctx.rows || []).map((r,i)=>`
@@ -1985,6 +2079,13 @@ function buildEquipmentApprovePreviewHTML(ctx) {
       <td class="c">${esc(r.quantity)}</td>
       <td class="c" style="vertical-align:middle">${esc(r.remark || '-')}</td>
     </tr>`).join('');
+
+  const idLabel = (() => {
+    const email = String(ctx.email || '').toLowerCase();
+    if (/@mfu\.ac\.th$/.test(email)) return 'รหัสพนักงาน';
+    if (/@lamduan\.mfu\.ac\.th$/.test(email)) return 'รหัสนักศึกษา';
+    return 'รหัสนักศึกษา/รหัสพนักงาน';
+  })();
 
   return `
   <div class="eqp-preview">
@@ -2002,12 +2103,12 @@ function buildEquipmentApprovePreviewHTML(ctx) {
     </div>
 
     <div class="date" style="margin-top:30px">วันที่ ${todayDateOnly}</div>
-    <div style="margin-top:20px">ส่วนที่ 1 สำหรับผู้ขอใช้บริการ</div>
+    <div style="margin-top:20px">สำหรับผู้ขอใช้บริการ</div>
 
     <section class="eqp-section eqp-section--par">
       <div class="eqp-par">
         ข้าพเจ้า ${esc(ctx.requester)}
-        รหัสนักศึกษา/รหัสพนักงาน ${esc(ctx.requesterId)}
+        ${idLabel} ${esc(ctx.requesterId)}
         ${ctx.tel ? 'โทร ' + esc(ctx.tel) : ''}
         มีความประสงค์ขอยืมอุปกรณ์ของศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง
         เพื่อใช้ในงาน ${esc(ctx.reason)} สถานที่ใช้งาน ${esc(ctx.location)}
@@ -2038,33 +2139,33 @@ function buildEquipmentApprovePreviewHTML(ctx) {
           <span class="name" style="padding:0 6px;">${esc(ctx.requester)}</span>
         </span>
         <span class="role">ผู้ยืม</span>
-        <div class="date" style="grid-column:2; justify-self:center; margin-top:6px;">${sigDT}</div>
+        <div class="date" style="grid-column:2; justify-self:center; margin-top:6px; font-size:12px; line-height:1.2;">${sigDT}</div>
       </div>
     </div>
 
     <div class="eqp-boxes">
       <div class="box">
-        <div class="title">ผลการดำเนินการ/ผลการปฏิบัติงาน (ผู้ส่งมอบ)</div>
+        <div class="title">ผลการดำเนินการ/ผลการปฏิบัติงาน</div>
         <textarea id="handoverRemark1" class="eqp-textarea" rows="3" maxlength="255"
-          placeholder="พิมพ์ผลการดำเนินการ/ผลการปฏิบัติงาน (ผู้ส่งมอบ) ที่นี่..."></textarea>
+          placeholder="พิมพ์ผลการดำเนินการ/ผลการปฏิบัติงาน ที่นี่..."></textarea>
         <div class="sign-inline" style="margin-top:8px;">
           <span class="lab">ลงชื่อ</span>
           <span class="dotfill"><span class="filltext">${esc(ctx.staffThaiName || '')}</span></span>
           <span class="role">ผู้ส่งมอบ</span>
         </div>
-        <div class="date">${fmtDT()}</div>
+        <div class="date" style="font-size:12px; line-height:1.2;">${fmtDT()}</div>
       </div>
 
       <div class="box">
-        <div class="title">ผลการดำเนินการ/ผลการปฏิบัติงาน (ผู้รับคืน)</div>
+        <div class="title">ผลการดำเนินการ/ผลการปฏิบัติงาน</div>
         <textarea id="handoverRemark2" class="eqp-textarea" rows="3" maxlength="255"
-          placeholder="พิมพ์ผลการดำเนินการ/ผลการปฏิบัติงาน (ผู้รับคืน) ที่นี่..." readonly></textarea>
+          placeholder="พิมพ์ผลการดำเนินการ/ผลการปฏิบัติงาน ที่นี่..." readonly></textarea>
         <div class="sign-inline" style="margin-top:8px;">
           <span class="lab">ลงชื่อ</span>
           <span class="dotfill"></span>
           <span class="role">ผู้รับคืน</span>
         </div>
-        <div class="date">วันที่........../........../..........  .......... น.</div>
+        <div class="date">........../........../..........</div>
       </div>
     </div>
 
@@ -2079,13 +2180,13 @@ function buildEquipmentApprovePreviewHTML(ctx) {
 
 
 
+
 // 2) ใช้ในหน้า approve_equipment (พรีวิวป๊อปอัปตอน "รับคืนอุปกรณ์")
 function buildEquipmentReturnPreviewHTML(ctx) {
   const esc = s => String(s ?? '-')
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
     .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 
-  // -- helpers --
   const toDate = (v) => {
     if (!v) return null;
     const x = v && v.$date ? v.$date : v;
@@ -2117,11 +2218,9 @@ function buildEquipmentReturnPreviewHTML(ctx) {
   };
   const [sinceStr, uptoStr] = splitRange(ctx.dateRange);
 
-  // แสดง “วันที่/เวลาที่มารับของ”
   const showReceiveDate = ctx.receive_date || ctx.dateBorrow || '-';
   const showReceiveTime = ctx.receive_time || ctx.timeBorrow || '-';
 
-  // ✅ ใช้ createdAt_old ก่อน; ถ้าไม่มี fallback เป็น createdAt/ปัจจุบัน
   const borrowerSigDT = (ctx.createdAt_old || ctx.createdAt)
     ? fmtDT(ctx.createdAt_old || ctx.createdAt)
     : fmtDT();
@@ -2133,6 +2232,13 @@ function buildEquipmentReturnPreviewHTML(ctx) {
     <td class="c">${esc(r.quantity)}</td>
     <td class="c" style="vertical-align:middle">${esc(r.remark || '-')}</td>
   </tr>`).join('');
+
+  const idLabel = (() => {
+    const email = String(ctx.email || '').toLowerCase();
+    if (/@mfu\.ac\.th$/.test(email)) return 'รหัสพนักงาน';
+    if (/@lamduan\.mfu\.ac\.th$/.test(email)) return 'รหัสนักศึกษา';
+    return 'รหัสนักศึกษา/รหัสพนักงาน';
+  })();
 
   return `
   <div class="eqp-preview">
@@ -2150,12 +2256,12 @@ function buildEquipmentReturnPreviewHTML(ctx) {
     </div>
 
     <div class="date" style="margin-top:30px">วันที่ ${todayDateOnly}</div>
-    <div style="margin-top:20px">ส่วนที่ 1 สำหรับผู้ขอใช้บริการ</div>
+    <div style="margin-top:20px">สำหรับผู้ขอใช้บริการ</div>
 
     <section class="eqp-section eqp-section--par">
       <div class="eqp-par">
         ข้าพเจ้า ${esc(ctx.requester)}
-        รหัสนักศึกษา/รหัสพนักงาน ${esc(ctx.requesterId)}
+        ${idLabel} ${esc(ctx.requesterId)}
         ${ctx.tel ? 'โทร ' + esc(ctx.tel) : ''}
         มีความประสงค์ขอยืมอุปกรณ์ของศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง
         เพื่อใช้ในงาน ${esc(ctx.reason)} สถานที่ใช้งาน ${esc(ctx.location)}
@@ -2186,14 +2292,13 @@ function buildEquipmentReturnPreviewHTML(ctx) {
           <span class="name" style="padding:0 6px;">${esc(ctx.requester)}</span>
         </span>
         <span class="role">ผู้ยืม</span>
-        <!-- ใช้ createdAt_old ถ้ามี -->
-        <div class="date" style="grid-column:2; justify-self:center; margin-top:6px;">${borrowerSigDT}</div>
+        <div class="date" style="grid-column:2; justify-self:center; margin-top:6px; font-size:12px; line-height:1.2;">${borrowerSigDT}</div>
       </div>
     </div>
 
     <div class="eqp-boxes">
       <div class="box">
-        <div class="title">ผลการดำเนินการ/ผลการปฏิบัติงาน (ผู้ส่งมอบ)</div>
+        <div class="title">ผลการดำเนินการ/ผลการปฏิบัติงาน</div>
         <div class="eqp-textarea" style="white-space:pre-wrap;background:#f5f6fa;color:#333;cursor:not-allowed;">
           ${esc(ctx.handoverRemarkSender || '')}
         </div>
@@ -2202,11 +2307,11 @@ function buildEquipmentReturnPreviewHTML(ctx) {
           <span class="dotfill"><span class="filltext">${esc(ctx.handoverSenderName || '')}</span></span>
           <span class="role">ผู้ส่งมอบ</span>
         </div>
-        <div class="date">วันที่ ${handoverDT}</div>
+        <div class="date" style="font-size:12px; line-height:1.2;"> ${handoverDT}</div>
       </div>
 
       <div class="box">
-        <div class="title">ผลการดำเนินการ/ผลการปฏิบัติงาน (ผู้รับคืน)</div>
+        <div class="title">ผลการดำเนินการ/ผลการปฏิบัติงาน</div>
         <textarea id="returnRemarkReceiver" class="eqp-textarea" rows="3" maxlength="255"
           placeholder="พิมพ์ผลการดำเนินการ/ปัญหาขณะรับคืน ฯลฯ..."></textarea>
         <div class="sign-inline" style="margin-top:8px;">
@@ -2214,7 +2319,7 @@ function buildEquipmentReturnPreviewHTML(ctx) {
           <span class="dotfill"><span class="filltext">${esc(ctx.receiverThaiName || '')}</span></span>
           <span class="role">ผู้รับคืน</span>
         </div>
-        <div class="date"> ${fmtDT()}</div>
+        <div class="date" style="font-size:12px; line-height:1.2;">${fmtDT()}</div>
       </div>
     </div>
 
@@ -2233,9 +2338,6 @@ function buildEquipmentReturnPreviewHTML(ctx) {
     </div>
   </div>`;
 }
-
-
-
 </script>
 
 <style scoped>

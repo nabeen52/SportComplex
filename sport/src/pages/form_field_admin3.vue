@@ -4,7 +4,7 @@
     <aside class="sidebar" :class="{ closed: isSidebarClosed }">
       <div class="sidebar-header">
         <img src="/img/logo.png" alt="logo" class="logo" />
-        <p class="sidebar-title">Sport Complex MFU</p>
+        <p class="sidebar-title">ศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง</p>
       </div>
       <nav class="nav-links">
         <router-link to="/dashboard" exact-active-class="active"><i class="pi pi-chart-pie"></i> แดชบอร์ด</router-link>
@@ -115,11 +115,11 @@
                   <col class="c-label" /><col class="c-colon" /><col />
                 </colgroup>
                 <tr>
-                  <td class="util-label">อาคาร</td><td class="colon">:</td>
+                  <td class="util-label">1.1 อาคาร</td><td class="colon">:</td>
                   <td class="restroom-text">{{ info.building && info.building.trim() !== '' ? info.building : '-' }}</td>
                 </tr>
                 <tr>
-                  <td class="util-label">พื้นที่/ห้อง</td><td class="colon">:</td>
+                  <td class="util-label">1.2 พื้นที่/ห้อง</td><td class="colon">:</td>
                   <td class="restroom-text">{{ info.zone && info.zone.trim() !== '' ? info.zone : '-' }}</td>
                 </tr>
               </table>
@@ -140,11 +140,21 @@
                     <col class="c-time" /><col class="c-sep" /><col class="c-time" />
                   </colgroup>
                   <tr>
-                    <td class="util-label">2.1 ไฟฟ้าส่องสว่าง</td><td class="colon">:</td>
-                    <td class="time"><span class="since">ตั้งแต่</span> {{ formatTimeTH(info.turnon_lights) }}</td>
-                    <td class="sep">-</td>
-                    <td class="time">{{ formatTimeTH(info.turnoff_lights) }}</td>
-                  </tr>
+                      <td class="util-label">2.1 ไฟฟ้าส่องสว่าง</td>
+                      <td class="colon">:</td>
+
+                      <!-- ถ้าไม่ต้องการ แสดงข้อความ -->
+                      <template v-if="isLightsNo">
+                        <td class="restroom-text" colspan="3">ไม่ต้องการใช้งาน</td>
+                      </template>
+
+                      <!-- ถ้าต้องการ แสดงช่วงเวลา -->
+                      <template v-else>
+                        <td class="time"><span class="since">ตั้งแต่</span> {{ formatTimeTH(info.turnon_lights) }}</td>
+                        <td class="sep">-</td>
+                        <td class="time">{{ formatTimeTH(info.turnoff_lights) }}</td>
+                      </template>
+                    </tr>
                   <tr>
                     <td class="util-label">2.2 ห้องสุขา</td><td class="colon">:</td>
                     <td class="restroom-text" colspan="3">
@@ -162,21 +172,36 @@
 
               <!-- ข้อ 3 -->
               <div class="form-row bold" style="margin-left:0;">
-                <span>3. ขออนุมัติรายการประกอบอาคาร</span>
-                <span :class="['radio-print', { on: isYes(info.facilityRequest) }]" style="margin-left:8px;"></span><label style="margin-right:18px;">เลือก</label>
-                <span :class="['radio-print', { on: isNo(info.facilityRequest) }]"></span><label>ไม่เลือก</label>
-              </div>
+  <span>3. ขออนุมัติรายการประกอบอาคาร</span>
+  <span :class="['radio-print', { on: isYes(info.facilityRequest) }]" style="margin-left:8px;"></span>
+  <label style="margin-right: 18px;">เลือก</label>
+  <span :class="['radio-print', { on: isNo(info.facilityRequest) }]"></span>
+  <label>ไม่เลือก</label>
+</div>
 
-              <div v-if="isYes(info.facilityRequest)">
-                <div class="form-row block-row" style="margin-left:80px;">
-                  <span style="white-space:nowrap;">3.1 ดึงอัฒจันทร์ภายในอาคารเฉลิมพระเกียรติฯ :</span>
-                  <span class="line-field block-text force-inline">{{ info.amphitheater && info.amphitheater.trim() !== '' ? info.amphitheater : '-' }}</span>
-                </div>
-                <div class="form-row block-row" style="margin-left:80px;">
-                  <span style="white-space:nowrap;">3.2 อุปกรณ์กีฬา (โปรดระบุรายการและจำนวน) :</span>
-                  <span class="line-field block-text force-inline">{{ info.need_equipment && info.need_equipment.trim() !== '' ? info.need_equipment : '-' }}</span>
-                </div>
-              </div>
+<div v-if="isYes(info.facilityRequest)">
+  <!-- แสดง "ดึงอัฒจันทร์ฯ" เฉพาะกรณีเป็นอาคาร 72 -->
+  <div
+    v-if="isBuilding72"
+    class="form-row block-row"
+    style="margin-left: 80px;"
+  >
+    <span style="white-space: nowrap;">3.1 ดึงอัฒจันทร์ภายในอาคารเฉลิมพระเกียรติฯ :</span>
+    <span class="line-field block-text force-inline">
+      {{ (info.amphitheater && info.amphitheater.trim() !== '') ? info.amphitheater : '-' }}
+    </span>
+  </div>
+
+  <!-- อุปกรณ์กีฬา: ถ้าไม่ใช่ 72 ให้เลื่อนเป็น 3.1 -->
+  <div class="form-row block-row" style="margin-left: 80px;">
+    <span style="white-space: nowrap;">
+      {{ isBuilding72 ? '3.2' : '3.1' }} อุปกรณ์กีฬา (โปรดระบุรายการและจำนวน) :
+    </span>
+    <span class="line-field block-text force-inline">
+      {{ (info.need_equipment && info.need_equipment.trim() !== '') ? info.need_equipment : '-' }}
+    </span>
+  </div>
+</div>
 
               <div class="note-line">
                 <span style="font-weight:bold; font-size:15px;">ทั้งนี้ต้องแนบเอกสารโครงการหรือกิจกรรมที่ได้รับการอนุมัติแล้วพร้อมกำหนดการจัดกิจกรรม</span>
@@ -337,6 +362,29 @@ const userId = localStorage.getItem('user_id') || ''
 const lastSeenTimestamp = ref(0)
 let polling = null
 
+const isBuilding72 = computed(() => {
+  const name = ((info.value && info.value.building) ? info.value.building : '')
+    .replace(/\s+/g, '')
+    .toLowerCase()
+  // ปรับเงื่อนไขตามที่ต้องการได้
+  return name.includes('72พรรษา') || name.includes('อาคารเฉลิมพระเกียรติ') || name.includes('72')
+})
+
+// แทนที่ของเดิมทั้งบล็อกนี้
+const isLightsNo = computed(() => {
+  const on  = (info.value?.turnon_lights  || '').trim()
+  const off = (info.value?.turnoff_lights || '').trim()
+
+  // ถ้าเวลาใดเวลาหนึ่งว่าง -> ถือว่า "ไม่ต้องการใช้งาน"
+  if (!on || !off) return true
+
+  // ถ้ามีทั้งสองเวลาแล้ว ค่อยพิจารณาค่าธง lights ต่อ (รองรับกรณีพิเศษ)
+  const v = norm(info.value?.lights ?? info.value?.light ?? info.value?.lighting ?? '')
+  return NO_TOKENS.includes(v)
+})
+
+
+
 function pruneOldNotifications () {
   const cutoff = Date.now() - (7 * 24 * 60 * 60 * 1000) // เก็บ 7 วัน
   notifications.value = notifications.value.filter(n => (n?.timestamp ?? 0) >= cutoff)
@@ -489,7 +537,8 @@ function toAbsUrl(p){
 }
 
 // โหลดข้อมูล booking + ผู้ใช้ + ไฟล์แนบ แล้ว normalize ให้อยู่โครงเดียวกับ form_field3
-function normalizeFieldBooking(doc={}){
+// โหลดข้อมูล booking + ผู้ใช้ + ไฟล์แนบ แล้ว normalize ให้อยู่โครงเดียวกับ form_field3
+function normalizeFieldBooking(doc = {}) {
   return {
     aw: doc.aw || '',
     date: doc.date || '',
@@ -504,20 +553,35 @@ function normalizeFieldBooking(doc={}){
     since_time: doc.since_time || '',
     until_thetime: doc.until_thetime || '',
     participants: doc.participants || '',
+
+    // -------- สาธารณูปโภค --------
     utilityRequest: doc.utilityRequest || '',
     restroom: doc.restroom || '',
+    lights: doc.lights ?? doc.light ?? doc.lighting ?? '',
+
+    // ✅ เพิ่ม 2 ฟิลด์นี้เพื่อให้ 2.1 แสดงได้
+    turnon_lights: doc.turnon_lights || '',
+    turnoff_lights: doc.turnoff_lights || '',
+
+    // -------- รายการประกอบอาคาร --------
     facilityRequest: doc.facilityRequest || '',
     amphitheater: doc.amphitheater || '',
     need_equipment: doc.need_equipment || '',
+
+    // -------- ผู้ยื่น --------
     proxyStudentName: doc.proxyStudentName || '',
     username_form: doc.username_form || '',
     id_form: doc.id_form || '',
     user_id: doc.user_id || '',
+
+    // -------- id booking --------
     booking_id: doc._id || doc.id || localStorage.getItem('bookingId') || ''
   }
 }
 
-onMounted(async ()=>{
+
+
+onMounted(async () => {
   lastSeenTimestamp.value = parseInt(localStorage.getItem(ADMIN_LAST_SEEN_KEY) || '0')
   await fetchNotifications()
   polling = setInterval(fetchNotifications, 30000)
@@ -525,47 +589,62 @@ onMounted(async ()=>{
   loadCart()
 
   const bookingId = localStorage.getItem('bookingId')
-  if (!bookingId){
+  if (!bookingId) {
     // เผื่อมาแบบ snapshot
     const snapRaw = localStorage.getItem('field_form_snapshot')
-    if (snapRaw){
+    if (snapRaw) {
       info.value = normalizeFieldBooking(JSON.parse(snapRaw))
-    }else{
-      return router.push({ path:'/form_field_admin', query:{ restore:'true' }})
+    } else {
+      return router.push({ path: '/form_field_admin', query: { restore: 'true' } })
     }
-  }else{
-    try{
+  } else {
+    try {
       const res = await axios.get(`${API_BASE}/api/booking_field/${bookingId}`)
       const doc = res?.data?.data ?? res?.data ?? {}
       info.value = normalizeFieldBooking(doc)
 
-      // Normalize yes/no ให้แน่นอนเหมือน form_field3
+      // --- Normalize yes/no ---
       info.value.utilityRequest  = isYes(info.value.utilityRequest)  ? 'yes' : (isNo(info.value.utilityRequest)  ? 'no' : '')
       info.value.restroom        = isYes(info.value.restroom)        ? 'yes' : (isNo(info.value.restroom)        ? 'no' : '')
       info.value.facilityRequest = isYes(info.value.facilityRequest) ? 'yes' : (isNo(info.value.facilityRequest) ? 'no' : '')
 
+      // ✅ ถ้ามีกรอกเวลาไฟแล้ว -> บังคับให้ lights = 'yes' เพื่อให้ 2.1 แสดงช่วงเวลา
+      const hasLightTimes =
+        !!(info.value.turnon_lights && info.value.turnoff_lights &&
+           info.value.turnon_lights.trim() && info.value.turnoff_lights.trim())
+
+      if (hasLightTimes) {
+        info.value.lights = 'yes'
+      } else {
+        // ถ้าไม่กรอกเวลา ให้ยึดค่าที่มาจากฐานข้อมูล (yes/no/ว่าง)
+        info.value.lights = isYes(info.value.lights) ? 'yes' : (isNo(info.value.lights) ? 'no' : '')
+      }
+
       // ไฟล์แนบ
       const rawAttach = doc.attachedFiles || doc.attachment || doc.files || []
-      fileAttachments.value = (rawAttach || []).map((x,i)=>({
+      fileAttachments.value = (rawAttach || []).map((x, i) => ({
         url: x?.url || x?.fileUrl || '',
-        fileName: x?.originalName || x?.fileName || x?.name || `attachment_${i+1}`,
-        size: x?.size ? Math.ceil(Number(x.size)/1024) : null
+        fileName: x?.originalName || x?.fileName || x?.name || `attachment_${i + 1}`,
+        size: x?.size ? Math.ceil(Number(x.size) / 1024) : null
       }))
 
       // ลายเซ็นของผู้ยื่น
-      if (info.value.user_id){
-        try{
+      if (info.value.user_id) {
+        try {
           const u = await axios.get(`${API_BASE}/api/user/${info.value.user_id}`)
           const sigPath = u.data.signaturePath || u.data.signature_url || u.data.signature || ''
           signatureUrl.value = sigPath ? toAbsUrl(sigPath) : ''
-        }catch{ signatureUrl.value = '' }
+        } catch {
+          signatureUrl.value = ''
+        }
       }
-    }catch{
+    } catch {
       // ถ้าดึงไม่ได้ให้กลับไปหน้า 1
-      return router.push({ path:'/form_field_admin', query:{ restore:'true' }})
+      return router.push({ path: '/form_field_admin', query: { restore: 'true' } })
     }
   }
 })
+
 onBeforeUnmount(()=>{
    if (polling) clearInterval(polling) 
    if (polling) clearInterval(polling)

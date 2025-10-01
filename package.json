@@ -1,7 +1,9 @@
 {
   "dependencies": {
     "chart.js": "^4.3.0",
+    "googleapis": "^160.0.0",
     "html2pdf.js": "^0.10.3",
+    "nodemailer": "^7.0.6",
     "vue-chartjs": "^5.2.0"
   }
 }

@@ -2146,13 +2146,29 @@ function buildFieldFormPreviewV2(
   const u = ynPack(b?.utilityRequest,  hasU ? true : undefined);
   const f = ynPack(b?.facilityRequest, hasF ? true : undefined);
 
-  const restroomText = (() => {
-    const raw = (b?.restroom ?? b?.restroom_text ?? '').toString().trim().toLowerCase();
-    if (!raw) return '-';
-    if (['yes','true','1','use','ใช้','ใช้งาน','ต้องการ','ต้องการใช้งาน'].includes(raw)) return 'ต้องการใช้งาน';
-    if (['no','false','0','not use','ไม่ใช้','ไม่ใช้งาน','ไม่ต้องการ','ไม่ต้องการใช้งาน'].includes(raw)) return 'ไม่ต้องการใช้งาน';
-    return raw;
-  })();
+  // 2.2 สุขา – ค่าว่างให้ถือว่า "ไม่ต้องการใช้งาน"
+const restroomText = (() => {
+  // เอา restroom_text มาก่อน ถ้าไม่มีค่อยใช้ restroom
+  const rawInput = (b?.restroom_text ?? b?.restroom ?? '').toString().trim();
+  const raw = rawInput.toLowerCase();
+
+  // ค่าว่าง -> ไม่ต้องการใช้งาน
+  if (!raw) return 'ไม่ต้องการใช้งาน';
+
+  // ต้องการใช้งาน
+  if (['yes','true','1','y','use','ใช้','ใช้งาน','ต้องการ','ต้องการใช้งาน'].includes(raw)) {
+    return 'ต้องการใช้งาน';
+  }
+  // ไม่ต้องการใช้งาน (รวม no/false/0/ข้อความไทย)
+  if (['no','false','0','n','not use','ไม่ใช้','ไม่ใช้งาน','ไม่ต้องการ','ไม่ต้องการใช้งาน'].includes(raw)) {
+    return 'ไม่ต้องการใช้งาน';
+  }
+  // ค่าอื่น ๆ แสดงตามที่ส่งมา
+  return rawInput;
+})();
+
+
+
 
   const sc = b?.secretary_choice || {};
   const sec_other_chk    = !!sc.other_checked;
@@ -2160,6 +2176,28 @@ function buildFieldFormPreviewV2(
 
   const todayIso = new Date().toISOString().slice(0,10);
   const todayTH  = fmtDate(todayIso);
+
+  // ใช้เช็กค่าว่าง/ขีด
+const hasVal = (v) => {
+  const s = String(v ?? '').trim();
+  return !!(s && s !== '-');
+};
+
+// 2.1 ไฟฟ้าส่องสว่าง
+const lightsText = (() => {
+  const on  = (b?.turnon_lights ?? '').toString().trim();
+  const off = (b?.turnoff_lights ?? '').toString().trim();
+  if (!hasVal(on) && !hasVal(off)) return 'ไม่ต้องการใช้งาน';
+  return `ตั้งแต่ ${fmtTime(on)} - ${fmtTime(off)}`;
+})();
+
+// แสดง “ดึงอัฒจันทร์…” เฉพาะอาคารเฉลิมพระเกียรติ 72 พรรษา
+const showAmphiRow = (() => {
+  const name = (b?.name ?? '').toString();
+  const norm = name.replace(/\s+/g, '');
+  return /เฉลิมพระเกียรติ?72พรรษา/.test(norm);
+})();
+
 
   return `
   <div class="mfu-form">
@@ -2469,7 +2507,7 @@ function buildFieldFormPreviewV2(
   <tr>
     <td class="lbl"><b>2.1 ไฟฟ้าส่องสว่าง</b></td>
     <td class="colon">:</td>
-    <td class="val">ตั้งแต่ ${fmtTime(b?.turnon_lights)} - ${fmtTime(b?.turnoff_lights)}</td>
+    <td class="val">${lightsText}</td>
   </tr>
   <tr>
     <td class="lbl"><b>2.2 สุขา</b></td>
@@ -2490,16 +2528,26 @@ function buildFieldFormPreviewV2(
         <span class="choice ${f.nOn ? 'on' : ''}"><span class="dot">${f.nOn ? '●' : '○'}</span> ไม่เลือก</span>
       </div>
       <table class="mfu-tbl mfu-tbl-fac" style="margin-left:31px;">
-  <tr>
-    <td class="lbl"><b>3.1 ดึงอัฒจันทร์ภายในอาคารเฉลิมพระเกียรติฯ</b></td>
-    <td class="colon">:</td>
-    <td class="val">${dash(b?.amphitheater)}</td>
-  </tr>
-  <tr>
-    <td class="lbl"><b>3.2 อุปกรณ์กีฬา (โปรดระบุรายการและจำนวน)</b></td>
-    <td class="colon">:</td>
-    <td class="val">${dash(b?.need_equipment)}</td>
-  </tr>
+
+  ${showAmphiRow ? `
+    <tr>
+      <td class="lbl"><b>3.1 ดึงอัฒจันทร์ภายในอาคารเฉลิมพระเกียรติฯ</b></td>
+      <td class="colon">:</td>
+      <td class="val">${dash(b?.amphitheater)}</td>
+    </tr>
+    <tr>
+      <td class="lbl"><b>3.2 อุปกรณ์กีฬา (โปรดระบุรายการและจำนวน)</b></td>
+      <td class="colon">:</td>
+      <td class="val">${dash(b?.need_equipment)}</td>
+    </tr>
+  ` : `
+    <tr>
+      <td class="lbl"><b>3.1 อุปกรณ์กีฬา (โปรดระบุรายการและจำนวน)</b></td>
+      <td class="colon">:</td>
+      <td class="val">${dash(b?.need_equipment)}</td>
+    </tr>
+  `}
+
 </table>
 
       <div class="mfu-note">

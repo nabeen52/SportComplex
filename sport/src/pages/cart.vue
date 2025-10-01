@@ -99,18 +99,25 @@
             <!-- ปุ่ม Next เดิม -->
             <button
               id="btnCheckout"
-              :disabled="products.length === 0"
+              :disabled="products.length === 0 || isSubmitting"
               @click="handleCheckout"
               :style="{
-                opacity: products.length === 0 ? 0.5 : 1,
-                cursor: products.length === 0 ? 'not-allowed' : 'pointer'
+                opacity: (products.length === 0 || isSubmitting) ? 0.5 : 1,
+                cursor: (products.length === 0 || isSubmitting) ? 'not-allowed' : 'pointer'
               }"
             >
               Next
             </button>
+
           </div>
         </div>
       </div>
+
+      <div v-if="isSubmitting" class="submit-overlay">
+        <div class="spinner"></div>
+        <p class="submit-text">Sending request... Please wait a moment</p>
+      </div>
+
 
      <footer class="foot">
         <div class="footer-left">
@@ -151,6 +158,10 @@ const userId = localStorage.getItem('user_id') || ''
 const lastCheckedIds = new Set()
 const lastSeenTimestamp = ref(parseInt(localStorage.getItem('lastSeenTimestamp') || '0'))
 let polling = null
+
+// ด้านบนของ <script setup> ร่วมกับตัวแปรอื่นๆ
+const isSubmitting = ref(false)
+
 
 // ดึงขั้นตอนอนุมัติสำหรับ "อุปกรณ์ยืมวันเดียว" จาก settings
 async function fetchApprovalRolesOneDay() {
@@ -325,7 +336,7 @@ async function removeItem(product) {
 
 // คำนวนรวมจำนวนและส่งไปหน้า form_equipment
 async function handleCheckout() {
-  if (products.value.length === 0) return;
+  if (products.value.length === 0 || isSubmitting.value) return;
 
   // 1) รวมจำนวนอุปกรณ์ชื่อเดียวกันในตะกร้า
   const itemMap = {};
@@ -372,7 +383,7 @@ async function handleCheckout() {
     return;
   }
 
-  // 5) วันเดียว → ส่งคำขอเข้า History โดยสร้าง step ตามที่ตั้งไว้ในหน้า step.vue
+  // ---- จากนี้คือ "ยืมวันเดียว" ----
   const uid = localStorage.getItem('user_id') || '';
   if (!uid) {
     await Swal.fire({ icon: 'warning', title: 'Please log in before using', confirmButtonText: 'OK' });
@@ -383,19 +394,17 @@ async function handleCheckout() {
   const booking_id = `${Date.now()}_${uid}`;
   const nowISO = new Date().toISOString();
 
-  // 5.1) ดึง roles ของ "equipment_one_day" จาก settings
+  // ดึง roles ของ one-day จาก settings
   let roles = [];
   try {
-    roles = await fetchApprovalRolesOneDay(); // คืนค่าเช่น ['staff','admin'] ตามที่ติ้กในหน้า step
+    roles = await fetchApprovalRolesOneDay(); // เช่น ['staff','admin']
   } catch (_) {
     roles = [];
   }
   if (!roles.length) roles = ['staff']; // fallback
-
-  // 5.2) แปลง roles -> step array
   const stepArr = buildStepFromRoles(roles);
 
-  // 5.3) Payload พื้นฐาน (ไม่ใส่ since/uptodate = ยืมวันเดียว)
+  // Payload พื้นฐาน
   const basePayload = {
     user_id: uid,
     type: 'equipment',
@@ -405,8 +414,11 @@ async function handleCheckout() {
     step: stepArr,
   };
 
+  // แสดงสถานะกำลังส่ง + กันกดซ้ำ
+  isSubmitting.value = true;
+
   try {
-    // 5.4) สร้าง 1 history ต่อ 1 รายการอุปกรณ์
+    // ส่ง 1 history ต่อ 1 รายการ
     await Promise.all(
       resultItems.map(item =>
         axios.post(`${API_BASE}/api/history`, {
@@ -417,7 +429,7 @@ async function handleCheckout() {
       )
     );
 
-    // 5.5) เคลียร์ตะกร้า
+    // เคลียร์ตะกร้า
     await axios.delete(`${API_BASE}/api/cart?user_id=${uid}`);
     products.value = [];
 
@@ -425,9 +437,12 @@ async function handleCheckout() {
     router.push('/history');
   } catch (err) {
     const msg = err?.response?.data?.message || err.message || 'Unable to send request';
-    Swal.fire('An error occurred', msg, 'error');
+    await Swal.fire('An error occurred', msg, 'error');
+  } finally {
+    isSubmitting.value = false;
   }
 }
+
 
 
 const totalCartItems = computed(() => {
@@ -716,6 +731,40 @@ onBeforeUnmount(() => {
     max-width: 320px;        /* จำกัดความกว้างไม่ให้ยาวเกิน */
   }
 }
+
+.submit-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(255,255,255,0.75);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000; /* สูงกว่ากระดิ่ง/ป๊อปอัพของหน้า */
+  backdrop-filter: blur(2px);
+  pointer-events: all; /* บล็อกการคลิกทุกอย่างด้านหลัง */
+}
+
+.spinner {
+  width: 56px;
+  height: 56px;
+  border: 5px solid #e5eaf3;
+  border-top-color: #2d7aff;
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+  margin-bottom: 12px;
+}
+
+.submit-text {
+  font-size: 1.05rem;
+  color: #1e2c48;
+  font-weight: 600;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 
 
 

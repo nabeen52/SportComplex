@@ -197,6 +197,9 @@ export default {
       loggedSignatureUrl: '',  // ใช้แสดงผล (พรีวิว)
       loggedSignatureRaw: '',  // << ใช้ส่งเข้า DB
 
+       usersEmailMap: {},
+       _usersLoaded: false,
+
        // ====== ขนาด A4 (px @96dpi) และ helper แปลง DOM → PDF Blob ======
         A4_W: Math.round(210 * (96 / 25.4)),  // ~ 794
         A4_H: Math.round(297 * (96 / 25.4)),  // ~ 1123
@@ -212,9 +215,24 @@ export default {
   },
   methods: {
 
+    async fetchUsers() {
+    const { data } = await axios.get('/api/users');
+    // สร้าง 2 แมป: ทั้ง user ทั้งอีเมล
+    this.userMap = Object.fromEntries(data.map(u => [String(u.user_id), u]));
+    this.usersEmailMap = Object.fromEntries(
+      data.map(u => [String(u.user_id), u.email || ''])
+    );
+    this._usersLoaded = true;
+  },
+
+   async ensureUsersLoaded() {
+    if (!this._usersLoaded || !Object.keys(this.usersEmailMap).length) {
+      await this.fetchUsers();
+    }
+  },
 
     // ถือว่า "อนุมัติครบจริง" อย่างไร
-isFullyApproved(item) {
+  isFullyApproved(item) {
   const typ = String(item?.type || '').toLowerCase();
 
   // ถ้าเป็นอุปกรณ์และ workflow มี admin ใน step → ต้องดูว่า admin อนุมัติแล้วจริงไหม
@@ -331,9 +349,6 @@ _buildFieldPdfNode(b, secretary_choice = {}, reason_admin = '', secThaiName = ''
   return holder;
 },
 
-
-
-
     // === สร้าง context สำหรับพรีวิวอนุมัติ "อุปกรณ์" ===
 _buildEquipmentCtxFromGroup(group) {
   const items = Array.isArray(group?.items) ? group.items : [];
@@ -348,9 +363,9 @@ _buildEquipmentCtxFromGroup(group) {
   const reason   = it0.reason || it0.reasons || "";
   const location = it0.location || it0.place || (it0.zone && it0.zone !== "-" ? it0.zone : (it0.name || ""));
 
-  // ช่วงวันที่ (แปลงเป็น dd/mm/yyyy - dd/mm/yyyy)
-  const sinceStr = it0.since     ? this.formatDate(it0.since)     : "-";
-  const uptoStr  = it0.uptodate  ? this.formatDate(it0.uptodate)  : "-";
+  // ช่วงวันที่ (dd/mm/yyyy - dd/mm/yyyy)
+  const sinceStr  = it0.since    ? this.formatDate(it0.since)    : "-";
+  const uptoStr   = it0.uptodate ? this.formatDate(it0.uptodate) : "-";
   const dateRange = `${sinceStr} - ${uptoStr}`;
 
   // แถวรายการ
@@ -365,7 +380,7 @@ _buildEquipmentCtxFromGroup(group) {
   const receive_date = it0.receive_date || it0.dateBorrow || "";
   const receive_time = it0.receive_time || it0.timeBorrow || "";
 
-  // >>> createdAt: ดึงจาก item แรกก่อน แล้วค่อยไล่หาจากตัวอื่น
+  // createdAt
   const pickCreatedAt = (o) =>
     (o?.createdAt && (o.createdAt.$date || o.createdAt)) ||
     (o?.created_at && (o.created_at.$date || o.created_at)) ||
@@ -377,16 +392,22 @@ _buildEquipmentCtxFromGroup(group) {
     pickCreatedAt(group) ||
     null;
 
+  // ✅ อีเมลจากคอลเลกชัน users ผ่าน user_id (ใช้แมปที่โหลดไว้ใน approveGroup)
+  const user_id = String(group.user_id || it0.user_id || "");
+  const email   = this.usersEmailMap?.[user_id] ?? group.email ?? it0.email ?? "";
+
   return {
     requester, requesterId, tel,
     reason, location, dateRange, rows,
     receive_date, receive_time,
-    // สำคัญ: ใส่ createdAt ลง ctx
     createdAt,
-    // เผื่อใช้ต่อในพรีวิว
-    items
+    items,
+
+    user_id,
+    email,
   };
 },
+
 
 
 
@@ -1343,10 +1364,10 @@ async approveGroup(group) {
       confirmButtonText: "ยืนยันอนุมัติ",
       cancelButtonText: "ยกเลิก",
       customClass: {
-    popup: 'swal-form-approve',
-    htmlContainer: 'swal-center-below',  // <-- ทำให้ข้อความอยู่กลางและต่ำลง
-    title: 'swal-center-below'           // (ไม่ใส่ก็ได้ ถ้าอยากให้หัวข้อกลางด้วย)
-  },
+        popup: 'swal-form-approve',
+        htmlContainer: 'swal-center-below',
+        title: 'swal-center-below'
+      },
       didOpen: () => {
         const p = Swal.getPopup();
         const chk = p.querySelector('#sec_other_chk');
@@ -1420,7 +1441,7 @@ async approveGroup(group) {
     // ===== EQUIPMENT =====
     const items = Array.isArray(group.items) ? group.items : [];
 
-    // ตรวจ "ยืมวันเดียว" ให้ robust: ว่าง/ขีด/หรือ since==uptodate
+    // ตรวจ "ยืมวันเดียว"
     const isSingleDay = items.every(it => {
       const s = norm(it.since), u = norm(it.uptodate);
       if (isEmptyDate(s) && isEmptyDate(u)) return true;
@@ -1463,7 +1484,7 @@ async approveGroup(group) {
         const url = `${API_BASE}/api/history/${item.id}/approve_equipment`;
         const headers = { "X-Idempotency-Key": `${item.id}-${item.booking_id || ""}-${approveDate}` };
         const payload = {
-          admin_id: adminUserId,     // ทำให้สถานะไปต่อขั้น admin บน backend
+          admin_id: adminUserId,
           approvedAt: approveDate,
           step
         };
@@ -1474,32 +1495,43 @@ async approveGroup(group) {
       try { await this.fetchAndGroup(); } catch (_) {}
 
       if (!failed.length) {
-  Swal.fire({
-    icon: 'success',
-    title: 'สำเร็จ',
-    html: 'อนุมัติเรียบร้อย',
-    width: 900,
-    customClass: {
-    popup: 'swal-success-wide',
-    htmlContainer: 'swal-center-below',  // <-- ทำให้ข้อความอยู่กลางและต่ำลง
-    title: 'swal-center-below'           // (ไม่ใส่ก็ได้ ถ้าอยากให้หัวข้อกลางด้วย)
-  }
-  });
-} else {
-  Swal.fire({
-    icon: 'warning',
-    title: 'สำเร็จบางส่วน',
-    html: `อนุมัติสำเร็จ ${results.length - failed.length} รายการ, ล้มเหลว ${failed.length} รายการ`,
-    width: 900,
-    customClass: { popup: 'swal-success-wide' }
-  });
-}
-
+        Swal.fire({
+          icon: 'success',
+          title: 'สำเร็จ',
+          html: 'อนุมัติเรียบร้อย',
+          width: 900,
+          customClass: {
+            popup: 'swal-success-wide',
+            htmlContainer: 'swal-center-below',
+            title: 'swal-center-below'
+          }
+        });
+      } else {
+        Swal.fire({
+          icon: 'warning',
+          title: 'สำเร็จบางส่วน',
+          html: `อนุมัติสำเร็จ ${results.length - failed.length} รายการ, ล้มเหลว ${failed.length} รายการ`,
+          width: 900,
+          customClass: { popup: 'swal-success-wide' }
+        });
+      }
       return;
     }
 
-    // ---- ยืมหลายวัน: พรีวิว + gen/upload PDF (เหมือนเดิม) ----
-    const ctx = await this._buildEquipmentCtxFromGroup(group);
+    // ---- ยืมหลายวัน: โหลด users → ทำ usersEmailMap ก่อนสร้าง ctx ----
+    if (!this.usersEmailMap || !Object.keys(this.usersEmailMap).length) {
+      try {
+        const { data } = await axios.get(`${API_BASE}/api/users`);
+        this.usersEmailMap = Object.fromEntries(
+          (Array.isArray(data) ? data : []).map(u => [String(u.user_id), u.email || ""])
+        );
+      } catch (e) {
+        console.warn("โหลด users สำหรับ usersEmailMap ไม่สำเร็จ:", e);
+        this.usersEmailMap = this.usersEmailMap || {};
+      }
+    }
+
+    const ctx = this._buildEquipmentCtxFromGroup(group);
     const html = buildEquipmentApprovePreviewHTML(ctx);
 
     const result = await Swal.fire({
@@ -1643,29 +1675,30 @@ async approveGroup(group) {
   try { await this.fetchAndGroup(); } catch (_) {}
 
   if (ok.length) {
-  Swal.fire({
-    icon: 'success',
-    title: 'สำเร็จ',
-    html: isEquipment ? 'อนุมัติอุปกรณ์เรียบร้อย' : 'อนุมัติเรียบร้อยแล้ว',
-    width: 900,
-    customClass: {
-    popup: 'swal-success-wide',
-    htmlContainer: 'swal-center-below',  // <-- ทำให้ข้อความอยู่กลางและต่ำลง
-    title: 'swal-center-below'           // (ไม่ใส่ก็ได้ ถ้าอยากให้หัวข้อกลางด้วย)
+    Swal.fire({
+      icon: 'success',
+      title: 'สำเร็จ',
+      html: isEquipment ? 'อนุมัติอุปกรณ์เรียบร้อย' : 'อนุมัติเรียบร้อยแล้ว',
+      width: 900,
+      customClass: {
+        popup: 'swal-success-wide',
+        htmlContainer: 'swal-center-below',
+        title: 'swal-center-below'
+      }
+    });
+  } else {
+    const e = fail[0]?.err;
+    const status = e?.response?.status;
+    const msg = e?.response?.data?.message || e?.message || 'ไม่สามารถอนุมัติได้';
+    Swal.fire({
+      icon: 'error',
+      title: 'ผิดพลาด',
+      html: `${msg}${status ? ` (รหัส ${status})` : ''}`,
+      width: 700
+    });
   }
-  });
-} else {
-  const e = fail[0]?.err;
-  const status = e?.response?.status;
-  const msg = e?.response?.data?.message || e?.message || 'ไม่สามารถอนุมัติได้';
-  Swal.fire({
-    icon: 'error',
-    title: 'ผิดพลาด',
-    html: `${msg}${status ? ` (รหัส ${status})` : ''}`,
-    width: 700  // error ไม่ต้องกว้างมากก็ได้
-  });
-}
 },
+
 
 async cancelGroup(group) {
   // กล่องยืนยัน + ช่องกรอกหมายเหตุ (บังคับกรอก)
@@ -2924,13 +2957,44 @@ function buildFieldFormPreviewV2(
   const u = ynPack(b?.utilityRequest,  hasU ? true : undefined);
   const f = ynPack(b?.facilityRequest, hasF ? true : undefined);
 
-  const restroomText = (() => {
-    const raw = (b?.restroom ?? '').toString().trim().toLowerCase();
-    if (!raw) return '-';
-    if (['yes','true','1','use','ใช้','ใช้งาน','ต้องการ','ต้องการใช้งาน'].includes(raw)) return 'ต้องการใช้งาน';
-    if (['no','false','0','not use','ไม่ใช้','ไม่ใช้งาน','ไม่ต้องการ','ไม่ต้องการใช้งาน'].includes(raw)) return 'ไม่ต้องการใช้งาน';
-    return b.restroom;
-  })();
+  // 2.2 สุขา – ค่าว่างให้ถือว่า "ไม่ต้องการใช้งาน"
+const restroomText = (() => {
+  // เอา restroom_text มาก่อน ถ้าไม่มีค่อยใช้ restroom
+  const rawInput = (b?.restroom_text ?? b?.restroom ?? '').toString().trim();
+  const raw = rawInput.toLowerCase();
+
+  // ค่าว่าง -> ไม่ต้องการใช้งาน
+  if (!raw) return 'ไม่ต้องการใช้งาน';
+
+  // ต้องการใช้งาน
+  if (['yes','true','1','y','use','ใช้','ใช้งาน','ต้องการ','ต้องการใช้งาน'].includes(raw)) {
+    return 'ต้องการใช้งาน';
+  }
+  // ไม่ต้องการใช้งาน (รวม no/false/0/ข้อความไทย)
+  if (['no','false','0','n','not use','ไม่ใช้','ไม่ใช้งาน','ไม่ต้องการ','ไม่ต้องการใช้งาน'].includes(raw)) {
+    return 'ไม่ต้องการใช้งาน';
+  }
+  // ค่าอื่น ๆ แสดงตามที่ส่งมา
+  return rawInput;
+})();
+
+
+  // ใช้เฉพาะช่อง 2.1
+const lightsText = (() => {
+  const on  = (b?.turnon_lights ?? '').toString().trim();
+  const off = (b?.turnoff_lights ?? '').toString().trim();
+  const empty = (s) => !s || s === '-';
+  if (empty(on) && empty(off)) return 'ไม่ต้องการใช้งาน';
+  return `ตั้งแต่ ${fmtTime(on)} - ${fmtTime(off)}`;
+})();
+
+const showAmphiRow = (() => {
+  const name = (b?.name ?? '').toString();
+  // ปรับให้ทนต่อช่องว่าง/รูปแบบพิมพ์
+  const norm = name.replace(/\s+/g, '');
+  return /เฉลิมพระเกียรติ?72พรรษา/.test(norm);
+})();
+
 
   const secNow = secApprovedAt ? new Date(secApprovedAt) : new Date();
 
@@ -3051,7 +3115,7 @@ function buildFieldFormPreviewV2(
         <tr>
           <td class="lbl"><b>2.1 ไฟฟ้าส่องสว่าง</b></td>
           <td class="colon">:</td>
-          <td class="val">ตั้งแต่ ${fmtTime(b?.turnon_lights)} - ${fmtTime(b?.turnoff_lights)}</td>
+          <td class="val">${lightsText}</td>
         </tr>
         <tr>
           <td class="lbl"><b>2.2 สุขา</b></td>
@@ -3072,16 +3136,24 @@ function buildFieldFormPreviewV2(
         <span class="choice ${f.nOn ? 'on' : ''}"><span class="dot">${f.nOn ? '●' : '○'}</span> ไม่เลือก</span>
       </div>
       <table class="mfu-tbl mfu-tbl-fac" style="margin-left:31px;">
-        <tr>
-          <td class="lbl"><b>3.1 ดึงอัฒจันทร์ภายในอาคารเฉลิมพระเกียรติฯ</b></td>
-          <td class="colon">:</td>
-          <td class="val">${dash(b?.amphitheater)}</td>
-        </tr>
-        <tr>
-          <td class="lbl"><b>3.2 อุปกรณ์กีฬา (โปรดระบุรายการและจำนวน)</b></td>
-          <td class="colon">:</td>
-          <td class="val">${dash(b?.need_equipment)}</td>
-        </tr>
+        ${showAmphiRow ? `
+          <tr>
+            <td class="lbl"><b>3.1 ดึงอัฒจันทร์ภายในอาคารเฉลิมพระเกียรติฯ</b></td>
+            <td class="colon">:</td>
+            <td class="val">${dash(b?.amphitheater)}</td>
+          </tr>
+          <tr>
+            <td class="lbl"><b>3.2 อุปกรณ์กีฬา (โปรดระบุรายการและจำนวน)</b></td>
+            <td class="colon">:</td>
+            <td class="val">${dash(b?.need_equipment)}</td>
+          </tr>
+        ` : `
+          <tr>
+            <td class="lbl"><b>3.1 อุปกรณ์กีฬา (โปรดระบุรายการและจำนวน)</b></td>
+            <td class="colon">:</td>
+            <td class="val">${dash(b?.need_equipment)}</td>
+          </tr>
+        `}
       </table>
 
       <div class="mfu-note">
@@ -3217,6 +3289,23 @@ function buildEquipmentApprovePreviewHTML(ctx) {
     }).format(d),
   });
 
+  // ✅ เลือกป้าย "รหัส..." ตามอีเมลของผู้ยืม
+  // รองรับหลายชื่อฟิลด์ที่อาจถูกส่งมาใน ctx
+  const getIdLabel = () => {
+    const email =
+      ctx.email ||
+      ctx.userEmail ||
+      ctx.requesterEmail ||
+      (ctx.usersEmailMap && ctx.user_id && ctx.usersEmailMap[ctx.user_id]) ||
+      (ctx.user && ctx.user.email) ||
+      "";
+
+    if (/@mfu\.ac\.th$/i.test(email)) return "รหัสพนักงาน";
+    if (/@lamduan\.mfu\.ac\.th$/i.test(email)) return "รหัสนักศึกษา";
+    return "รหัสนักศึกษา/รหัสพนักงาน"; // เผื่อกรณีหาอีเมลไม่เจอ
+  };
+  const idLabel = getIdLabel();
+
   // วันนี้ (หัวฟอร์ม)
   const { date: dateTH } = fmtTH(new Date());
 
@@ -3271,12 +3360,12 @@ function buildEquipmentApprovePreviewHTML(ctx) {
     </div>
 
     <div class="date" style="margin-top:30px">วันที่ ${dateTH}</div>
-    <div style="margin-top:20px">ส่วนที่1 สำหรับผู้ขอใช้บริการ</div>
+    <div style="margin-top:20px">สำหรับผู้ขอใช้บริการ</div>
 
     <section class="eqp-section eqp-section--par">
       <div class="eqp-par">
         ข้าพเจ้า ${esc(ctx.requester)}
-        รหัสนักศึกษา/รหัสพนักงาน ${esc(ctx.requesterId)}
+        ${idLabel} ${esc(ctx.requesterId)}
         ${ctx.tel ? 'โทร ' + esc(ctx.tel) : ''}
         มีความประสงค์ขอยืมอุปกรณ์ของศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง
         เพื่อใช้ในงาน ${esc(ctx.reason)} สถานที่ใช้งาน ${esc(ctx.location)}
@@ -3341,44 +3430,21 @@ function buildEquipmentApprovePreviewHTML(ctx) {
     </div>
 
     <style>
-      /* หัวฟอร์มและบล็อกขวา (ไม่ซ้อนทับ) */
-      .eqp-head{
-        text-align:center;
-        margin-bottom: 8px;
-      }
+      .eqp-head{ text-align:center; margin-bottom: 8px; }
       .eqp-head .t1{ font-weight:700; font-size:20px; }
       .eqp-head .t2{ font-size:14px; margin-top:2px; }
-
-      .eqp-meta{
-        display:flex;
-        justify-content:flex-end;
-        margin: 8px 0 12px;   /* เว้นที่ก่อนเข้าบรรทัด "วันที่ ..." */
-      }
-      .eqp-meta .right-meta{
-        text-align:right;
-        line-height:1.55;
-      }
-
+      .eqp-meta{ display:flex; justify-content:flex-end; margin: 8px 0 12px; }
+      .eqp-meta .right-meta{ text-align:right; line-height:1.55; }
       .eqp-table{ width:100%; border-collapse:collapse; table-layout:fixed; }
-      .eqp-table th,.eqp-table td{
-        border:1px solid #ccc; padding:8px 10px; text-align:center;
-        vertical-align:middle; word-break:break-word; white-space:normal;
-      }
+      .eqp-table th,.eqp-table td{ border:1px solid #ccc; padding:8px 10px; text-align:center;
+        vertical-align:middle; word-break:break-word; white-space:normal; }
       .eqp-table thead th{ font-weight:600; }
       .eqp-table tbody tr{ height:40px; }
-
-      .eqp-sign{
-        display:grid; grid-template-columns:auto 240px auto;
-        column-gap:8px; align-items:center; justify-content:end; text-align:unset;
-      }
+      .eqp-sign{ display:grid; grid-template-columns:auto 240px auto; column-gap:8px; align-items:center; justify-content:end; text-align:unset; }
       .eqp-sign .sig-line{ display:contents; }
-      .eqp-sign .sig-line .line{
-        height:1.2em; border-bottom:1px dotted #666;
-        display:flex; align-items:flex-end; justify-content:center;
-      }
+      .eqp-sign .sig-line .line{ height:1.2em; border-bottom:1px dotted #666; display:flex; align-items:flex-end; justify-content:center; }
       .eqp-sign .sig-line .name{ padding:0 6px; background:transparent; }
-      .eqp-sign .date{ grid-column:2; justify-self:center; margin-top:6px; }
-
+      .eqp-sign .date{ grid-column:2; justify-self:center; margin-top:6px; font-size:12px; line-height:1.2; }
       .eqp-boxes{ display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:18px; }
       .eqp-boxes .box{ border:1px solid #ccc; padding:12px; min-height:160px; }
       .eqp-boxes .title{ font-weight:600; margin-bottom:10px; text-align:center; }
@@ -3388,11 +3454,6 @@ function buildEquipmentApprovePreviewHTML(ctx) {
     </style>
   </div>`;
 }
-
-
-
-
-
 </script>
 <!-- ===== GLOBAL (ไม่ scoped): วางแทนที่บล็อก <style> เดิมได้เลย ===== -->
 <style>
