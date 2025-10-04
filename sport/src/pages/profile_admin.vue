@@ -11,7 +11,7 @@
         <router-link to="/home_admin" exact-active-class="active"><i class="pi pi-megaphone"></i> แก้ไขข่าว</router-link>
         <router-link to="/edit_field" active-class="active"><i class="pi pi-map-marker"></i> แก้ไขสนาม</router-link>
         <router-link to="/edit_equipment" active-class="active"><i class="pi pi-clipboard"></i> แก้ไขอุปกรณ์ </router-link>
-         <router-link to="/step" active-class="active"><i class="pi pi-sitemap"></i> แก้ไขขั้นตอนการอนุมัติ </router-link>
+         <!-- <router-link to="/step" active-class="active"><i class="pi pi-sitemap"></i> แก้ไขขั้นตอนการอนุมัติ </router-link> -->
         <router-link to="/booking_field_admin" active-class="active"><i class="pi pi-map-marker"></i> จองสนาม</router-link>
         <router-link to="/approve_field" active-class="active"><i class="pi pi-verified"></i> อนุมัติ</router-link>
         <!-- <router-link to="/return_admin" active-class="active"><i class="pi pi-box"></i> รับคืนอุปกรณ์ </router-link> -->
@@ -50,36 +50,40 @@
 
       <!-- Body -->
       <div class="probody">
-        <!-- Profile -->
-        <div>
-          <h1 style="padding-left: 50px;">Profile</h1>
-          <div class="profile-container">
-  <div class="proinfo">
-    <!-- Avatar -->
-    <img :src="profileImageUrl" alt="profile" class="profile-img" @error="imgError" />
+       <!-- Profile -->
+<div>
+  <h1 style="padding-left: 50px;">Profile</h1>
 
-    <div class="profile-details" v-if="info">
-      <p>Username : {{ info.name }}</p>
-      <p>Email : {{ info.email }}</p>
-      <p>Phone : {{ info.phone || '-' }}</p>
+  <div class="profile-scroll-container">
+    <div class="profile-container">
+      <div class="proinfo">
+        <!-- Avatar -->
+        <img :src="profileImageUrl" alt="profile" class="profile-img" @error="imgError" />
 
-      <div class="signature-wrap">
-        <div class="signature-label">Signature :</div>
-        <template v-if="info.signaturePath">
-          <img :src="signatureImageUrl" alt="signature" class="signature-img" @error="signatureError" />
-        </template>
-        <span v-else class="signature-empty">ยังไม่มีลายเซ็น</span>
+        <div class="profile-details" v-if="info">
+          <p>Username : {{ info.name }}</p>
+          <p>Thai name : {{ info.thaiName && info.thaiName.trim() ? info.thaiName : '—' }}</p>
+          <p>Email : {{ info.email }}</p>
+          <p>Phone : {{ info.phone || '-' }}</p>
+
+          <div class="signature-wrap">
+            <div class="signature-label">Signature :</div>
+            <template v-if="signatureImageUrl">
+              <img :src="signatureImageUrl" alt="signature" class="signature-img" @error="signatureError" />
+            </template>
+            <span v-else class="signature-empty">ยังไม่มีลายเซ็น</span>
+          </div>
+        </div>
+
+        <!-- ปุ่มแก้ไข: มุมขวาล่างของการ์ด -->
+        <button class="card-edit-btn" @click="openEditSwal" title="เเก้ไขโปรไฟล์">
+          <i class="pi pi-pencil"></i>
+        </button>
       </div>
     </div>
-
-    <!-- ปุ่มแก้ไข: มุมขวาล่างของการ์ด -->
-    <button class="card-edit-btn" @click="openEditSwal" title="Edit profile">
-      <i class="pi pi-pencil"></i>
-    </button>
   </div>
 </div>
 
-        </div>
         <!-- History -->
         <div>
           <h1 style="padding-left: 50px;">History</h1>
@@ -181,7 +185,8 @@ const info = ref({
   phone: "",
   // รองรับทั้ง signaturePath และ signature
   signaturePath: "",
-  signature: ""
+  signature: "",
+  thaiName: "" 
 })
 
 const history = ref([])
@@ -400,21 +405,39 @@ async function fetchNotifications() {
   } catch (err) {}
 }
 async function openEditSwal() {
+  const HONORIFICS = ['นาย','นาง','นางสาว']
+
+  const rawThai = (info.value.thaiName || '').trim()
+  const m = rawThai.match(/^(\S+)\s+(.*)$/)
+  let prefillPrefix = '', prefillBare = rawThai
+  if (m && HONORIFICS.includes(m[1])) {
+    prefillPrefix = m[1]
+    prefillBare = (m[2] || '').trim()
+  }
+
   const currentSig = signatureImageUrl.value
+
   const html = `
-    <div class="swal-edit-wrap">
-      <input
-        type="tel"
-        id="swal-phone"
-        class="swal2-input"
-        placeholder="เบอร์โทร (4–10 หลัก)"
-        value="${info.value.phone || ''}"
-        inputmode="numeric"
-        minlength="4"
-        maxlength="10"
-        pattern="\\d{4,10}"
-      >
-      <input type="file" id="swal-signature" class="swal2-file" accept="image/*" style="margin-top:6px;">
+    <div class="swal-profile">
+      <h3 class="swal-profile-title">แก้ไขโปรไฟล์</h3>
+
+      <div class="swal-row">
+        <select id="swal-prefix" class="swal-field swal-select">
+          <option value="">— โปรดระบุ —</option>
+          ${HONORIFICS.map(o => `<option value="${o}" ${o===prefillPrefix?'selected':''}>${o}</option>`).join('')}
+        </select>
+        <input id="swal-thaiName-bare" type="text" class="swal-field"
+               placeholder="ชื่อ-นามสกุล (ภาษาไทย)"
+               value="${(prefillBare || '').replace(/"/g,'&quot;')}" />
+      </div>
+
+      <input id="swal-phone" type="tel" class="swal-field"
+             placeholder="เบอร์โทรศัพท์ที่สามารถติดต่อได้(4-10 หลัก)"
+             value="${info.value.phone || ''}" inputmode="numeric"
+             minlength="4" maxlength="10" pattern="\\d{4,10}" />
+
+      <input id="swal-signature" type="file" class="swal-file-native" accept="image/*" />
+
       <div id="swal-preview" class="swal-preview">
         ${currentSig
           ? `<img src="${currentSig}" class="swal-signature-img">`
@@ -422,83 +445,94 @@ async function openEditSwal() {
       </div>
     </div>
   `
+
   const { isConfirmed, value } = await Swal.fire({
-    title: 'เเก้ไขโปรไฟล์',
     html,
-    focusConfirm: false,
     showCancelButton: true,
     confirmButtonText: 'Save',
     cancelButtonText: 'Cancel',
     width: 560,
-    customClass: { popup: 'swal-center-popup' },
+    padding: 0,
+    customClass: {
+      popup: 'swal-profile-popup',
+      confirmButton: 'swal-btn-save',
+      cancelButton: 'swal-btn-cancel'
+    },
+    focusConfirm: false,
     didOpen: () => {
       const phoneEl = document.getElementById('swal-phone')
-      const fileEl = document.getElementById('swal-signature')
-      const previewEl = document.getElementById('swal-preview')
+      const fileEl  = document.getElementById('swal-signature')
+      const preview = document.getElementById('swal-preview')
 
-      // บังคับให้เป็นเลขล้วน และตัดให้ไม่เกิน 10 หลักขณะพิมพ์
       phoneEl?.addEventListener('input', () => {
-        let v = (phoneEl.value || '').replace(/\D+/g, '') // keep digits only
-        if (v.length > 10) v = v.slice(0, 10)             // hard cap 10
+        let v = (phoneEl.value || '').replace(/\D+/g, '')
+        if (v.length > 10) v = v.slice(0, 10)
         phoneEl.value = v
       })
 
       fileEl?.addEventListener('change', () => {
         const f = fileEl.files?.[0]
-        if (!f) {
-          previewEl.innerHTML = `<span class="swal-signature-empty">ยังไม่มีลายเซ็น</span>`
-          return
-        }
+        if (!f) { preview.innerHTML = `<span class="swal-signature-empty">ยังไม่มีลายเซ็น</span>`; return }
         const url = URL.createObjectURL(f)
-        previewEl.innerHTML = `<img src="${url}" class="swal-signature-img">`
+        preview.innerHTML = `<img src="${url}" class="swal-signature-img">`
       })
     },
     preConfirm: () => {
-      const phone = (document.getElementById('swal-phone')?.value || '').trim()
-      const file = document.getElementById('swal-signature')?.files?.[0] || null
+      const prefixEl = document.getElementById('swal-prefix')
+      const nameEl   = document.getElementById('swal-thaiName-bare')
+      const phoneEl  = document.getElementById('swal-phone')
+      const fileEl   = document.getElementById('swal-signature')
 
-      const hasPhoneChange = phone !== (info.value.phone || '')
-      const hasSignature = !!file
+      const prefix = (prefixEl.value || '').trim()
+      let bare    = (nameEl.value || '').trim()
+      const first = bare.split(/\s+/)[0]
+      if (['นาย','นาง','นางสาว'].includes(first)) bare = bare.replace(/^\S+\s*/, '').trim()
 
-      if (!hasPhoneChange && !hasSignature) {
-        Swal.showValidationMessage('ใส่เบอร์ใหม่หรืออัปโหลดลายเซ็นอย่างน้อย 1 อย่าง')
-        return false
+      const hasPrefix = !!prefix, hasBare = !!bare
+      if (hasBare && !hasPrefix) { Swal.showValidationMessage('กรุณาเลือกคำนำหน้า'); return false }
+      if (hasPrefix && !hasBare) { Swal.showValidationMessage('กรุณากรอกชื่อ-นามสกุล (ภาษาไทย)'); return false }
+
+      const mergedThaiName = [prefix, bare].filter(Boolean).join(' ').trim()
+      const phone = (phoneEl.value || '').trim()
+      const file  = fileEl.files?.[0] || null
+
+      const changedThai  = mergedThaiName !== (info.value.thaiName || '')
+      const changedPhone = phone !== (info.value.phone || '')
+      const changedSig   = !!file
+      if (!changedThai && !changedPhone && !changedSig) {
+        Swal.showValidationMessage('กรุณาแก้ไขอย่างน้อย 1 รายการ'); return false
       }
-
-      // ตรวจความยาวเบอร์: 4–10 หลัก (เฉพาะกรณีมีการเปลี่ยนแปลงเบอร์)
-      if (hasPhoneChange) {
-        const digitsOnly = phone.replace(/\D+/g, '')
-        if (digitsOnly.length > 0 && (digitsOnly.length < 4 || digitsOnly.length > 10)) {
-          Swal.showValidationMessage('กรุณากรอกเบอร์ 4–10 หลัก')
-          return false
+      if (changedPhone) {
+        const d = phone.replace(/\D+/g,'')
+        if (d.length > 0 && (d.length < 4 || d.length > 10)) {
+          Swal.showValidationMessage('กรุณากรอกเบอร์ 4–10 หลัก'); return false
         }
       }
-
-      return { phone, file }
+      return { mergedThaiName, phone, file, changedThai, changedPhone }
     }
   })
-  if (!isConfirmed) return
-  const { phone, file } = value
 
+  if (!isConfirmed) return
   try {
+    const { mergedThaiName, phone, file, changedThai, changedPhone } = value
     const fd = new FormData()
-    if (phone !== (info.value.phone || '')) fd.append('phone', phone)
-    if (file) fd.append('signature', file) // ฝั่งหลังบ้านอ่านจาก field 'signature'
+    if (changedThai)  fd.append('thaiName', mergedThaiName)
+    if (changedPhone) fd.append('phone', phone)
+    if (file)         fd.append('signature', file)
 
     const res = await axios.patch(`${API_BASE}/api/users/profile`, fd, {
       headers: { 'Content-Type': 'multipart/form-data' },
       withCredentials: true
     })
+    if (!res.data?.success || !res.data?.user) throw new Error(res.data?.message || 'อัปเดตไม่สำเร็จ')
 
-    if (res.data?.success && res.data?.user) {
-      info.value.phone = res.data.user.phone || ''
-      info.value.signaturePath = res.data.user.signaturePath || res.data.user.signature || ''
-      info.value.signature = info.value.signaturePath
-      sigBust.value = Date.now()
-      Swal.fire('บันทึกสำเร็จ', '', 'success')
-    } else {
-      throw new Error(res.data?.message || 'อัปเดตไม่สำเร็จ')
-    }
+    info.value.phone         = res.data.user.phone || ''
+    info.value.signaturePath = res.data.user.signaturePath || res.data.user.signature || ''
+    info.value.signature     = info.value.signaturePath
+    info.value.thaiName      = res.data.user.thaiName || res.data.user.thai_name || ''
+    sigBust.value = Date.now()
+
+    Swal.fire({ icon:'success', title:'บันทึกสำเร็จ', showConfirmButton:false, timer:1200 })
   } catch (e) {
     Swal.fire('เกิดข้อผิดพลาด', e.response?.data?.message || e.message, 'error')
   }
@@ -525,7 +559,8 @@ onMounted(async () => {
   picture: resMe.data.user.picture,
   phone: resMe.data.user.phone || '',
   signaturePath: resMe.data.user.signaturePath || resMe.data.user.signature || '',
-  signature: resMe.data.user.signature || ''
+  signature: resMe.data.user.signature || '',
+  thaiName: resMe.data.user.thaiName || resMe.data.user.thai_name || '' 
 }
 
     } else {
@@ -1003,7 +1038,7 @@ function openDetail(hist) {
 <style scoped>
 
 .probody{
-    background-color: #ffffff;
+  background-color: #dbe9f4;
     width: 100%;
     height: 100vh;
     padding: 20px;
@@ -1011,16 +1046,19 @@ function openDetail(hist) {
     overflow-x: hidden;
 }
 
-.proinfo{
-  position: relative;           /* << เพิ่มบรรทัดนี้ */
-  background-color: rgb(235, 235, 235);
+.proinfo {
+  position: relative;
+  background-color: white; /* เหมือน staff */
   border-radius: 20px;
-  padding: 30px 40px;
+  padding: 30px 60px 30px 40px;
   display: flex;
   align-items: center;
   gap: 2rem;
   width: 100%;
   min-height: 160px;
+  overflow-x: auto;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 .profile-img {
   height: 120px;
@@ -1040,8 +1078,15 @@ function openDetail(hist) {
   border: 1px dashed #cbd5e1; background: #f8fafc; border-radius: 8px; padding: 6px;
 }
 .signature-empty{ color:#94a3b8; font-style: italic; }
+.profile-scroll-container {
+  overflow-x: auto;
+  padding: 0 70px;
+  box-sizing: border-box;
+}
+
 .profile-container {
-  padding: 1rem 70px;
+  padding: 1rem 0;
+  min-width: 360px;
 }
 .card-edit-btn{
   position: absolute;
@@ -1309,6 +1354,11 @@ function openDetail(hist) {
     margin-left: 0;
     margin-right: 0;
   }
+}
+@media (max-width: 768px) {
+  .profile-scroll-container { padding: 0 15px; }
+  .profile-container { padding: 1rem 15px; }
+  .proinfo { width: 100%; max-width: 100%; padding: 20px; }
 }
 
 .notification-dropdown { position: absolute; right: 0; top: 38px; background: #fff; border-radius: 18px 0 18px 18px; box-shadow: 0 8px 24px 0 rgba(27, 50, 98, 0.14), 0 2px 4px 0 rgba(33, 125, 215, 0.06); min-width: 330px; max-width: 370px; max-height: 420px; overflow-y: auto; z-index: 1002; padding: 0; border: none; animation: fadeDown 0.22s; }

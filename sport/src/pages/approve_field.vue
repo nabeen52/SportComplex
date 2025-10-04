@@ -10,7 +10,7 @@
         <router-link to="/home_admin" exact-active-class="active"><i class="pi pi-megaphone"></i> แก้ไขข่าว</router-link>
         <router-link to="/edit_field" active-class="active"><i class="pi pi-map-marker"></i> แก้ไขสนาม</router-link>
         <router-link to="/edit_equipment" active-class="active"><i class="pi pi-clipboard"></i> แก้ไขอุปกรณ์ </router-link>
-        <router-link to="/step" active-class="active"><i class="pi pi-sitemap"></i> แก้ไขขั้นตอนการอนุมัติ </router-link>
+        <!-- <router-link to="/step" active-class="active"><i class="pi pi-sitemap"></i> แก้ไขขั้นตอนการอนุมัติ </router-link> -->
         <router-link to="/booking_field_admin" active-class="active"><i class="pi pi-map-marker"></i> จองสนาม</router-link>
         <router-link to="/approve_field" active-class="active"><i class="pi pi-verified"></i> อนุมัติ</router-link>
         <!-- <router-link to="/return_admin" active-class="active"><i class="pi pi-box"></i> รับคืนอุปกรณ์ </router-link> -->
@@ -308,10 +308,30 @@ _buildFieldPdfNode(b, secretary_choice = {}, reason_admin = '', secThaiName = ''
     padding: '0',
   });
 
+  // ✅ รวม room_request จากหลายแหล่งให้แน่ใจว่ามีค่า
+  const pick = (...vals) => {
+    for (const v of vals) {
+      const s = (v ?? '').toString().trim();
+      if (s) return s;
+    }
+    return '';
+  };
+  const enriched = {
+    ...b,
+    room_request: pick(
+      b?.room_request,
+      b?.roomRequest,
+      b?.form?.room_request,
+      b?.form?.roomRequest,
+      b?.booking_field?.room_request,
+      b?.booking_field?.roomRequest
+    )
+  };
+
   // ใช้เทมเพลตเดียวกับพรีวิว
-  const reqKey = b.user_id || b.id_form || '';
+  const reqKey = enriched.user_id || enriched.id_form || '';
   const reqSig = this.userSigMap?.[reqKey] || '';
-  holder.innerHTML = buildFieldFormPreviewV2(b, secThaiName, secSignUrl, reqSig);
+  holder.innerHTML = buildFieldFormPreviewV2(enriched, secThaiName, secSignUrl, reqSig);
 
   // === เติมค่าที่เลือกใน dialog: “เลขานุการศูนย์กีฬา > อื่นๆ” ===
   const chk = holder.querySelector('#sec_other_chk');
@@ -324,19 +344,13 @@ _buildFieldPdfNode(b, secretary_choice = {}, reason_admin = '', secThaiName = ''
   if (chk) chk.checked = wantOther;
 
   if (box) {
-    // ให้มีค่าแน่ ๆ: ถ้าติ๊กแต่ไม่กรอก ให้เป็น '-'
     const text = wantOther ? ((reason_admin || '').trim() || '-') : '';
-
-    // input/textarea
     if ('value' in box) box.value = text;
-
-    // contenteditable div
     const isCE = box.isContentEditable || box.getAttribute('contenteditable') === 'true';
     if (isCE) {
       box.textContent = text;
       try { box.setAttribute('data-ph', ''); } catch (_){}
     } else if (!('value' in box)) {
-      // element ธรรมดา
       box.textContent = text;
     }
   }
@@ -411,7 +425,7 @@ _buildEquipmentCtxFromGroup(group) {
 
 
 
-_freezeFormForPdf(root) {
+_freezeFormForPdf(root) { 
   if (!root) return;
 
   // checkbox -> ☑/☐
@@ -454,13 +468,12 @@ _freezeFormForPdf(root) {
     inp.replaceWith(span);
   });
 
-  // NEW: contenteditable / .mfu-ta -> ทำเป็น div นิ่ง
+  // contenteditable / .mfu-ta -> ทำเป็น div นิ่ง
   root.querySelectorAll('[contenteditable="true"], .mfu-ta').forEach(el => {
     const text = (el.textContent || '').trim();
     const repl = document.createElement('div');
     repl.className = 'pdf-fake-input';
 
-    // ช่อง 'อื่นๆ' ให้แสดง "ข้อความล้วน" ไม่มีกล่อง
     const plain = (el.id === 'sec_other_reason' || el.id === 'head_other_reason');
 
     if (plain) {
@@ -985,6 +998,7 @@ async downloadBookingPdf(target) {
   },
 
    // โหลด/จัดกลุ่มข้อมูลที่ต้องอนุมัติ (Field + Equipment)
+// โหลด/จัดกลุ่มข้อมูลที่ต้องอนุมัติ (Field + Equipment)
 async fetchAndGroup() {
   try {
     // 1) users map
@@ -1046,6 +1060,12 @@ async fetchAndGroup() {
         name_activity: activityName,
         restroom: h.restroom || "",
 
+        // ✅ ห้องที่ต้องการใช้งาน (ดึงจากหลายแหล่ง)
+        room_request:
+          (h.room_request ?? h.roomRequest ??
+           h.form?.room_request ?? h.form?.roomRequest ??
+           h.booking_field?.room_request ?? h.booking_field?.roomRequest ?? ""),
+
         attachment: Array.isArray(h.attachment) ? h.attachment : [],
         fileName: Array.isArray(h.fileName) ? h.fileName : [],
         bookingPdfUrl: h.bookingPdfUrl || h.booking_pdf_url || null,
@@ -1074,33 +1094,36 @@ async fetchAndGroup() {
       new Map(bookings.map(b => [String(b.id), b])).values()
     );
 
-    // 5) ยังไม่อนุมัติ
-    const pendingOnlyRaw = bookingsClean.filter(b => !this.isFullyApproved(b));
+    // 5) ยังไม่อนุมัติ + ตัด “Admin Quick Booking”
+    const pendingOnlyRaw = bookingsClean
+      .filter(b => !this.isFullyApproved(b))
+      .filter(b => {
+        const rq = String(b.requester || b.username_form || '').trim().toLowerCase();
+        return rq !== 'admin quick booking';
+      });
 
-    // 6) คัดเฉพาะที่ควรให้โผล่ในหน้า admin (REQUIRED_ROLE = 'admin')
+    // 6) คัดเฉพาะที่ควรโผล่ในหน้า admin (REQUIRED_ROLE = 'admin')
     const REQUIRED_ROLE = 'admin';
-const pendingOnly = pendingOnlyRaw.filter(b => {
-  if (b.type === 'field') {
-    // สนาม: ตามเดิม (ให้เห็นเฉพาะที่มี role admin ใน step)
-    return this.hasRoleInStep(b, REQUIRED_ROLE);
-  }
+    const pendingOnly = pendingOnlyRaw.filter(b => {
+      if (b.type === 'field') {
+        // สนาม: มี role admin ใน step
+        return this.hasRoleInStep(b, REQUIRED_ROLE);
+      }
 
-  // อุปกรณ์:
-  const isSingle = this.isSingleDayItem(b);
-  if (!isSingle) {
-    // หลายวัน: ตามเดิม (มี admin ใน step)
-    return this.hasRoleInStep(b, REQUIRED_ROLE);
-  }
+      // อุปกรณ์:
+      const isSingle = this.isSingleDayItem(b);
+      if (!isSingle) {
+        // หลายวัน: มี admin ใน step
+        return this.hasRoleInStep(b, REQUIRED_ROLE);
+      }
 
-  // ยืมวันเดียว: แสดงเมื่อ "staff อนุมัติแล้ว" และ "admin ยังไม่อนุมัติ"
-  const hasStaff = this.hasRoleIn(b, 'staff');
-  const hasAdmin = this.hasRoleIn(b, 'admin');
-  const staffOk  = this.isStaffApprovedInStep(b);
-  const adminWait = this.isAdminNotApprovedInStep(b);
-
-  // (สำคัญ) ไม่ต้องเช็ค status ว่า pending เสมอ — บางแบ็กเอนด์เซ็ต approved ไปก่อน
-  return hasStaff && hasAdmin && staffOk && adminWait;
-});
+      // ยืมวันเดียว: staff อนุมัติแล้ว + admin ยังไม่อนุมัติ
+      const hasStaff = this.hasRoleIn(b, 'staff');
+      const hasAdmin = this.hasRoleIn(b, 'admin');
+      const staffOk  = this.isStaffApprovedInStep(b);
+      const adminWait = this.isAdminNotApprovedInStep(b);
+      return hasStaff && hasAdmin && staffOk && adminWait;
+    });
 
     // 7) จัดกลุ่ม
     const fieldGroups = pendingOnly
@@ -1152,6 +1175,7 @@ const pendingOnly = pendingOnlyRaw.filter(b => {
     console.error('โหลด/จัดกลุ่มข้อมูลอนุมัติไม่สำเร็จ:', err);
   }
 },
+
 
 async approveAll() {
   const targets = (this.filteredGrouped || []).filter(g =>
@@ -2396,7 +2420,7 @@ function formatDate(date) {
 
   try {
     if (item.type === 'field') {
-      // ------------------ FIELD (แบบใหม่) --------------------
+     // ------------------ FIELD (แบบใหม่) --------------------
       const res = await axios.get(`${API_BASE}/api/booking_field?id=${mainBookingId}`);
       let data;
       if (Array.isArray(res.data)) {
@@ -2951,52 +2975,51 @@ function buildFieldFormPreviewV2(
 
   const hasU = [b?.turnon_air,b?.turnoff_air,b?.turnon_lights,b?.turnoff_lights,b?.other,b?.restroom]
     .some(v => String(v ?? '').trim() && String(v ?? '').trim() !== '-');
-  const hasF = [b?.amphitheater,b?.need_equipment]
+
+  // ✅ รวม room_request เข้าไปด้วย เพื่อให้ข้อ 3 “เลือก” อัตโนมัติเมื่อมีการกรอกห้อง
+  const hasF = [b?.amphitheater,b?.need_equipment,b?.room_request]
     .some(v => String(v ?? '').trim() && String(v ?? '').trim() !== '-');
 
   const u = ynPack(b?.utilityRequest,  hasU ? true : undefined);
   const f = ynPack(b?.facilityRequest, hasF ? true : undefined);
 
   // 2.2 สุขา – ค่าว่างให้ถือว่า "ไม่ต้องการใช้งาน"
-const restroomText = (() => {
-  // เอา restroom_text มาก่อน ถ้าไม่มีค่อยใช้ restroom
-  const rawInput = (b?.restroom_text ?? b?.restroom ?? '').toString().trim();
-  const raw = rawInput.toLowerCase();
-
-  // ค่าว่าง -> ไม่ต้องการใช้งาน
-  if (!raw) return 'ไม่ต้องการใช้งาน';
-
-  // ต้องการใช้งาน
-  if (['yes','true','1','y','use','ใช้','ใช้งาน','ต้องการ','ต้องการใช้งาน'].includes(raw)) {
-    return 'ต้องการใช้งาน';
-  }
-  // ไม่ต้องการใช้งาน (รวม no/false/0/ข้อความไทย)
-  if (['no','false','0','n','not use','ไม่ใช้','ไม่ใช้งาน','ไม่ต้องการ','ไม่ต้องการใช้งาน'].includes(raw)) {
-    return 'ไม่ต้องการใช้งาน';
-  }
-  // ค่าอื่น ๆ แสดงตามที่ส่งมา
-  return rawInput;
-})();
-
+  const restroomText = (() => {
+    const rawInput = (b?.restroom_text ?? b?.restroom ?? '').toString().trim();
+    const raw = rawInput.toLowerCase();
+    if (!raw) return 'ไม่ต้องการใช้งาน';
+    if (['yes','true','1','y','use','ใช้','ใช้งาน','ต้องการ','ต้องการใช้งาน'].includes(raw)) return 'ต้องการใช้งาน';
+    if (['no','false','0','n','not use','ไม่ใช้','ไม่ใช้งาน','ไม่ต้องการ','ไม่ต้องการใช้งาน'].includes(raw)) return 'ไม่ต้องการใช้งาน';
+    return rawInput;
+  })();
 
   // ใช้เฉพาะช่อง 2.1
-const lightsText = (() => {
-  const on  = (b?.turnon_lights ?? '').toString().trim();
-  const off = (b?.turnoff_lights ?? '').toString().trim();
-  const empty = (s) => !s || s === '-';
-  if (empty(on) && empty(off)) return 'ไม่ต้องการใช้งาน';
-  return `ตั้งแต่ ${fmtTime(on)} - ${fmtTime(off)}`;
-})();
+  const lightsText = (() => {
+    const on  = (b?.turnon_lights ?? '').toString().trim();
+    const off = (b?.turnoff_lights ?? '').toString().trim();
+    const empty = (s) => !s || s === '-';
+    if (empty(on) && empty(off)) return 'ไม่ต้องการใช้งาน';
+    return `ตั้งแต่ ${fmtTime(on)} - ${fmtTime(off)}`;
+  })();
 
-const showAmphiRow = (() => {
-  const name = (b?.name ?? '').toString();
-  // ปรับให้ทนต่อช่องว่าง/รูปแบบพิมพ์
-  const norm = name.replace(/\s+/g, '');
-  return /เฉลิมพระเกียรติ?72พรรษา/.test(norm);
-})();
-
+  const showAmphiRow = (() => {
+    const name = (b?.name ?? '').toString();
+    const norm = name.replace(/\s+/g, '');
+    return /เฉลิมพระเกียรติ?72พรรษา/.test(norm);
+  })();
 
   const secNow = secApprovedAt ? new Date(secApprovedAt) : new Date();
+
+  // ✅ เตรียมแถว “ห้องที่ต้องการใช้งาน” โดยดึงจาก form_field (b.room_request)
+  const roomRowLabelWhenAmphi = '3.3 ห้องที่ต้องการใช้งาน';
+  const roomRowLabelNoAmphi   = '3.2 ห้องที่ต้องการใช้งาน';
+  const roomRow = (label) => `
+    <tr>
+      <td class="lbl"><b>${label}</b></td>
+      <td class="colon">:</td>
+      <td class="val">${dash(b?.room_request)}</td>
+    </tr>
+  `;
 
   return `
   <div class="mfu-form">
@@ -3042,20 +3065,9 @@ const showAmphiRow = (() => {
       .mfu-sign.mfu-signline .dots{ height:1.15em; border-bottom:1px dotted #888; position:relative; }
       .mfu-sign.mfu-signline .sigimg{ position:absolute; top:-34px; left:0; right:0; margin:0 auto; max-height:48px; width:auto; opacity:.95; pointer-events:none; }
       .mfu-sign.mfu-signline .name,.mfu-sign.mfu-signline .role{ grid-column:2; text-align:center; display:block; margin-top:6px; }
-      .mfu-sign.mfu-signline .date{ 
-        grid-column:2; 
-        text-align:center; 
-        display:block; 
-        margin-top:6px; 
-        font-size:11px;  
-      }
-
+      .mfu-sign.mfu-signline .date{ grid-column:2; text-align:center; display:block; margin-top:6px; font-size:11px; }
       .mfu-box .row.center{ justify-content: center; }
-      .mfu-box .row.center .date{ 
-        text-align: center; 
-        display: inline-block; 
-        font-size:11px;  
-      }
+      .mfu-box .row.center .date{ text-align: center; display: inline-block; font-size:11px; }
       .mfu-box .paren-row{ justify-content: center; }
       .mfu-box .sig-row.spacer{ height:56px; }
       .limit-3lines{ max-height: calc(1.6em * 3); overflow: hidden; }
@@ -3074,8 +3086,8 @@ const showAmphiRow = (() => {
 
     <div class="mfu-meta">
       <div><b>ที่ อว.</b> ${d(b?.aw)}</div>
-      <div><b>วันที่</b> ${fmtDate(b?.date)}</div>
-      <div><b>โทร</b> ${d(b?.tel)}</div>
+      <div style = "padding-left: 50px"><b>วันที่</b> ${fmtDate(b?.date)}</div>
+      <div style = "padding-left: 50px"><b>โทร</b> ${d(b?.tel)}</div>
     </div>
 
     <div class="mfu-sec">
@@ -3124,9 +3136,7 @@ const showAmphiRow = (() => {
         </tr>
       </table>
 
-      <div class="mfu-note">
-        *ต้องได้รับการอนุมัติจากรองอธิการบดีผู้กำกับดูแล และสำเนาเอกสารถึงฝ่ายอนุรักษ์พลังงาน
-      </div>
+
     </div>
 
     <div class="mfu-sec">
@@ -3147,12 +3157,14 @@ const showAmphiRow = (() => {
             <td class="colon">:</td>
             <td class="val">${dash(b?.need_equipment)}</td>
           </tr>
+          ${roomRow(roomRowLabelWhenAmphi)}
         ` : `
           <tr>
             <td class="lbl"><b>3.1 อุปกรณ์กีฬา (โปรดระบุรายการและจำนวน)</b></td>
             <td class="colon">:</td>
             <td class="val">${dash(b?.need_equipment)}</td>
           </tr>
+          ${roomRow(roomRowLabelNoAmphi)}
         `}
       </table>
 
@@ -3191,15 +3203,15 @@ const showAmphiRow = (() => {
                data-ph="โปรดระบุ"
                oninput="(function(el){
                  var h=el.innerHTML;
-                 h=h.replace(/<div><br><\/div>/gi,'\n')
-                    .replace(/<div>/gi,'\n')
+                 h=h.replace(/<div><br><\/div>/gi,'\\n')
+                    .replace(/<div>/gi,'\\n')
                     .replace(/<\/div>/gi,'')
-                    .replace(/<br\s*\/?>/gi,'\n')
+                    .replace(/<br\\s*\\/?>(?=.)/gi,'\\n')
                     .replace(/&nbsp;/gi,' ')
                     .replace(/<[^>]+>/g,'');
-                 h=h.replace(/\r/g,'');
-                 var lines=h.split('\n').slice(0,3);
-                 var text=lines.join('\n');
+                 h=h.replace(/\\r/g,'');
+                 var lines=h.split('\\n').slice(0,3);
+                 var text=lines.join('\\n');
                  if(text.length>255) text=text.slice(0,255);
                  if(el.innerText!==text){
                    el.innerText=text;
@@ -3207,7 +3219,7 @@ const showAmphiRow = (() => {
                    var s=window.getSelection(); s.removeAllRanges(); s.addRange(r);
                  }
                })(this)"
-               onkeydown="if(event.key==='Enter'){var v=(this.innerText||'').replace(/\r/g,''); if(v.split('\n').length>=3){event.preventDefault();}}"
+               onkeydown="if(event.key==='Enter'){var v=(this.innerText||'').replace(/\\r/g,''); if(v.split('\\n').length>=3){event.preventDefault();}}"
                onpaste="setTimeout(()=>{this.dispatchEvent(new Event('input'));},0)"></div>
         </div>
 
@@ -3225,23 +3237,22 @@ const showAmphiRow = (() => {
         </div>
 
         <div class="row">
-  <label class="chk">
-    <input type="checkbox" id="head_other_chk" disabled />
-    <span>อื่นๆ :</span>
-  </label>
+          <label class="chk">
+            <input type="checkbox" id="head_other_chk" disabled />
+            <span>อื่นๆ :</span>
+          </label>
 
-  <textarea id="head_other_reason"
-            class="mfu-input limit-3lines"
-            placeholder="โปรดระบุ"
-            rows="1"
-            disabled
-            style="resize:none;"
-            oninput="var v=this.value.replace(/\r/g,''); v=v.split('\n').slice(0,3).join('\n'); if(v.length>255)v=v.slice(0,255); if(v!==this.value)this.value=v;"
-            onkeydown="if(event.key==='Enter' && (this.value.split('\n').length>=3)){event.preventDefault();}"
-            onpaste="setTimeout(()=>{var v=this.value.replace(/\r/g,''); v=v.split('\n').slice(0,3).join('\n'); if(v.length>255)v=v.slice(0,255); if(v!==this.value)this.value=v;},0)">
-  </textarea>
-</div>
-
+          <textarea id="head_other_reason"
+                    class="mfu-input limit-3lines"
+                    placeholder="โปรดระบุ"
+                    rows="1"
+                    disabled
+                    style="resize:none;"
+                    oninput="var v=this.value.replace(/\\r/g,''); v=v.split('\\n').slice(0,3).join('\\n'); if(v.length>255)v=v.slice(0,255); if(v!==this.value)this.value=v;"
+                    onkeydown="if(event.key==='Enter' && (this.value.split('\\n').length>=3)){event.preventDefault();}"
+                    onpaste="setTimeout(()=>{var v=this.value.replace(/\\r/g,''); v=v.split('\\n').slice(0,3).join('\\n'); if(v.length>255)v=v.slice(0,255); if(v!==this.value)this.value=v;},0)">
+          </textarea>
+        </div>
 
         <div class="row sig-row spacer"></div>
         <div class="row paren-row"><span class="paren">(</span><span style="flex:1;text-align:center;"></span><span class="paren">)</span></div>
@@ -3250,6 +3261,7 @@ const showAmphiRow = (() => {
     </div>
   </div>`;
 }
+
 
 
 // === Equipment approve preview (HTML แสดงใน Swal) ===
@@ -3360,7 +3372,8 @@ function buildEquipmentApprovePreviewHTML(ctx) {
     </div>
 
     <div class="date" style="margin-top:30px">วันที่ ${dateTH}</div>
-    <div style="margin-top:20px">สำหรับผู้ขอใช้บริการ</div>
+
+    <div style="margin-top:20px; font-weight: bold; ">สำหรับผู้ขอใช้บริการ</div>
 
     <section class="eqp-section eqp-section--par">
       <div class="eqp-par">
@@ -3372,6 +3385,14 @@ function buildEquipmentApprovePreviewHTML(ctx) {
         ระหว่างวันที่ ${esc(sinceStr)} ถึงวันที่ ${esc(uptoStr)}
       </div>
     </section>
+
+    <div style = 'font-size: 15px'>
+      <p>โดยมีรายการดังต่อไปนี้</p>
+    </div>
+
+    <div style = 'font-size: 15px'>
+      <p><b>สถานที่มารับของ:</b> สำนักงานอาคารกีฬาอเนกประสงค์ (ข้างสนามแบดมินตัน)</p>
+    </div>
 
     <section class="eqp-section eqp-section--table">
       <table class="eqp-table">

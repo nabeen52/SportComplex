@@ -24,6 +24,8 @@
       @click="toggleSidebar"
     ></div>
 
+    
+
     <div class="main">
       <!-- ✅ Topbar (responsive, ไม่ทับ, ไม่มีปุ่ม ×) -->
       <header class="topbar">
@@ -337,7 +339,7 @@ function buildEquipmentHandoverPDFHTML(ctx) {
     </div>
 
     <div class="date" style="margin-top:30px">วันที่ ${todayDateOnly}</div>
-    <div style="margin-top:20px">สำหรับผู้ขอใช้บริการ</div>
+    <div style="margin-top:20px; font-weight: bold">สำหรับผู้ขอใช้บริการ</div>
 
     <section class="eqp-section eqp-section--par">
       <div class="eqp-par" style="font-size:16px; line-height:1.75; text-indent:2em; word-break:break-word; margin:12px 0 18px;">
@@ -349,6 +351,14 @@ function buildEquipmentHandoverPDFHTML(ctx) {
         ระหว่างวันที่ ${esc(sinceStr)} ถึงวันที่ ${esc(uptoStr)}
       </div>
     </section>
+
+    <div style = 'font-size: 15px'>
+      <p>โดยมีรายการดังต่อไปนี้</p>
+    </div>
+
+    <div style = 'font-size: 15px'>
+      <p><b>สถานที่มารับของ:</b> สำนักงานอาคารกีฬาอเนกประสงค์ (ข้างสนามแบดมินตัน)</p>
+    </div>
 
     <section class="eqp-section eqp-section--table">
       <table class="eqp-table" style="width:100%; border-collapse:collapse; table-layout:fixed; font-size:15px; margin:14px 0 22px;">
@@ -410,7 +420,7 @@ function buildEquipmentHandoverPDFHTML(ctx) {
       </div>
 
       <div style="margin-top:20px">
-        *หมายเหตุ หากอุปกรณ์เกิดการชำรุดเสียหายในระหว่างที่ผู้ยืมเป็นผู้รับผิดชอบ ผู้ยืมจะต้องชดใช้ค่าเสียหายที่เกิดขึ้นทั้งหมด
+        *หมายเหตุ หากอุปกรณ์เกิดการชำรุดสูญหายในระหว่างที่ผู้ยืมเป็นผู้รับผิดชอบ ผู้ยืมจะต้องชดใช้ค่าเสียหายที่เกิดขึ้นทั้งหมด
       </div>
     </div>
   </div>`;
@@ -2103,7 +2113,7 @@ function buildEquipmentApprovePreviewHTML(ctx) {
     </div>
 
     <div class="date" style="margin-top:30px">วันที่ ${todayDateOnly}</div>
-    <div style="margin-top:20px">สำหรับผู้ขอใช้บริการ</div>
+    <div style="margin-top:20px; font-weight: bold">สำหรับผู้ขอใช้บริการ</div>
 
     <section class="eqp-section eqp-section--par">
       <div class="eqp-par">
@@ -2115,6 +2125,14 @@ function buildEquipmentApprovePreviewHTML(ctx) {
         ระหว่างวันที่ ${esc(sinceStr)} ถึงวันที่ ${esc(uptoStr)}
       </div>
     </section>
+
+    <div style = 'font-size: 15px'>
+      <p>โดยมีรายการดังต่อไปนี้ </p>
+    </div>
+
+    <div style = 'font-size: 15px'>
+      <p><b>สถานที่มารับของ:</b> สำนักงานอาคารกีฬาอเนกประสงค์ (ข้างสนามแบดมินตัน)</p>
+    </div>
 
     <section class="eqp-section eqp-section--table">
       <table class="eqp-table">
@@ -2170,7 +2188,7 @@ function buildEquipmentApprovePreviewHTML(ctx) {
     </div>
 
     <div style="margin-top:20px">
-      *หมายเหตุ หากอุปกรณ์เกิดการชำรุดเสียหายในระหว่างที่ผู้ยืมเป็นผู้รับผิดชอบผู้ยืมจะต้องชดใช้ค่าเสียหายที่เกิดขึ้นทั้งหมด
+      *หมายเหตุ หากอุปกรณ์เกิดการชำรุดสูญหายในระหว่างที่ผู้ยืมเป็นผู้รับผิดชอบ ผู้ยืมจะต้องชดใช้ค่าเสียหายที่เกิดขึ้นทั้งหมด
     </div>
   </div>`;
 }
@@ -2256,7 +2274,7 @@ function buildEquipmentReturnPreviewHTML(ctx) {
     </div>
 
     <div class="date" style="margin-top:30px">วันที่ ${todayDateOnly}</div>
-    <div style="margin-top:20px">สำหรับผู้ขอใช้บริการ</div>
+    <div style="margin-top:20px; font-weight: bold">สำหรับผู้ขอใช้บริการ</div>
 
     <section class="eqp-section eqp-section--par">
       <div class="eqp-par">
@@ -2268,6 +2286,14 @@ function buildEquipmentReturnPreviewHTML(ctx) {
         ระหว่างวันที่ ${esc(sinceStr)} ถึงวันที่ ${esc(uptoStr)}
       </div>
     </section>
+
+    <div style = 'font-size: 15px'>
+      <p>โดยมีรายการดังต่อไปนี้</p>
+    </div>
+
+    <div style = 'font-size: 15px'>
+      <p><b>สถานที่มารับของ:</b> สำนักงานอาคารกีฬาอเนกประสงค์ (ข้างสนามแบดมินตัน)</p>
+    </div>
 
     <section class="eqp-section eqp-section--table">
       <table class="eqp-table">
@@ -2324,8 +2350,7 @@ function buildEquipmentReturnPreviewHTML(ctx) {
     </div>
 
     <div style="margin-top:20px">
-      *หมายเหตุ หากอุปกรณ์เกิดการชำรุดเสียหายในระหว่างที่ผู้ยืมเป็นผู้รับผิดชอบ
-      ผู้ยืมจะต้องชดใช้ค่าเสียหายที่เกิดขึ้นทั้งหมด
+      *หมายเหตุ หากอุปกรณ์เกิดการชำรุดสูญหายในระหว่างที่ผู้ยืมเป็นผู้รับผิดชอบ ผู้ยืมจะต้องชดใช้ค่าเสียหายที่เกิดขึ้นทั้งหมด
     </div>
 
     <div id="returnStatusBox" style="margin-top:14px; text-align:center;">

@@ -263,7 +263,7 @@
                 placeholder="วัน/เดือน/ปี"
               />
 
-              <small class="note-text">* กรุณาจองก่อนใช้งานจริง 5 วัน</small>
+    
             </div>
 
             <!-- วันที่และเวลาที่มารับของ -->
@@ -306,7 +306,7 @@
             <!-- แนบไฟล์ -->
             <div class="form-row">
               <label>
-                แนบไฟล์
+                แนบไฟล์ (รายละเอียดโครงการ)
                 <span v-if="touched && showError && selectedFiles.length === 0" style="color:red">*</span>
               </label>
 
@@ -330,6 +330,7 @@
 
                   <div class="accepted-file-info">
                     * รองรับไฟล์ <span class="file-ext">.png, .jpg, .jpeg, .pdf, .xls, .xlsx, .doc, .docx</span> เท่านั้น
+                    ไม่บังคับแนบไฟล์
                   </div>
                 </div>
 
@@ -663,10 +664,8 @@ function onPhoneInput(e) {
 }
 
 /* ===== บังคับจองล่วงหน้าอย่างน้อย 5 วัน ===== */
-const MIN_LEAD_DAYS = 5
 const minStartDate = ref(new Date())
-minStartDate.value.setHours(0,0,0,0)
-minStartDate.value.setDate(minStartDate.value.getDate() + MIN_LEAD_DAYS)
+ minStartDate.value.setHours(0,0,0,0)
 
 /* dpRange helpers */
 const dpRangeStart = computed(() =>
@@ -694,7 +693,6 @@ function validateFields() {
   if (!form.location) fields['location'] = true
   if (!form.start_date) fields['start_date'] = true
   if (!form.end_date) fields['end_date'] = true
-  if (!selectedFiles.value.length) fields['file'] = true
   if (!form.receive_date) fields['receive_date'] = true
   if (!form.receive_time) fields['receive_time'] = true
 
@@ -800,10 +798,10 @@ function closeNotifications() {
 
 async function submitBooking() {
   touched.value = true
-  if (!validateFields() || !validateBeforeSubmit()) {
-    Swal.fire('กรุณากรอกข้อมูลให้ครบถ้วน', '', 'warning')
-    return
-  }
+ if (!validateFields()) {
+  Swal.fire('กรุณากรอกข้อมูลให้ครบถ้วน', '', 'warning')
+  return
+ }
 
   const items = Object.entries(selectedQuantities).map(([name, amount]) => ({
     item_name: name,
@@ -823,6 +821,9 @@ async function submitBooking() {
   try {
     const res = await axios.post(`${API_BASE}/api/booking_equipment`, bookingPayload)
     const booking = res.data?.booking || res.data
+    // ✅ ล้างข้อมูล auto-save เก่าหลังส่งสำเร็จ
+localStorage.removeItem('equipmentFormData')
+
     localStorage.setItem('equipmentFormData', JSON.stringify({
       form: {
         ...form,
@@ -985,6 +986,13 @@ onMounted(async () => {
       console.error('โหลดชื่อผู้ใช้ไม่สำเร็จ', err)
     }
   }
+// ✅ ตั้งค่าวันเริ่มต้นเริ่มที่วันนี้เฉพาะตอนยังไม่เคยกรอกเท่านั้น
+if (!form.start_date || !form.end_date) {
+  const today = new Date()
+  dpRange.value = [today, today]
+  form.start_date = toISO(today)
+  form.end_date = toISO(today)
+}
 
   // เซ็ตค่าเริ่มต้นของปฏิทินจากค่าใน form (ถ้ามี)
   const s = safeDate(form.start_date)
@@ -1200,7 +1208,6 @@ watch(dpReceive, (d) => {
   form.receive_date = (!d || isNaN(d)) ? '' : toISO(d)
 })
 </script>
-
 <style scoped>
 .headStepper {
   position: sticky;

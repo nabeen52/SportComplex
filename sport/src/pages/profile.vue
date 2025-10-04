@@ -1,6 +1,6 @@
 <template>
   <div class="layout">
-    <!-- Sidebar ทางซ้าย -->
+    <!-- Sidebar ซ้าย -->
     <aside class="sidebar" :class="{ closed: isSidebarClosed }">
       <div class="sidebar-header">
         <img src="/img/logo.png" alt="logo" class="logo" />
@@ -14,35 +14,39 @@
       </nav>
     </aside>
 
+    <!-- overlay แค่ตอนมือถือ -->
     <div
-      v-if="!isSidebarClosed"
+      v-if="!isSidebarClosed && isMobile"
       class="sidebar-overlay"
-      @click="toggleSidebar"
+      @click="isSidebarClosed = true"
     ></div>
 
     <!-- Content -->
     <div class="main">
+      <!-- Topbar -->
       <header class="topbar">
         <button class="menu-toggle" @click="toggleSidebar">☰</button>
 
         <div class="topbar-actions">
-          <!-- Notification bell -->
-          <div>
+          <!-- กระดิ่งแจ้งเตือน -->
+          <div style="position: relative;">
             <div
               v-if="showNotifications"
               class="notification-backdrop"
               @click="closeNotifications"
             ></div>
+
             <button class="notification-btn" @click="toggleNotifications">
               <i class="pi pi-bell"></i>
               <span v-if="unreadCount > 0" class="badge">{{ unreadCount }}</span>
             </button>
+
             <div v-if="showNotifications" class="notification-dropdown">
               <ul>
                 <li
                   v-for="(noti, idx) in notifications.slice(0, 10)"
                   :key="noti.id || idx"
-                  :class="['notification-item', noti.type || '', { unread: idx === 0 }]"
+                  :class="['notification-item', noti.type || '', { unread: noti.timestamp > lastSeenTimestamp }]"
                 >
                   {{ noti.message }}
                 </li>
@@ -57,43 +61,44 @@
             <span v-if="products.length > 0" class="badge">{{ products.length }}</span>
           </router-link>
 
-          <!-- Profile link -->
+          <!-- Profile -->
           <router-link to="/profile"><i class="pi pi-user"></i></router-link>
         </div>
       </header>
 
       <!-- Body -->
       <div class="probody">
-        <!-- Profile -->
         <div>
           <h1 style="padding-left: 50px;">Profile</h1>
 
-          <div class="profile-container">
-            <div class="proinfo">
-  <!-- Avatar -->
-  <img :src="profileImageUrl" alt="profile" class="profile-img" @error="imgError" />
+          <div class="profile-scroll-container">
+            <div class="profile-container">
+              <div class="proinfo">
+                <!-- Avatar -->
+                <img :src="profileImageUrl" alt="profile" class="profile-img" @error="imgError" />
 
-  <div class="profile-details" v-if="info">
-    <p>Username : {{ info.name }}</p>
-    <p>Email : {{ info.email }}</p>
-    <p>Phone : {{ info.phone || '-' }}</p>
+                <div class="profile-details" v-if="info">
+                  <p>Username : {{ info.name }}</p>
+                  <p>Thai name : {{ info.thaiName && info.thaiName.trim() ? info.thaiName : '—' }}</p>
+                  <p>Email : {{ info.email }}</p>
+                  <p>Phone : {{ info.phone || '-' }}</p>
 
-    <div class="signature-wrap">
-      <div class="signature-label">Signature :</div>
-      <template v-if="info.signaturePath">
-        <img :src="signatureImageUrl" alt="signature" class="signature-img" @error="signatureError" />
-      </template>
-      <span v-else class="signature-empty">ยังไม่มีลายเซ็น</span>
-    </div>
-  </div>
+                  <div class="signature-wrap">
+                    <div class="signature-label">Signature :</div>
+                    <template v-if="signatureImageUrl">
+                      <img :src="signatureImageUrl" alt="signature" class="signature-img" @error="signatureError" />
+                    </template>
+                    <span v-else class="signature-empty">ยังไม่มีลายเซ็น</span>
+                  </div>
+                </div>
 
-  <!-- ปุ่มแก้ไข: มุมขวาล่างของการ์ด -->
-  <button class="card-edit-btn" @click="openEditSwal" title="Edit profile">
-    <i class="pi pi-pencil"></i>
-  </button>
-</div>
-
-          </div> <!-- /.profile-container -->
+                <!-- ปุ่มแก้ไข: มุมขวาล่างของการ์ด -->
+                <button class="card-edit-btn" @click="openEditSwal" title="เเก้ไขโปรไฟล์">
+                  <i class="pi pi-pencil"></i>
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div class="logout-container">
@@ -101,6 +106,7 @@
         </div>
       </div>
 
+      <!-- Footer -->
       <footer class="foot">
         <div class="footer-left">
           <p>
@@ -124,10 +130,10 @@ import { useRouter } from 'vue-router'
 import Swal from 'sweetalert2'
 import axios from 'axios'
 
-const API_BASE = import.meta.env.VITE_API_BASE
+axios.defaults.withCredentials = true
 
-// ===== Global =====
-const products = ref([])
+const API_BASE = import.meta.env.VITE_API_BASE
+const isMobile = ref(window.innerWidth <= 600)
 const isSidebarClosed = ref(false)
 const router = useRouter()
 const userId = localStorage.getItem('user_id') || ''
@@ -139,17 +145,12 @@ const info = ref({
   email: '-',
   picture: null,
   phone: '',
-  // รองรับได้ทั้ง signaturePath และ signature
   signaturePath: '',
-  signature: ''
+  signature: '',
+  thaiName: ''   // ✅ เพิ่มให้เหมือน staff
 })
 
-// option: แก้ user_id ได้เฉพาะโดเมน mfu
-const editId = ref(false)
-const editUserId = ref('')
-const canEditUserId = computed(() => info.value?.email?.toLowerCase().endsWith('@mfu.ac.th'))
-
-// ===== Notifications (ของเดิม) =====
+// ===== Notifications (user) =====
 const showNotifications = ref(false)
 const notifications = ref([])
 const unreadCount = ref(0)
@@ -157,22 +158,24 @@ const lastCheckedIds = new Set()
 const lastSeenTimestamp = ref(parseInt(localStorage.getItem('lastSeenTimestamp') || '0'))
 let polling = null
 
-// ===== Images =====
+// ===== Cart =====
+const products = ref([])
+
+// ===== Profile image =====
 const profileImageUrl = computed(() => {
   if (!info.value || !info.value.picture) return '/img/user.png'
   return info.value.picture.startsWith('http') ? info.value.picture : API_BASE + info.value.picture
 })
+function imgError(e) { e.target.src = '/img/user.png' }
 
-// path ดิบของลายเซ็น (รองรับหลายชื่อ field)
+// ===== Signature image =====
 const rawSignaturePath = computed(() =>
   (info.value?.signaturePath || info.value?.signature || '').trim()
 )
-
-const sigBust = ref(0) // cache-busting
+const sigBust = ref(0)
 const signatureImageUrl = computed(() => {
   const p = rawSignaturePath.value
   if (!p) return ''
-  // รองรับ http(s), data, blob
   if (/^(https?:|data:|blob:)/i.test(p)) {
     return sigBust.value ? `${p}${p.includes('?') ? '&' : '?'}v=${sigBust.value}` : p
   }
@@ -180,27 +183,37 @@ const signatureImageUrl = computed(() => {
   const path = p.startsWith('/') ? p : `/${p}`
   return `${base}${path}${sigBust.value ? `?v=${sigBust.value}` : ''}`
 })
-
-function imgError(e) { e.target.src = '/img/user.png' }
 function signatureError(e) { e.target.style.display = 'none' }
 
-// ===== SweetAlert edit (Phone + Signature) =====
+// ===== Edit (Thai name + Phone + Signature) =====
 async function openEditSwal() {
+  const HONORIFICS = ['นาย','นาง','นางสาว']
+  const rawThai = (info.value.thaiName || '').trim()
+  const m = rawThai.match(/^(\S+)\s+(.*)$/)
+  let prefillPrefix = '', prefillBare = rawThai
+  if (m && HONORIFICS.includes(m[1])) {
+    prefillPrefix = m[1]
+    prefillBare = (m[2] || '').trim()
+  }
   const currentSig = signatureImageUrl.value
+
   const html = `
-    <div class="swal-edit-wrap">
-      <input
-        type="tel"
-        id="swal-phone"
-        class="swal2-input"
-        placeholder="เบอร์โทร (4–10 หลัก)"
-        value="${info.value.phone || ''}"
-        inputmode="numeric"
-        minlength="4"
-        maxlength="10"
-        pattern="\\d{4,10}"
-      >
-      <input type="file" id="swal-signature" class="swal2-file" accept="image/*" style="margin-top:6px;">
+    <div class="swal-profile">
+      <h3 class="swal-profile-title">Edit Profile</h3>
+      <div class="swal-row">
+        <select id="swal-prefix" class="swal-field swal-select">
+          <option value="">— โปรดระบุ —</option>
+          ${HONORIFICS.map(o => `<option value="${o}" ${o===prefillPrefix?'selected':''}>${o}</option>`).join('')}
+        </select>
+        <input id="swal-thaiName-bare" type="text" class="swal-field"
+               placeholder="ชื่อ-นามสกุล (ภาษาไทย)"
+               value="${(prefillBare || '').replace(/"/g,'&quot;')}" />
+      </div>
+      <input id="swal-phone" type="tel" class="swal-field"
+             placeholder="เบอร์โทรศัพท์ที่สามารถติดต่อได้(4-10 หลัก)"
+             value="${info.value.phone || ''}" inputmode="numeric"
+             minlength="4" maxlength="10" pattern="\\d{4,10}" />
+      <input id="swal-signature" type="file" class="swal-file-native" accept="image/*" />
       <div id="swal-preview" class="swal-preview">
         ${currentSig
           ? `<img src="${currentSig}" class="swal-signature-img">`
@@ -208,124 +221,103 @@ async function openEditSwal() {
       </div>
     </div>
   `
+
   const { isConfirmed, value } = await Swal.fire({
-    title: 'เเก้ไขโปรไฟล์',
     html,
-    focusConfirm: false,
     showCancelButton: true,
     confirmButtonText: 'Save',
     cancelButtonText: 'Cancel',
     width: 560,
-    customClass: { popup: 'swal-center-popup' },
+    padding: 0,
+    customClass: {
+      popup: 'swal-profile-popup',
+      confirmButton: 'swal-btn-save',
+      cancelButton: 'swal-btn-cancel'
+    },
+    focusConfirm: false,
     didOpen: () => {
       const phoneEl = document.getElementById('swal-phone')
-      const fileEl = document.getElementById('swal-signature')
-      const previewEl = document.getElementById('swal-preview')
+      const fileEl  = document.getElementById('swal-signature')
+      const preview = document.getElementById('swal-preview')
 
-      // บังคับให้เป็นเลขล้วน และตัดให้ไม่เกิน 10 หลักขณะพิมพ์
       phoneEl?.addEventListener('input', () => {
-        let v = (phoneEl.value || '').replace(/\D+/g, '') // keep digits only
-        if (v.length > 10) v = v.slice(0, 10)             // hard cap 10
+        let v = (phoneEl.value || '').replace(/\D+/g, '')
+        if (v.length > 10) v = v.slice(0, 10)
         phoneEl.value = v
       })
-
       fileEl?.addEventListener('change', () => {
         const f = fileEl.files?.[0]
-        if (!f) {
-          previewEl.innerHTML = `<span class="swal-signature-empty">ยังไม่มีลายเซ็น</span>`
-          return
-        }
+        if (!f) { preview.innerHTML = `<span class="swal-signature-empty">ยังไม่มีลายเซ็น</span>`; return }
         const url = URL.createObjectURL(f)
-        previewEl.innerHTML = `<img src="${url}" class="swal-signature-img">`
+        preview.innerHTML = `<img src="${url}" class="swal-signature-img">`
       })
     },
     preConfirm: () => {
-      const phone = (document.getElementById('swal-phone')?.value || '').trim()
-      const file = document.getElementById('swal-signature')?.files?.[0] || null
+      const prefixEl = document.getElementById('swal-prefix')
+      const nameEl   = document.getElementById('swal-thaiName-bare')
+      const phoneEl  = document.getElementById('swal-phone')
+      const fileEl   = document.getElementById('swal-signature')
 
-      const hasPhoneChange = phone !== (info.value.phone || '')
-      const hasSignature = !!file
+      const prefix = (prefixEl.value || '').trim()
+      let bare    = (nameEl.value || '').trim()
+      const first = bare.split(/\s+/)[0]
+      if (['นาย','นาง','นางสาว'].includes(first)) bare = bare.replace(/^\S+\s*/, '').trim()
 
-      if (!hasPhoneChange && !hasSignature) {
-        Swal.showValidationMessage('ใส่เบอร์ใหม่หรืออัปโหลดลายเซ็นอย่างน้อย 1 อย่าง')
-        return false
+      const hasPrefix = !!prefix, hasBare = !!bare
+      if (hasBare && !hasPrefix) { Swal.showValidationMessage('กรุณาเลือกคำนำหน้า'); return false }
+      if (hasPrefix && !hasBare) { Swal.showValidationMessage('กรุณากรอกชื่อ-นามสกุล (ภาษาไทย)'); return false }
+
+      const mergedThaiName = [prefix, bare].filter(Boolean).join(' ').trim()
+      const phone = (phoneEl.value || '').trim()
+      const file  = fileEl.files?.[0] || null
+
+      const changedThai  = mergedThaiName !== (info.value.thaiName || '')
+      const changedPhone = phone !== (info.value.phone || '')
+      const changedSig   = !!file
+      if (!changedThai && !changedPhone && !changedSig) {
+        Swal.showValidationMessage('กรุณาแก้ไขอย่างน้อย 1 รายการ'); return false
       }
-
-      // ตรวจความยาวเบอร์: 4–10 หลัก (เฉพาะกรณีมีการเปลี่ยนแปลงเบอร์)
-      if (hasPhoneChange) {
-        const digitsOnly = phone.replace(/\D+/g, '')
-        if (digitsOnly.length > 0 && (digitsOnly.length < 4 || digitsOnly.length > 10)) {
-          Swal.showValidationMessage('กรุณากรอกเบอร์ 4–10 หลัก')
-          return false
+      if (changedPhone) {
+        const d = phone.replace(/\D+/g,'')
+        if (d.length > 0 && (d.length < 4 || d.length > 10)) {
+          Swal.showValidationMessage('กรุณากรอกเบอร์ 4–10 หลัก'); return false
         }
       }
-
-      return { phone, file }
+      return { mergedThaiName, phone, file, changedThai, changedPhone }
     }
   })
-  if (!isConfirmed) return
-  const { phone, file } = value
 
+  if (!isConfirmed) return
   try {
+    const { mergedThaiName, phone, file, changedThai, changedPhone } = value
     const fd = new FormData()
-    if (phone !== (info.value.phone || '')) fd.append('phone', phone)
-    if (file) fd.append('signature', file) // ฝั่งหลังบ้านอ่านจาก field 'signature'
+    if (changedThai)  fd.append('thaiName', mergedThaiName)
+    if (changedPhone) fd.append('phone', phone)
+    if (file)         fd.append('signature', file)
 
     const res = await axios.patch(`${API_BASE}/api/users/profile`, fd, {
       headers: { 'Content-Type': 'multipart/form-data' },
       withCredentials: true
     })
+    if (!res.data?.success || !res.data?.user) throw new Error(res.data?.message || 'อัปเดตไม่สำเร็จ')
 
-    if (res.data?.success && res.data?.user) {
-      info.value.phone = res.data.user.phone || ''
-      info.value.signaturePath = res.data.user.signaturePath || res.data.user.signature || ''
-      info.value.signature = info.value.signaturePath
-      sigBust.value = Date.now()
-      Swal.fire('บันทึกสำเร็จ', '', 'success')
-    } else {
-      throw new Error(res.data?.message || 'อัปเดตไม่สำเร็จ')
-    }
+    info.value.phone         = res.data.user.phone || ''
+    info.value.signaturePath = res.data.user.signaturePath || res.data.user.signature || ''
+    info.value.signature     = info.value.signaturePath
+    info.value.thaiName      = res.data.user.thaiName || res.data.user.thai_name || ''
+    sigBust.value = Date.now()
+
+    Swal.fire({ icon:'success', title:'บันทึกสำเร็จ', showConfirmButton:false, timer:1200 })
   } catch (e) {
     Swal.fire('เกิดข้อผิดพลาด', e.response?.data?.message || e.message, 'error')
   }
 }
 
-
-
-// ===== user_id update (option เดิม) =====
-async function saveUserId() {
-  if (!editUserId.value.trim()) {
-    Swal.fire('กรุณากรอก user id', '', 'warning')
-    return
-  }
-  try {
-    const res = await axios.patch(`${API_BASE}/api/users/update_id`, {
-      old_user_id: info.value.id,
-      new_user_id: editUserId.value.trim()
-    }, { withCredentials: true })
-
-    if (res.data?.success) {
-      info.value.id = editUserId.value.trim()
-      Swal.fire('บันทึกสำเร็จ', '', 'success')
-      editId.value = false
-    } else {
-      Swal.fire('เกิดข้อผิดพลาด', res.data?.message || '', 'error')
-    }
-  } catch (e) {
-    Swal.fire('เกิดข้อผิดพลาด', e.response?.data?.message || e.message, 'error')
-  }
-}
-
-// ===== Layout =====
+// ===== Sidebar & Mobile =====
 function toggleSidebar() { isSidebarClosed.value = !isSidebarClosed.value }
-
-// ===== Cart =====
-async function loadCart() {
-  if (!userId) return
-  try {
-    const res = await axios.get(`${API_BASE}/api/cart?user_id=${userId}`)
-    products.value = res.data
-  } catch { products.value = [] }
+function checkMobile() {
+  isMobile.value = window.innerWidth <= 600
+  if (isMobile.value) isSidebarClosed.value = true
 }
 
 // ===== Logout =====
@@ -352,7 +344,7 @@ async function logout() {
   }
 }
 
-// ===== Notifications (ของเดิม) =====
+// ===== Notifications =====
 function pruneOldNotifications() {
   const cutoff = Date.now() - (7 * 24 * 60 * 60 * 1000)
   notifications.value = notifications.value.filter(n => (n?.timestamp ?? 0) >= cutoff)
@@ -407,6 +399,15 @@ async function fetchNotifications() {
   } catch {}
 }
 
+// ===== Cart =====
+async function loadCart() {
+  if (!userId) return
+  try {
+    const res = await axios.get(`${API_BASE}/api/cart?user_id=${userId}`)
+    products.value = res.data
+  } catch { products.value = [] }
+}
+
 // ===== Lifecycle =====
 onMounted(async () => {
   try {
@@ -419,7 +420,8 @@ onMounted(async () => {
         picture: res.data.user.picture,
         phone: res.data.user.phone || '',
         signaturePath: res.data.user.signaturePath || res.data.user.signature || '',
-        signature: res.data.user.signature || ''
+        signature: res.data.user.signature || '',
+        thaiName: res.data.user.thaiName || res.data.user.thai_name || ''
       }
     } else {
       router.push('/login'); return
@@ -430,16 +432,16 @@ onMounted(async () => {
 
   await fetchNotifications()
   polling = setInterval(fetchNotifications, 30000)
-  fetchNotifications()
-  setInterval(fetchNotifications, 30000)
+  window.addEventListener('resize', checkMobile)
+
   loadCart()
 })
 
-onUnmounted(() => clearInterval(polling))
+onUnmounted(() => {
+  clearInterval(polling)
+  window.removeEventListener('resize', checkMobile)
+})
 </script>
-
-
-
 
 <style scoped>
 .probody {
@@ -450,18 +452,31 @@ onUnmounted(() => clearInterval(polling))
   box-sizing: border-box;
   overflow-x: hidden;
 }
+
+.profile-scroll-container {
+  overflow-x: auto;
+  padding: 0 70px;
+  box-sizing: border-box;
+}
+
+.profile-container {
+  padding: 1rem 0;
+  min-width: 360px;
+}
+
 .proinfo {
   position: relative;
   background-color: white;
   border-radius: 20px;
   padding: 30px 60px 30px 40px;
   display: flex;
-  align-items: center; /* <-- เปลี่ยนจาก flex-start เป็น center */
+  align-items: center;
   gap: 2rem;
   width: 100%;
   min-height: 160px;
   overflow-x: auto;
   max-width: 100%;
+  box-sizing: border-box;
 }
 
 .profile-img {
@@ -471,64 +486,146 @@ onUnmounted(() => clearInterval(polling))
   border-radius: 16px;
   box-shadow: 0 1px 12px #e3e3e3;
   margin-right: 24px;
-  align-self: center; /* เพิ่มบรรทัดนี้ */
+  align-self: center;
 }
+
 .profile-details {
   color: #333;
   font-size: 1.07rem;
   padding-left: 12px;
 }
-.profile-container { padding: 1rem 70px; }
-.profile-grid { display: flex; flex-direction: column; gap: 1rem; padding: 1rem 70px; }
-.profile-card { background-color: white; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.15); padding: 1rem 1.5rem; width: 100%; }
-.profile-row { display: flex; justify-content: space-between; align-items: center; font-size: 1rem; color: #333; }
-.left, .center, .right { flex: 1; }
-.center { text-align: center; }
 
-.logout-container { display: flex; justify-content: flex-end; margin: 0px 70px 20px 0px; }
-.logout-btn { background: #ef4444; color: #fff; border: none; border-radius: 8px; padding: 8px 18px; font-weight: 600; margin-top: 16px; cursor: pointer; transition: background 0.2s; }
+.logout-container {
+  display: flex;
+  justify-content: flex-end;
+  margin: 0px 70px 20px 0px;
+}
+.logout-btn {
+  background: #ef4444;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 18px;
+  font-weight: 600;
+  margin-top: 16px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
 .logout-btn:hover { background: #dc2626; }
 
-/* ===== แจ้งเตือน (ของเดิม) ===== */
+/* ===== แจ้งเตือน (เหมือนของเดิม) ===== */
 .notification-dropdown {
-  position: absolute; right: 0; top: 38px; background: #fff; border-radius: 18px 0 18px 18px;
+  position: absolute;
+  right: 0;
+  top: 38px;
+  background: #fff;
+  border-radius: 18px 0 18px 18px;
   box-shadow: 0 8px 24px 0 rgba(27,50,98,0.14), 0 2px 4px 0 rgba(33,125,215,0.06);
-  min-width: 330px; max-width: 370px; max-height: 420px; overflow-y: auto; z-index: 1002; padding: 0; border: none; animation: fadeDown 0.22s;
+  min-width: 330px;
+  max-width: 370px;
+  max-height: 420px;
+  overflow-y: auto;
+  z-index: 1002;
+  padding: 0;
+  border: none;
+  animation: fadeDown 0.22s;
 }
-@keyframes fadeDown { 0%{opacity:0; transform:translateY(-24px);} 100%{opacity:1; transform:translateY(0);} }
-.notification-dropdown ul { padding: 0; margin: 0; list-style: none; }
+
+@keyframes fadeDown {
+  0% { opacity: 0; transform: translateY(-24px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+.notification-dropdown ul {
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
 .notification-dropdown li {
   background: linear-gradient(90deg, #f6fafd 88%, #e2e7f3 100%);
-  margin: 0.2em 0.8em; padding: 0.85em 1.1em; border-radius: 12px; border: none; font-size: 1.07rem; font-weight: 500; color: #1e2c48;
-  box-shadow: 0 2px 8px 0 rgba(85,131,255,0.06); display: flex; align-items: flex-start; gap: 10px; position: relative; cursor: default; transition: background 0.2s;
+  margin: 0.2em 0.8em;
+  padding: 0.85em 1.1em;
+  border-radius: 12px;
+  border: none;
+  font-size: 1.07rem;
+  font-weight: 500;
+  color: #1e2c48;
+  box-shadow: 0 2px 8px 0 rgba(85,131,255,0.06);
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  position: relative;
+  cursor: default;
+  transition: background 0.2s;
 }
-.notification-dropdown li:not(:last-child){ margin-bottom: 0.15em; }
-.notification-dropdown li::before{ content:"🔔"; font-size:1.2em; margin-right:7px; color:#1976d2; opacity:.80; }
-.notification-dropdown li.no-noti{ background:#f2f3f6; color:#a7aab7; justify-content:center; font-style:italic; }
-.notification-dropdown::-webkit-scrollbar{ width:7px; }
-.notification-dropdown::-webkit-scrollbar-thumb{ background:#e1e7f5; border-radius:10px; }
-.notification-dropdown::-webkit-scrollbar-track{ background:transparent; }
+
+.notification-dropdown li:not(:last-child) {
+  margin-bottom: 0.15em;
+}
+
+.notification-dropdown li::before {
+  content: "🔔";
+  font-size: 1.2em;
+  margin-right: 7px;
+  color: #f59e0b;     /* เหลืองอ่อนแบบรูปเดิม */
+  opacity: .95;
+}
+
+.notification-dropdown li.no-noti {
+  background: #f2f3f6;
+  color: #a7aab7;
+  justify-content: center;
+  font-style: italic;
+}
+
+.notification-dropdown::-webkit-scrollbar { width: 7px; }
+.notification-dropdown::-webkit-scrollbar-thumb { background: #e1e7f5; border-radius: 10px; }
+.notification-dropdown::-webkit-scrollbar-track { background: transparent; }
+
+/* โทนตามสถานะ + แถบสีซ้าย (แบบเดิม) */
+.notification-item.approved{
+  background: linear-gradient(90deg,#e9fbe7 85%,#cbffdb 100%);
+  color:#228c22;
+  border-left:4px solid #38b000;
+}
+.notification-item.disapproved{
+  background: linear-gradient(90deg,#ffeaea 85%,#ffd6d6 100%);
+  color:#b91423;
+  border-left:4px solid #ff6060;
+}
+.notification-item.canceled,
+.notification-item.cancel{
+  background: linear-gradient(90deg,#f9d7d7 80%,#e26a6a 100%);
+  color:#91061a;
+  border-left:4px solid #bb2124;
+}
+.notification-item.returned{
+  background: linear-gradient(90deg,#e0f0ff 85%,#b6e0ff 100%);
+  color:#1976d2;
+  border-left:4px solid #1976d2;
+}
+
+/* ปุ่ม/แบดจ์ด้านบนให้วางเหมือนเดิม */
+.notification-btn {
+  background: none; border: none; cursor: pointer;
+  font-size: 1.4rem; position: relative;
+}
+.badge{
+  position: absolute; top: -8px; right: -10px;
+  min-width: 18px; height: 18px; padding: 0 6px;
+  border-radius: 999px; display: flex; align-items: center; justify-content: center;
+  font-size: 11px; line-height: 1; background: #ff1a1a; color:#fff;
+  border: 2px solid #243b6a; /* ให้กลืนกับสีพื้น topbar */
+}
+.notification-backdrop{ position:fixed; inset:0; background:transparent; z-index:1001; }
+
+
+/* สีพื้นหลังตามสถานะ (เหมือนฝั่ง staff) */
 .notification-item.approved{ background:linear-gradient(90deg,#e9fbe7 85%,#cbffdb 100%); border-left:4px solid #38b000; color:#228c22; }
 .notification-item.disapproved{ background:linear-gradient(90deg,#ffeaea 85%,#ffd6d6 100%); border-left:4px solid #ff6060; color:#b91423; }
 .notification-item.canceled, .notification-item.cancel{ background:linear-gradient(90deg,#f9d7d7 80%,#e26a6a 100%); border-left:4px solid #bb2124; color:#91061a; }
 .notification-item.returned{ background:linear-gradient(90deg,#e0f0ff 85%,#b6e0ff 100%); border-left:4px solid #1976d2; color:#1976d2; }
-.notification-item{ transition: background .3s, border-color .3s, color .3s; }
-.notification-backdrop{ position:fixed; inset:0; background:transparent; z-index:1001; }
-
-/* ===== ปุ่ม ===== */
-.edit-btn, .save-btn, .cancel-btn {
-  margin-left: 8px; background: #f59e42; color:#fff; border:none; border-radius:6px; padding:6px 18px;
-  cursor:pointer; transition: background 0.2s; min-width:80px; min-height:20px; box-sizing:border-box; display:inline-block;
-}
-.save-btn { background:#22c55e; } .save-btn:hover{ background:#15803d; }
-.cancel-btn { background:#ef4444; } .cancel-btn:hover{ background:#dc2626; }
-.edit-btn:hover { background:#ea580c; }
-
-.editable-row{ display:flex; align-items:center; gap:12px; flex-wrap:nowrap; margin-top:10px; }
-.field-label{ width:90px; color:#334155; font-weight:600; }
-.input{ padding:8px 12px; border:1px solid #e5e7eb; border-radius:8px; outline:none; min-width:260px; }
-
-.edit-actions{ margin-top:12px; }
 
 /* Signature UI */
 .signature-wrap{ margin-top:10px; display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
@@ -538,33 +635,7 @@ onUnmounted(() => clearInterval(polling))
   border: 1px dashed #cbd5e1; background: #f8fafc; border-radius: 8px; padding: 6px;
 }
 .signature-empty{ color:#94a3b8; font-style: italic; }
-.signature-preview{ margin-top:8px; }
 
-/* สำหรับจอมือถือ */
-@media (max-width: 768px) {
-  .profile-container { padding: 1rem 15px; }
-  .proinfo { width: 100%; max-width: 100%; padding: 20px; }
-  .logout-container { margin: 10px 15px 20px 0; display:flex; justify-content:flex-end; }
-}
-
-.fab-edit{
-  position: fixed;
-  right: 24px;
-  bottom: 24px;
-  width: 56px;
-  height: 56px;
-  border-radius: 999px;
-  border: none;
-  background: #f59e42;
-  color: #fff;
-  font-size: 20px;
-  display: grid;
-  place-items: center;
-  box-shadow: 0 10px 20px rgba(0,0,0,.18), 0 6px 12px rgba(0,0,0,.12);
-  cursor: pointer;
-  z-index: 1010;
-}
-.fab-edit:hover{ background:#ea580c; }
 /* ปุ่ม Edit ในการ์ด (ขวาล่าง) */
 .card-edit-btn{
   position: absolute;
@@ -579,37 +650,77 @@ onUnmounted(() => clearInterval(polling))
   font-size: 18px;
   display: grid;
   place-items: center;
- 
   cursor: pointer;
 }
 .card-edit-btn:hover{ background:#ea580c; }
 
-/* จัดกลางใน SweetAlert */
-.swal-center{ display:flex !important; flex-direction:column; align-items:center; }
-.swal-edit-wrap{ width:100%; display:flex; flex-direction:column; align-items:center; }
-.swal-preview{ margin-top:10px; display:flex; justify-content:center; width:100%; }
-.swal-signature-img{
-  max-width: 260px; max-height: 100px; object-fit: contain;
-  border: 1px dashed #cbd5e1; background: #f8fafc; border-radius: 6px; padding: 4px;
+/* มือถือ */
+@media (max-width: 768px) {
+  .profile-scroll-container { padding: 0 15px; }
+  .profile-container { padding: 1rem 15px; }
+  .proinfo { width: 100%; max-width: 100%; padding: 20px; }
+  .logout-container { margin: 10px 15px 20px 0; display:flex; justify-content:flex-end; }
 }
-.swal-signature-empty{ color:#94a3b8; font-style:italic; }
 </style>
 
 <style>
 @import '../css/style.css';
 
-/* จัด SweetAlert ให้อยู่กึ่งกลางและให้พรีวิวอยู่กลางจริง ๆ */
-.swal-center-popup .swal2-html-container{
-  display:flex;
-  flex-direction:column;
-  align-items:center;
+/* ===== SweetAlert สไตล์เดียวกับ staff ===== */
+.swal-profile-popup.swal2-popup{
+  border-radius: 12px;
+  box-shadow: 0 20px 50px rgba(0,0,0,.18);
+  overflow: hidden;
 }
-.swal-edit-wrap{ width:100%; display:flex; flex-direction:column; align-items:center; }
-.swal-preview{ margin-top:10px; display:flex; justify-content:center; width:100%; }
+.swal-profile{ padding: 26px 28px 18px; }
+.swal-profile-title{
+  font-size: 40px; font-weight: 800; text-align: center; margin: 10px 0 18px; color:#1f2937;
+}
+.swal-row{
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.swal-field{
+  width: 100%;
+  height: 44px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 0 14px;
+  font-size: 16px;
+  background: #f8fafc;
+  color:#111827;
+}
+.swal-field::placeholder{ color:#9ca3af; }
+.swal-select{
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg width='18' height='18' viewBox='0 0 20 20' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M5 7l5 5 5-5' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 10px center; background-size: 16px;
+}
+/* โทรศัพท์ */
+#swal-phone{ margin-bottom: 12px; }
+
+/* พรีวิวลายเซ็น */
+.swal-preview{ display:flex; justify-content:center; margin-top:8px; }
 .swal-signature-img{
-  max-width:260px; max-height:100px; object-fit:contain;
-  border:1px dashed #cbd5e1; background:#f8fafc; border-radius:6px; padding:4px;
+  width: 220px; height: 88px; object-fit: contain;
+  border: 1px dashed #cbd5e1; background: #f8fafc; border-radius: 8px; padding: 6px;
 }
 .swal-signature-empty{ color:#94a3b8; font-style:italic; }
 
+/* ปุ่ม */
+.swal-btn-save{
+  background:#6366f1 !important; border-radius:8px !important; padding:10px 22px !important; font-weight:700 !important;
+}
+.swal-btn-cancel{
+  background:#6b7280 !important; color:#fff !important; border-radius:8px !important; padding:10px 22px !important; font-weight:700 !important; margin-left:10px !important;
+}
+
+/* input[type=file] แบบ native ให้สะอาด */
+.swal-file-native{
+  width: 100%;
+  margin: 8px 0 6px;
+  border: 1px solid #e5e7eb; border-radius: 8px; padding: 6px; background: #fff; font-size: 15px;
+}
 </style>

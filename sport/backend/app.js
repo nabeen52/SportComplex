@@ -246,8 +246,8 @@ async function notifyAdminNewBorrow({ requester, items, booking_id }) {
         <h2>มีรายการขอยืมอุปกรณ์รออนุมัติ</h2>
         <p><b>ผู้ขอ:</b> ${requester}</p>
         <ul>${itemList}</ul>
-        <br>
-        <p>กรุณาเข้าสู่ระบบศูนย์กีฬาเพื่ออนุมัติรายการนี้</p>
+        <p><b>กรุณาเข้าสู่ระบบศูนย์กีฬาเพื่ออนุมัติรายการนี้</p>
+        <p><b>https://reserv-scc.mfu.ac.th/</p>
         <hr>
         <p style="font-size: 0.95em; color: #888;">Sport Complex – MFU</p>
       </div>
@@ -264,8 +264,8 @@ async function notifyStaffNewBorrow({ requester, items, booking_id }) {
         <h2>มีรายการขอยืมอุปกรณ์รออนุมัติ</h2>
         <p><b>ผู้ขอ:</b> ${requester}</p>
         <ul>${itemList}</ul>
-        <br>
-        <p>กรุณาเข้าสู่ระบบศูนย์กีฬาเพื่ออนุมัติรายการนี้</p>
+        <p><b>กรุณาเข้าสู่ระบบศูนย์กีฬาเพื่ออนุมัติรายการนี้</p>
+        <p><b>https://reserv-scc.mfu.ac.th/</p>
         <hr>
         <p style="font-size: 0.95em; color: #888;">Sport Complex – MFU</p>
       </div>
@@ -331,7 +331,7 @@ async function sendApproveEquipmentEmailImmediate({ to, name, itemsHtml, fileUrl
 
 // ส่งอีเมลแจ้ง user ว่าคืนของสำเร็จแล้ว
 // ส่งอีเมลแจ้ง user ว่าคืนของสำเร็จแล้ว (FIXED)
-async function sendReturnSuccessEmail({ to, name, equipment, quantity, fileUrl }) {
+async function sendReturnSuccessEmail({ to, name, equipment, quantity, fileUrl,}) {
     if (!to) return;
     const html = `
     <div>
@@ -340,7 +340,6 @@ async function sendReturnSuccessEmail({ to, name, equipment, quantity, fileUrl }
       <p><b>อุปกรณ์:</b> ${equipment || '-'}</p>
       <p><b>จำนวน:</b> ${quantity || '-'}</p>
       ${fileUrl ? `<p><b>เอกสารรับคืน:</b> <a href="${fileUrl}" target="_blank" rel="noopener">เปิดไฟล์</a></p>` : ''}
-      <br>
       <p>ขอบคุณที่ใช้บริการศูนย์กีฬามหาวิทยาลัยแม่ฟ้าหลวง</p>
       <hr>
       <p style="font-size: 0.95em; color: #888;">Sport Complex – MFU</p>
@@ -353,7 +352,6 @@ async function sendReturnSuccessEmail({ to, name, equipment, quantity, fileUrl }
     }
 }
 
-// แจ้งเตือน admin ทุกคนเมื่อมีรายการขอใช้สนามเข้ามาใหม่ (pending)
 async function notifyAdminNewFieldBooking({ requester, building, activity, since, uptodate, zone, booking_id }) {
     const adminEmails = await getAdminEmails();
     if (!adminEmails.length) return;
@@ -365,8 +363,8 @@ async function notifyAdminNewFieldBooking({ requester, building, activity, since
     <p><b>กิจกรรม:</b> ${activity || '-'}</p>
     <p><b>วันที่:</b> ${formatDateRange(since, uptodate)}</p>
     <p><b>โซน:</b> ${zone || '-'}</p>
-    <br>
-    <p>กรุณาเข้าสู่ระบบศูนย์กีฬาเพื่ออนุมัติรายการนี้</p>
+    <p><b>กรุณาเข้าสู่ระบบศูนย์กีฬาเพื่ออนุมัติรายการนี้</p>
+    <p><b>https://reserv-scc.mfu.ac.th/</p>
     <hr>
     <p style="font-size: 0.95em; color: #888;">Sport Complex – MFU</p>
   </div>
@@ -1215,20 +1213,83 @@ app.get('/api/users/email/:email', async (req, res) => {
         res.status(500).send({ message: err.message });
     }
 });
+// PATCH /api/users/email/:email  (สำหรับแอดมิน/ซูเปอร์แก้ชื่อไทย/คำนำหน้าให้ผู้อื่น)
+app.patch('/api/users/email/:email', async (req, res) => {
+    try {
+        const role = String(req.user?.role || '').toLowerCase();
+        if (!['admin', 'super'].includes(role)) {
+            return res.status(403).json({ success: false, message: 'forbidden' });
+        }
+
+        const email = decodeURIComponent(req.params.email || '').trim();
+        if (!email) return res.status(400).json({ success: false, message: 'email required' });
+
+        // รองรับหลายคีย์จากฝั่ง FE
+        const rawThai =
+            (req.body.thaiName ?? req.body.thai_name ?? req.body.name_th ?? req.body.nameTh ?? '').toString().trim();
+        const thaiPrefix = (req.body.thaiPrefix ?? '').toString().trim();
+
+        const update = {};
+        if (rawThai) update.thaiName = rawThai;          // เก็บค่าเดียวเป็นจริง
+        if ('thaiPrefix' in req.body) update.thaiPrefix = thaiPrefix; // ถ้าส่งมาก็อัปเดตได้
+
+        // อนุญาตอัปเดต field อื่นแบบเลือกได้ (ถ้าอยาก)
+        if (typeof req.body.phone === 'string') update.phone = req.body.phone.trim();
+
+        const user = await User.findOneAndUpdate(
+            { email },
+            { $set: update },
+            { new: true }
+        );
+        if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+        // ส่ง alias กลับด้วยเพื่อให้ FE เวอร์ชันต่าง ๆ อ่านได้
+        const out = user.toObject ? user.toObject() : user;
+        out.name_th = out.thaiName;
+        out.nameTh = out.thaiName;
+        out.thai_name = out.thaiName;
+
+        return res.json({ success: true, user: out });
+    } catch (err) {
+        return res.status(500).json({ success: false, message: err.message });
+    }
+});
 
 // ==== อัปเดตโปรไฟล์ของผู้ใช้ปัจจุบัน (phone + ลายเซ็นไฟล์) ====
+// ==== อัปเดตโปรไฟล์ของผู้ใช้ปัจจุบัน (thaiName + phone + ลายเซ็นไฟล์) ====
 app.patch('/api/users/profile', signatureUpload.single('signature'), async (req, res) => {
     try {
-        // ต้อง login แล้วเท่านั้น (มีอยู่ใน app.use('/api', requireLogin) อยู่แล้ว)
         const uid = req.user?.user_id;
         if (!uid) return res.status(401).json({ success: false, message: 'Not logged in' });
 
         const update = {};
+
+        // ✅ รับ thaiName จาก multipart/form-data (รวมคำนำหน้ามาแล้วจาก FE)
+        //    รองรับ alias thai_name ด้วย
+        const rawThaiName = (typeof req.body.thaiName === 'string'
+            ? req.body.thaiName
+            : (typeof req.body.thai_name === 'string' ? req.body.thai_name : '')).trim();
+
+        if (rawThaiName) {
+            // แยก token แรกเป็นคำนำหน้าแบบคร่าวๆ
+            const HONORIFICS = ['นาย', 'นาง', 'นางสาว']
+            const m = rawThaiName.match(/^(\S+)\s+(.*)$/)
+            // ถ้าพบคำนำหน้า ต้องมีชื่อหลังจากนั้นด้วย, และถ้าไม่มีคำนำหน้าเลย ก็ถือว่าผ่าน (เพราะไม่ได้ใส่ชื่อ)
+            if (m) {
+                const prefix = m[1], rest = (m[2] || '').trim()
+                if (HONORIFICS.includes(prefix) && !rest) {
+                    return res.status(400).json({ success: false, message: 'กรุณากรอกชื่อ-นามสกุลหลังคำนำหน้า' })
+                }
+            }
+            update.thaiName = rawThaiName
+        }
+
         if (typeof req.body.phone === 'string') {
             update.phone = req.body.phone.trim();
         }
+
         if (req.file) {
-            update.signaturePath = `/uploads/signatures/${req.file.filename}`; // เก็บเป็น path (ไม่ใช่ base64)
+            update.signaturePath = `/uploads/signatures/${req.file.filename}`;
         }
 
         const user = await User.findOneAndUpdate(
@@ -1236,13 +1297,19 @@ app.patch('/api/users/profile', signatureUpload.single('signature'), async (req,
             { $set: update },
             { new: true }
         );
+
         if (!user) return res.status(404).json({ success: false, message: 'User not found' });
 
-        return res.json({ success: true, user });
+        // (ออปชัน) ส่งทั้ง thaiName และ thai_name กลับไปเพื่อให้ FE รุ่นเก่าอ่านได้
+        const out = user.toObject ? user.toObject() : user;
+        out.thai_name = out.thaiName;
+
+        return res.json({ success: true, user: out });
     } catch (err) {
         return res.status(500).json({ success: false, message: err.message });
     }
 });
+
 
 // === เพิ่ม API ดูชื่อจาก user_id ===
 app.get('/api/user/:user_id', async (req, res) => {
@@ -1509,6 +1576,20 @@ app.post('/api/history', async (req, res) => {
                     .filter(r => ALLOWED.has(r))
             ));
 
+        // ✅ ใหม่: helper สำหรับแปลงค่าทุกแบบ → string (กันกรณี array/object)
+        const normalizeText = (v) => {
+            if (v == null) return '';
+            if (Array.isArray(v)) {
+                return v.map(x => (x == null ? '' : String(x))).filter(Boolean).join(', ');
+            }
+            if (typeof v === 'object') {
+                if ('label' in v) return String(v.label);
+                if ('value' in v) return String(v.value);
+                try { return JSON.stringify(v); } catch { return String(v); }
+            }
+            return String(v);
+        };
+
         const sanitizeIncomingStep = (step) => {
             if (!Array.isArray(step)) return [];
             const now = new Date();
@@ -1523,12 +1604,7 @@ app.post('/api/history', async (req, res) => {
                 if (r && 'approve' in r) {
                     approve = r.approve === true ? true : r.approve === false ? false : null;
                 }
-                return {
-                    role,
-                    approve,
-                    createdAt: r?.createdAt ? new Date(r.createdAt) : now,
-                    updatedAt: now
-                };
+                return { role, approve, createdAt: r?.createdAt ? new Date(r.createdAt) : now, updatedAt: now };
             }).filter(Boolean);
         };
 
@@ -1572,7 +1648,6 @@ app.post('/api/history', async (req, res) => {
         async function loadRolesFromSettings() {
             let field = [], equipment = [], equipment_one_day = [];
             try {
-                // 1) พยายามอ่านแบบแยก 3 เอกสารก่อน (สมัยใหม่)
                 const [docField, docEquip, docEquip1d] = await Promise.all([
                     Settings.findOne({ key: 'approval_roles_field' }).lean(),
                     Settings.findOne({ key: 'approval_roles_equipment' }).lean(),
@@ -1584,11 +1659,9 @@ app.post('/api/history', async (req, res) => {
             } catch { }
 
             try {
-                // 2) ถ้ายังว่าง ให้ลองอ่าน key เดียว 'approval_roles' (ที่เก็บ {field,equipment,equipment_one_day})
                 if (!field.length || !equipment.length || !equipment_one_day.length) {
                     const setDoc = await Settings.findOne({ key: 'approval_roles' }).lean();
                     const val = setDoc?.value || {};
-                    // รองรับ alias เก่า ๆ ด้วย
                     field = field.length ? field : cleanRoles(val.field || []);
                     equipment = equipment.length ? equipment : cleanRoles(val.equipment || []);
                     equipment_one_day = equipment_one_day.length
@@ -1611,7 +1684,6 @@ app.post('/api/history', async (req, res) => {
 
         // ---------- สรุป step ตามประเภท ----------
         if (type === 'field') {
-            // ใช้ settings.field เสมอ (กันว่าง)
             if (rolesField.length > 0) {
                 const now = new Date();
                 step = rolesField.map(r => ({ role: r, approve: null, createdAt: now, updatedAt: now }));
@@ -1619,15 +1691,12 @@ app.post('/api/history', async (req, res) => {
         } else if (type === 'equipment') {
             const now = new Date();
             if (isEquipmentMultiDay(body)) {
-                // หลายวัน → ใช้ settings.equipment
                 if (rolesEquipMulti.length > 0) {
                     step = rolesEquipMulti.map(r => ({ role: r, approve: null, createdAt: now, updatedAt: now }));
                 } else if (!step.length) {
-                    // กันว่างสุดท้าย
                     step = [{ role: 'staff', approve: null, createdAt: now, updatedAt: now }];
                 }
             } else {
-                // วันเดียว → ใช้ settings.equipment_one_day ก่อน, ถ้าว่างค่อย fallback -> equipment -> FE -> ['staff']
                 if (rolesEquip1Day.length > 0) {
                     step = rolesEquip1Day.map(r => ({ role: r, approve: null, createdAt: now, updatedAt: now }));
                 } else if (rolesEquipMulti.length > 0) {
@@ -1695,14 +1764,16 @@ app.post('/api/history', async (req, res) => {
 
             reason_admin: body.reason_admin || '',
 
+            // ✅ เก็บ room_request โดย normalize ให้เป็น string เสมอ
+            room_request: normalizeText(body.room_request ?? body.roomRequest),
+
             // ⬅️ สำคัญ: เก็บ step ที่สรุปแล้ว
             step,
         });
 
         console.log('[history.create] type=%s booking=%s step=%j', doc.type, doc.booking_id, doc.step);
 
-        // === แจ้งอีเมล (ตามเดิม) ===
-        // === แจ้งอีเมลหลังสร้างเอกสาร ===
+        // === แจ้งอีเมลหลังสร้างเอกสาร (เดิม) ===
         try {
             const requesterName = await getUserDisplayNameById(doc.user_id);
 
@@ -1718,30 +1789,17 @@ app.post('/api/history', async (req, res) => {
                 });
             } else if (doc.type === 'equipment') {
                 const items = [{ name: doc.name, quantity: doc.quantity }];
-
-                // ถ้ามีช่วงวัน (since & uptodate) = หลายวัน -> แจ้ง admin
-                // ถ้าไม่มี (หรือวันเดียว) -> แจ้ง staff
-                const hasPeriod =
-                    !!(doc?.since) && !!(doc?.uptodate); // วันเดียวในโปรเจกต์นี้จะว่างทั้งคู่
+                const hasPeriod = !!doc?.since && !!doc?.uptodate;
 
                 if (hasPeriod) {
-                    await notifyAdminNewBorrow({
-                        requester: requesterName,
-                        items,
-                        booking_id: doc.booking_id,
-                    });
+                    await notifyAdminNewBorrow({ requester: requesterName, items, booking_id: doc.booking_id });
                 } else {
-                    await notifyStaffNewBorrow({
-                        requester: requesterName,
-                        items,
-                        booking_id: doc.booking_id,
-                    });
+                    await notifyStaffNewBorrow({ requester: requesterName, items, booking_id: doc.booking_id });
                 }
             }
         } catch (mailErr) {
             console.error('notify error:', mailErr);
         }
-
 
         return res.status(201).json(doc);
     } catch (err) {
@@ -2154,6 +2212,8 @@ app.patch('/api/history/:id/request-return', uploadReturn.single('returnPhoto'),
               <p><b>ชื่อผู้คืน:</b> ${userName}</p>
               ${itemsHtml}
               <p><b>หลักฐานภาพถ่าย:</b> <a href="${newDoc.returnPhoto}" target="_blank" rel="noopener">เปิดดูรูป</a></p>
+              <p><b>กรุณาเข้าสู่ระบบศูนย์กีฬาเพื่อยืนยันการคืนรายการนี้</p>
+              <p><b>https://reserv-scc.mfu.ac.th/</p>
               <hr><p style="font-size:0.95em;color:#888;">Sport Complex – MFU</p>
             </div>
           `
@@ -2312,7 +2372,7 @@ app.patch('/api/history/:id/handover', async (req, res) => {
                 <p><b>ผู้รับมอบ:</b> ${borrowerName}</p>
                 ${itemsHtml}
                 ${bookingPdfUrl ? `<p><b>เอกสาร:</b> <a href="${bookingPdfUrl}" target="_blank" rel="noopener">เปิดไฟล์</a></p>` : ''}
-                <p style="margin-top:10px;">กรุณาตรวจสอบอุปกรณ์และเก็บรักษาอย่างเหมาะสม</p>
+                <p style="margin-top:10px;"><b>กรุณาตรวจสอบอุปกรณ์และเก็บรักษาอย่างเหมาะสม</p>
                 <hr><p style="font-size:0.95em;color:#888;">Sport Complex – MFU</p>
               </div>
             `
@@ -3411,6 +3471,7 @@ app.patch('/api/history/:id/approve_equipment', async (req, res) => {
             <p><b>ชื่อผู้ยืม:</b> ${borrowerName}</p>
             ${itemsHtml}
             <p style="margin-top:10px;">สถานะปัจจุบัน: <b>รอการส่งมอบจากเจ้าหน้าที่</b></p>
+            <p><b>สถานที่รับอุปกรณ์: สำนักงานอาคารกีฬาอเนกประสงค์(ข้างสนามแบดมินตัน)</p>
             <hr><p style="font-size:0.95em;color:#888;">Sport Complex – MFU</p>
           </div>
         `
@@ -3428,6 +3489,8 @@ app.patch('/api/history/:id/approve_equipment', async (req, res) => {
               <p><b>ผู้ยืม:</b> ${borrowerName}</p>
               ${itemsHtml}
               <p style="margin-top:10px;">สถานะ: <b>รอการส่งมอบ</b></p>
+              <p><b>กรุณาเข้าสู่ระบบศูนย์กีฬาเพื่อรส่งมอบรายการนี้</p>
+              <p><b>https://reserv-scc.mfu.ac.th/</p>
               <hr><p style="font-size:0.95em;color:#888;">Sport Complex – MFU</p>
             </div>
           `
@@ -3667,6 +3730,8 @@ app.patch('/api/history/:id/approve_field', async (req, res) => {
               <p><b>วันที่:</b> ${formatDateRange(updated.since, updated.uptodate)}</p>
               <p><b>เวลา:</b> ${(updated.startTime || '-')} ถึง ${(updated.endTime || '-')}</p>
               <p><b>โซน:</b> ${updated.zone || '-'}</p>
+              <p><b>กรุณาเข้าสู่ระบบศูนย์กีฬาเพื่ออนุมัติรายการนี้</p>
+              <p><b>https://reserv-scc.mfu.ac.th/</p>
             </div>`
                     );
                 }
@@ -3980,55 +4045,96 @@ app.post('/api/booking_field', upload.array('files', 10), async (req, res) => {
             }));
         }
 
-        // -- helper: แปลง string เป็น Date (หรือ null) --
+        // -- helpers --
         const parseDate = (v) => (v ? new Date(v) : null);
-        const norm = v => (v ?? '').toString().trim().toLowerCase();
+        const trim = (v) => (v ?? '').toString().trim();
+        const norm = v => trim(v).toLowerCase();
         const yesTokens = new Set(['yes', 'เลือก', 'ต้องการ', 'true', '1']);
         const noTokens = new Set(['no', 'ไม่เลือก', 'ไม่ต้องการ', 'false', '0']);
-        const toYesNo = v => yesTokens.has(norm(v)) ? 'yes' : (noTokens.has(norm(v)) ? 'no' : '');
+        const toYesNo = v => (yesTokens.has(norm(v)) ? 'yes' : (noTokens.has(norm(v)) ? 'no' : ''));
 
-        // -- เก็บข้อมูลจาก form (req.body) --
+        // -- map body -> bookingData (sanitize + normalize) --
         const bookingData = {
-            aw: req.body.aw,
+            aw: trim(req.body.aw),
             date: parseDate(req.body.date),
-            tel: req.body.tel,
-            agency: req.body.agency,
-            name_activity: req.body.name_activity,
-            reasons: req.body.reasons,
+            tel: trim(req.body.tel),
+
+            agency: trim(req.body.agency),
+            name_activity: trim(req.body.name_activity),
+            reasons: trim(req.body.reasons),
+
             since: parseDate(req.body.since),
             uptodate: parseDate(req.body.uptodate),
-            since_time: req.body.since_time,
-            until_thetime: req.body.until_thetime,
-            participants: req.body.participants,
-            requester: req.body.requester,
-            building: req.body.building,
-            zone: req.body.zone,
-            need: req.body.need,
-            needless: req.body.needless,
-            turnon_air: req.body.turnon_air,
-            turnoff_air: req.body.turnoff_air,
-            turnon_lights: req.body.turnon_lights,
-            turnoff_lights: req.body.turnoff_lights,
-            other: req.body.other,
-            amphitheater: req.body.amphitheater,
-            need_equipment: req.body.need_equipment,
-            user_id: req.body.user_id,
-            files: filesArr,
-            no_receive: req.body.no_receive,
-            date_receive: parseDate(req.body.date_receive),
-            receiver: req.body.receiver,
-            uploadFiles: req.body.uploadFiles || [],
-            utilityRequest: req.body.utilityRequest,
-            facilityRequest: req.body.facilityRequest,
-            proxyStudentName: req.body.proxyStudentName,   // <--- แก้ตรงนี้!
-            proxyStudentId: req.body.proxyStudentId,       // <--- แก้ตรงนี้!
-            username_form: req.body.username_form || '',
-            id_form: req.body.id_form || '',
-            utilityRequest: toYesNo(req.body.utilityRequest),
-            facilityRequest: toYesNo(req.body.facilityRequest),
-            restroom: toYesNo(req.body.restroom),
+            since_time: trim(req.body.since_time),
+            until_thetime: trim(req.body.until_thetime),
 
+            participants: trim(req.body.participants),
+            requester: trim(req.body.requester),
+
+            building: trim(req.body.building),
+            zone: trim(req.body.zone),
+
+            // legacy fields (ถ้ามีใช้อยู่)
+            need: trim(req.body.need),
+            needless: trim(req.body.needless),
+
+            // utilities
+            turnon_air: trim(req.body.turnon_air),
+            turnoff_air: trim(req.body.turnoff_air),
+            lights: toYesNo(req.body.lights),
+            turnon_lights: trim(req.body.turnon_lights),
+            turnoff_lights: trim(req.body.turnoff_lights),
+            restroom: toYesNo(req.body.restroom),
+            utilityRequest: toYesNo(req.body.utilityRequest),
+
+            // facility group
+            facilityRequest: toYesNo(req.body.facilityRequest),
+            amphitheater: trim(req.body.amphitheater),     // 3.1
+            need_equipment: trim(req.body.need_equipment), // 3.2
+            room_request: trim(req.body.room_request),     // ✅ 3.3 (ใหม่)
+
+            other: trim(req.body.other),
+
+            // ผู้ใช้/ผู้ยื่น
+            user_id: trim(req.body.user_id),
+            proxyStudentName: trim(req.body.proxyStudentName || ''),
+            proxyStudentId: trim(req.body.proxyStudentId || ''),
+            username_form: trim(req.body.username_form || ''),
+            id_form: trim(req.body.id_form || ''),
+
+            // รับของ (ถ้า field นี้มีใช้)
+            no_receive: trim(req.body.no_receive),
+            date_receive: parseDate(req.body.date_receive),
+            receiver: trim(req.body.receiver),
+
+            uploadFiles: Array.isArray(req.body.uploadFiles) ? req.body.uploadFiles : [],
+            files: filesArr
         };
+
+        // ============ Server-side validation สำหรับหัวข้อ 3 ============
+        if (bookingData.facilityRequest === 'yes') {
+            const hasAny =
+                !!bookingData.amphitheater ||
+                !!bookingData.need_equipment ||
+                !!bookingData.room_request; // ต้องมีอย่างน้อยหนึ่ง
+
+            if (!hasAny) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'กรุณากรอกอย่างน้อย 1 ช่องในหัวข้อ 3 (อัฒจันทร์/อุปกรณ์กีฬา/ห้องที่ต้องการใช้งาน)'
+                });
+            }
+
+            // อาคาร “72” ต้องกรอก amphitheater
+            if ((bookingData.building || '').includes('72') && !bookingData.amphitheater) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'อาคาร 72 พรรษา ต้องระบุอัฒจันทร์ (3.1)'
+                });
+            }
+        }
+        // ===============================================================
+
         // -- สร้าง booking ใหม่ใน DB --
         const booking = await BookingField.create(bookingData);
 
@@ -4638,6 +4744,96 @@ app.get('/api/history/:id/file/:idx', async (req, res) => {
         res.status(500).send(error.message);
     }
 });
+
+// ===== Admin Quick Booking: FIELD =====
+// สร้างรายการจองพิเศษ (pending) ด้วย booking_id เดียว (ครอบคลุมหลายวัน)
+app.post('/api/history/admin-quick-field', async (req, res) => {
+    try {
+        const {
+            name,            // ชื่อสนาม
+            zone = '-',      // โซน (ถ้าไม่มีส่ง '-')
+            agency = '',     // หน่วยงาน
+            reasons = '',    // ใช้เก็บ "ชื่อกิจกรรม"
+            since, uptodate, // YYYY-MM-DD
+            startTime, endTime,
+            booking_id       // ถ้าไม่ส่ง จะ generate ให้
+        } = req.body || {};
+
+        // ตรวจเบื้องต้น
+        if (!name || !since || !uptodate || !startTime || !endTime) {
+            return res.status(400).json({ error: 'missing required fields' });
+        }
+
+        // ดึง roles ที่ต้องมีใน step (จาก Settings) ถ้าไม่มีใช้ fallback
+        async function getFieldRoles() {
+            try {
+                const doc1 = await Settings.findOne({ key: 'approval_roles_field' }).lean();
+                let roles = [];
+                if (Array.isArray(doc1?.value)) roles = doc1.value;
+                else if (doc1?.value?.field) roles = doc1.value.field;
+                roles = (roles || []).map(r => String(r).toLowerCase());
+                const ALLOWED = new Set(['staff', 'admin', 'super']);
+                roles = roles.filter(r => ALLOWED.has(r));
+                return roles.length ? roles : ['admin', 'super']; // fallback
+            } catch {
+                return ['admin', 'super'];
+            }
+        }
+
+        const roles = await getFieldRoles();
+        const step = roles.map(r => ({ role: r, approve: null }));
+
+        const finalBookingId = booking_id || `${Date.now()}_${req.user?.user_id || 'admin'}`;
+
+        const doc = await History.create({
+            type: 'field',
+            status: 'pending',
+            name, zone,
+            agency,
+            reasons,                 // ← เก็บชื่อกิจกรรม
+            requester: 'Admin Quick Booking',
+            user_id: req.user?.user_id || '',
+
+            since: new Date(since),
+            uptodate: new Date(uptodate),
+            startTime, endTime,
+
+            booking_id: finalBookingId,
+
+            // ✅ ธงสำหรับ FE ให้รู้ว่าอันนี้สร้างจากปุ่มจองพิเศษ
+            specialAdminQuick: true,
+            createdByRole: (req.user?.role || '').toLowerCase(),
+
+            step
+        });
+
+        return res.status(201).json({ ok: true, data: doc });
+    } catch (e) {
+        console.error('[admin-quick-field:create] error', e);
+        return res.status(500).json({ ok: false, error: 'failed to create admin-quick booking' });
+    }
+});
+
+// ลบทั้งชุดด้วย booking_id (จะลบทุกวันของรายการนั้น)
+// จำกัดให้ลบเฉพาะที่เป็น specialAdminQuick = true เพื่อไม่โดนข้อมูลปกติ
+app.delete('/api/history/admin-quick-field/:bookingId', async (req, res) => {
+    try {
+        const bookingId = String(req.params.bookingId || '').trim();
+        if (!bookingId) return res.status(400).json({ ok: false, error: 'missing booking_id' });
+
+        const result = await History.deleteMany({
+            type: 'field',
+            booking_id: bookingId,
+            specialAdminQuick: true
+        });
+
+        return res.json({ ok: true, deletedCount: result.deletedCount || 0 });
+    } catch (e) {
+        console.error('[admin-quick-field:delete] error', e);
+        return res.status(500).json({ ok: false, error: 'failed to delete admin-quick booking' });
+    }
+});
+
 app.post('/api/booking_field_upload', bookingFieldUpload.array('files'), async (req, res) => {
     try {
         const data = req.body;

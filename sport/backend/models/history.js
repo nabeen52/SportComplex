@@ -33,6 +33,10 @@ const historySchema = new mongoose.Schema(
         endTime: String,
         quantity: Number,
 
+        specialAdminQuick: { type: Boolean, default: false }, // ✅ ธงว่าเอกสารถูกสร้างจากปุ่ม "จองพิเศษ (Admin)"
+        createdByRole: { type: String, default: '' },         // เช่น 'admin'
+
+
         approvedBy: String,
         approvedAt: Date,
         disapprovedBy: String,
@@ -87,6 +91,7 @@ const historySchema = new mongoose.Schema(
         date_receive: { type: Date, default: null },
         receiver: { type: String, default: '' },
         restroom: { type: String, default: '' },
+        room_request: { type: String, default: '' },
 
         fileUrl: { type: String, default: '' },
 

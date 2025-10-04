@@ -74,6 +74,7 @@
 
                 <div class="profile-details" v-if="info">
                   <p>Username : {{ info.name }}</p>
+                  <p>Thai name : {{ info.thaiName && info.thaiName.trim() ? info.thaiName : '—' }}</p>
                   <p>Email : {{ info.email }}</p>
                   <p>Phone : {{ info.phone || '-' }}</p>
 
@@ -140,7 +141,8 @@ const info = ref({
   phone: '',
   // รองรับได้ทั้ง signaturePath และ signature
   signaturePath: '',
-  signature: ''
+  signature: '',
+   thaiName: ''  
 })
 
 // ===== Notifications =====
@@ -177,21 +179,40 @@ function signatureError(e) { e.target.style.display = 'none' }
 
 // ===== SweetAlert: Edit Phone + Signature =====
 async function openEditSwal() {
+  const HONORIFICS = ['นาย','นาง','นางสาว']
+
+  const rawThai = (info.value.thaiName || '').trim()
+  const m = rawThai.match(/^(\S+)\s+(.*)$/)
+  let prefillPrefix = '', prefillBare = rawThai
+  if (m && HONORIFICS.includes(m[1])) {
+    prefillPrefix = m[1]
+    prefillBare = (m[2] || '').trim()
+  }
+
   const currentSig = signatureImageUrl.value
+
   const html = `
-    <div class="swal-edit-wrap">
-      <input
-        type="tel"
-        id="swal-phone"
-        class="swal2-input"
-        placeholder="เบอร์โทร (4–10 หลัก)"
-        value="${info.value.phone || ''}"
-        inputmode="numeric"
-        minlength="4"
-        maxlength="10"
-        pattern="\\d{4,10}"
-      >
-      <input type="file" id="swal-signature" class="swal2-file" accept="image/*" style="margin-top:6px;">
+    <div class="swal-profile">
+      <h3 class="swal-profile-title">แก้ไขโปรไฟล์</h3>
+
+      <div class="swal-row">
+        <select id="swal-prefix" class="swal-field swal-select">
+          <option value="">— โปรดระบุ —</option>
+          ${HONORIFICS.map(o => `<option value="${o}" ${o===prefillPrefix?'selected':''}>${o}</option>`).join('')}
+        </select>
+        <input id="swal-thaiName-bare" type="text" class="swal-field"
+               placeholder="ชื่อ-นามสกุล (ภาษาไทย)"
+               value="${(prefillBare || '').replace(/"/g,'&quot;')}" />
+      </div>
+
+      <input id="swal-phone" type="tel" class="swal-field"
+             placeholder="เบอร์โทรศัพท์ที่สามารถติดต่อได้(4-10 หลัก)"
+             value="${info.value.phone || ''}" inputmode="numeric"
+             minlength="4" maxlength="10" pattern="\\d{4,10}" />
+
+      <!-- ✅ ใช้ native file input เพียงตัวเดียว ให้หน้าตาเหมือนรูปที่สอง -->
+      <input id="swal-signature" type="file" class="swal-file-native" accept="image/*" />
+
       <div id="swal-preview" class="swal-preview">
         ${currentSig
           ? `<img src="${currentSig}" class="swal-signature-img">`
@@ -199,87 +220,100 @@ async function openEditSwal() {
       </div>
     </div>
   `
+
   const { isConfirmed, value } = await Swal.fire({
-    title: 'เเก้ไขโปรไฟล์',
     html,
-    focusConfirm: false,
     showCancelButton: true,
     confirmButtonText: 'Save',
     cancelButtonText: 'Cancel',
-    width: 560,
-    customClass: { popup: 'swal-center-popup' },
+    width: 560,                          // ← ให้พอดีกับรูปที่สอง
+    padding: 0,
+    customClass: {
+      popup: 'swal-profile-popup',
+      confirmButton: 'swal-btn-save',
+      cancelButton: 'swal-btn-cancel'
+    },
+    focusConfirm: false,
     didOpen: () => {
       const phoneEl = document.getElementById('swal-phone')
-      const fileEl = document.getElementById('swal-signature')
-      const previewEl = document.getElementById('swal-preview')
+      const fileEl  = document.getElementById('swal-signature')
+      const preview = document.getElementById('swal-preview')
 
-      // บังคับให้เป็นเลขล้วน และตัดให้ไม่เกิน 10 หลักขณะพิมพ์
       phoneEl?.addEventListener('input', () => {
-        let v = (phoneEl.value || '').replace(/\D+/g, '') // keep digits only
-        if (v.length > 10) v = v.slice(0, 10)             // hard cap 10
+        let v = (phoneEl.value || '').replace(/\D+/g, '')
+        if (v.length > 10) v = v.slice(0, 10)
         phoneEl.value = v
       })
 
       fileEl?.addEventListener('change', () => {
         const f = fileEl.files?.[0]
-        if (!f) {
-          previewEl.innerHTML = `<span class="swal-signature-empty">ยังไม่มีลายเซ็น</span>`
-          return
-        }
+        if (!f) { preview.innerHTML = `<span class="swal-signature-empty">ยังไม่มีลายเซ็น</span>`; return }
         const url = URL.createObjectURL(f)
-        previewEl.innerHTML = `<img src="${url}" class="swal-signature-img">`
+        preview.innerHTML = `<img src="${url}" class="swal-signature-img">`
       })
     },
     preConfirm: () => {
-      const phone = (document.getElementById('swal-phone')?.value || '').trim()
-      const file = document.getElementById('swal-signature')?.files?.[0] || null
+      const prefixEl = document.getElementById('swal-prefix')
+      const nameEl   = document.getElementById('swal-thaiName-bare')
+      const phoneEl  = document.getElementById('swal-phone')
+      const fileEl   = document.getElementById('swal-signature')
 
-      const hasPhoneChange = phone !== (info.value.phone || '')
-      const hasSignature = !!file
+      const prefix = (prefixEl.value || '').trim()
+      let bare    = (nameEl.value || '').trim()
+      const first = bare.split(/\s+/)[0]
+      if (['นาย','นาง','นางสาว'].includes(first)) bare = bare.replace(/^\S+\s*/, '').trim()
 
-      if (!hasPhoneChange && !hasSignature) {
-        Swal.showValidationMessage('ใส่เบอร์ใหม่หรืออัปโหลดลายเซ็นอย่างน้อย 1 อย่าง')
-        return false
+      const hasPrefix = !!prefix, hasBare = !!bare
+      if (hasBare && !hasPrefix) { Swal.showValidationMessage('กรุณาเลือกคำนำหน้า'); return false }
+      if (hasPrefix && !hasBare) { Swal.showValidationMessage('กรุณากรอกชื่อ-นามสกุล (ภาษาไทย)'); return false }
+
+      const mergedThaiName = [prefix, bare].filter(Boolean).join(' ').trim()
+      const phone = (phoneEl.value || '').trim()
+      const file  = fileEl.files?.[0] || null
+
+      const changedThai  = mergedThaiName !== (info.value.thaiName || '')
+      const changedPhone = phone !== (info.value.phone || '')
+      const changedSig   = !!file
+      if (!changedThai && !changedPhone && !changedSig) {
+        Swal.showValidationMessage('กรุณาแก้ไขอย่างน้อย 1 รายการ'); return false
       }
-
-      // ตรวจความยาวเบอร์: 4–10 หลัก (เฉพาะกรณีมีการเปลี่ยนแปลงเบอร์)
-      if (hasPhoneChange) {
-        const digitsOnly = phone.replace(/\D+/g, '')
-        if (digitsOnly.length > 0 && (digitsOnly.length < 4 || digitsOnly.length > 10)) {
-          Swal.showValidationMessage('กรุณากรอกเบอร์ 4–10 หลัก')
-          return false
+      if (changedPhone) {
+        const d = phone.replace(/\D+/g,'')
+        if (d.length > 0 && (d.length < 4 || d.length > 10)) {
+          Swal.showValidationMessage('กรุณากรอกเบอร์ 4–10 หลัก'); return false
         }
       }
-
-      return { phone, file }
+      return { mergedThaiName, phone, file, changedThai, changedPhone }
     }
   })
-  if (!isConfirmed) return
-  const { phone, file } = value
 
+  if (!isConfirmed) return
   try {
+    const { mergedThaiName, phone, file, changedThai, changedPhone } = value
     const fd = new FormData()
-    if (phone !== (info.value.phone || '')) fd.append('phone', phone)
-    if (file) fd.append('signature', file) // ฝั่งหลังบ้านอ่านจาก field 'signature'
+    if (changedThai)  fd.append('thaiName', mergedThaiName)
+    if (changedPhone) fd.append('phone', phone)
+    if (file)         fd.append('signature', file)
 
     const res = await axios.patch(`${API_BASE}/api/users/profile`, fd, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-      withCredentials: true
+      headers: { 'Content-Type': 'multipart/form-data' }, withCredentials: true
     })
+    if (!res.data?.success || !res.data?.user) throw new Error(res.data?.message || 'อัปเดตไม่สำเร็จ')
 
-    if (res.data?.success && res.data?.user) {
-      info.value.phone = res.data.user.phone || ''
-      info.value.signaturePath = res.data.user.signaturePath || res.data.user.signature || ''
-      info.value.signature = info.value.signaturePath
-      sigBust.value = Date.now()
-      Swal.fire('บันทึกสำเร็จ', '', 'success')
-    } else {
-      throw new Error(res.data?.message || 'อัปเดตไม่สำเร็จ')
-    }
+    info.value.phone         = res.data.user.phone || ''
+    info.value.signaturePath = res.data.user.signaturePath || res.data.user.signature || ''
+    info.value.signature     = info.value.signaturePath
+    info.value.thaiName      = res.data.user.thaiName || res.data.user.thai_name || ''
+    sigBust.value = Date.now()
+
+    Swal.fire({ icon:'success', title:'บันทึกสำเร็จ', showConfirmButton:false, timer:1200 })
   } catch (e) {
     Swal.fire('เกิดข้อผิดพลาด', e.response?.data?.message || e.message, 'error')
   }
 }
+
+
+
 
 
 // ===== Sidebar & Mobile =====
@@ -372,7 +406,8 @@ onMounted(async () => {
         picture: res.data.user.picture,
         phone: res.data.user.phone || '',
         signaturePath: res.data.user.signaturePath || res.data.user.signature || '',
-        signature: res.data.user.signature || ''
+        signature: res.data.user.signature || '',
+        thaiName: res.data.user.thaiName || res.data.user.thai_name || '' 
       }
     } else {
       router.push('/login'); return
@@ -539,4 +574,140 @@ onUnmounted(() => {
   border:1px dashed #cbd5e1; background:#f8fafc; border-radius:6px; padding:4px;
 }
 .swal-signature-empty{ color:#94a3b8; font-style:italic; }
+
+/* ===== SWAL PROFILE (ให้เหมือนภาพ) ===== */
+.swal-profile-popup.swal2-popup{
+  border-radius: 12px;
+  box-shadow: 0 20px 50px rgba(0,0,0,.18);
+  overflow: hidden;
+}
+
+.swal-profile{
+  padding: 26px 28px 18px;
+}
+
+.swal-profile-title{
+  margin: 0 0 18px;
+  font-size: 32px;             /* ขนาดใกล้ภาพ */
+  font-weight: 700;
+  text-align: center;
+  color: #1f2937;
+}
+
+.swal-row{
+  display: grid;
+  grid-template-columns: 180px 1fr;  /* ซ้ายเป็น select, ขวาเป็นชื่อไทย */
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.swal-field{
+  width: 100%;
+  height: 44px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 0 14px;
+  font-size: 16px;
+  background: #fff;
+}
+
+.swal-select{
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg width='18' height='18' viewBox='0 0 20 20' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M5 7l5 5 5-5' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 16px;
+}
+
+/* ช่องเบอร์โทร */
+#swal-phone{
+  margin-bottom: 12px;
+}
+
+/* แถวเลือกไฟล์ “เลือกไฟล์ | ไม่ได้เลือกไฟล์ใด” */
+
+
+
+
+
+/* พรีวิวลายเซ็น */
+.swal-preview{
+  display: flex;
+  justify-content: center;
+  margin-top: 8px;
+}
+.swal-signature-img{
+  width: 220px;
+  height: 88px;
+  object-fit: contain;
+  border: 1px dashed #cbd5e1;
+  background: #f8fafc;
+  border-radius: 8px;
+  padding: 6px;
+}
+.swal-signature-empty{
+  color:#94a3b8; font-style:italic;
+}
+
+/* ปุ่ม */
+.swal-btn-save{
+  background:#6366f1 !important;       /* สีม่วงในภาพตัวอย่าง */
+  border-radius: 8px !important;
+  padding: 10px 22px !important;
+  font-weight: 700 !important;
+}
+.swal-btn-save:hover{ filter: brightness(0.95); }
+
+.swal-btn-cancel{
+  background:#6b7280 !important;        /* เทา */
+  border-radius: 8px !important;
+  padding: 10px 22px !important;
+  font-weight: 700 !important;
+  margin-left: 10px !important;
+  color:#fff !important;
+}
+/* ==== ทำให้ input[type=file] แบบ native แสดงเหมือนรูปที่สอง ==== */
+.swal-file-native{
+  width: 100%;
+  margin: 8px 0 6px;
+  /* ให้ดู clean ขึ้นเล็กน้อย แต่ยังคงลุค native (ปุ่ม "เลือกไฟล์" + ข้อความ) */
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 6px;     /* อาจไม่ส่งผลกับบางเบราว์เซอร์ แต่ไม่เป็นไร */
+  background: #fff;
+  font-size: 15px;
+}
+
+/* ปรับโทนอินพุตให้ละมุนแบบรูป */
+.swal-field{
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  color: #111827;
+}
+.swal-field::placeholder{ color:#9ca3af; }
+
+/* หัวข้อใหญ่แบบรูปที่สอง */
+.swal-profile-title{
+  font-size: 40px;
+  font-weight: 800;
+  text-align: center;
+  margin: 10px 0 18px;
+}
+
+/* ปุ่ม Save/Cancel สีตรงตัวอย่าง */
+.swal-btn-save{
+  background:#6366f1 !important;
+  border-radius:8px !important;
+  padding:10px 22px !important;
+  font-weight:700 !important;
+}
+.swal-btn-cancel{
+  background:#6b7280 !important;
+  color:#fff !important;
+  border-radius:8px !important;
+  padding:10px 22px !important;
+  font-weight:700 !important;
+  margin-left:10px !important;
+}
+
 </style>

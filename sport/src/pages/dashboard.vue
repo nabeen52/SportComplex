@@ -11,7 +11,7 @@
         <router-link to="/home_admin" exact-active-class="active"><i class="pi pi-megaphone"></i> แก้ไขข่าว</router-link>
         <router-link to="/edit_field" active-class="active"><i class="pi pi-map-marker"></i> แก้ไขสนาม</router-link>
         <router-link to="/edit_equipment" active-class="active"><i class="pi pi-clipboard"></i> แก้ไขอุปกรณ์ </router-link>
-         <router-link to="/step" active-class="active"><i class="pi pi-sitemap"></i> แก้ไขขั้นตอนการอนุมัติ </router-link>
+         <!-- <router-link to="/step" active-class="active"><i class="pi pi-sitemap"></i> แก้ไขขั้นตอนการอนุมัติ </router-link> -->
         <router-link to="/booking_field_admin" active-class="active"><i class="pi pi-map-marker"></i> จองสนาม</router-link>
         <router-link to="/approve_field" active-class="active"><i class="pi pi-verified"></i> อนุมัติ</router-link>
         <!-- <router-link to="/return_admin" active-class="active"><i class="pi pi-box"></i> รับคืนอุปกรณ์ </router-link> -->
@@ -823,10 +823,10 @@ function exportFieldPDF() {
     'รายงานสถิติการใช้สนามกีฬาของหน่วยงาน',
     'สถิติการใช้งาน สนามกีฬาของหน่วยงาน.pdf',
     [
-      `ชื่อสนาม: ${selectedFieldName.value || 'ทั้งหมด'}`,
-      `เดือน: ${selectedFieldMonth.value ? months[selectedFieldMonth.value - 1] : 'ทั้งหมด'}`,
-      `ปี: ${selectedFieldYear.value || 'ทั้งหมด'}`,
-      `แสดงสูงสุด: ${fieldShowLimit.value ? fieldShowLimit.value + ' รายการ' : 'ทั้งหมด'}`
+      `สนาม: ${selectedFieldName.value || 'ทุกสนาม'}`,
+      `เดือน: ${selectedFieldMonth.value ? months[selectedFieldMonth.value - 1] : 'ทุกเดือน'}`,
+      `ปี: ${selectedFieldYear.value || 'ทุกปี'}`,
+      `แสดงสูงสุด: ${fieldShowLimit.value ? fieldShowLimit.value + ' รายการ' : 'ทุกรายการ'}`
     ].join('   ')
   )
 }
@@ -879,13 +879,13 @@ function exportPDF(data, header, filename, filterSummary, type = 'field') {
     y += 12
 
     pdf.setFontSize(13)
-    const intro = 'รายงานแสดงสรุปสถิติการใช้บริการของแต่ละหน่วยงาน'
+    const intro = 'รายงานแสดงสรุปสถิติการใช้งาน'
     const introLines = pdf.splitTextToSize(intro, pageWidth - 30)
     introLines.forEach(line => { pdf.text(line, 15, y); y += 8 })
     y += 10
 
     pdf.setFontSize(14)
-    pdf.text('สรุปการใช้บริการแต่ละหน่วยงาน', pageWidth / 2, y, { align: 'center' }); y += 10
+    pdf.text('สรุปการใช้งาน', pageWidth / 2, y, { align: 'center' }); y += 10
     pdf.setFontSize(13)
 
     let totalUsage = 0, totalHours = 0
@@ -903,11 +903,11 @@ function exportPDF(data, header, filename, filterSummary, type = 'field') {
          pdf.text(`${i + 1}. ${u.unit}`, leftX, y)
         let rightText = ''
         if (type === 'equipment') {
-          rightText = `จำนวนการใช้งาน: ${u.usage || 0} ครั้ง`
+          rightText = `จำนวนการใช้งาน: ${u.usage || 0} รอบ`
         } else if (type === 'overall') {
-          rightText = `จำนวนชั่วโมง: ${u.hours || 0}`
+          rightText = `${u.hours || 0} ชม.`
         } else {
-          rightText = `จำนวนครั้ง: ${u.usage || 0} | จำนวนชั่วโมง: ${u.hours || 0}`
+          rightText = `${u.usage || 0} รอบ | ${u.hours || 0} ชม.`
         }
         pdf.text(rightText, rightX, y, { align: 'right' }); y += lineHeight
         if (type === 'equipment') totalUsage += u.usage || 0
@@ -915,21 +915,21 @@ function exportPDF(data, header, filename, filterSummary, type = 'field') {
         if (type !== 'overall') totalUsage += u.usage || 0 // เฉพาะ non-overall
       })
        y += 4
-      if (type === 'equipment') {
-        pdf.text(`รวมการใช้งาน: ${totalUsage} ครั้ง`, leftX, y)
-      } else if (type === 'overall') {
-        pdf.text(`รวมชั่วโมง: ${totalHours}`, leftX, y)
-      } else {
-        pdf.text(`รวมครั้ง: ${totalUsage} | รวมชั่วโมง: ${totalHours}`, leftX, y)
-      }
+      // if (type === 'equipment') {
+      //   pdf.text(`รวมการใช้งาน: ${totalUsage} ครั้ง`, leftX, y)
+      // } else if (type === 'overall') {
+      //   pdf.text(`รวมชั่วโมง: ${totalHours}`, leftX, y)
+      // } else {
+      //   pdf.text(`รวมครั้ง: ${totalUsage} | รวมชั่วโมง: ${totalHours}`, leftX, y)
+      // }
     }
     y += marginBottom
     if (y > pdf.internal.pageSize.getHeight() - 20) {
       pdf.addPage(); y = 25
     }
     pdf.setFontSize(12)
-    pdf.text('ผู้จัดทำ: ...........................................................', leftX, y); y += 7
-    pdf.text('ระบบจัดการศูนย์กีฬา มหาวิทยาลัยแม่ฟ้าหลวง', leftX, y)
+    // pdf.text('ผู้จัดทำ: ...........................................................', leftX, y); y += 7
+    // pdf.text('ระบบจัดการศูนย์กีฬา มหาวิทยาลัยแม่ฟ้าหลวง', leftX, y)
 
     pdf.save(filename)
   } catch (e) {

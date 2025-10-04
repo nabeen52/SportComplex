@@ -827,8 +827,27 @@ function isNarrow(bk){
 
 
 function chipTitle(bk) {
-  const head = fieldHasZones.value ? (bk.zone || bk.name) : bk.name
-  return `${head} • ${bk.startTime}-${bk.endTime} • ${mapStatus(bk.status)}`
+   // กิจกรรม
+  const activity = bk.reasons || bk.activity || bk.title || '-'
+  // หน่วยงาน
+  const agency = bk.agency || '-'
+  // เวลา
+  const timeStr = `${bk.startTime || '--:--'} - ${bk.endTime || '--:--'}`
+  // สนาม + โซน (แสดงโซนเฉพาะถ้ามีและไม่ใช่ '-')
+  const fieldStr = bk.name || fieldName.value || '-'
+  const zoneStr  = bk.zone && bk.zone !== '-' ? bk.zone : null
+  // สถานะ (แมปเป็นคำสั้นๆที่มีอยู่แล้ว)
+  const status = mapStatus(bk.status || '')
+
+  // ทำเป็นหลายบรรทัด (tooltip ของเบราว์เซอร์รองรับ \n)
+  const lines = [
+    `กิจกรรม: ${activity}`,
+    `หน่วยงาน: ${agency}`,
+    `เวลา: ${timeStr}`,
+    `สนาม: ${fieldStr}${zoneStr ? ` / โซน: ${zoneStr}` : ''}`,
+    `สถานะ: ${status}`
+  ]
+  return lines.join('\n')
 }
 
 

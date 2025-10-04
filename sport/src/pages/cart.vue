@@ -180,6 +180,74 @@ async function fetchApprovalRolesOneDay() {
   }
 }
 
+async function reconcileCartWithStock({ showToast = true } = {}) {
+  if (!Array.isArray(products.value) || !products.value.length) return;
+
+  let changed = false;
+  const updates = [];
+
+  for (const p of products.value) {
+    const avail = Number(stockMap.value[p.name] || 0);
+    const current = Number(p.quantity || 0);
+
+    // ถ้าสต็อกหมด → ลบออกจากตะกร้า
+    if (avail <= 0 && current > 0) {
+      updates.push(
+        axios.delete(`${API_BASE}/api/cart/delete`, { data: { user_id: userId, name: p.name } })
+      );
+      changed = true;
+      p.quantity = 0; // อัปเดตหน้า UI ทันที
+      continue;
+    }
+
+    // ถ้าเกินสต็อก → หนีบให้เท่ากับสต็อก
+    if (current > avail) {
+      p.quantity = avail;
+      updates.push(
+        axios.put(`${API_BASE}/api/cart/update`, {
+          user_id: userId,
+          name: p.name,
+          quantity: avail,
+        })
+      );
+      changed = true;
+    }
+
+    // ถ้าติดลบ/ศูนย์ที่ไม่ถูกต้อง → หนีบขั้นต่ำเป็น 1 (ถ้าสต็อกมี)
+    if (current < 1 && avail > 0) {
+      p.quantity = 1;
+      updates.push(
+        axios.put(`${API_BASE}/api/cart/update`, {
+          user_id: userId,
+          name: p.name,
+          quantity: 1,
+        })
+      );
+      changed = true;
+    }
+  }
+
+  if (updates.length) {
+    try {
+      await Promise.all(updates);
+      // กรองรายการที่สต็อกหมดออกจากหน้า UI
+      products.value = products.value.filter(p => p.quantity > 0);
+      if (changed && showToast) {
+        await Swal.fire({
+          icon: 'info',
+          title: 'ปรับจำนวนตามสต็อก',
+          text: 'บางรายการถูกปรับไม่ให้เกินจำนวนที่มีอยู่',
+          timer: 1400,
+          showConfirmButton: false
+        });
+      }
+    } catch (e) {
+      // เงียบๆ ไปก่อนเพื่อไม่กวนผู้ใช้ แต่คุณจะ console.log ได้ถ้าต้องการ
+    }
+  }
+}
+
+
 function buildStepFromRoles(roles) {
   const nowISO = new Date().toISOString();
   return (Array.isArray(roles) ? roles : []).map(r => ({
@@ -459,8 +527,13 @@ onMounted(async () => {
     router.replace('/login');
     return;
   }
-  await loadCart()
-  await loadStock()
+
+  await loadCart();
+  await loadStock();
+
+  // 🔒 หนีบจำนวนในตะกร้าให้ไม่เกินสต็อกทุกครั้งที่เข้าหน้านี้
+  await reconcileCartWithStock({ showToast: false });
+
   try {
     const annRes = await axios.get(`${API_BASE}/api/announcement`)
     announcement.value = annRes.data?.announce || ""
@@ -469,7 +542,8 @@ onMounted(async () => {
   }
   await fetchNotifications()
   polling = setInterval(fetchNotifications, 30000)
-})
+});
+
 
 onBeforeUnmount(() => {
   if (polling) clearInterval(polling)

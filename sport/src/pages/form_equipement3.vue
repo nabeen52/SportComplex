@@ -132,6 +132,9 @@
         <div class="form-row" style="padding-top: 10px; justify-content: flex-start !important;">
           <span>โดยมีรายการดังต่อไปนี้</span>
         </div>
+<p style="margin: 16px 0;">
+  <b>สถานที่รับอุปกรณ์:</b> สำนักงานอาคารกีฬาอเนกประสงค์ (ข้างสนามแบดมินตัน)
+</p>
 
         <!-- ================= ตารางรายการอุปกรณ์ ================= -->
         <div class="form-row" style="padding-top: 0px;">
@@ -210,7 +213,7 @@
           </table>
         </div>
         <div style="margin-top: 15px;"></div>
-<p class="note-block"> <b> *หมายเหตุ หากอุปกรณ์เกิดการชำรุดเสียหายในระหว่างที่ผู้ยืมเป็นผู้รับผิดชอบ ผู้ยืมจะต้องชดใช้ค่าเสียหายที่เกิดขึ้นทั้งหมด</b>
+<p class="note-block"> <b> *หมายเหตุ หากอุปกรณ์เกิดการชำรุดหรือสูญหายในระหว่างที่ผู้ยืมเป็นผู้รับผิดชอบ ผู้ยืมจะต้องชดใช้ค่าเสียหายที่เกิดขึ้นทั้งหมด</b>
  
 </p>
        
@@ -272,7 +275,6 @@
   </div>
 </div>
 </template>
-
 <script setup>
 import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
@@ -769,7 +771,6 @@ async function handleNext() {
 
 
 </script>
-
 <style scoped>
 .headStepper {
   position: sticky;

@@ -774,16 +774,6 @@ openPdfFromGroup(group) {
       }
     },
 
-    // เดิมมีอยู่แล้ว (ย้ำว่าให้คงไว้เหมือนเดิม)
-    showReturnButton(group) {
-      return (
-        group.type === 'equipment' &&
-        group.items.length > 0 &&
-        group.items.every(item => item.status === 'Approved') &&
-        !group.items.some(item => item.status === 'Returned' || item.status === 'Return-pending')
-      );
-    },
-
     _makeSnapshot(rows = []) {
       const lite = (rows || []).map(r => ({
         id: r.id || r._id,
@@ -1606,14 +1596,41 @@ async cancelItem(itemId) {
       }
     },
 
-    showReturnButton(group) {
-      return (
-        group.type === 'equipment' &&
-        group.items.length > 0 &&
-        group.items.every(item => item.status === 'Approved') &&
-        !group.items.some(item => item.status === 'Returned' || item.status === 'Return-pending')
-      )
-    },
+    // แทนที่ของเดิมให้เหลืออันนี้อันเดียว
+showReturnButton(group) {
+  // แสดงปุ่มคืนได้เฉพาะกลุ่มอุปกรณ์เท่านั้น
+  if (group.type !== 'equipment') return false;
+
+  const items = Array.isArray(group.items) ? group.items : [];
+  if (items.length === 0) return false;
+
+  // ต้องเป็นสถานะ Approved ทั้งกลุ่ม และยังไม่มี Returned/Return-pending ปะปน
+  const allApproved = items.every(it => it.status === 'Approved');
+  const hasReturnedOrPending = items.some(it =>
+    it.status === 'Returned' || it.status === 'Return-pending'
+  );
+  if (!allApproved || hasReturnedOrPending) return false;
+
+  // ---- เงื่อนไข "ยืมหลายวัน" ----
+  const isMultiDay = items.some(it => it.since || it.uptodate);
+
+  // helper เช็คค่าว่างแบบหลากหลาย
+  const isEmptyLike = (v) => {
+    const s = (v ?? '').toString().trim().toLowerCase();
+    return !s || s === 'null' || s === 'undefined';
+  };
+
+  // ถ้าเป็น "ยืมหลายวัน" และยังไม่มีข้อมูลผู้ส่งมอบของ (handover) เลย -> ไม่ให้แสดงปุ่ม Return
+  if (isMultiDay) {
+    const noHandoverForAll =
+      items.every(it => isEmptyLike(it.handoverById) && isEmptyLike(it.handoverBy));
+    if (noHandoverForAll) return false;
+  }
+
+  // เงื่อนไขผ่านทั้งหมด -> แสดงปุ่ม Return
+  return true;
+},
+
 
     itemShowCondition(item, group) {
       const groupHasReturned = group.items.some(it =>

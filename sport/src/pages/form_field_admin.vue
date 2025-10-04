@@ -11,7 +11,7 @@
         <router-link to="/home_admin" exact-active-class="active"><i class="pi pi-megaphone"></i> แก้ไขข่าว</router-link>
         <router-link to="/edit_field" active-class="active"><i class="pi pi-map-marker"></i> แก้ไขสนาม</router-link>
         <router-link to="/edit_equipment" active-class="active"><i class="pi pi-clipboard"></i> แก้ไขอุปกรณ์ </router-link>
-         <router-link to="/step" active-class="active"><i class="pi pi-sitemap"></i> แก้ไขขั้นตอนการอนุมัติ </router-link>
+        <!-- <router-link to="/step" active-class="active"><i class="pi pi-sitemap"></i> แก้ไขขั้นตอนการอนุมัติ </router-link> -->
         <router-link to="/booking_field_admin" active-class="active"><i class="pi pi-map-marker"></i> จองสนาม</router-link>
         <router-link to="/approve_field" active-class="active"><i class="pi pi-verified"></i> อนุมัติ</router-link>
         <!-- <router-link to="/return_admin" active-class="active"><i class="pi pi-box"></i> รับคืนอุปกรณ์ </router-link> -->
@@ -136,64 +136,43 @@
       />
     </div>
 
-          <div class="form-row" style="position:relative;">
-          <label>
-  ชื่อหน่วยงาน
-  <span v-if="showValidate && (missingFields.agency || missingFields.agencyOther)" class="required-star">*</span>
-</label>
-<input
-  ref="agencyInputEl"
-  class="custom-input"
-  type="text"
-  v-model="agencySearch"
-  @click="maybeEnterEdit"
-  @input="filterAgency"
-  @focus="onAgencyFocus"
-  @blur="onAgencyBlur"
-  :readonly="isFormLocked || (isAgencySelected && !!agencyInput && !isAgencyEditing)"
-  placeholder="ค้นหาหรือเลือกหน่วยงาน"
-  autocomplete="off"
-  :class="['custom-input', { 'input-error': showValidate && (missingFields.agency || missingFields.agencyOther) }]"
-  style="flex:1"
-/>
+         <!-- ชื่อหน่วยงาน (เหมือนหน้า form_field: ไม่มี 'อื่นๆ' แต่พิมพ์เองได้) -->
+<div class="form-row" style="position:relative;">
+  <label>
+    ชื่อหน่วยงาน
+    <span v-if="showValidate && missingFields.agency" class="required-star">*</span>
+  </label>
 
+  <input
+    ref="agencyInputEl"
+    class="custom-input"
+    type="text"
+    v-model="agencySearch"
+    @input="filterAgency"
+    @focus="onAgencyFocus"
+    @blur="onAgencyBlur"
+    :readonly="isFormLocked"
+    placeholder="พิมพ์เพื่อค้นหาหรือกรอกชื่อหน่วยงานของคุณ"
+    autocomplete="off"
+    :class="['custom-input', { 'input-error': showValidate && missingFields.agency }]"
+    style="flex:1"
+  />
 
+  <small class="note-text">หากไม่พบชื่อหน่วยงาน สามารถกรอกชื่อหน่วยงานของคุณได้เลย</small>
 
+  <!-- ดรอปดาวน์รายชื่อจาก DB (ไม่มี 'อื่นๆ') -->
   <ul v-if="agencyDropdownOpen && filteredAgencyOptions.length" class="agency-dropdown">
     <li
       v-for="option in filteredAgencyOptions"
       :key="option"
       @mousedown.prevent="selectAgency(option)"
       style="cursor:pointer;padding:7px 16px;"
-    >{{ option }}</li>
+    >
+      {{ option }}
+    </li>
   </ul>
 </div>
 
-
-<div class="form-row" v-if="agencyInput === 'อื่นๆ'">
-  <label>
-    โปรดระบุหน่วยงาน
-    <span v-if="showValidate && missingFields.agencyOther" class="required-star">*</span>
-  </label>
-  <input
-    type="text"
-    class="custom-input"
-    v-model="customAgency"
-    placeholder="กรอกชื่อหน่วยงาน"
-    :readonly="isFormLocked"
-    :class="{ 'is-invalid': showValidate && missingFields.agencyOther }"
-  />
-</div>
-<div class="form-row" v-if="agencyInput === 'อื่นๆ'">
-  <label>รายละเอียดเพิ่มเติม (ถ้ามี)</label>
-  <input
-    type="text"
-    class="custom-input"
-    v-model="otherAgencyDetail"
-    placeholder="รายละเอียดเพิ่มเติม"
-    :readonly="isFormLocked"
-  />
-</div>
 
               <div class="form-row">
                 <label>
@@ -318,17 +297,17 @@
 
 
 
-              <div class="form-section-title">1.ขอใช้สถานที่</div>
+              <div class="form-section-title">1. ขอใช้สถานที่</div>
               <div class="form-row">
                 <label>
-                  อาคารที่ต้องการขอใช้
+                  1.1 อาคารที่ต้องการขอใช้
                   <span v-if="showValidate && missingFields.building" class="required-star">*</span>
                 </label>
                 <input type="text" class="custom-input building-readonly" :value="formData.building || 'ยังไม่ได้เลือกอาคาร'" readonly />
               </div>
               <div class="form-row" v-if="hasZone && formData.zone">
                 <label>
-                  พื้นที่/ห้อง
+                  1.2 พื้นที่/ห้อง
                   <span v-if="showValidate && missingFields.zone" class="required-star">*</span>
                 </label>
                 <input type="text" class="custom-input" :value="formData.zone" readonly />
@@ -355,7 +334,7 @@
   <!-- ห้องสุขา -->
   <div class="form-row" style="grid-column: span 2;">
     <label>
-      ห้องสุขา
+      2.1 ห้องสุขา
       <span v-if="showValidate && missingFields.restroomChoice" class="required-star">*</span>
     </label>
     <div class="radio-inline" style="margin-top:4px;">
@@ -370,7 +349,7 @@
   <!-- ไฟฟ้าส่องสว่าง: ต้องเลือกก่อน -->
   <div class="form-row" style="grid-column: span 2;">
     <label>
-      ไฟฟ้าส่องสว่าง
+      2.2 ไฟฟ้าส่องสว่าง
       <span v-if="showValidate && missingFields.lightsChoice" class="required-star">*</span>
     </label>
     <div class="radio-inline" style="margin-top:4px;">
@@ -382,7 +361,6 @@
     </div>
   </div>
 
-  <!-- ช่องเวลา โผล่เฉพาะเมื่อเลือกไฟ = ต้องการ -->
   <!-- ช่องเวลา โผล่เฉพาะเมื่อเลือกไฟ = ต้องการ -->
 <div class="form-row" style="grid-column: span 2;" v-if="formData.lights === 'yes'">
   <label>ตั้งแต่เวลา - ถึงเวลา</label>
@@ -405,40 +383,62 @@
 </template>
 
 
-              <!-- ============== 3. ขอใช้รายการประกอบอาคาร ============= -->
-              <div class="form-section-title">3.ขออนุมัติรายการประกอบอาคาร</div>
-              <div class="form-row" style="grid-column: span 2;">
-                <div>
-                  <label>
-                    <input type="radio" name="facility-request" value="yes" v-model="formData.facilityRequest" /> ต้องการ
-                  </label>
-                  <label>
-                    <input type="radio" name="facility-request" value="no" v-model="formData.facilityRequest" /> ไม่ต้องการ
-                  </label>
-                </div>
-                <!-- แจ้งเตือนถ้าเลือก "ต้องการ" แล้วไม่กรอกช่องใดเลย -->
-                <span
-                  v-if="formData.facilityRequest === 'yes' && showValidate && missingFields.facilityGroup"
-                  class="input-error-message"
-                  style="margin-left:12px;"
-                >
-                  กรุณากรอกข้อมูลอย่างน้อย 1 ช่องในหัวข้อนี้
-                </span>
-              </div>
-              <div
-                class="form-row"
-                v-if="formData.facilityRequest === 'yes' && formData.building && formData.building.includes('72')"
-              >
-                <label>
-                  ดึงอัฒจันทร์ภายในอาคารเฉลิมพระเกียรติ 72 พรรษา
-                  <span v-if="showValidate && missingFields.amphitheater" class="required-star">*</span>
-                </label>
-                <input type="text" class="custom-input" v-model="formData.amphitheater" placeholder="เลือกฝั่งของอัฒจันทร์" />
-              </div>
-              <div class="form-row" v-if="formData.facilityRequest === 'yes'">
-                <label>อุปกรณ์กีฬา (โปรดระบุรายการและจำนวน)</label>
-                <input type="text" class="custom-input" v-model="formData.need_equipment" />
-              </div>
+            <!-- ============== 3. ขอใช้รายการประกอบอาคาร ============= -->
+<div class="form-section-title">3.ขออนุมัติรายการประกอบอาคาร</div>
+
+<div class="form-row" style="grid-column: span 2;">
+  <div>
+    <label>
+      <input type="radio" name="facility-request" value="yes" v-model="formData.facilityRequest" />
+      ต้องการ
+    </label>
+    <label>
+      <input type="radio" name="facility-request" value="no" v-model="formData.facilityRequest" />
+      ไม่ต้องการ
+    </label>
+  </div>
+  <span
+    v-if="formData.facilityRequest === 'yes' && showValidate && missingFields.facilityGroup"
+    class="input-error-message"
+    style="margin-left:12px;"
+  >
+    กรุณากรอกข้อมูลอย่างน้อย 1 ช่องในหัวข้อนี้
+  </span>
+</div>
+
+<!-- 3.1 (เฉพาะอาคารเฉลิมพระเกียรติ 72 พรรษา) -->
+<div class="form-row"
+     v-if="formData.facilityRequest === 'yes' && isBuilding72">
+  <label>
+    3.1 ดึงอัฒจันทร์ภายในอาคารเฉลิมพระเกียรติ 72 พรรษา
+    <span v-if="showValidate && missingFields.amphitheater" class="required-star">*</span>
+  </label>
+  <input type="text" class="custom-input" v-model="formData.amphitheater" placeholder="เลือกฝั่งของอัฒจันทร์" />
+</div>
+
+<!-- อุปกรณ์กีฬา: ถ้าเป็น 72 = 3.2, ถ้าไม่ใช่ = 3.1 -->
+<div class="form-row" v-if="formData.facilityRequest === 'yes'">
+  <label>{{ isBuilding72 ? '3.2' : '3.1' }} อุปกรณ์กีฬา (โปรดระบุรายการและจำนวน)</label>
+  <input type="text" class="custom-input" v-model="formData.need_equipment" />
+</div>
+
+<!-- ห้องที่ต้องการใช้งาน: ถ้าเป็น 72 = 3.3, ถ้าไม่ใช่ = 3.2 -->
+<div class="form-row" v-if="formData.facilityRequest === 'yes'">
+  <label>{{ isBuilding72 ? '3.3' : '3.2' }} ห้องที่ต้องการใช้งาน</label>
+  <input type="text" class="custom-input" v-model="formData.room_request"
+         placeholder="เช่น ห้องประชุม 201, โถงกลาง, ห้องซ้อม ฯลฯ" />
+</div>
+
+
+
+
+
+
+
+
+
+
+
            <div class="form-row" style="grid-column: span 2;">
                 <label>
                   แนบไฟล์
@@ -580,6 +580,98 @@ const MAX_TOTAL_SIZE = 100 * 1024 * 1024;  // รวมสูงสุด 100MB
 
 const lastSeenTimestamp = ref(0)
 let polling = null
+
+/* ===== Helpers สำหรับหน่วยงาน (เหมือนหน้า form_field) ===== */
+function normalize(s) {
+  return (s || '').toString().trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+const isBuilding72 = computed(() => {
+  const name = (formData.value.building || '').replace(/\s+/g, '').toLowerCase()
+  // ครอบคลุมทั้ง “เฉลิมพระเกียรติ 72 พรรษา” และกรณีพิมพ์สั้น ๆ ว่า 72
+  return name.includes('เฉลิมพระเกียรติ') || name.includes('72พรรษา') || name.includes('72')
+})
+
+
+
+function pickArray(resData) {
+  if (Array.isArray(resData)) return resData;
+  if (resData && Array.isArray(resData.data)) return resData.data;
+  if (resData && Array.isArray(resData.items)) return resData.items;
+  return [];
+}
+function extractAgencyNames(rawList) {
+  return rawList
+    .map(x => (x?.agency ?? x?.unit ?? x?.name ?? x?.title ?? x?.label ?? '').toString().trim())
+    .filter(Boolean);
+}
+async function fetchAllAgenciesRobust() {
+  const tries = [
+    { params: { type: 'agency' } },
+    { params: { type: 'equipment' } },
+    { params: { type: 'agency,equipment' } },
+    { params: undefined },
+  ];
+  const collected = new Set();
+  for (const t of tries) {
+    try {
+      const res = await axios.get(`${API_BASE}/api/information`, {
+        withCredentials: true,
+        ...(t?.params ? { params: t.params } : {})
+      });
+      const arr = extractAgencyNames(pickArray(res.data));
+      for (const name of arr) collected.add(name);
+    } catch { /* ข้าม */ }
+  }
+  return Array.from(collected);
+}
+function agencyExists(name) {
+  const n = normalize(name);
+  if (!n) return false;
+  return agencyOptions.value.some(opt => normalize(opt) === n);
+}
+let _addingAgency = false;
+async function ensureAgencyInInformation(name) {
+  const newName = (name || '').trim().replace(/\s+/g, ' ');
+  if (!newName || _addingAgency) return;
+  if (agencyExists(newName)) return;
+  _addingAgency = true;
+  try {
+    await axios.post(
+      `${API_BASE}/api/information`,
+      { agency: newName, type: 'agency' },
+      { withCredentials: true, headers: { 'Content-Type': 'application/json' } }
+    );
+    await refreshAgencies();
+    if (!agencyExists(newName)) {
+      agencyOptions.value.push(newName);
+    }
+  } catch (e) {
+    const status = e?.response?.status;
+    if (status === 409 || status === 422) return; // มีอยู่แล้ว
+    const msg = e?.response?.data?.message || e?.message || 'ไม่ทราบสาเหตุ';
+    await Swal.fire({
+      icon: 'error',
+      title: 'เพิ่มชื่อหน่วยงานไม่สำเร็จ',
+      html: `สถานะ: <b>${status ?? '—'}</b><br>สาเหตุ: ${msg}`,
+      confirmButtonText: 'ตกลง'
+    });
+    throw e;
+  } finally {
+    _addingAgency = false;
+  }
+}
+async function refreshAgencies() {
+  try {
+    const list = await fetchAllAgenciesRobust();
+    agencyOptions.value = list.sort((a,b) => a.localeCompare(b, 'th'));
+    return !!agencyOptions.value.length;
+  } catch {
+    agencyOptions.value = [];
+    return false;
+  }
+}
+
 
 
 // Agency
@@ -734,12 +826,10 @@ function checkAvailability() {
 
 
 const filteredAgencyOptions = computed(() => {
-  const search = agencySearch.value.trim().toLowerCase()
-  if (!search) return agencyOptions.value
-  return agencyOptions.value.filter(option =>
-    option.toLowerCase().includes(search)
-  )
-})
+  const search = normalize(agencySearch.value);
+  if (!search) return agencyOptions.value;
+  return agencyOptions.value.filter(opt => normalize(opt).includes(search));
+});
 
 function pruneOldNotifications () {
   const cutoff = Date.now() - (7 * 24 * 60 * 60 * 1000) // เก็บ 7 วัน
@@ -787,58 +877,48 @@ function onProxyIdInput(e) {
 
 const isAgencySelected = computed(() =>
   !!agencyInput.value &&
-  agencyOptions.value.includes(agencyInput.value) &&
-  agencyInput.value !== 'อื่นๆ'
-)
+  agencyOptions.value.includes(agencyInput.value)
+);
 
 
 function filterAgency() {
-  agencyDropdownOpen.value = true
-  isAgencyEditing.value = true     // คงโหมดแก้ไขไว้ขณะพิมพ์
+  agencyDropdownOpen.value = true;
+  isAgencyEditing.value = true;
 }
 
 function selectAgency(option) {
-  agencyInput.value = option       // ค่าที่เลือกจริง
-  agencySearch.value = option      // โชว์ผลลัพธ์ที่เลือก
-  agencyDropdownOpen.value = false
-  isAgencyEditing.value = false    // กลับไปล็อก
-  handleAgencyChange()
+  agencyInput.value = option;
+  agencySearch.value = option;
+  agencyDropdownOpen.value = false;
+  isAgencyEditing.value = false;
 }
 
 
 function onAgencyFocus() {
-  isAgencyEditing.value = true
-  agencyDropdownOpen.value = true
+  isAgencyEditing.value = true;
+  agencyDropdownOpen.value = true;
   if (isAgencySelected.value) {
-    agencySearch.value = ''   // โฟกัสแล้วให้เคลียร์เพื่อพิมพ์หาใหม่ได้
+    agencySearch.value = '';
   }
 }
-
 function onAgencyBlur() {
   setTimeout(() => {
-    agencyDropdownOpen.value = false
-    isAgencyEditing.value = false
-  }, 180)
-}
-
-function handleAgencyChange() {
-  if (agencyInput.value !== 'อื่นๆ') {
-    customAgency.value = ''
-    otherAgencyDetail.value = ''
-  }
+    agencyDropdownOpen.value = false;
+    isAgencyEditing.value = false;
+  }, 180);
 }
 
 function maybeEnterEdit() {
-  if (isFormLocked.value) return
-  // เฉพาะกรณีที่เคยเลือกแล้ว และตอนนี้ยังไม่อยู่โหมดแก้ไข
+  if (isFormLocked.value) return;
   if (isAgencySelected.value && !isAgencyEditing.value) {
-    isAgencyEditing.value = true        // ปลดล็อกพิมพ์
-    agencyDropdownOpen.value = true     // เปิด dropdown
-    agencySearch.value = ''             // เคลียร์ข้อความที่โชว์ให้พิมพ์ใหม่
-    // focus ช่องให้พร้อมพิมพ์
-    nextTick(() => agencyInputEl.value?.focus())
+    isAgencyEditing.value = true;
+    agencyDropdownOpen.value = true;
+    agencySearch.value = '';
+    nextTick(() => agencyInputEl.value?.focus());
   }
 }
+
+
 
 const isSidebarClosed = ref(false)
 function toggleSidebar() {
@@ -1061,52 +1141,67 @@ async function compressImage(file, maxW = 1600, quality = 0.8) {
 }
 
 async function handleFileChange(event) {
-  const allowExt = /\.(png|jpg|jpeg|pdf|xls|xlsx|doc|docx)$/i
-  let files = Array.from(event.target.files).filter(f => allowExt.test(f.name))
+  // ถ้าผู้ใช้กดเลือกไฟล์แล้วกด "ยกเลิก" -> ไม่แตะค่าเดิม
+  if (!event || !event.target || !event.target.files) return;
+  const rawList = Array.from(event.target.files);
+  if (rawList.length === 0) {
+    // กันบางเบราว์เซอร์ที่ onChange ยิงแต่ FileList ว่าง
+    // คง selectedFiles เดิมไว้ แล้วรีเซ็ตค่า input ให้พร้อมเลือกครั้งถัดไป
+    event.target.value = '';
+    return;
+  }
+
+  const allowExt = /\.(png|jpg|jpeg|pdf|xls|xlsx|doc|docx)$/i;
+  let files = rawList.filter(f => allowExt.test(f.name));
 
   // บีบอัดเฉพาะรูป
-  const processed = []
+  const processed = [];
   for (const f of files) {
     if (/\.(png|jpe?g)$/i.test(f.name)) {
-      // ถ้าไฟล์เกิน 1.5MB ค่อยบีบ
-      processed.push(f.size > 1.5 * 1024 * 1024 ? await compressImage(f, 1600, 0.82) : f)
+      processed.push(f.size > 1.5 * 1024 * 1024 ? await compressImage(f, 1600, 0.82) : f);
     } else {
-      processed.push(f)
+      processed.push(f);
     }
   }
 
   // ตรวจเพดานต่อไฟล์
-  const overs = processed.filter(f => f.size > MAX_FILE_SIZE)
+  const overs = processed.filter(f => f.size > MAX_FILE_SIZE);
   if (overs.length) {
-    Swal.fire({
-  icon: 'warning',
-  title: 'ไฟล์ใหญ่เกินกำหนด',
-  html:
-    overs
-      .map(f => `${f.name} (${Math.round(f.size/1024/1024)}MB)`)
-      .join('<br>') +
-    `<br>เพดานไฟล์ละ ${Math.round(MAX_FILE_SIZE/1024/1024)}MB`,
-})
+    await Swal.fire({
+      icon: 'warning',
+      title: 'ไฟล์ใหญ่เกินกำหนด',
+      html:
+        overs
+          .map(f => `${f.name} (${Math.round(f.size/1024/1024)}MB)`)
+          .join('<br>') +
+        `<br>เพดานไฟล์ละ ${Math.round(MAX_FILE_SIZE/1024/1024)}MB`,
+    });
   }
-  const accepted = processed.filter(f => f.size <= MAX_FILE_SIZE)
+  const accepted = processed.filter(f => f.size <= MAX_FILE_SIZE);
 
-  // ตรวจขนาดรวม
-  const total = accepted.reduce((s, f) => s + f.size, 0)
+  // ตรวจขนาดรวม (เฉพาะชุดที่เลือกครั้งนี้; ถ้าอยากรวมกับไฟล์เดิมให้บวก selectedFiles ด้วย)
+  const total = accepted.reduce((s, f) => s + f.size, 0);
   if (total > MAX_TOTAL_SIZE) {
-    Swal.fire({
-  icon: 'warning',
-  title: 'ขนาดรวมไฟล์เกินกำหนด',
-  text: `รวม ${Math.round(total/1024/1024)}MB (เพดาน ${Math.round(MAX_TOTAL_SIZE/1024/1024)}MB)`,
-})
-    fileError.value = true
-    return
+    await Swal.fire({
+      icon: 'warning',
+      title: 'ขนาดรวมไฟล์เกินกำหนด',
+      text: `รวม ${Math.round(total/1024/1024)}MB (เพดาน ${Math.round(MAX_TOTAL_SIZE/1024/1024)}MB)`,
+    });
+    fileError.value = true;
+    return;
   }
 
-  selectedFiles.value = accepted
-  window._tempSelectedFiles = selectedFiles.value
-  fileError.value = selectedFiles.value.length === 0
-  saveFormToSession()
+  // ตั้งค่าไฟล์ใหม่ (พฤติกรรมเดิม: แทนที่ชุดเก่า หากต้องการ "เพิ่ม" ให้ใช้ .concat แทน)
+  selectedFiles.value = accepted;
+  window._tempSelectedFiles = selectedFiles.value;
+  fileError.value = selectedFiles.value.length === 0;
+
+  // รีเซ็ตค่า input เพื่อให้เลือกไฟล์เดิมชื่อเดิมได้อีกครั้งในอนาคต
+  event.target.value = '';
+
+  saveFormToSession();
 }
+
 
 function clearFiles() {
   selectedFiles.value = []
@@ -1171,12 +1266,20 @@ watch(proxyStudentName, saveFormToSession)
 watch(proxyStudentId, saveFormToSession)
 watch(username_form, saveFormToSession)
 watch(id_form, saveFormToSession)
-watch(agencyInput, (v) => { agencySearch.value = v || '' })
+watch(agencyInput, (v) => {
+  if (v) agencySearch.value = v;     // เลือกจากลิสต์ → sync มาโชว์
+  saveFormToSession();
+});
+
 watch(agencySearch, (v) => {
-  if (v !== agencyInput.value && agencyOptions.value.includes(v)) {
-    agencyInput.value = v
+  const match = agencyOptions.value.find(opt => normalize(opt) === normalize(v));
+  if (match) {
+    agencyInput.value = match;      // พิมพ์ตรงกับตัวเลือก → ถือว่าเลือก
   }
-})
+  saveFormToSession();
+});
+
+watch(agencySearch, saveFormToSession);
 
 watch(() => formData.value.lights, (v) => {
   if (v !== 'yes') {
@@ -1260,37 +1363,34 @@ function saveFormToSession() {
     JSON.stringify({
       formData: formData.value,
       agencyInput: agencyInput.value,
-      customAgency: customAgency.value,
-      otherAgencyDetail: otherAgencyDetail.value,
+      agencySearch: agencySearch.value,
       proxyUserId: proxyUserId.value,
       isProxyBooking: isProxyBooking.value,
-      // ❌ ไม่เก็บรายชื่อไฟล์ปลอม
       proxyStudentName: proxyStudentName.value,
       proxyStudentId: proxyStudentId.value,
       username_form: username_form.value,
       id_form: id_form.value,
     })
-  )
+  );
 }
 
 function loadFormFromSession() {
-  const data = sessionStorage.getItem('form_field_save')
+  const data = sessionStorage.getItem('form_field_save');
   if (data) {
     try {
-      const d = JSON.parse(data)
-      if (d.formData) Object.assign(formData.value, d.formData)
-      agencyInput.value = d.agencyInput || ''
-      customAgency.value = d.customAgency || ''
-      otherAgencyDetail.value = d.otherAgencyDetail || ''
-      proxyUserId.value = d.proxyUserId || ''
-      isProxyBooking.value = d.isProxyBooking || false
-      dateRange.value = [formData.value.since, formData.value.uptodate]
-      proxyStudentName.value = d.proxyStudentName || ''
-      proxyStudentId.value = d.proxyStudentId || ''
-      username_form.value = d.username_form ?? username_form.value
-      id_form.value = d.id_form ?? id_form.value
-    } catch (e) {
-      sessionStorage.removeItem('form_field_save')
+      const d = JSON.parse(data);
+      if (d.formData) Object.assign(formData.value, d.formData);
+      agencyInput.value = d.agencyInput || '';
+      agencySearch.value = d.agencySearch || agencyInput.value || '';
+      proxyUserId.value = d.proxyUserId || '';
+      isProxyBooking.value = d.isProxyBooking || false;
+      dateRange.value = [formData.value.since, formData.value.uptodate];
+      proxyStudentName.value = d.proxyStudentName || '';
+      proxyStudentId.value = d.proxyStudentId || '';
+      username_form.value = d.username_form ?? username_form.value;
+      id_form.value = d.id_form ?? id_form.value;
+    } catch {
+      sessionStorage.removeItem('form_field_save');
     }
   }
 }
@@ -1352,11 +1452,8 @@ async function goStep(targetStep) {
     return
   }
 }
-const finalAgency = computed(() =>
-  agencyInput.value === 'อื่นๆ'
-    ? customAgency.value
-    : agencyInput.value
-)
+
+const finalAgency = computed(() => (agencySearch.value || agencyInput.value || '').trim());
 
 // Input Validation
 const missingFields = ref({})
@@ -1409,16 +1506,13 @@ function validateFields () {
     fields['id_form'] = true
   }
 
-  // หน่วยงาน
-  if (!finalAgency.value || String(finalAgency.value).trim() === '') {
+  // หน่วยงาน (พิมพ์เองได้; ต้องไม่ว่าง)
+  const finalAgc = (finalAgency.value || '').trim()
+  if (!finalAgc) {
     fields['agency'] = true
   }
-  if (agencyInput.value === 'อื่นๆ' &&
-      (!customAgency.value || String(customAgency.value).trim() === '')) {
-    fields['agencyOther'] = true
-  }
 
-  // โซน (ถ้ามีโซน)
+  // โซน (ถ้าอาคารนั้นมีโซน)
   if (hasZone.value &&
       (!formData.value.zone || String(formData.value.zone).trim() === '')) {
     fields['zone'] = true
@@ -1464,31 +1558,25 @@ function validateFields () {
       if (!formData.value.turnoff_lights) fields['turnoff_lights'] = true
     }
 
-    // ✅ ปรับเงื่อนไขรวม: ให้ "ไฟฟ้า = ไม่ต้องการ" ผ่านได้
+    // ✅ ให้ผ่านได้ถ้าเลือกไฟฟ้า = ไม่ต้องการ
     const lightsOK =
       formData.value.lights === 'yes' &&
       !!formData.value.turnon_lights &&
       !!formData.value.turnoff_lights
 
     const restroomYES = formData.value.restroom === 'yes'
-    const lightsNO    = formData.value.lights === 'no'   // <-- เพิ่มบรรทัดนี้
+    const lightsNO    = formData.value.lights === 'no'
 
-    // เดิม: if (!(lightsOK || restroomYES)) fields['utilityGroup'] = true
-    // ใหม่: ถ้าไฟฟ้า = ไม่ต้องการ ก็ไม่ต้องบังคับอย่างอื่น
     if (!(lightsOK || restroomYES || lightsNO)) {
       fields['utilityGroup'] = true
     }
   }
 
-  // (Admin อนุญาตจองทับเวลาได้ จึงไม่บังคับ time conflict ที่นี่)
+  // (Admin: **ไม่** บังคับเรื่องชนเวลาจองใน validate — ไปถามยืนยันใน handleSubmit แทน)
 
   missingFields.value = fields
   return Object.keys(fields).length === 0
 }
-
-
-
-
 
 function fileToBase64(file) {
   return new Promise((resolve, reject) => {
@@ -1499,74 +1587,70 @@ function fileToBase64(file) {
   })
 }
 async function handleSubmit() {
-  showValidate.value = true;
+  showValidate.value = true
 
   // 1) ตรวจความครบถ้วนเบื้องต้น
-  const isValid = validateFields();
+  const isValid = validateFields()
 
   // ถ้าไม่ผ่าน และสาเหตุไม่ได้มีแค่ 'timeConflict' → เตือนแล้วหยุด
   if (!isValid) {
-    const keys = Object.keys(missingFields.value || {});
-    const onlyTimeConflict = keys.length === 1 && keys[0] === 'timeConflict';
+    const keys = Object.keys(missingFields.value || {})
+    const onlyTimeConflict = keys.length === 1 && keys[0] === 'timeConflict'
     if (!onlyTimeConflict) {
-      Swal.fire({
+      await Swal.fire({
         icon: 'warning',
         title: 'กรอกข้อมูลไม่ครบถ้วน',
         text: 'กรุณากรอกข้อมูลให้ครบถ้วนและแนบไฟล์ก่อนดำเนินการต่อ',
         confirmButtonText: 'ตกลง'
-      });
-      return;
+      })
+      return
     }
     // ถ้า “ไม่ผ่านเพราะชนเวลาอย่างเดียว” ให้ไปต่อได้ (จะถามยืนยันด้านล่าง)
   }
 
-  // 2) เงื่อนไขเฉพาะหัวข้อ "ไฟฟ้าส่องสว่าง"
-  //    ถ้าเลือกไฟฟ้า = ต้องการ แต่ยังไม่กรอกเวลา → เตือนและไม่ไปต่อ
-  const needLights   = formData.value.utilityRequest === 'yes' && formData.value.lights === 'yes';
-  const noLightTimes = !formData.value.turnon_lights || !formData.value.turnoff_lights;
+  // 2) เงื่อนไขเฉพาะหัวข้อ "ไฟฟ้าส่องสว่าง" — ถ้าเลือก "ต้องการ" แต่ยังไม่กรอกเวลา → เตือนและหยุด
+  const needLights   = formData.value.utilityRequest === 'yes' && formData.value.lights === 'yes'
+  const noLightTimes = !formData.value.turnon_lights || !formData.value.turnoff_lights
   if (needLights && noLightTimes) {
-    const restroomYES = formData.value.restroom === 'yes';
-
-    // เซ็ตฟิลด์ที่ขาดให้แสดงแดงเฉพาะที่เกี่ยวข้อง
+    // ขีดเส้นแดงเฉพาะช่องที่ขาด + กลุ่มหัวข้อ (ถ้ายังไม่เลือกห้องน้ำเป็น "ต้องการ")
+    const restroomYES = formData.value.restroom === 'yes'
     missingFields.value = {
       ...missingFields.value,
       turnon_lights:  !formData.value.turnon_lights,
       turnoff_lights: !formData.value.turnoff_lights,
-      // ขึ้น utilityGroup เฉพาะกรณีที่ทั้งหัวข้อยังว่าง (ยังไม่ได้เลือกห้องสุขาเป็น "ต้องการ")
       ...(restroomYES ? {} : { utilityGroup: true }),
-    };
+    }
 
     await Swal.fire({
       icon: 'warning',
       title: 'กรุณากรอกเวลาไฟฟ้าส่องสว่าง',
       text: 'เมื่อเลือก “ไฟฟ้าส่องสว่าง – ต้องการ” ต้องกรอกเวลาเริ่มและเวลาสิ้นสุด',
       confirmButtonText: 'ตกลง'
-    });
-    return;
+    })
+    return
   }
 
   // 3) ตรวจไฟล์แนบ: ต้องเป็นไฟล์จริง (File/Blob) อย่างน้อย 1
-  const realFiles = selectedFiles.value.filter(f => f instanceof File || f instanceof Blob);
+  const realFiles = selectedFiles.value.filter(f => f instanceof File || f instanceof Blob)
   if (realFiles.length === 0 && window._tempSelectedFiles?.length) {
-    // กู้คืนกรณีโดนรีเฟรช/กลับหน้าแล้ว state หาย
-    selectedFiles.value = window._tempSelectedFiles.filter(f => f instanceof File || f instanceof Blob);
+    selectedFiles.value = window._tempSelectedFiles.filter(f => f instanceof File || f instanceof Blob)
   }
   if (selectedFiles.value.length === 0) {
-    fileError.value = true;
+    fileError.value = true
     await Swal.fire({
       icon: 'warning',
       title: 'ไม่มีไฟล์แนบ',
       text: 'กรุณาเลือกไฟล์อีกครั้ง',
       confirmButtonText: 'ตกลง'
-    });
-    return;
+    })
+    return
   }
 
   // 4) ชนเวลาที่สนาม: แอดมิน “อนุญาตจองทับ” ได้ แต่ให้ยืนยันก่อน
   if (hasTimeConflict.value) {
     const listDays = (conflictDays.value || [])
       .map(d => dayjs(d).format('DD/MM/YYYY'))
-      .join(', ');
+      .join(', ')
     const confirm = await Swal.fire({
       icon: 'warning',
       title: 'ช่วงเวลาทับกับรายการจอง',
@@ -1576,53 +1660,56 @@ async function handleSubmit() {
       showCancelButton: true,
       confirmButtonText: 'จองทับ',
       cancelButtonText: 'ยกเลิก'
-    });
-    if (!confirm.isConfirmed) return;
+    })
+    if (!confirm.isConfirmed) return
   }
 
-  // 5) ส่งข้อมูล
-  try {
-    localStorage.setItem('zoneSelected', formData.value.zone || '');
-    const fd = new FormData();
+  // 5) ก่อน submit: ถ้าพิมพ์หน่วยงานใหม่ → บันทึกเข้าฐานข้อมูล information (type='agency')
+  const agName = (finalAgency.value || '').trim()
+  if (agName && !agencyExists(agName)) {
+    await ensureAgencyInInformation(agName)     // อัปเดต dropdown ด้วย
+  }
 
-    // แนบเฉพาะไฟล์จริง
-    selectedFiles.value.forEach(f => fd.append('files', f));
+  // 6) ส่งข้อมูล
+  try {
+    localStorage.setItem('zoneSelected', formData.value.zone || '')
+
+    const fd = new FormData()
+    selectedFiles.value.forEach(f => fd.append('files', f))
 
     const payload = {
       ...formData.value,
-      agency: (finalAgency.value ?? ''),
-      agency_other_detail: (otherAgencyDetail.value ?? ''),
+      agency: (finalAgency.value ?? ''),           // << ใช้ค่าที่พิมพ์/เลือกสุดท้าย
       user_id: (proxyUserId.value ?? ''),
       proxyStudentName: (formData.value.proxyStudentName ?? ''),
       proxyStudentId: (formData.value.proxyStudentId ?? ''),
       username_form: (username_form.value ?? ''),
       id_form: (id_form.value ?? '')
-    };
-    Object.entries(payload).forEach(([k, v]) => fd.append(k, v ?? ''));
+    }
+    Object.entries(payload).forEach(([k, v]) => fd.append(k, v ?? ''))
 
     const res = await axios.post(`${API_BASE}/api/booking_field`, fd, {
       withCredentials: true,
-    });
+    })
 
     // เก็บสำหรับหน้าถัดไป/ย้อนกลับ
-    localStorage.setItem('bookingId', res.data.bookingId);
-    window._tempSelectedFiles = selectedFiles.value;
+    localStorage.setItem('bookingId', res.data.bookingId)
+    window._tempSelectedFiles = selectedFiles.value
 
-    router.push('/form_field_admin3');
+    // รีเฟรชลิสต์หน่วยงาน (เผื่อ backend normalize ชื่อ)
+    await refreshAgencies()
+
+    router.push('/form_field_admin3')
   } catch (err) {
-    console.error(err?.response?.data || err);
-    Swal.fire({
+    console.error(err?.response?.data || err)
+    await Swal.fire({
       icon: 'error',
       title: 'ผิดพลาด',
       text: 'บันทึกข้อมูลไม่สำเร็จ',
       confirmButtonText: 'ตกลง'
-    });
+    })
   }
 }
-
-
-
-
 
 function handleClear() {
   // ✅ เก็บค่าเฉพาะ อาคาร/โซน ไว้
@@ -1805,12 +1892,11 @@ onMounted(async () => {
     loginName.value = 'ชื่อผู้ใช้ระบบ'
   }
 
-  // กู้ชื่อ/รหัสผู้ขอจาก localStorage ถ้ามี
+  // Admin: เคลียร์ชื่อ/รหัสผู้ขอใช้จาก localStorage (ให้เริ่มกรอกใหม่)
   username_form.value = ''
   id_form.value = ''
   localStorage.removeItem('username_form')
   localStorage.removeItem('id_form')
-
 
   /* ====== restore ฟอร์ม/อาคาร/โซน ====== */
   const restore = route.query.restore === 'true'
@@ -1832,10 +1918,10 @@ onMounted(async () => {
       if (storedZone) formData.value.zone = storedZone
     }
     if (route.query.fieldName) formData.value.building = route.query.fieldName
-    if (route.query.zone) formData.value.zone = route.query.zone
+    if (route.query.zone)      formData.value.zone     = route.query.zone
   } else {
     if (route.query.fieldName) formData.value.building = route.query.fieldName
-    if (route.query.zone) formData.value.zone = route.query.zone
+    if (route.query.zone)      formData.value.zone     = route.query.zone
 
     if (!formData.value.building) {
       const storedBuilding =
@@ -1853,17 +1939,16 @@ onMounted(async () => {
     }
   }
 
-  /* ====== โหลดตัวเลือกหน่วยงาน ====== */
+  /* ====== โหลดตัวเลือกหน่วยงาน (robust แบบหน้า user) ====== */
   try {
-    const res = await axios.get(`${API_BASE}/api/information?type=equipment`)
-    const uniqueUnits = [...new Set(res.data.map(item => item.unit))]
-    agencyOptions.value = uniqueUnits
-    if (!agencyOptions.value.includes('อื่นๆ')) {
-      agencyOptions.value.push('อื่นๆ')
-    }
+    const list = await fetchAllAgenciesRobust()
+    agencyOptions.value = list.sort((a,b) => a.localeCompare(b, 'th'))
   } catch {
-    agencyOptions.value = ['อื่นๆ']
+    agencyOptions.value = []
   }
+
+  // ถ้ามีค่า agencyInput อยู่ ให้โชว์ในช่อง; ถ้าไม่มี ให้ค่าว่าง
+  agencySearch.value = agencySearch.value || agencyInput.value || ''
 
   /* ====== ตั้งค่า DatePicker ให้ตรงกับค่าที่มี ====== */
   dpDate.value  = safeDate(formData.value.date)
@@ -1889,6 +1974,7 @@ onMounted(async () => {
   loadFormFromSession()
   loadFilesFromGlobal()
 })
+
 
 
 // ✅ โหลดคืนไฟล์ทุกครั้งเมื่อ component ถูก activate (เช่น Back จากหน้า 3)

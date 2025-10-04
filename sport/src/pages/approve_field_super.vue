@@ -687,6 +687,13 @@ async fetchAndGroup() {
       restroom:        h.restroom ?? h.restroom_text ?? h.use_restroom ?? '',
       other:           h.other ?? h.other_text ?? '',
 
+      // ✅ ห้องที่ต้องการใช้
+      room_request:
+      (h.room_request ?? h.roomRequest ??
+      h.form?.room_request ?? h.form?.roomRequest ??
+      h.booking_field?.room_request ?? h.booking_field?.roomRequest ?? ''),
+
+
       // รายการประกอบอาคาร
       facilityRequest: h.facilityRequest ?? h.facility_request ?? h.facility ?? '',
       amphitheater:    h.amphitheater ?? h.pull_grandstand ?? '',
@@ -1929,7 +1936,6 @@ doc.text(`โทร ${data.tel || '-'}`, 430, 100);
 }
 
   },
-  // ===== lifecycle: mounted() =====
 // ===== lifecycle: mounted() =====
 // ===== lifecycle: mounted() =====
 async mounted() {
@@ -1983,8 +1989,16 @@ async mounted() {
         since_time:     h.since_time ?? h.startTime ?? '',
         until_thetime:  h.until_thetime ?? h.endTime   ?? '',
 
+        // ข้อมูลสถานที่
         name:       h.name ?? '-',
         zone:       h.zone ?? '-',
+
+        // ✅ ห้องที่ต้องการใช้ (แหล่งใดก็ได้)
+        room_request:
+          (h.room_request ?? h.roomRequest ??
+           h.form?.room_request ?? h.form?.roomRequest ??
+           h.booking_field?.room_request ?? h.booking_field?.roomRequest ?? ''),
+
         requester:  h.requester ?? '-',
         user_id:    h.user_id ?? '-',
         username_form:     h.username_form || '-',
@@ -2074,6 +2088,7 @@ async mounted() {
   document.addEventListener('mousedown', this.handleClickOutside);
 },
 
+
   beforeUnmount() {
     clearInterval(this.polling)
     document.removeEventListener('mousedown', this.handleClickOutside);
@@ -2118,6 +2133,17 @@ function buildFieldFormPreviewV2(
     if (isNaN(d)) return '-';
     return d.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', hour12: false }) + ' น.';
   };
+
+    // 3.x ห้องที่ต้องการใช้ (รองรับทั้ง string และ array)
+  const roomReqText = (() => {
+    const v = b?.room_request;
+    if (Array.isArray(v)) {
+      const joined = v.map(x => (x ?? '').toString().trim()).filter(Boolean).join(', ');
+      return joined || '-';
+    }
+    return dash(v);
+  })();
+
 
   // เวลา ณ ตอนสร้างพรีวิว (ใช้กับหัวหน้า)
   const nowTHTime = new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', hour12: false }) + ' น.';
@@ -2463,8 +2489,8 @@ const showAmphiRow = (() => {
 
     <div class="mfu-meta">
       <div><b>ที่ อว.</b> ${d(b?.aw)}</div>
-      <div><b>วันที่</b> ${fmtDate(b?.date)}</div>
-      <div><b>โทร</b> ${d(b?.tel)}</div>
+      <div style = "padding-left: 50px"><b>วันที่</b> ${fmtDate(b?.date)}</div>
+      <div style = "padding-left: 50px"><b>โทร</b> ${d(b?.tel)}</div>
     </div>
 
     <div class="mfu-sec">
@@ -2516,45 +2542,53 @@ const showAmphiRow = (() => {
   </tr>
 </table>
 
-      <div class="mfu-note">
-        *ต้องได้รับการอนุมัติจากรองอธิการบดีผู้กำกับดูแล และสำเนาเอกสารถึงฝ่ายอนุรักษ์พลังงาน
-      </div>
+      
     </div>
 
     <div class="mfu-sec">
-      <h4>3. ขออนุมัติรายการประกอบอาคาร</h4>
-      <div class="mfu-yn">
-        <span class="choice ${f.yOn ? 'on' : ''}"><span class="dot">${f.yOn ? '●' : '○'}</span> เลือก</span>
-        <span class="choice ${f.nOn ? 'on' : ''}"><span class="dot">${f.nOn ? '●' : '○'}</span> ไม่เลือก</span>
-      </div>
-      <table class="mfu-tbl mfu-tbl-fac" style="margin-left:31px;">
+  <h4>3. ขออนุมัติรายการประกอบอาคาร</h4>
+  <div class="mfu-yn">
+    <span class="choice ${f.yOn ? 'on' : ''}"><span class="dot">${f.yOn ? '●' : '○'}</span> เลือก</span>
+    <span class="choice ${f.nOn ? 'on' : ''}"><span class="dot">${f.nOn ? '●' : '○'}</span> ไม่เลือก</span>
+  </div>
 
-  ${showAmphiRow ? `
-    <tr>
-      <td class="lbl"><b>3.1 ดึงอัฒจันทร์ภายในอาคารเฉลิมพระเกียรติฯ</b></td>
-      <td class="colon">:</td>
-      <td class="val">${dash(b?.amphitheater)}</td>
-    </tr>
-    <tr>
-      <td class="lbl"><b>3.2 อุปกรณ์กีฬา (โปรดระบุรายการและจำนวน)</b></td>
-      <td class="colon">:</td>
-      <td class="val">${dash(b?.need_equipment)}</td>
-    </tr>
-  ` : `
-    <tr>
-      <td class="lbl"><b>3.1 อุปกรณ์กีฬา (โปรดระบุรายการและจำนวน)</b></td>
-      <td class="colon">:</td>
-      <td class="val">${dash(b?.need_equipment)}</td>
-    </tr>
-  `}
+  <table class="mfu-tbl mfu-tbl-fac" style="margin-left:31px;">
+    ${showAmphiRow ? `
+      <tr>
+        <td class="lbl"><b>3.1 ดึงอัฒจันทร์ภายในอาคารเฉลิมพระเกียรติฯ</b></td>
+        <td class="colon">:</td>
+        <td class="val">${dash(b?.amphitheater)}</td>
+      </tr>
+      <tr>
+        <td class="lbl"><b>3.2 อุปกรณ์กีฬา (โปรดระบุรายการและจำนวน)</b></td>
+        <td class="colon">:</td>
+        <td class="val">${dash(b?.need_equipment)}</td>
+      </tr>
+      <tr>
+        <td class="lbl"><b>3.3 ห้องที่ต้องการใช้</b></td>
+        <td class="colon">:</td>
+        <td class="val">${roomReqText}</td>
+      </tr>
+    ` : `
+      <tr>
+        <td class="lbl"><b>3.1 อุปกรณ์กีฬา (โปรดระบุรายการและจำนวน)</b></td>
+        <td class="colon">:</td>
+        <td class="val">${dash(b?.need_equipment)}</td>
+      </tr>
+      <tr>
+        <td class="lbl"><b>3.2 ห้องที่ต้องการใช้</b></td>
+        <td class="colon">:</td>
+        <td class="val">${roomReqText}</td>
+      </tr>
+    `}
+  </table>
 
-</table>
+  <div class="mfu-note">
+    ทั้งนี้ต้องแนบเอกสารโครงการหรือกิจกรรมที่ได้รับการอนุมัติแล้วพร้อมกำหนดการจัดกิจกรรมหากเป็นการเรียนการสอน <br>
+    ต้องแนบตารางการเรียนการสอน (Class schedule) พร้อมทั้งรายชื่อนักศึกษา
+  </div>
+</div>
 
-      <div class="mfu-note">
-        ทั้งนี้ต้องแนบเอกสารโครงการหรือกิจกรรมที่ได้รับการอนุมัติแล้วพร้อมกำหนดการจัดกิจกรรมหากเป็นการเรียนการสอน <br>
-        ต้องแนบตารางการเรียนการสอน (Class schedule) พร้อมทั้งรายชื่อนักศึกษา
-      </div>
-    </div>
 
     <!-- ผู้ขอใช้ -->
     <div class="mfu-sign">

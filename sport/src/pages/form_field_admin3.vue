@@ -11,7 +11,7 @@
         <router-link to="/home_admin" exact-active-class="active"><i class="pi pi-megaphone"></i> แก้ไขข่าว</router-link>
         <router-link to="/edit_field" active-class="active"><i class="pi pi-map-marker"></i> แก้ไขสนาม</router-link>
         <router-link to="/edit_equipment" active-class="active"><i class="pi pi-clipboard"></i> แก้ไขอุปกรณ์ </router-link>
-         <router-link to="/step" active-class="active"><i class="pi pi-sitemap"></i> แก้ไขขั้นตอนการอนุมัติ </router-link>
+        <!-- <router-link to="/step" active-class="active"><i class="pi pi-sitemap"></i> แก้ไขขั้นตอนการอนุมัติ </router-link> -->
         <router-link to="/booking_field_admin" active-class="active"><i class="pi pi-map-marker"></i> จองสนาม</router-link>
         <router-link to="/approve_field" active-class="active"><i class="pi pi-verified"></i> อนุมัติ</router-link>
         <router-link to="/agency_admin" active-class="active"><i class="pi pi-briefcase"></i> หน่วยงาน </router-link>
@@ -201,6 +201,20 @@
       {{ (info.need_equipment && info.need_equipment.trim() !== '') ? info.need_equipment : '-' }}
     </span>
   </div>
+
+  <!-- 3.x ห้องที่ต้องการใช้งาน -->
+<div class="form-row block-row" style="margin-left: 80px;">
+  <span style="white-space: nowrap;">
+    {{ isBuilding72 ? '3.3' : '3.2' }} ห้องที่ต้องการใช้งาน :
+  </span>
+  <span class="line-field block-text force-inline">
+    {{ info.room_request && info.room_request.trim() ? info.room_request : '-' }}
+  </span>
+</div>
+
+
+
+
 </div>
 
               <div class="note-line">
@@ -382,6 +396,54 @@ const isLightsNo = computed(() => {
   const v = norm(info.value?.lights ?? info.value?.light ?? info.value?.lighting ?? '')
   return NO_TOKENS.includes(v)
 })
+
+async function uploadTempFilesAndGetUrls() {
+  try {
+    // ใช้แหล่งเดียวกับหน้า form_field3
+    const picked =
+      (Array.isArray(window._tempSelectedFiles) && window._tempSelectedFiles.length > 0)
+        ? window._tempSelectedFiles
+        : (Array.isArray(window._adminSelectedFiles) && window._adminSelectedFiles.length > 0)
+          ? window._adminSelectedFiles
+          : []
+
+    if (!picked.length) return []
+
+    const results = []
+    for (const f of picked) {
+      const fd = new FormData()
+      fd.append('file', f)              // ✅ ชื่อ key = 'file' เหมือน form_field3
+      const up = await axios.post(`${API_BASE}/api/upload`, fd, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      })
+      const url = up?.data?.fileUrl || up?.data?.url || ''
+      if (url) {
+        results.push({
+          url,
+          fileName: f.name || up?.data?.fileName || 'attachment',
+          sizeKB: f.size ? Math.round(f.size / 1024) : null
+        })
+      }
+    }
+
+    // อัปเดต preview บนหน้านี้ด้วย
+    if (results.length) {
+      fileAttachments.value = [
+        ...fileAttachments.value,
+        ...results.map(x => ({ url: x.url, fileName: x.fileName, size: x.sizeKB }))
+      ]
+    }
+
+    // เคลียร์ตัวแปรไฟล์ชั่วคราว
+    try { delete window._tempSelectedFiles } catch {}
+    try { delete window._adminSelectedFiles } catch {}
+
+    return results
+  } catch (e) {
+    console.warn('uploadTempFilesAndGetUrls error:', e?.message || e)
+    return []
+  }
+}
 
 
 
@@ -567,6 +629,7 @@ function normalizeFieldBooking(doc = {}) {
     facilityRequest: doc.facilityRequest || '',
     amphitheater: doc.amphitheater || '',
     need_equipment: doc.need_equipment || '',
+    room_request: (doc.room_request || doc.roomRequest || ''),
 
     // -------- ผู้ยื่น --------
     proxyStudentName: doc.proxyStudentName || '',
@@ -750,33 +813,48 @@ async function uploadPdfBlob(pdfBlob){
 
 // ---------- Next (สร้าง History แบบ form_field3) ----------
 const isLoading = ref(false)
-async function handleNext(){
+
+// ⬇️ ใช้แทนฟังก์ชัน handleNext เดิมทั้งก้อน (มีใส่ room_request ใน payload)
+async function handleNext () {
   const bookingIdFromServer = info.value.booking_id || ''
   const userIdForSave = info.value.user_id || localStorage.getItem('user_id') || ''
-  if (!bookingIdFromServer){ alert('ไม่พบเลขที่คำขอ (booking_id)'); return }
-  if (!userIdForSave){ alert('ไม่พบผู้ใช้ที่ทำรายการ (user_id)'); return }
+
+  if (!bookingIdFromServer) { alert('ไม่พบเลขที่คำขอ (booking_id)'); return }
+  if (!userIdForSave)      { alert('ไม่พบผู้ใช้ที่ทำรายการ (user_id)'); return }
 
   isLoading.value = true
-  try{
-    // 1) PDF 1 หน้าแน่นอน
+  try {
+    // 1) สร้าง PDF 1 หน้า
     const pdfBlob = await htmlToPdfBlob('pdf-section')
-    const pdfUrl = await uploadPdfBlob(pdfBlob)
+    const pdfUrl  = await uploadPdfBlob(pdfBlob)
 
-    // 2) แนบไฟล์จาก booking (ถ้ามีใน multer/แนบเดิม)
-    const allAttach = (fileAttachments.value || []).map(f=>f.url).filter(Boolean)
-    const allNames  = (fileAttachments.value || []).map(f=>f.fileName || 'ไฟล์แนบ')
+    // 2) อัปโหลดไฟล์ที่เพิ่งเลือกในหน้า admin (ถ้ามี)
+    const uploadedNow = await uploadTempFilesAndGetUrls()
 
-    // 3) ดึง roles อนุมัติ (field) เพื่อฝั่ง approve ใช้ต่อให้ตรง baseline
+    // 3) รวมไฟล์เดิม + ไฟล์ใหม่ แล้วแตกเป็น 2 อาร์เรย์ (url / fileName)
+    const existing = (fileAttachments.value || []).map(f => ({
+      url: f.url, fileName: f.fileName || 'ไฟล์แนบ'
+    }))
+    const merged = [
+      ...existing,
+      ...uploadedNow.map(f => ({ url: f.url, fileName: f.fileName || 'ไฟล์แนบ' }))
+    ]
+
+    const allAttachments = merged.map(x => x.url).filter(Boolean)
+    const allFileNames   = merged.map(x => x.fileName || 'ไฟล์แนบ')
+
+    // 4) โหลด roles เพื่อสร้าง step
     let stepArray = []
-    try{
+    try {
       const resStep = await axios.get(`${API_BASE}/api/settings/approval_roles`)
       const roles = Array.isArray(resStep?.data?.value?.field) ? resStep.data.value.field : []
-      const VALID = ['staff','admin','super']
-      const cleaned = Array.from(new Set(roles.map(r=>String(r||'').trim().toLowerCase()).filter(r=>VALID.includes(r))))
-      stepArray = cleaned.map(r=>({ role:r, approve: null }))
-    }catch{ stepArray = [] }
+      const VALID = ['staff', 'admin', 'super']
+      stepArray = Array.from(new Set(
+        roles.map(r => String(r || '').trim().toLowerCase()).filter(r => VALID.includes(r))
+      )).map(r => ({ role: r, approve: null }))
+    } catch { stepArray = [] }
 
-    // 4) สร้างประวัติ
+    // 5) POST /api/history — เพิ่ม room_request เข้าไปด้วย
     await axios.post(`${API_BASE}/api/history`, {
       user_id: userIdForSave,
       name: info.value.building,
@@ -790,15 +868,20 @@ async function handleNext(){
       type: 'field',
       agency: info.value.agency,
       booking_id: bookingIdFromServer,
-      attachment: allAttach,
-      fileName: allNames,
+
+      // แนบไฟล์แบบเดียวกับฝั่ง user
+      attachment: allAttachments,
+      fileName:   allFileNames,
+
       date: new Date(),
       proxyStudentName: info.value.proxyStudentName || '',
       proxyStudentId: info.value.proxyStudentId || '',
       bookingPdfUrl: pdfUrl,
       username_form: info.value.username_form || '',
-      id_form: info.value.id_form || '',
+      id_form:       info.value.id_form || '',
       step: stepArray,
+
+      // ฟิลด์อื่น ๆ
       utilityRequest: info.value.utilityRequest || '',
       restroom: info.value.restroom || '',
       facilityRequest: info.value.facilityRequest || '',
@@ -809,6 +892,8 @@ async function handleNext(){
       other: info.value.other || '',
       amphitheater: info.value.amphitheater || '',
       need_equipment: info.value.need_equipment || '',
+      room_request: info.value.room_request || '',  // ✅ ใส่เพิ่มตรงนี้
+
       aw: info.value.aw || '',
       tel: info.value.tel || '',
       reasons: info.value.reasons || '',
@@ -820,16 +905,18 @@ async function handleNext(){
       fileUrl: info.value.fileUrl || ''
     })
 
-    // ลบ snapshot เมื่อจบขั้นตอนยืนยันแล้ว
-    localStorage.removeItem(SNAP_KEY)
+    // 6) ไปขั้นถัดไป
+    localStorage.removeItem('field_form_snapshot')
     router.push('/form_field_admin4')
-
-  }catch(err){
+  } catch (err) {
     alert('เกิดข้อผิดพลาด: ' + (err?.response?.data?.message || err.message))
-  }finally{
+  } finally {
     isLoading.value = false
   }
 }
+
+
+
 
 
 // ออกจาก route ไปที่อื่นที่ไม่ใช่ flow -> เคลียร์ snapshot

@@ -209,48 +209,49 @@
   </table>
 </div>
 
+  <!-- ข้อ 3 -->
+<div class="form-row bold" style="margin-left: 0;">
+  <span>3. ขออนุมัติรายการประกอบอาคาร</span>
+  <span :class="['radio-print', { on: isYes(info.facilityRequest) }]" style="margin-left:8px;"></span>
+  <label style="margin-right: 18px;">เลือก</label>
+  <span :class="['radio-print', { on: isNo(info.facilityRequest) }]"></span>
+  <label>ไม่เลือก</label>
+</div>
 
-
-  <div class="note-line">
-    <span style="font-weight:bold; font-size: 15px;">
-      *ต้องได้รับการอนุมัติจากรองอธิการบดีผู้กำกับดูแล และสำเนาเอกสารถึงฝ่ายอนุรักษ์พลังงาน
+<div v-if="isYes(info.facilityRequest)">
+  <!-- 3.1 เฉพาะอาคาร 72: อัฒจันทร์ -->
+  <div
+    v-if="isBuilding72"
+    class="form-row block-row"
+    style="margin-left: 80px;"
+  >
+    <span style="white-space: nowrap;">3.1 ดึงอัฒจันทร์ภายในอาคารเฉลิมพระเกียรติฯ :</span>
+    <span class="line-field block-text force-inline">
+      {{ info.amphitheater && info.amphitheater.trim() ? info.amphitheater : '-' }}
     </span>
   </div>
 
-  <!-- ข้อ 3 -->
-  <div class="form-row bold" style="margin-left: 0;">
-    <span>3. ขออนุมัติรายการประกอบอาคาร</span>
-    <span :class="['radio-print', { on: isYes(info.facilityRequest) }]" style="margin-left:8px;"></span>
-    <label style="margin-right: 18px;">เลือก</label>
-    <span :class="['radio-print', { on: isNo(info.facilityRequest) }]"></span>
-    <label>ไม่เลือก</label>
+  <!-- 3.2 (หรือ 3.1 ถ้าไม่ใช่ 72): อุปกรณ์กีฬา -->
+  <div class="form-row block-row" style="margin-left: 80px;">
+    <span style="white-space: nowrap;">
+      {{ isBuilding72 ? '3.2' : '3.1' }} อุปกรณ์กีฬา (โปรดระบุรายการและจำนวน) :
+    </span>
+    <span class="line-field block-text force-inline">
+      {{ info.need_equipment && info.need_equipment.trim() ? info.need_equipment : '-' }}
+    </span>
   </div>
 
-  <div v-if="isYes(info.facilityRequest)">
-
-    <!-- แสดงอัฒจันทร์เฉพาะเมื่อเป็นอาคาร 72 -->
-   <div
-     v-if="isBuilding72"
-     class="form-row block-row"
-     style="margin-left: 80px;"
-   >
-     <span style="white-space: nowrap;">3.1 ดึงอัฒจันทร์ภายในอาคารเฉลิมพระเกียรติฯ :</span>
-     <span class="line-field block-text force-inline">
-       {{ info.amphitheater?.trim() ? info.amphitheater : '-' }}
-     </span>
-   </div>
-
-   <!-- อุปกรณ์กีฬา: ถ้าไม่มี 72 ให้เลื่อนเป็น 3.1 -->
-   <div class="form-row block-row" style="margin-left: 80px;">
-     <span style="white-space: nowrap;">
-       {{ isBuilding72 ? '3.2' : '3.1' }} อุปกรณ์กีฬา (โปรดระบุรายการและจำนวน) :
-     </span>
-     <span class="line-field block-text force-inline">
-       {{ info.need_equipment?.trim() ? info.need_equipment : '-' }}
-     </span>
-   </div>
-
+  <!-- 3.3 (หรือ 3.2 ถ้าไม่ใช่ 72): ห้องที่ต้องการใช้งาน -->
+  <div class="form-row block-row" style="margin-left: 80px;">
+    <span style="white-space: nowrap;">
+      {{ isBuilding72 ? '3.3' : '3.2' }} ห้องที่ต้องการใช้งาน :
+    </span>
+    <span class="line-field block-text force-inline">
+      {{ info.room_request && info.room_request.trim() ? info.room_request : '-' }}
+    </span>
   </div>
+</div>
+
 
   <div class="note-line">
     <span style="font-weight:bold; font-size: 15px;">
@@ -464,6 +465,85 @@ const lastSeenTimestamp = ref(parseInt(localStorage.getItem('lastSeenTimestamp')
 let polling = null
 
 const signatureUrl = ref('')  // URL รูปลายเซ็นของผู้ยื่น
+// มีลายเซ็นแล้วหรือยัง
+const hasSignature = computed(() => !!(signatureUrl.value && signatureUrl.value.trim()));
+
+// บังคับให้มีลายเซ็นก่อนส่งแบบฟอร์ม
+// บังคับให้มีลายเซ็นก่อนส่งแบบฟอร์ม (อัปโหลดไฟล์ → ถ้าชนิดไม่ผ่าน แปลงเป็น PNG แล้วอัปโหลด)
+// บังคับให้มีลายเซ็นก่อนส่งแบบฟอร์ม (อัปโหลดตรงไปที่ /api/users/profile แบบหน้าโปรไฟล์)
+async function ensureSignatureOrPrompt() {
+  const uid = info.value?.user_id || localStorage.getItem('user_id') || '';
+  if (!uid) {
+    await Swal.fire({ icon:'error', title:'ไม่พบผู้ใช้', text:'กรุณาเข้าสู่ระบบใหม่อีกครั้ง' });
+    return false;
+  }
+
+  // เช็คว่ามีลายเซ็นอยู่แล้วหรือยัง (อิง /api/me หรือ /api/user/:id ก็ได้)
+  try {
+    const me = await axios.get(`${API_BASE}/api/me`, { withCredentials: true });
+    const sigPath = me.data?.user?.signaturePath || me.data?.user?.signature || '';
+    if (sigPath) {
+      signatureUrl.value = toAbsUrl(sigPath);
+      return true;
+    }
+  } catch (_) {/* ignore */}
+
+  // ยังไม่มี → ขอไฟล์จากผู้ใช้
+  const { value:file } = await Swal.fire({
+    icon: 'warning',
+    title: 'ยังไม่มีลายเซ็นอิเล็กทรอนิกส์',
+    html: 'กรุณาอัปโหลดลายเซ็น (รองรับ .png / .jpg / .gif) สูงสุด 2 MB',
+    input: 'file',
+    inputAttributes: { accept: 'image/png,image/jpeg,image/gif' },
+    showCancelButton: true,
+    confirmButtonText: 'อัปโหลดและบันทึก',
+    cancelButtonText: 'ยกเลิก',
+    showCloseButton: true,
+  });
+  if (!file) return false;
+  if (file.size > 2 * 1024 * 1024) {
+    await Swal.fire({ icon:'error', title:'ไฟล์ใหญ่เกินไป', text:'จำกัดขนาดไม่เกิน 2 MB' });
+    return false;
+  }
+
+  // ถ้าไม่ใช่ PNG/JPEG ให้แปลงเป็น PNG ก่อน
+  let uploadBlob = file;
+  let uploadName = file.name;
+  if (!isAllowedImageType(file.type, file.name)) {
+    try {
+      uploadBlob = await imageFileToPngBlob(file);
+      uploadName = (file.name?.replace(/\.[^.]+$/, '') || 'signature') + '.png';
+    } catch (e) {
+      console.error(e);
+      await Swal.fire({ icon:'error', title:'ไม่สามารถอ่านไฟล์ภาพได้', text:'กรุณาเลือกไฟล์ .png หรือ .jpg ใหม่' });
+      return false;
+    }
+  }
+
+  try {
+    // อัปโหลดเหมือนหน้าโปรไฟล์: PATCH /api/users/profile, field name = 'signature'
+    const fd = new FormData();
+    fd.append('signature', uploadBlob, uploadName);
+    const res = await axios.patch(`${API_BASE}/api/users/profile`, fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      withCredentials: true,
+    });
+
+    const user = res.data?.user;
+    const sig = user?.signaturePath || user?.signature || '';
+    if (!res.data?.success || !sig) throw new Error(res.data?.message || 'อัปเดตไม่สำเร็จ');
+
+    signatureUrl.value = toAbsUrl(sig);        // ใช้ตัวเดียวกับหน้าโปรไฟล์
+    await Swal.fire({ icon:'success', title:'บันทึกลายเซ็นแล้ว', timer:1200, showConfirmButton:false });
+    return true;
+  } catch (err) {
+    console.error(err);
+    await Swal.fire({ icon:'error', title:'บันทึกลายเซ็นไม่สำเร็จ', text: err?.response?.data?.message || err.message });
+    return false;
+  }
+}
+
+
 
 const REQUIRED_APPROVAL_ROLES = ['admin', 'super'];
 
@@ -542,6 +622,88 @@ function pruneOldNotifications() {
   const cutoff = Date.now() - (7 * 24 * 60 * 60 * 1000) // 7 วัน
   notifications.value = notifications.value.filter(n => (n?.timestamp ?? 0) >= cutoff)
 }
+
+// แปลงภาพอะไรก็ได้เป็น PNG Blob (กันเคส type ว่าง หรือเป็น gif/webp)
+async function imageFileToPngBlob(file) {
+  const dataUrl = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+
+  const img = new Image();
+  img.crossOrigin = 'anonymous';
+  await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = dataUrl; });
+
+  // สร้าง canvas ขนาดรูปจริง
+  const canvas = document.createElement('canvas');
+  canvas.width = img.naturalWidth || img.width;
+  canvas.height = img.naturalHeight || img.height;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(img, 0, 0);
+
+  const blob = await new Promise((res) => canvas.toBlob(res, 'image/png', 0.92));
+  return blob;
+}
+
+function isAllowedImageType(type, name) {
+  const ok = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif'];
+  const ext = (name || '').toLowerCase();
+  return (
+    ok.includes(type) ||
+    ext.endsWith('.png') ||
+    ext.endsWith('.jpg') ||
+    ext.endsWith('.jpeg') ||
+    ext.endsWith('.gif')
+  );
+}
+
+
+
+// === Signature helpers ===
+
+async function updateSignatureOnServer(uid, fileUrl) {
+  // ลองหลาย endpoint และหลายชื่อฟิลด์ (signaturePath / signature_url / signature)
+  const candidates = [
+    { url: `${API_BASE}/api/user/${uid}`,   method: 'patch' },
+    { url: `${API_BASE}/api/user/${uid}`,   method: 'put'   },
+    { url: `${API_BASE}/api/users/${uid}`,  method: 'patch' },
+    { url: `${API_BASE}/api/users/${uid}`,  method: 'put'   },
+    // กรณีบางแบ็กเอนด์ใช้ query แทน params
+    { url: `${API_BASE}/api/user?id=${encodeURIComponent(uid)}`,  method: 'patch' },
+    { url: `${API_BASE}/api/users?id=${encodeURIComponent(uid)}`, method: 'patch' },
+  ];
+
+  const payloads = [
+    { signaturePath: fileUrl },
+    { signature_url: fileUrl },
+    { signature: fileUrl },
+  ];
+
+  let lastErr = null;
+
+  for (const c of candidates) {
+    for (const body of payloads) {
+      try {
+        await axios({ url: c.url, method: c.method, data: body });
+        return { ok: true, used: { ...c, body } };
+      } catch (e) {
+        // เก็บ error ล่าสุดเพื่อโชว์รายละเอียดหากทั้งหมดล้มเหลว
+        lastErr = e;
+        // ถ้า 404/405/400 ก็ลองอันถัดไปต่อ
+      }
+    }
+  }
+
+  return {
+    ok: false,
+    error: lastErr?.response?.data?.message || lastErr?.message || 'Unknown error',
+    status: lastErr?.response?.status,
+  };
+}
+
 
 function toggleNotifications() {
   showNotifications.value = !showNotifications.value
@@ -807,44 +969,63 @@ function blobToBase64(blob) {
 }
 
 onMounted(async () => {
+  // ==== 1) แสดงไฟล์แนบชั่วคราวที่เพิ่งอัปโหลดใน step ก่อนหน้า (ถ้ามี) ====
   const tempFiles = Array.isArray(window._tempSelectedFiles) ? window._tempSelectedFiles : []
   for (const f of tempFiles) {
     fileAttachments.value.push({
       fileName: f.name || 'ไฟล์แนบ',
-      url: '#',
+      url: '#', // ไฟล์ชั่วคราว (ยังไม่อัปขึ้นเซิร์ฟเวอร์)
       size: f.size ? Math.round(f.size / 1024) : null,
     })
   }
+
+  // ==== 2) ดึง booking โดยใช้ bookingId ที่เพิ่งสร้างในหน้า form_field ====
   const bookingId = localStorage.getItem('bookingId')
   if (!bookingId) {
     Swal.fire('ไม่พบ bookingId')
     return
   }
+
   try {
     const res = await axios.get(`${API_BASE}/api/booking_field/${bookingId}`)
-    info.value = res.data
+    // กัน undefined/null แล้ว map เข้า info
+    info.value = res.data || {}
 
-    // map เดิม (ไม่รื้อ)
+    // ---- 2.1 normalize yes/no (รองรับทั้ง yes/no/เลือก/ไม่เลือก/true/false) ----
     if (info.value.utilityRequest === 'เลือก') info.value.utilityRequest = 'yes'
     if (info.value.utilityRequest === 'ไม่เลือก') info.value.utilityRequest = 'no'
     if (info.value.facilityRequest === 'เลือก') info.value.facilityRequest = 'yes'
     if (info.value.facilityRequest === 'ไม่เลือก') info.value.facilityRequest = 'no'
 
-    // ✅ normalize เพิ่มเติมให้แน่นอน
     info.value.utilityRequest  = isYes(info.value.utilityRequest)  ? 'yes' : (isNo(info.value.utilityRequest)  ? 'no' : '')
     info.value.restroom        = isYes(info.value.restroom)        ? 'yes' : (isNo(info.value.restroom)        ? 'no' : '')
     info.value.facilityRequest = isYes(info.value.facilityRequest) ? 'yes' : (isNo(info.value.facilityRequest) ? 'no' : '')
 
+    // ---- 2.2 กันค่าว่างฟิลด์ใหม่/เดิม (trim + fallback เป็น '') ----
+    info.value.amphitheater   = (info.value.amphitheater   || '').toString().trim()
+    info.value.need_equipment = (info.value.need_equipment || '').toString().trim()
+    info.value.room_request   = (info.value.room_request   || '').toString().trim()   // ✅ ฟิลด์ใหม่ 3.3
+
+    // ---- 2.3 ดึงชื่อผู้ใช้ผู้ยื่น + ลายเซ็น (ถ้ามี) ----
     if (info.value.user_id) {
       try {
         const userRes = await axios.get(`${API_BASE}/api/user/${info.value.user_id}`)
-        info.value.requester = userRes.data.name || '-'
+        info.value.requester = userRes.data?.name || '-'
+
+        const sigPath =
+          userRes.data?.signaturePath ||
+          userRes.data?.signature_url ||
+          userRes.data?.signature ||
+          ''
+        signatureUrl.value = sigPath ? toAbsUrl(sigPath) : ''
       } catch {
         info.value.requester = '-'
+        signatureUrl.value = ''
       }
     }
 
-    if (info.value.files && info.value.files.length > 0) {
+    // ---- 2.4 รวมไฟล์แนบจาก multer (ไฟล์จริงที่ backend เก็บไว้) แสดงในรายการ ----
+    if (Array.isArray(info.value.files) && info.value.files.length > 0) {
       for (const file of info.value.files) {
         fileAttachments.value.push({
           fileName: file.originalName || file.fileName || 'ไฟล์แนบ',
@@ -853,34 +1034,18 @@ onMounted(async () => {
         })
       }
     }
-
-    if (info.value.user_id) {
-  try {
-    const userRes = await axios.get(`${API_BASE}/api/user/${info.value.user_id}`)
-    info.value.requester = userRes.data.name || '-'
-
-    // ✅ ดึงลายเซ็นจาก users.signaturePath
-    const sigPath =
-      userRes.data.signaturePath ||
-      userRes.data.signature_url ||
-      userRes.data.signature ||
-      ''
-
-    signatureUrl.value = sigPath ? toAbsUrl(sigPath) : ''
-  } catch {
-    info.value.requester = '-'
-    signatureUrl.value = ''
-  }
-}
-
-
-
-
   } catch (err) {
     Swal.fire('ดึงข้อมูลไม่สำเร็จ')
     console.error(err)
   }
+
+  // ==== 3) ระบบแจ้งเตือน/ตะกร้า (เหมือนเดิม) ====
+  lastSeenTimestamp.value = parseInt(localStorage.getItem('lastSeenTimestamp') || '0')
+  fetchNotifications()
+  polling = setInterval(fetchNotifications, 30000)
+  loadCart()
 })
+
 
 async function uploadTempFilesAndGetUrls() {
   const filesToUpload = Array.isArray(window._tempSelectedFiles) ? window._tempSelectedFiles : []
@@ -933,6 +1098,11 @@ function normTime(t) {
 
 async function handleNext() {
   if (isLoading.value) return;
+
+  // ✅ ต้องมีลายเซ็นก่อน ถ้าไม่มีจะเด้ง Swal ให้เพิ่มและบันทึก
+  const ok = await ensureSignatureOrPrompt();
+  if (!ok) return; // ผู้ใช้ยกเลิกหรือบันทึกไม่สำเร็จ
+
   isLoading.value = true;
 
   try {
@@ -944,14 +1114,13 @@ async function handleNext() {
       return;
     }
 
-    // รวม draft กับข้อมูลที่โหลดมา
+    // ===== (ส่วนเดิมของคุณ: เตรียม bookingData / normalize / คำนวณ lights / โหลด roles / export PDF / อัปโหลดไฟล์แนบ / สร้าง payload) =====
     const draft = (() => {
       try { return JSON.parse(sessionStorage.getItem('form_field_save') || 'null') || {}; }
       catch { return {}; }
     })();
     let bookingData = preferFilled(info.value || {}, draft || {});
 
-    // normalize yes/no + เวลา
     bookingData.utilityRequest  = normalizeYesNo(bookingData.utilityRequest);
     bookingData.restroom        = normalizeYesNo(bookingData.restroom);
     bookingData.facilityRequest = normalizeYesNo(bookingData.facilityRequest);
@@ -964,7 +1133,6 @@ async function handleNext() {
     bookingData.since_time      = normStr(bookingData.since_time);
     bookingData.until_thetime   = normStr(bookingData.until_thetime);
 
-    // ✅ Logic: ไฟฟ้าส่องสว่าง "ไม่ต้องการใช้งาน" (หรือไม่กรอกเวลาเลย)
     const toTime5 = (t) => (t || '').toString().trim().slice(0, 5);
     if (isLightsNo.value) {
       bookingData.turnon_lights = '';
@@ -978,7 +1146,6 @@ async function handleNext() {
       bookingData.lights_text = (on && off) ? `ตั้งแต่ ${on} - ${off} น.` : '';
     }
 
-    // โหลด step จาก settings (field)
     const cleanRoles = (arr) =>
       Array.from(new Set(
         (Array.isArray(arr) ? arr : [])
@@ -994,10 +1161,9 @@ async function handleNext() {
       stepArray = [];
     }
 
-    // ทำ PDF + อัปโหลด (ไม่ให้บล็อก flow ถ้าพัง)
     let pdfUrl = '';
     try {
-      await nextTick(); // ให้ DOM เสถียรก่อนแคปเจอร์
+      await nextTick();
       const pdfBlob = await htmlToPdfBlob('pdf-section');
       pdfUrl = await uploadPdfBlob(pdfBlob);
     } catch (e) {
@@ -1005,7 +1171,6 @@ async function handleNext() {
       pdfUrl = '';
     }
 
-    // อัปโหลดไฟล์แนบชั่วคราว (ถ้ามี) + รวมไฟล์ทั้งหมด
     const hasTemp     = Array.isArray(window._tempSelectedFiles) && window._tempSelectedFiles.length > 0;
     const uploadedNow = hasTemp ? await uploadTempFilesAndGetUrls() : [];
     const multerFiles = Array.isArray(bookingData.files) ? bookingData.files : [];
@@ -1018,7 +1183,6 @@ async function handleNext() {
       ...uploadedNow.map(f => f.fileName || 'ไฟล์แนบ'),
     ];
 
-    // payload (เพิ่ม lights / lights_text)
     const payload = {
       user_id: bookingData.user_id,
       name: bookingData.building,
@@ -1037,7 +1201,7 @@ async function handleNext() {
       date: new Date(),
       proxyStudentName: bookingData.proxyStudentName || '',
       proxyStudentId: bookingData.proxyStudentId || '',
-      bookingPdfUrl: pdfUrl, // ← ถ้า gen ไม่ได้ จะเป็น ''
+      bookingPdfUrl: pdfUrl,
 
       username_form: bookingData.username_form || localStorage.getItem('username_form') || '',
       id_form:       bookingData.id_form       || localStorage.getItem('id_form')       || '',
@@ -1063,14 +1227,14 @@ async function handleNext() {
       receiver:        bookingData.receiver || '',
       fileUrl:         bookingData.fileUrl || '',
 
-      // ฟิลด์ใหม่
       lights:      bookingData.lights || '',
       lights_text: bookingData.lights_text || '',
+      room_request:    bookingData.room_request || '',
+
     };
 
     await axios.post(`${API_BASE}/api/history`, payload);
 
-    // เคลียร์ & ไปหน้าถัดไป
     sessionStorage.removeItem('form_field_save');
     window._tempSelectedFiles = [];
     localStorage.removeItem('username_form');
@@ -1090,6 +1254,7 @@ async function handleNext() {
     isLoading.value = false;
   }
 }
+
 
 
 

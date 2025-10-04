@@ -39,6 +39,7 @@ const bookingFieldSchema = new mongoose.Schema({
     date_receive: Date,
     receiver: String,
     need_equipment: String,
+    room_request: { type: String, default: '' },
 
     restroom: {
         type: String,

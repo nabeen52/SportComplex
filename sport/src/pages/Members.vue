@@ -11,7 +11,7 @@
         <router-link to="/home_admin" exact-active-class="active"><i class="pi pi-megaphone"></i> แก้ไขข่าว</router-link>
         <router-link to="/edit_field" active-class="active"><i class="pi pi-map-marker"></i> แก้ไขสนาม</router-link>
         <router-link to="/edit_equipment" active-class="active"><i class="pi pi-clipboard"></i> แก้ไขอุปกรณ์ </router-link>
-         <router-link to="/step" active-class="active"><i class="pi pi-sitemap"></i> แก้ไขขั้นตอนการอนุมัติ </router-link>
+         <!-- <router-link to="/step" active-class="active"><i class="pi pi-sitemap"></i> แก้ไขขั้นตอนการอนุมัติ </router-link> -->
         <router-link to="/booking_field_admin" active-class="active"><i class="pi pi-map-marker"></i> จองสนาม</router-link>
         <router-link to="/approve_field" active-class="active"><i class="pi pi-verified"></i> อนุมัติ</router-link>
         <!-- <router-link to="/return_admin" active-class="active"><i class="pi pi-box"></i> รับคืนอุปกรณ์ </router-link> -->
@@ -284,94 +284,108 @@ export default {
   }
 },
 
-    async addMember() {
+async addMember() {
   const { value: formValues } = await Swal.fire({
-    title: 'เพิ่มสมาชิกจาก User',
+    title: 'เพิ่มพนักงาน/ผู้ดูเเล',
     html: `
-      <div class="form-grid">
-        <input type="email" id="email" class="swal2-input col-left" placeholder="อีเมลผู้ใช้งาน (user)">
-        <select id="position" class="swal2-input col-right">
-          <option value="">เลือกตำแหน่ง</option>
+      <!-- แถวบน: อีเมล (กว้าง) + ตำแหน่ง (แคบ) -->
+      <div class="row-1 add-user-grid-1fr-220">
+        <input type="email" id="email" class="swal2-input" placeholder="อีเมลผู้ใช้งาน (user)">
+        <select id="position" class="swal2-input">
           <option value="Staff">Staff</option>
-          <option value="Admin">Admin</option>
+          <option value="Admin" selected>Admin</option>
           <option value="Super">Super</option>
         </select>
+      </div>
 
-        <input type="text" id="thaiName" class="swal2-input col-span-2 extra" placeholder="ชื่อ-นามสกุล (ภาษาไทย)">
-        <div class="file col-span-2 extra">
-          <input type="file" id="signature" accept="image/*,.png,.jpg,.jpeg,.pdf" hidden>
-          <button type="button" id="pickSig" class="file-btn">เลือกไฟล์ลายเซ็น</button>
-          <span id="sigName" class="file-name">ยังไม่ได้เลือกไฟล์</span>
-        </div>
-    
+      <!-- แถวล่าง: คำนำหน้า (แคบ) + ชื่อไทย (กว้าง) -->
+      <div class="row-2 add-user-grid-220-1fr">
+        <select id="thaiPrefix" class="swal2-input">
+          <option value="">— โปรดระบุ —</option>
+          <option value="นาย">นาย</option>
+          <option value="นาง">นาง</option>
+          <option value="นางสาว">นางสาว</option>
+        </select>
+        <input type="text" id="thaiName" class="swal2-input" placeholder="ชื่อ–นามสกุล (ภาษาไทย)–ไม่บังคับ">
       </div>
     `,
-    customClass: { popup: 'member-swal' },
+    // ใช้คลาสใหม่เฉพาะกล่องนี้เท่านั้น
+    customClass: { popup: 'add-user-swal' },
     focusConfirm: false,
     showCancelButton: true,
     confirmButtonText: 'เลื่อนตำแหน่ง',
     cancelButtonText: 'ยกเลิก',
-    didOpen: () => {
-      const posEl = document.getElementById('position');
-      const extras = document.querySelectorAll('.member-swal .extra');
-
-      const showExtras = () => {
-        const show = posEl.value === 'Admin' || posEl.value === 'Super';
-        extras.forEach(el => (el.style.display = show ? '' : 'none'));
-      };
-      posEl.addEventListener('change', showExtras);
-      showExtras();
-
-      const fileInput = document.getElementById('signature');
-      const pickBtn = document.getElementById('pickSig');
-      const fileName = document.getElementById('sigName');
-      pickBtn.addEventListener('click', () => fileInput.click());
-      fileInput.addEventListener('change', () => {
-        fileName.textContent = fileInput.files?.[0]?.name || 'ยังไม่ได้เลือกไฟล์';
-      });
-    },
     preConfirm: () => {
-      const email = document.getElementById('email').value.trim();
-      const position = document.getElementById('position').value;
-      const needExtra = position === 'Admin' || position === 'Super';
-      const thaiName = (document.getElementById('thaiName')?.value || '').trim();
-      const signatureFile = document.getElementById('signature')?.files?.[0] || null;
+      const email      = document.getElementById('email').value.trim();
+      const position   = document.getElementById('position').value;
+      const thaiName   = (document.getElementById('thaiName')?.value || '').trim();
+      const thaiPrefix = (document.getElementById('thaiPrefix')?.value || '').trim();
 
-      if (!email || !isValidEmail(email) || !position) {
-        Swal.showValidationMessage('กรุณากรอกอีเมลที่ถูกต้องและเลือกตำแหน่ง');
-        return false;
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        Swal.showValidationMessage('กรุณากรอกอีเมลผู้ใช้ให้ถูกต้อง'); return false;
       }
-      if (needExtra) {
-        if (!thaiName) return Swal.showValidationMessage('กรุณากรอกชื่อ (ภาษาไทย)');
-        if (!signatureFile) return Swal.showValidationMessage('กรุณาอัปโหลดไฟล์ลายเซ็น');
+      if (!position) {
+        Swal.showValidationMessage('กรุณาเลือกตำแหน่ง'); return false;
       }
-      return { email, position, thaiName, signatureFile };
+      // กติกาเหมือนใน profile.vue
+      if (thaiName && !thaiPrefix)  { Swal.showValidationMessage('กรุณาเลือกคำนำหน้า'); return false; }
+      if (thaiPrefix && !thaiName)  { Swal.showValidationMessage('กรุณากรอกชื่อ–นามสกุล (ภาษาไทย)'); return false; }
+
+      return { email, position, thaiName, thaiPrefix };
     }
   });
 
   if (!formValues) return;
 
   try {
+    // ยืนยันว่ามี user จริง
     const check = await axios.get(`${API_BASE}/api/users/email/${encodeURIComponent(formValues.email)}`);
     if (!check.data || check.data.role !== 'user') {
-      Swal.fire('ไม่พบผู้ใช้นี้ หรือไม่ใช่ user', '', 'error');
-      return;
+      Swal.fire('ไม่พบผู้ใช้นี้ หรือไม่ใช่ user', '', 'error'); return;
     }
 
     if (formValues.position === 'Staff') {
-      await axios.patch(`${API_BASE}/api/members/${encodeURIComponent(formValues.email)}`, {
-        email: formValues.email, position: 'Staff'
-      });
-    } else {
-      const fd = new FormData();
-      fd.append('email', formValues.email);
-      fd.append('position', formValues.position);
-      fd.append('thaiName', formValues.thaiName);
-      fd.append('signature', formValues.signatureFile);
-      await axios.post(`${API_BASE}/api/members/promote`, fd, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
-    }
+  // 1) เปลี่ยน role -> Staff
+  await axios.patch(`${API_BASE}/api/members/${encodeURIComponent(formValues.email)}`, {
+    email: formValues.email, position: 'Staff'
+  });
+
+  // 2) ถ้ามีคำนำหน้าหรือชื่อไทย ให้บันทึกลง users ด้วย
+  const combinedThai = [formValues.thaiPrefix, formValues.thaiName]
+    .filter(Boolean).join(' ').trim();
+
+  if (combinedThai || formValues.thaiPrefix) {
+    await axios.patch(`${API_BASE}/api/users/email/${encodeURIComponent(formValues.email)}`, {
+      thaiPrefix: formValues.thaiPrefix || '',
+      thaiName: combinedThai || '',
+      name_th: combinedThai || '',
+      nameTh: combinedThai || '',
+      thai_name: combinedThai || ''
+    });
+  }
+} else {
+  // ===== Admin / Super — ส่งชื่อไทยที่ "รวมคำนำหน้า" และส่งหลาย key =====
+  const fd = new FormData();
+  fd.append('email', formValues.email);
+  fd.append('position', formValues.position);
+
+  const combinedThai = [formValues.thaiPrefix, formValues.thaiName]
+    .filter(Boolean).join(' ').trim();
+
+  if (combinedThai) {
+    fd.append('thaiName',  combinedThai);
+    fd.append('name_th',   combinedThai);   // เผื่อแบ็กเอนด์ใช้ชื่อนี้
+    fd.append('thai_name', combinedThai);   // และชื่อนี้
+    fd.append('nameTh',    combinedThai);   // หรือชื่อนี้
+  }
+  // ถ้าต้องการเก็บคำนำหน้าเป็นฟิลด์แยกด้วย (ไม่กระทบ)
+  if (formValues.thaiPrefix) fd.append('thaiPrefix', formValues.thaiPrefix);
+
+  await axios.post(`${API_BASE}/api/members/promote`, fd, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  });
+}
+
 
     await this.loadMembers();
     Swal.fire('เลื่อนตำแหน่งสำเร็จ', '', 'success');
@@ -381,142 +395,148 @@ export default {
 }
 ,
 
-    async editMember(index) {
+   async editMember(index) {
   const Member = this.Members[index];
   if (this.normalizeEmail(Member.email) === this.normalizeEmail(this.currentUserEmail)) {
-    Swal.fire('คุณไม่สามารถแก้ไขข้อมูลตัวเองได้', '', 'warning');
-    return;
+    Swal.fire('คุณไม่สามารถแก้ไขข้อมูลตัวเองได้', '', 'warning'); return;
   }
 
-  // ==== ดึงค่าเดิมจาก backend ====
-  let existingThaiName = '';
-  let signatureUrl = '';
+  // ดึงชื่อไทยเดิม
+  let existingThaiName = '', existingPrefix = '';
   try {
     const res = await axios.get(`${API_BASE}/api/users/email/${encodeURIComponent(Member.email)}`);
     const u = res.data || {};
-    existingThaiName = u.thaiName || u.name_th || u.nameTh || '';         // เผื่อใช้คีย์อื่น
-    signatureUrl = u.signaturePath || u.signatureUrl || '';               // path/url เก็บไฟล์เดิม
-  } catch (e) {
-    // ถ้าดึงไม่สำเร็จ ปล่อยค่าว่างไป
-  }
+    const raw = (u.thaiName || u.name_th || u.nameTh || '').trim();
+    const m = raw.match(/^(\S+)\s+(.*)$/);
+    const HON = ['นาย','นาง','นางสาว'];
+    if (m && HON.includes(m[1])) { existingPrefix = m[1]; existingThaiName = (m[2] || '').trim(); }
+    else { existingThaiName = raw; }
+  } catch {}
+
   const esc = (s='') => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
-  const fileName = signatureUrl ? signatureUrl.split('/').pop() : 'ยังไม่ได้เลือกไฟล์';
-  // ทำลิงก์แบบ absolute ถ้าได้มาเป็น path
-  const absSigUrl = signatureUrl
-    ? (signatureUrl.startsWith('http') ? signatureUrl
-       : `${API_BASE}${signatureUrl.startsWith('/') ? '' : '/'}${signatureUrl}`)
-    : '';
 
-  // ==== เปิด SweetAlert ====
   const { value: result, isConfirmed, isDenied } = await Swal.fire({
-    title: 'แก้ไขสมาชิก',
-    html: `
-      <div class="form-grid">
-        <input type="email" id="email" class="swal2-input col-left" placeholder="อีเมล" value="${esc(Member.email)}">
-        <select id="position" class="swal2-input col-right">
-          <option value="Staff" ${Member.position === 'Staff' ? 'selected' : ''}>Staff</option>
-          <option value="Admin" ${Member.position === 'Admin' ? 'selected' : ''}>Admin</option>
-          <option value="Super" ${Member.position === 'Super' ? 'selected' : ''}>Super</option>
-        </select>
+  title: 'แก้ไขพนักงาน/ผู้ดูแล',
+  html: `
+    <!-- แถวบน: อีเมล (กว้าง) + ตำแหน่ง (แคบ) -->
+    <div class="row-1 add-user-grid-1fr-220">
+      <input type="email" id="email" class="swal2-input" placeholder="อีเมล" value="${esc(Member.email)}">
+      <select id="position" class="swal2-input">
+        <option value="Staff" ${Member.position==='Staff'?'selected':''}>Staff</option>
+        <option value="Admin" ${Member.position==='Admin'?'selected':''}>Admin</option>
+        <option value="Super" ${Member.position==='Super'?'selected':''}>Super</option>
+      </select>
+    </div>
 
-        <!-- ใส่ค่าเดิมของชื่อภาษาไทย และให้กว้าง 2 คอลัมน์ -->
-        <input type="text" id="thaiName" class="swal2-input col-span-2 extra" placeholder="ชื่อ (ภาษาไทย)" value="${esc(existingThaiName)}">
+    <!-- แถวล่าง: คำนำหน้า (แคบ) + ชื่อไทย (กว้าง) -->
+    <div class="row-2 add-user-grid-220-1fr">
+      <select id="thaiPrefix" class="swal2-input">
+        <option value="">— โปรดระบุ —</option>
+        <option value="นาย" ${existingPrefix==='นาย'?'selected':''}>นาย</option>
+        <option value="นาง" ${existingPrefix==='นาง'?'selected':''}>นาง</option>
+        <option value="นางสาว" ${existingPrefix==='นางสาว'?'selected':''}>นางสาว</option>
+      </select>
+      <input type="text" id="thaiName" class="swal2-input" placeholder="ชื่อ–นามสกุล (ภาษาไทย)–ไม่บังคับ" value="${esc(existingThaiName)}">
+    </div>
+  `,
+  // ใช้คลาส popup เดียวกับตอน 'เพิ่มพนักงาน/ผู้ดูแล' เพื่อให้หน้าตาเหมือนกัน
+  customClass: { popup: 'add-user-swal' },
+  showCancelButton: true,
+  showDenyButton: true,
+  confirmButtonText: 'บันทึก',
+  denyButtonText: 'ลบ',
+  cancelButtonText: 'ยกเลิก',
+  preConfirm: () => {
+    const email      = document.getElementById('email').value.trim();
+    const position   = document.getElementById('position').value;
+    const thaiName   = (document.getElementById('thaiName')?.value || '').trim();
+    const thaiPrefix = (document.getElementById('thaiPrefix')?.value || '').trim();
 
-        <!-- โชว์ชื่อไฟล์เดิม + ปุ่มเลือกไฟล์ใหม่ + ลิงก์ดูไฟล์เดิม -->
-        <div class="file col-span-2 extra">
-          <input type="file" id="signature" accept="image/*,.png,.jpg,.jpeg,.pdf" hidden>
-          <button type="button" id="pickSig" class="file-btn">อัปเดตลายเซ็น</button>
-          <span id="sigName" class="file-name">${esc(fileName)}</span>
-          ${absSigUrl ? `<a href="${absSigUrl}" target="_blank" class="file-link">ดูไฟล์เดิม</a>` : ''}
-        </div>
-      </div>
-    `,
-    customClass: { popup: 'member-swal' },
-    showCancelButton: true,
-    showDenyButton: true,
-    confirmButtonText: 'บันทึก',
-    denyButtonText: 'ลบ',
-    cancelButtonText: 'ยกเลิก',
-    didOpen: () => {
-      const posEl = document.getElementById('position');
-      const extras = document.querySelectorAll('.member-swal .extra');
-      const toggleExtras = () => {
-        const show = posEl.value === 'Admin' || posEl.value === 'Super';
-        extras.forEach(el => el.style.display = show ? '' : 'none');
-      };
-      posEl.addEventListener('change', toggleExtras);
-      toggleExtras(); // โชว์ทันทีถ้าปัจจุบันเป็น Admin/Super
-
-      // จัดการปุ่มเลือกไฟล์
-      const fileInput = document.getElementById('signature');
-      const pickBtn = document.getElementById('pickSig');
-      const fileNameEl = document.getElementById('sigName');
-      pickBtn.addEventListener('click', () => fileInput.click());
-      fileInput.addEventListener('change', () => {
-        fileNameEl.textContent = fileInput.files?.[0]?.name || '${esc(fileName)}';
-      });
-    },
-    preConfirm: () => {
-      const email = document.getElementById('email').value.trim();
-      const position = document.getElementById('position').value;
-      const thaiName = (document.getElementById('thaiName')?.value || '').trim();
-      const signatureFile = document.getElementById('signature')?.files?.[0] || null;
-
-      if (email !== Member.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-        Swal.showValidationMessage('กรุณากรอกอีเมลที่ถูกต้อง');
-        return false;
-      }
-      if (!position) {
-        Swal.showValidationMessage('กรุณาเลือกตำแหน่ง');
-        return false;
-      }
-      return { email, position, thaiName, signatureFile };
+    if (email !== Member.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      Swal.showValidationMessage('กรุณากรอกอีเมลที่ถูกต้อง'); return false;
     }
+    if (!position) { Swal.showValidationMessage('กรุณาเลือกตำแหน่ง'); return false; }
+    if (thaiName && !thaiPrefix)  { Swal.showValidationMessage('กรุณาเลือกคำนำหน้า'); return false; }
+    if (thaiPrefix && !thaiName)  { Swal.showValidationMessage('กรุณากรอกชื่อ–นามสกุล (ภาษาไทย)'); return false; }
+
+    return { email, position, thaiName, thaiPrefix };
+  }
+});
+
+
+ if (isConfirmed && result) {
+  try {
+    const oldEmail = Member.email;
+    const wasPriv  = Member.position === 'Admin' || Member.position === 'Super';
+    const willPriv = result.position === 'Admin' || result.position === 'Super';
+
+    if (!wasPriv && willPriv) {
+      // user/Staff -> Admin/Super (promote)
+      const fd = new FormData();
+      fd.append('oldEmail', oldEmail);
+      fd.append('email', result.email);
+      fd.append('position', result.position);
+
+      const combinedThai = [result.thaiPrefix, result.thaiName].filter(Boolean).join(' ').trim();
+      if (combinedThai) {
+        fd.append('thaiName',  combinedThai);
+        fd.append('name_th',   combinedThai);
+        fd.append('thai_name', combinedThai);
+        fd.append('nameTh',    combinedThai);
+      }
+      if (result.thaiPrefix) fd.append('thaiPrefix', result.thaiPrefix);
+
+      await axios.post(`${API_BASE}/api/members/promote`, fd, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+
+    } else if (willPriv) {
+      // Admin/Super -> Admin/Super (update privileged)
+      const fd = new FormData();
+      fd.append('oldEmail', oldEmail);
+      fd.append('email', result.email);
+      fd.append('position', result.position);
+
+      const combinedThai = [result.thaiPrefix, result.thaiName].filter(Boolean).join(' ').trim();
+      if (combinedThai) {
+        fd.append('thaiName',  combinedThai);
+        fd.append('name_th',   combinedThai);
+        fd.append('thai_name', combinedThai);
+        fd.append('nameTh',    combinedThai);
+      }
+      if (result.thaiPrefix) fd.append('thaiPrefix', result.thaiPrefix);
+
+      await axios.post(`${API_BASE}/api/members/update-privileged`, fd, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+
+    } else {
+      // ✅ Admin/Super -> Staff (DEMOTE) หรือ Staff -> Staff
+      await axios.patch(`${API_BASE}/api/members/${encodeURIComponent(oldEmail)}`, {
+        email: result.email,
+        position: 'Staff'
+      });
+      
+  // ✅ อัปเดตคำนำหน้า/ชื่อไทยใน users ด้วย
+  const combinedThai = [result.thaiPrefix, result.thaiName]
+    .filter(Boolean).join(' ').trim();
+
+  await axios.patch(`${API_BASE}/api/users/email/${encodeURIComponent(result.email)}`, {
+    thaiPrefix: result.thaiPrefix || '',
+    thaiName: combinedThai || '',
+    name_th: combinedThai || '',
+    nameTh: combinedThai || '',
+    thai_name: combinedThai || ''
   });
 
-  // ==== ดำเนินการบันทึก/ลบ ====
-  if (isConfirmed && result) {
-    try {
-      const oldEmail = Member.email;
-      const wasPriv = Member.position === 'Admin' || Member.position === 'Super';
-      const willPriv = result.position === 'Admin' || result.position === 'Super';
-
-      if (!wasPriv && willPriv) {
-        if (!result.thaiName) return Swal.fire('กรุณากรอกชื่อ (ภาษาไทย)', '', 'warning');
-        if (!result.signatureFile) return Swal.fire('กรุณาอัปโหลดไฟล์ลายเซ็น', '', 'warning');
-        const fd = new FormData();
-        fd.append('oldEmail', oldEmail);
-        fd.append('email', result.email);
-        fd.append('position', result.position);
-        fd.append('thaiName', result.thaiName);
-        fd.append('signature', result.signatureFile);
-        await axios.post(`${API_BASE}/api/members/promote`, fd, {
-          headers: { 'Content-Type': 'multipart/form-data' }
-        });
-      } else if (willPriv) {
-        const fd = new FormData();
-        fd.append('oldEmail', oldEmail);
-        fd.append('email', result.email);
-        fd.append('position', result.position);
-        // ส่งเฉพาะฟิลด์ที่แก้
-        if (result.thaiName)  fd.append('thaiName', result.thaiName);
-        if (result.signatureFile) fd.append('signature', result.signatureFile);
-        await axios.post(`${API_BASE}/api/members/update-privileged`, fd, {
-          headers: { 'Content-Type': 'multipart/form-data' }
-        });
-      } else {
-        await axios.patch(`${API_BASE}/api/members/${encodeURIComponent(oldEmail)}`, {
-          email: result.email,
-          position: result.position
-        });
-      }
-
-      await this.loadMembers();
-      Swal.fire('แก้ไขสำเร็จ', '', 'success');
-    } catch (err) {
-      Swal.fire('ผิดพลาด', err?.response?.data?.message || 'ไม่สามารถบันทึกข้อมูลได้', 'error');
     }
+
+    await this.loadMembers();
+    Swal.fire('แก้ไขสำเร็จ', '', 'success');
+  } catch (err) {
+    Swal.fire('ผิดพลาด', err?.response?.data?.message || 'ไม่สามารถบันทึกข้อมูลได้', 'error');
   }
+}
 
   if (isDenied) {
     const confirmDelete = await Swal.fire({
@@ -534,12 +554,15 @@ export default {
         });
         await this.loadMembers();
         Swal.fire('เปลี่ยนสถานะเป็นผู้ใช้ทั่วไปแล้ว', '', 'success');
-      } catch (err) {
+      } catch {
         Swal.fire('ผิดพลาด', 'ไม่สามารถเปลี่ยนสถานะได้', 'error');
       }
     }
   }
-},
+}
+
+
+,
 async openUserLookup() {
   try {
     Swal.fire({
@@ -1031,8 +1054,25 @@ _buildUsersTableHTML() {
 @import '../css/style.css';
 
 /* ---- SweetAlert layout for Management forms ---- */
-.swal2-popup.member-swal { padding: 26px 28px 22px; }
+.swal2-popup.member-swal{
+  max-width: min(900px, 96vw) !important;
+  width: auto !important;
+  padding: 0 24px !important;
+}
+.member-swal .grid-1fr-220{
+  display: grid;
+  grid-template-columns: 1fr 220px;
+  gap: 12px 16px;
+  margin-bottom: 12px;
+}
 
+/* แถวล่าง: คำนำหน้า (แคบ) + ชื่อไทย (กว้าง) */
+.member-swal .grid-220-1fr{
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 12px 16px;
+  margin-bottom: 6px;
+}
 .member-swal .form-grid{
   display: grid;
   grid-template-columns: 1fr 180px; /* ซ้ายกว้าง ขวาแคบ */
@@ -1045,16 +1085,21 @@ _buildUsersTableHTML() {
 .member-swal .col-span-2{ grid-column: 1 / -1; }
 
 .member-swal .swal2-input{
-  width: 100%;
-  margin: 0;
   height: 44px;
+  margin: 0 !important;
   box-sizing: border-box;
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 15px;
 }
-.member-swal select.swal2-input{
-  height: 44px;
-  padding-right: 28px;
+.member-swal select.swal2-input{ padding-right: 28px; }
+@media (max-width: 520px){
+  .member-swal .grid-1fr-220,
+  .member-swal .grid-220-1fr{
+    grid-template-columns: 1fr !important;
+  }
 }
-
 .member-swal .file{
   display: flex;
   align-items: center;
@@ -1335,6 +1380,66 @@ _buildUsersTableHTML() {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+/* คอมโบคำนำหน้าใน Swal */
+.member-swal .title-select {
+  height: 44px;
+  padding-right: 28px;
+}
+/* ===== SweetAlert: เพิ่มสมาชิกจาก User (เฉพาะกล่องนี้เท่านั้น) ===== */
+.swal2-popup.add-user-swal{
+  max-width: 680px !important;   /* ขนาดให้พอดีกับภาพ */
+  width: calc(100vw - 40px) !important;
+  padding: 18px 22px 16px !important;
+  border-radius: 14px;
+}
+
+/* จัดกริดสองแถวเหมือนภาพ: บน (อีเมล 1fr | ตำแหน่ง 220px), ล่าง (คำนำหน้า 220px | ชื่อไทย 1fr) */
+.add-user-swal .add-user-grid-1fr-220{
+  display: grid;
+  grid-template-columns: 1fr 220px;
+  gap: 10px 14px;
+  margin-bottom: 10px;
+}
+.add-user-swal .add-user-grid-220-1fr{
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 10px 14px;
+}
+
+/* สไตล์อินพุตให้เรียบเหมือนภาพ */
+.add-user-swal .swal2-input{
+  height: 44px;
+  margin: 0 !important;
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  font-size: 15px;
+  box-shadow: none !important;
+}
+.add-user-swal select.swal2-input{ padding-right: 28px; }
+
+/* ปุ่มยืนยัน/ยกเลิกตามภาพ */
+.add-user-swal .swal2-actions{
+  margin-top: 16px !important;
+}
+.add-user-swal .swal2-confirm{
+  background:#6366f1 !important;  /* โทนม่วงน้ำเงินแบบภาพ */
+  border-radius: 10px !important;
+  padding: 10px 18px !important;
+}
+.add-user-swal .swal2-cancel{
+  background:#6b7280 !important;
+  border-radius: 10px !important;
+  padding: 10px 18px !important;
+}
+
+/* รองรับจอแคบ */
+@media (max-width: 520px){
+  .add-user-swal .add-user-grid-1fr-220,
+  .add-user-swal .add-user-grid-220-1fr{
+    grid-template-columns: 1fr !important;
+  }
 }
 
 </style>

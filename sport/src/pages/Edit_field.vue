@@ -163,7 +163,7 @@ export default {
         { to: "/home_admin", label: "แก้ไขข่าว", icon: "pi pi-megaphone", exact: true },
         { to: "/edit_field", label: "แก้ไขสนาม", icon: "pi pi-map-marker" },
         { to: "/edit_equipment", label: "แก้ไขอุปกรณ์", icon: "pi pi-clipboard" },
-        { to: "/step", label: "แก้ไขขั้นตอนการอนุมัติ", icon: "pi pi-sitemap" },
+        // { to: "/step", label: "แก้ไขขั้นตอนการอนุมัติ", icon: "pi pi-sitemap" },
         { to: "/booking_field_admin", label: "จองสนาม", icon: "pi pi-map-marker" },
         { to: "/approve_field", label: "อนุมัติ", icon: "pi pi-verified" },
         // { to: "/return_admin", label: "รับคืนอุปกรณ์", icon: "pi pi-box" },
