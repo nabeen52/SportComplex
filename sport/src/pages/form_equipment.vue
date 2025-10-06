@@ -987,12 +987,7 @@ onMounted(async () => {
     }
   }
 // ✅ ตั้งค่าวันเริ่มต้นเริ่มที่วันนี้เฉพาะตอนยังไม่เคยกรอกเท่านั้น
-if (!form.start_date || !form.end_date) {
-  const today = new Date()
-  dpRange.value = [today, today]
-  form.start_date = toISO(today)
-  form.end_date = toISO(today)
-}
+
 
   // เซ็ตค่าเริ่มต้นของปฏิทินจากค่าใน form (ถ้ามี)
   const s = safeDate(form.start_date)
