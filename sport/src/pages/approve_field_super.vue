@@ -181,12 +181,10 @@ export default {
     // ========== บังคับ A4 หน้าเดียว ==========
 // ========== บังคับ A4 หน้าเดียว + แก้ textarea เป็นข้อความก่อนแคปเจอร์ ==========
 async _makeA4OnePageBlob(element) {
-  // รอฟอนต์ (กันเด้งตัวอักษร)
   if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch {} }
 
   const MARGIN_MM = 10;
 
-  // เก็บ style เดิมไว้คืนค่า
   const orig = {
     width: element.style.width, margin: element.style.margin, padding: element.style.padding,
     boxSizing: element.style.boxSizing, transform: element.style.transform,
@@ -194,11 +192,9 @@ async _makeA4OnePageBlob(element) {
     left: element.style.left, top: element.style.top, display: element.style.display,
   };
 
-  // สร้าง wrapper กว้าง A4
   const wrapper = document.createElement('div');
   Object.assign(wrapper.style, { width: '210mm', background: '#fff', display: 'block', padding: '0', margin: '0' });
 
-  // ปรับ element ให้พอดี A4 (ขอบ 10mm)
   element.style.width = '190mm';
   element.style.margin = '10mm auto';
   element.style.padding = '0';
@@ -208,94 +204,151 @@ async _makeA4OnePageBlob(element) {
   element.style.position = 'static';
   element.style.display  = 'block';
 
-  // เปิดโหมดพิมพ์
   const hadPrintClass = element.classList.contains('pdf-print');
   element.classList.add('pdf-print');
 
-  // ย้ายเข้า wrapper ชั่วคราว
   const parent = element.parentNode;
-  const next   = element.nextSibling;
   parent.insertBefore(wrapper, element);
-  wrapper.appendChild(element);
 
-  // ---------- สำคัญ: ทำให้ข้อความในฟอร์ม “กลายเป็นตัวหนังสือ” ชั่วคราว ----------
-  const revertList = [];
-  const materializeControls = () => {
-    // ให้ textarea สูงเท่าเนื้อหา
-    element.querySelectorAll('textarea').forEach(ta => {
+  // clone for safe editing
+  const clone = element.cloneNode(true);
+
+  // sanitize target text nodes (remove "อื่นๆ" and colons) - same as before
+  (function sanitizeTargetText(root) {
+    const reOther = /(^|\s)อื่นๆ:?\s*/gi;
+    const targets = [
+      ['เลขานุการ','ศูนย์','กีฬา'],
+      ['หัวหน้า','ศูนย์','กีฬา']
+    ];
+    const candidates = root.querySelectorAll('label, .chk, .mfu-box .row, .mfu-box .chk, .mfu-box label, span, div');
+    candidates.forEach(node => {
+      try {
+        const fullText = (node.textContent || '').toString();
+        if (!fullText.trim()) return;
+        const lower = fullText.replace(/\s+/g,' ').toLowerCase();
+        const matched = targets.some(kw => kw.every(k => lower.includes(k)));
+        if (!matched) return;
+        const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT, null, false);
+        const tnodes = [];
+        let tn;
+        while (tn = walker.nextNode()) tnodes.push(tn);
+        tnodes.forEach(t => {
+          try {
+            let s = t.nodeValue || '';
+            if (reOther.test(s)) s = s.replace(reOther, '$1');
+            s = s.replace(/[:\uFE55]/g, ' ').replace(/\s+/g, ' ');
+            if (s !== (t.nodeValue || '')) t.nodeValue = s;
+          } catch(e){}
+        });
+      } catch(e){}
+    });
+  })(clone);
+
+  // CSS to hide checkmarks/icons in clone while preserving layout
+  const styleTag = document.createElement('style');
+  styleTag.type = 'text/css';
+  styleTag.textContent = `
+    .pdf-temp-root input[type="checkbox"] { visibility: hidden !important; opacity: 0 !important; }
+    .pdf-temp-root label::before, .pdf-temp-root label::after { display: none !important; content: none !important; }
+    .pdf-temp-root label svg, .pdf-temp-root .chk svg, .pdf-temp-root .icon-check, .pdf-temp-root .tick { display: none !important; }
+    .pdf-temp-root label, .pdf-temp-root .chk, .pdf-temp-root .checkbox { background-image: none !important; background: transparent !important; }
+    .pdf-temp-root input[type="checkbox"] { display: inline-block !important; width: 16px; height: 16px; vertical-align: middle; }
+  `;
+
+  const cloneHolder = document.createElement('div');
+  cloneHolder.className = 'pdf-temp-root';
+  cloneHolder.style.width = '190mm';
+  cloneHolder.style.margin = '10mm auto';
+  cloneHolder.style.boxSizing = 'border-box';
+  cloneHolder.style.padding = '0';
+  cloneHolder.appendChild(styleTag);
+  cloneHolder.appendChild(clone);
+
+  // ---- Materialize controls on clone BUT replace input with text node DIV (avoid duplication) ----
+  try {
+    // textarea sizing
+    clone.querySelectorAll('textarea').forEach(ta => {
       ta.style.height = 'auto';
       ta.style.height = ta.scrollHeight + 'px';
     });
 
-    // แทนที่ textarea และ input[type=text|search|email|number|tel|url] ด้วย div.span
     const selectors = [
       'textarea',
       'input[type="text"]','input[type="search"]','input[type="email"]',
       'input[type="number"]','input[type="tel"]','input[type="url"]'
     ].join(',');
 
-    element.querySelectorAll(selectors).forEach(ctrl => {
-      const val = (ctrl.value ?? '').toString();
-      // ถ้าไม่มีค่าและไม่ได้อยู่ในพื้นที่ที่ต้องพิมพ์ ก็ข้าม
-      if (!val && ctrl.tagName !== 'TEXTAREA') return;
+    clone.querySelectorAll(selectors).forEach(ctrl => {
+      try {
+        const val = (ctrl.value ?? '').toString();
+        // If empty and not textarea: do nothing (keep original placeholder/layout)
+        if (!val && ctrl.tagName !== 'TEXTAREA') return;
 
-      const repl = document.createElement('div');
-      repl.className = 'pdf-ta-repl';
-      repl.textContent = val;                           // เก็บ \n ไว้ แล้วคุมด้วย CSS pre-wrap
-      const cs = window.getComputedStyle(ctrl);
+        // Create replacement DIV (text-only) with same computed style
+        const repl = document.createElement('div');
+        repl.className = 'pdf-ta-repl';
+        repl.textContent = val;
+        const cs = window.getComputedStyle(ctrl);
+        Object.assign(repl.style, {
+          whiteSpace: 'pre-wrap',
+          wordBreak:  'break-word',
+          lineHeight: cs.lineHeight,
+          font:       cs.font,
+          fontSize:   cs.fontSize,
+          fontFamily: cs.fontFamily,
+          color:      '#111',
+          display:    (cs.display === 'inline') ? 'inline-block' : 'block',
+          padding:    cs.padding,
+          margin:     cs.margin,
+          width:      cs.width,
+          minHeight:  cs.height,
+          border:     '0',
+        });
 
-      // ก๊อปปี้สไตล์หลัก ๆ ให้ดูใกล้เคียง
-      Object.assign(repl.style, {
-        whiteSpace: 'pre-wrap',
-        wordBreak:  'break-word',
-        lineHeight: cs.lineHeight,
-        font:       cs.font,
-        fontSize:   cs.fontSize,
-        fontFamily: cs.fontFamily,
-        color:      '#111',
-        display:    (cs.display === 'inline') ? 'inline-block' : 'block',
-        padding:    cs.padding,
-        margin:     cs.margin,
-        width:      cs.width,
-        minHeight:  cs.height,
-        border:     '0',
-      });
-
-      ctrl.style.display = 'none';
-      ctrl.parentNode.insertBefore(repl, ctrl.nextSibling);
-
-      // เก็บไว้คืนค่า
-      revertList.push(() => {
-        repl.remove();
-        ctrl.style.display = '';
-      });
+        // Replace the input element itself with repl — this prevents duplication
+        // If ctrl is inside label and other text nodes are present, replacing ctrl keeps other text nodes intact
+        const parentEl = ctrl.parentNode;
+        if (parentEl) {
+          try {
+            parentEl.replaceChild(repl, ctrl);
+          } catch (e) {
+            // fallback: hide ctrl and insert repl after (less ideal)
+            try { ctrl.style.display = 'none'; parentEl.insertBefore(repl, ctrl.nextSibling); } catch(_) {}
+          }
+        } else {
+          // if no parent (rare), just hide ctrl and insert repl nearby
+          try { ctrl.style.display = 'none'; ctrl.parentNode && ctrl.parentNode.insertBefore(repl, ctrl.nextSibling); } catch(_) {}
+        }
+      } catch (e) {
+        // ignore per-control errors
+      }
     });
-  };
+  } catch (e) {
+    console.warn('materialize clone failed', e);
+  }
 
-  materializeControls();
+  wrapper.appendChild(cloneHolder);
 
-  // ให้ layout คงที่ก่อนแคปเจอร์
+  // give browser a frame to layout
   await new Promise(r => requestAnimationFrame(r));
 
-  // DOM -> canvas
   const worker = html2pdf().set({
     html2canvas: {
       scale: 3,
       useCORS: true,
       backgroundColor: '#ffffff',
-      letterRendering: true     // ช่วยไม่ให้ตัวอักษร “ขาด” บางตัว
+      letterRendering: true
     }
   }).from(wrapper).toCanvas();
 
-  const canvas  = await worker.get('canvas');
+  const canvas = await worker.get('canvas');
   const imgData = canvas.toDataURL('image/jpeg', 0.98);
 
-  // วางรูปลง A4
-  const pdf   = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+  const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
   const pageW = pdf.internal.pageSize.getWidth();
   const pageH = pdf.internal.pageSize.getHeight();
-  const maxW  = pageW - MARGIN_MM * 2;
-  const maxH  = pageH - MARGIN_MM * 2;
+  const maxW = pageW - MARGIN_MM * 2;
+  const maxH = pageH - MARGIN_MM * 2;
   const imgRatio = canvas.width / canvas.height;
   const boxRatio = maxW / maxH;
   let drawW, drawH;
@@ -306,15 +359,18 @@ async _makeA4OnePageBlob(element) {
   pdf.addImage(imgData, 'JPEG', x, y, drawW, drawH);
   const pdfBlob = pdf.output('blob');
 
-  // ---------- คืน DOM / สไตล์เดิม ----------
-  revertList.forEach(fn => { try { fn(); } catch {} });
-  if (next) parent.insertBefore(element, next); else parent.appendChild(element);
-  wrapper.remove();
+  // cleanup
+  try { wrapper.remove(); } catch(_) {}
   if (!hadPrintClass) element.classList.remove('pdf-print');
   Object.assign(element.style, orig);
 
   return pdfBlob;
 },
+
+
+
+
+
 
 
 // เรียกจาก SweetAlert preview -> สร้าง/ดาวน์โหลด PDF 1 หน้า

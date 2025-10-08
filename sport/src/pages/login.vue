@@ -11,7 +11,7 @@
       </div>
 
          <!-- User Manual link (top-right corner) -->
-        <div style="position: absolute; top: 2rem; right: 2rem;">
+        <!-- <div style="position: absolute; top: 2rem; right: 2rem;">
  <button style="
   border-radius: 12px;
   padding: 8px 16px;
@@ -20,6 +20,21 @@
   cursor: pointer;
 ">
     <a href="#" style="color: #fff; text-decoration: none;">User Manual</a>
+  </button>
+</div> -->
+<div style="position: absolute; top: 2rem; right: 2rem;">
+  <button
+    @click="openUserManual"
+    style="
+      border-radius: 12px;
+      padding: 8px 16px;
+      border: none;
+      background: rgba(84, 110, 122, 0.50);
+      color: #fff;
+      cursor: pointer;
+    "
+  >
+    User Manual
   </button>
 </div>
   
@@ -78,6 +93,12 @@ const loginWithGoogle = () => {
   // ไป route Google OAuth ตรงๆ (ไม่มี chain logout)
   window.location.href = `${API_BASE}/auth/google`;
 }
+const openUserManual = () => {
+  window.open(
+    "https://drive.google.com/drive/folders/1wVVzJnBLUa6gKIJTgfCuVMxHsFcOwBi0?usp=drive_link",
+    "_blank"
+  );
+};
 
 
 // อ่าน query param error

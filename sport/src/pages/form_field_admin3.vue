@@ -164,11 +164,7 @@
                 </table>
               </div>
 
-              <div class="note-line">
-                <span style="font-weight:bold; font-size: 15px;">
-                  *ต้องได้รับการอนุมัติจากรองอธิการบดีผู้กำกับดูแล และสำเนาเอกสารถึงฝ่ายอนุรักษ์พลังงาน
-                </span>
-              </div>
+              
 
               <!-- ข้อ 3 -->
               <div class="form-row bold" style="margin-left:0;">
@@ -302,7 +298,7 @@
 
             <div style="margin-top:12px;">
               <span style="font-weight:bold; font-size:15px;">
-                หมายเหตุ: ให้นักศึกษา/ผู้รับผิดชอบแนบเอกสารโครงการหรือกำหนดการเพื่อประกอบการพิจารณา
+                หมายเหตุ: ให้ผู้รับผิดชอบแนบเอกสารโครงการหรือกำหนดการเพื่อประกอบการพิจารณา
               </span>
             </div>
           </div>

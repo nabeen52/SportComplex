@@ -308,7 +308,7 @@ _buildFieldPdfNode(b, secretary_choice = {}, reason_admin = '', secThaiName = ''
     padding: '0',
   });
 
-  // ✅ รวม room_request จากหลายแหล่งให้แน่ใจว่ามีค่า
+  // helper: pick room_request from possible fields
   const pick = (...vals) => {
     for (const v of vals) {
       const s = (v ?? '').toString().trim();
@@ -328,40 +328,167 @@ _buildFieldPdfNode(b, secretary_choice = {}, reason_admin = '', secThaiName = ''
     )
   };
 
-  // ใช้เทมเพลตเดียวกับพรีวิว
+  // render the normal preview (do NOT modify buildFieldFormPreviewV2)
   const reqKey = enriched.user_id || enriched.id_form || '';
   const reqSig = this.userSigMap?.[reqKey] || '';
   holder.innerHTML = buildFieldFormPreviewV2(enriched, secThaiName, secSignUrl, reqSig);
 
-  // === เติมค่าที่เลือกใน dialog: “เลขานุการศูนย์กีฬา > อื่นๆ” ===
-  const chk = holder.querySelector('#sec_other_chk');
-  const box = holder.querySelector('#sec_other_reason');
+  // --- PDF-only tweak: replace "อื่นๆ" control with text-only element (if needed) ---
+  try {
+    const rawText = ((reason_admin || '').toString().trim()) ||
+                    ((secretary_choice && (secretary_choice.other_text || secretary_choice.other)) ? (secretary_choice.other_text || secretary_choice.other || '').toString().trim() : '');
 
-  const wantOther =
-    !!(secretary_choice && secretary_choice.other_checked) ||
-    (!!reason_admin && String(reason_admin).trim() !== '');
+    // find existing elements
+    const secOtherBox = holder.querySelector('#sec_other_reason');
+    const secOtherChk = holder.querySelector('#sec_other_chk');
+    const labelToRemove = secOtherChk ? secOtherChk.closest('label') : null;
 
-  if (chk) chk.checked = wantOther;
+    const escapeHtml = (s) => {
+      if (s == null) return '';
+      return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/\r/g, '')
+        .replace(/\n/g, '<br>');
+    };
+    const finalHtml = rawText ? escapeHtml(rawText) : '';
 
-  if (box) {
-    const text = wantOther ? ((reason_admin || '').trim() || '-') : '';
-    if ('value' in box) box.value = text;
-    const isCE = box.isContentEditable || box.getAttribute('contenteditable') === 'true';
-    if (isCE) {
-      box.textContent = text;
-      try { box.setAttribute('data-ph', ''); } catch (_){}
-    } else if (!('value' in box)) {
-      box.textContent = text;
+    // create a replacement div if needed
+    const createReplacementDiv = () => {
+      const replacement = document.createElement('div');
+      replacement.id = 'sec_other_reason';
+      replacement.className = 'mfu-input mfu-ta limit-3lines';
+      replacement.setAttribute('data-ph', 'โปรดระบุ');
+      replacement.style.minHeight = '36px';
+      replacement.style.whiteSpace = 'pre-wrap';
+      replacement.style.wordBreak = 'break-word';
+      replacement.style.overflowWrap = 'anywhere';
+      replacement.innerHTML = finalHtml;
+      return replacement;
+    };
+
+    if (labelToRemove && labelToRemove.parentElement) {
+      const container = labelToRemove.parentElement;
+      // remove checkbox label and old box (if in same parent)
+      try { labelToRemove.remove(); } catch (_) {}
+      if (secOtherBox && secOtherBox.parentElement === container) secOtherBox.remove();
+      else if (secOtherBox) secOtherBox.remove();
+
+      const replacement = createReplacementDiv();
+      // append at the same container (we will align it after measuring)
+      container.appendChild(replacement);
+    } else if (secOtherBox) {
+      // replace content if box exists
+      if ('value' in secOtherBox) secOtherBox.value = rawText;
+      else secOtherBox.innerHTML = finalHtml;
+      // ensure classes present
+      secOtherBox.classList.add('mfu-input','mfu-ta','limit-3lines');
+    } else {
+      // fallback: insert into first secretary box
+      const secBoxParent = holder.querySelector('.mfu-boxes .mfu-box');
+      if (secBoxParent) {
+        const replacement = createReplacementDiv();
+        const sigRow = secBoxParent.querySelector('.sig-row');
+        if (sigRow) secBoxParent.insertBefore(replacement, sigRow);
+        else secBoxParent.appendChild(replacement);
+      }
     }
+  } catch (err) {
+    console.warn('PDF-only sec_other initial replacement failed', err);
   }
 
-  // แช่แข็งฟอร์มให้เป็นตัวหนังสือก่อนจับภาพ
+  // --- ALIGN: measure real left position of the "เรียน หัวหน้าศูนย์กีฬาฯ" line
+  try {
+    // append holder off-screen but in DOM so browser computes layout
+    holder.style.position = 'fixed';
+    holder.style.left = '-9999px';
+    holder.style.top = '0';
+    holder.style.visibility = 'hidden';
+    document.body.appendChild(holder);
+
+    // helper: find element that contains the text "เรียน หัวหน้าศูนย์กีฬาฯ"
+    const findElementByText = (root, text) => {
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT, null, false);
+      const lower = text.toLowerCase();
+      let node;
+      while (node = walker.nextNode()) {
+        if ((node.textContent || '').toLowerCase().includes(lower)) return node;
+      }
+      return null;
+    };
+
+    // try a few likely variants (Thai spacing might vary)
+    const candidates = [
+      'เรียน หัวหน้าศูนย์กีฬาฯ',
+      'เรียน หัวหน้าศูนย์กีฬาฯ',
+      'เรียน หัวหน้าศูนย์กีฬาฯ', // keep same - just uses one
+      'เรียน หัวหน้าศูนย์กีฬ',
+      'เรียน หัวหน้าศูนย์กีฬา'
+    ];
+    let labelEl = null;
+    for (const txt of candidates) {
+      labelEl = findElementByText(holder, txt);
+      if (labelEl) break;
+    }
+
+    // fallback: try the specific selector where template normally renders that text
+    if (!labelEl) {
+      labelEl = holder.querySelector('.mfu-box .chk') || holder.querySelector('.mfu-box .row span') || holder.querySelector('.mfu-box .row');
+    }
+
+    if (labelEl) {
+      const labelRect = labelEl.getBoundingClientRect();
+
+      // find sec_other_reason and its nearest positioned parent to compute relative left
+      const secOtherEl = holder.querySelector('#sec_other_reason');
+      if (secOtherEl) {
+        // find container for secOtherEl to calc relative offset
+        const container = secOtherEl.parentElement || secOtherEl;
+        const contRect = container.getBoundingClientRect();
+
+        // desired offset relative to container's left
+        const desiredLeft = Math.max(0, labelRect.left - contRect.left);
+
+        // apply offset: prefer margin-left if element is in flow
+        // Set width to avoid overflow
+        secOtherEl.style.marginLeft = `${desiredLeft}px`;
+        secOtherEl.style.width = `calc(100% - ${desiredLeft}px)`;
+        secOtherEl.style.minHeight = '36px';
+        secOtherEl.style.whiteSpace = 'pre-wrap';
+        secOtherEl.style.wordBreak = 'break-word';
+        secOtherEl.style.overflowWrap = 'anywhere';
+      }
+    } else {
+      // if cannot find labelEl, fallback to a reasonable margin
+      const secOtherEl = holder.querySelector('#sec_other_reason');
+      if (secOtherEl) {
+        secOtherEl.style.marginLeft = '30px';
+        secOtherEl.style.width = 'calc(100% - 30px)';
+      }
+    }
+  } catch (err) {
+    console.warn('PDF-only sec_other alignment failed', err);
+    // best-effort fallback already set earlier
+  } finally {
+    // remove holder from DOM but keep its content for PDF generation (we will re-use holder)
+    try { document.body.removeChild(holder); } catch (_) {}
+    // clear the temporary positioning so downstream code sees the element normally
+    holder.style.position = '';
+    holder.style.left = '';
+    holder.style.top = '';
+    holder.style.visibility = '';
+  }
+
+  // แช่แข็งฟอร์มให้เป็นตัวหนังสือก่อนจับภาพ (if available)
   if (typeof this._freezeFormForPdf === 'function') {
     this._freezeFormForPdf(holder);
   }
 
   return holder;
 },
+
+
 
     // === สร้าง context สำหรับพรีวิวอนุมัติ "อุปกรณ์" ===
 _buildEquipmentCtxFromGroup(group) {
