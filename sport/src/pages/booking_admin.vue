@@ -473,7 +473,7 @@ function chipStyle(bk){
 }
 function chipTitle(bk){
   const lines = [
-    `กิจกรรม: ${bk.reasons || bk.activity || bk.title || '-'}`,
+    `กิจกรรม: ${bk.name_active || bk.reasons  || bk.title || '-'}`,
     `หน่วยงาน: ${bk.agency || '-'}`,
     `เวลา: ${bk.startTime || '--:--'} - ${bk.endTime || '--:--'}`,
     `สนาม: ${bk.name || fieldName.value || '-'}${bk.zone && bk.zone !== '-' ? ` / โซน: ${bk.zone}` : ''}`,

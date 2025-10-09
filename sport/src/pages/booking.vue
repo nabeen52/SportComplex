@@ -828,7 +828,7 @@ function isNarrow(bk){
 
 function chipTitle(bk) {
    // กิจกรรม
-  const activity = bk.reasons || bk.activity || bk.title || '-'
+  const activity = bk.name_active || bk.reasons ||  bk.title || '-'
   // หน่วยงาน
   const agency = bk.agency || '-'
   // เวลา
