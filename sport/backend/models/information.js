@@ -10,7 +10,8 @@ const informationSchema = new mongoose.Schema({
             month: Number,
             usage: { type: Number, default: 1 },
             hours: { type: Number, default: 0 },
-            fieldName: { type: String, default: "" }  // ✅ เพิ่มตรงนี้
+            fieldName: { type: String, default: "" },  // ✅ เพิ่มตรงนี้
+            participants: { type: Number, default: 0 },
         }
     ]
 });

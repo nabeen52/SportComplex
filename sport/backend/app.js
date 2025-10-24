@@ -3839,6 +3839,7 @@ app.patch('/api/history/:id/approve_field_super', async (req, res) => {
     try {
         const { id } = req.params;
 
+        // ✅ ตรวจสิทธิ์หัวหน้า
         const superId = req.body.admin_id;
         const superUser = await User.findOne({ user_id: superId });
         if (!superUser) return res.status(403).send({ message: 'forbidden' });
@@ -3848,7 +3849,7 @@ app.patch('/api/history/:id/approve_field_super', async (req, res) => {
             `${superUser.firstname || ''} ${superUser.lastname || ''}`.trim() ||
             superId;
 
-        // ต้องเป็น field, ยัง pending และผ่าน admin มาแล้ว
+        // ✅ เงื่อนไข: ต้องเป็น field, ยัง pending และผ่าน admin แล้ว
         const cond = {
             _id: id,
             type: 'field',
@@ -3857,11 +3858,13 @@ app.patch('/api/history/:id/approve_field_super', async (req, res) => {
             approvedAt: { $exists: true },
         };
 
+        // ✅ PDF URL
         const fileUrl = (req.body.bookingPdfUrl || req.body.booking_pdf_url || req.body.fileUrl || '').trim();
 
         delete req.body.attachment;
         delete req.body.fileName;
 
+        // ✅ fields ที่จะอัปเดตใน history
         const updateSet = {
             status: 'approved',
             superApprovedBy: superName,
@@ -3883,28 +3886,101 @@ app.patch('/api/history/:id/approve_field_super', async (req, res) => {
             },
             updatedAt: new Date(),
         };
+
         if (fileUrl) {
             updateSet.bookingPdfUrl = fileUrl;
             updateSet.booking_pdf_url = fileUrl;
         }
 
+        // ✅ update history
         let updated = await History.findOneAndUpdate(cond, { $set: updateSet }, { new: true, runValidators: true });
         if (!updated) {
             return res.status(404).send({ message: 'not found, not pending, or not secretary-approved' });
         }
 
-        // ✅ step: super อนุมัติ (approve=true)
+        // ✅ update step (approve=true)
         try {
             await updateHistoryStep(
                 { id, role: 'super', approve: true, actorName: superName, remark: req.body.reason_supervisor || '' },
-                { syncStatus: true } // ครบ admin+super -> approved
+                { syncStatus: true }
             );
             updated = await History.findById(id);
         } catch (e) {
             console.error('update step (approve_field_super) error:', e.message);
         }
 
-        // side-effects/ส่งอีเมล (เดิม) …
+        // ✅ ====== บันทึกข้อมูลลง collection information ======
+        try {
+            let totalHours = 0;
+            if (updated.since && updated.uptodate && updated.startTime && updated.endTime) {
+                totalHours = calcTotalHours(updated.since, updated.uptodate, updated.startTime, updated.endTime);
+            }
+
+            if (updated.agency && String(updated.agency).trim() !== '') {
+                const dt = new Date(updated.approvedAt_supervisor || Date.now());
+                await Information.findOneAndUpdate(
+                    {
+                        unit: new RegExp('^' + String(updated.agency).trim() + '$', 'i'),
+                        type: 'field',
+                    },
+                    {
+                        $push: {
+                            usageByMonthYear: {
+                                year: dt.getFullYear(),
+                                month: dt.getMonth() + 1,
+                                usage: 1,
+                                hours: totalHours,
+                                fieldName: updated.name || '',
+                                participants: parseInt(updated.participants) || 0,
+                            },
+                        },
+                        $inc: { usage: 1 },
+                    },
+                    { upsert: true, new: true }
+                );
+            }
+        } catch (infoErr) {
+            console.error('บันทึกข้อมูลลง information ไม่สำเร็จ:', infoErr.message);
+        }
+
+        // ✅ ====== อัปเดตแบบสะสมใน collection fields ======
+        try {
+            if (updated.name && updated.participants) {
+                const fieldName = updated.name.trim();
+
+                const fieldUpdate = {
+                    $set: {
+                        name: fieldName,
+                        name_active: updated.name_active,
+                        lastApprovedAt: new Date(),
+                        lastUser: updated.user_id,
+                        lastAgency: updated.agency || '',
+                        lastPdfUrl: updated.bookingPdfUrl || '',
+                        lastReason: updated.reason || '',
+                        updatedAt: new Date(),
+                    },
+                    $inc: {
+                        usage: 1, // เพิ่มจำนวนครั้งที่ใช้สนาม
+                        participants: parseInt(updated.participants) || 0, // เพิ่มจำนวนผู้เข้าร่วมสะสม
+                    },
+                };
+
+                await Field.findOneAndUpdate(
+                    { name: fieldName },
+                    fieldUpdate,
+                    { upsert: true, new: true }
+                );
+
+                console.log(`✅ อัปเดตสะสม fields ของ "${fieldName}" สำเร็จ (+${updated.participants} คน, +1 ครั้ง)`);
+            } else {
+                console.log(`ℹ️ ไม่มีชื่อสนามหรือจำนวนผู้เข้าร่วม ไม่ได้อัปเดต fields`);
+            }
+        } catch (fieldErr) {
+            console.error('อัปเดตข้อมูล fields ไม่สำเร็จ:', fieldErr.message);
+        }
+        // ✅ ====== จบส่วนอัปเดต fields ======
+
+        // ✅ ส่งอีเมลแจ้งผู้จอง
         try {
             const user = await User.findOne({ user_id: updated.user_id });
             if (user?.email) {
@@ -3917,7 +3993,7 @@ app.patch('/api/history/:id/approve_field_super', async (req, res) => {
                     uptodate: updated.uptodate,
                     startTime: updated.startTime,
                     endTime: updated.endTime,
-                    fileUrl: updated.bookingPdfUrl || ''   // แนบลิงก์ไฟล์ถ้ามี
+                    fileUrl: updated.bookingPdfUrl || '',
                 });
             }
         } catch (mailErr) {

@@ -731,13 +731,19 @@ const filteredFieldUnits = computed(() => {
     })
 
     let sumUsage = filtered.reduce((acc, f) => acc + (f.usage || 0), 0)
-    let sumHours = filtered.reduce((acc, f) => acc + (f.hours || 0), 0)
-    if (sumUsage > 0 || sumHours > 0) {
-      result.push({
-        unit: unit.unit || unit.fieldName,
-        usage: sumUsage,
-        hours: sumHours
-      })
+ let sumHours = filtered.reduce((acc, f) => acc + (f.hours || 0), 0)
+ // 🔽 1. เพิ่มบรรทัดนี้
+ let sumParticipants = filtered.reduce((acc, f) => acc + (f.participants || 0), 0)
+
+ // 🔽 2. เพิ่มเงื่อนไขเช็ค sumParticipants ด้วย
+ if (sumUsage > 0 || sumHours > 0 || sumParticipants > 0) {
+ result.push({
+ unit: unit.unit || unit.fieldName,
+ usage: sumUsage,
+ hours: sumHours,
+ // 🔽 3. เพิ่ม property นี้ส่งไปด้วย
+ participants: sumParticipants
+ })
     }
   })
   // Sort & Limit
@@ -792,27 +798,58 @@ const filteredEquipUnits = computed(() => {
 })
 
 
+// ... (แทนที่ของเดิม)
 function exportOverallFieldPDF() {
-  // เตรียม data เป็น summary ของแต่ละสนาม (sum ตามช่วงเดือน)
-  const chartData = overallFieldChartData.value;
-  const fieldSummaries = chartData.datasets.map(ds => {
-    // หาผลรวมชั่วโมงช่วงนี้
-    const totalHours = ds.data.reduce((a, b) => a + (b || 0), 0);
-    return {
-      unit: ds.label,    // ชื่อสนาม
-      hours: totalHours, // ผลรวมชั่วโมง
-    }
-  })
+ // 1. ดึงช่วงวันที่ที่เลือก
+ const yStart = Number(overallFieldStartYear.value)
+ const yEnd  = Number(overallFieldEndYear.value)
+ const mStart = Number(overallFieldStartMonth.value)
+const mEnd  = Number(overallFieldEndMonth.value)
 
-  // สร้าง summary text
-  const periodText = `ช่วง: ${months[overallFieldStartMonth.value - 1]} ${overallFieldStartYear.value} ถึง ${months[overallFieldEndMonth.value - 1]} ${overallFieldEndYear.value}`;
-  exportPDF(
-    fieldSummaries,
-    'รายงานสถิติการใช้ "สนามกีฬาโดยภาพรวม"',
-    'สถิติการใช้งาน สนามกีฬาโดยภาพรวม.pdf',
-    periodText,
-    'overall'
-  );
+ // 2. เตรียม object สำหรับรวมข้อมูล
+ const summaries = {}
+ allFieldNamesOverall.value.forEach(name => {
+  summaries[name] = { unit: name, hours: 0, participants: 0, usage: 0 }
+ })
+
+ // 3. วนลูปข้อมูลดิบ (fieldUnits) เพื่อรวมยอด
+ fieldUnits.value.forEach(unit => {
+ if (!unit.usageByMonthYear) return
+ unit.usageByMonthYear.forEach(row => {
+ const fieldName = row.fieldName
+if (!summaries[fieldName]) return // ถ้าไม่ใช่สนามที่อยู่ใน list ก็ข้าม
+
+ const rowYear = Number(row.year)
+const rowMonth = Number(row.month)
+
+ // 4. เช็คว่าอยู่ในช่วงวันที่ที่เลือกหรือไม่
+ const isAfterStart = rowYear > yStart || (rowYear === yStart && rowMonth >= mStart)
+const isBeforeEnd = rowYear < yEnd || (rowYear === yEnd && rowMonth <= mEnd)
+
+ if (isAfterStart && isBeforeEnd) {
+ summaries[fieldName].hours += row.hours || 0
+ summaries[fieldName].participants += row.participants || 0
+ summaries[fieldName].usage += row.usage || 0
+ }
+ })
+ })
+
+ // 5. แปลง object เป็น array และตัดอันที่ไม่มีข้อมูลทิ้ง
+ const fieldSummaries = Object.values(summaries).filter(
+ s => s.hours > 0 || s.participants > 0 || s.usage > 0
+ );
+
+ // 6. สร้างข้อความสรุป
+ const periodText = `ช่วง: ${months[mStart - 1]} ${yStart} ถึง ${months[mEnd - 1]} ${yEnd}`;
+
+ // 7. เรียกใช้ exportPDF
+ exportPDF(
+ fieldSummaries, // <--- ใช้ข้อมูลใหม่ที่รวมยอดแล้ว
+ 'รายงานสถิติการใช้ "สนามกีฬาโดยภาพรวม"',
+ 'สถิติการใช้งาน สนามกีฬาโดยภาพรวม.pdf',
+ periodText,
+  'overall' // type 'overall'
+ );
 }
 
 
@@ -888,7 +925,7 @@ function exportPDF(data, header, filename, filterSummary, type = 'field') {
     pdf.text('สรุปการใช้งาน', pageWidth / 2, y, { align: 'center' }); y += 10
     pdf.setFontSize(13)
 
-    let totalUsage = 0, totalHours = 0
+    let totalUsage = 0, totalHours = 0, totalParticipants = 0
     const lineHeight = 9, marginBottom = 18, leftX = 20, rightX = pageWidth - 20
     if (!data.length) {
       pdf.text('ไม่มีข้อมูลการใช้งาน', leftX, y); y += lineHeight
@@ -901,19 +938,23 @@ function exportPDF(data, header, filename, filterSummary, type = 'field') {
           pdf.setFontSize(13)
         }
          pdf.text(`${i + 1}. ${u.unit}`, leftX, y)
-        let rightText = ''
-        if (type === 'equipment') {
-          rightText = `จำนวนการใช้งาน: ${u.usage || 0} รอบ`
-        } else if (type === 'overall') {
-          rightText = `${u.hours || 0} ชม.`
-        } else {
-          rightText = `${u.usage || 0} รอบ | ${u.hours || 0} ชม.`
-        }
-        pdf.text(rightText, rightX, y, { align: 'right' }); y += lineHeight
-        if (type === 'equipment') totalUsage += u.usage || 0
-        else totalHours += u.hours || 0
-        if (type !== 'overall') totalUsage += u.usage || 0 // เฉพาะ non-overall
-      })
+ let rightText = ''
+ if (type === 'equipment') {
+ rightText = `จำนวนการใช้งาน: ${u.usage || 0} รอบ`
+ } else if (type === 'overall') {
+ // ⬅️ แก้ไข 'overall' (ใช้ข้อมูลจากข้อ 1)
+ rightText = `${u.usage || 0} รอบ | ${u.hours || 0} ชม. | ${u.participants || 0} คน`
+ } else {
+ // ⬅️ แก้ไข 'field' (ของ "สนามกีฬาของหน่วยงาน")
+ rightText = `${u.usage || 0} รอบ | ${u.hours || 0} ชม. | ${u.participants || 0} คน`
+ }
+ pdf.text(rightText, rightX, y, { align: 'right' }); y += lineHeight
+        
+        // ⬇️ ลบ 3 บรรทัดเก่าข้างบน (if type...) แล้วแทนที่ด้วย 3 บรรทัดนี้ ⬇️
+  totalUsage += u.usage || 0
+ totalHours += u.hours || 0
+ totalParticipants += u.participants || 0
+ })
        y += 4
       // if (type === 'equipment') {
       //   pdf.text(`รวมการใช้งาน: ${totalUsage} ครั้ง`, leftX, y)
@@ -953,17 +994,17 @@ function exportPDF(data, header, filename, filterSummary, type = 'field') {
 }
 /* ปล่อยสูง auto, กันล้นแนวนอน และคงพื้นที่แคนวาสกราฟไว้ด้วย canvas height */
 .chart-container.overall {
-  height: auto !important;       /* ให้สูงอัตโนมัติ */
-  min-height: 320px;             /* ฐานขั้นต่ำ */
-  max-height: none !important;   /* ไม่จำกัดความสูง */
-  overflow: visible !important;  /* ให้ tooltip โผล่ได้ */
+  height: auto !important;      /* ให้สูงอัตโนมัติ */
+  min-height: 320px;            /* ฐานขั้นต่ำ */
+  max-height: none !important;  /* ไม่จำกัดความสูง */
+  /* overflow: visible !important; */  /* <--- ปิด/ลบบรรทัดนี้ */
+  overflow-x: hidden !important;    /* <--- เพิ่มบรรทัดนี้แทน (นี่คือสไตล์ที่ทำให้การ์ดกว้างเท่ากัน) */
 }
 /* ล็อกความสูงตัวกราฟ (canvas) แทน เพื่อไม่ให้ยืดตาม legend */
-.chart-container.overall canvas {
+.chart-container.overall :deep(canvas) {  /* <--- แก้ไขบรรทัดนี้ */
   height: 260px !important;  /* ปรับได้ตามชอบ */
   width: 100% !important;
 }
-
 
 .filter-options {
   display: flex;

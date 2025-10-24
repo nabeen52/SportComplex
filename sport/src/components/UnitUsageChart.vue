@@ -53,30 +53,56 @@ const props = defineProps({
 // 1) เตรียมชุดข้อมูลดิบ (ยังไม่ใส่ hidden)
 const rawDatasets = computed(() => {
   const usageLabel = props.unitType === 'equipment' ? 'จำนวนการใช้' : 'จำนวนครั้ง'
+
+  // 🔹 รวมค่าซ้ำของเดือน (ถ้ามีหลายแถวเดือนเดียวกัน)
+  const grouped = {}
+  props.units.forEach(u => {
+    if (!grouped[u.unit]) {
+      grouped[u.unit] = { usage: 0, hours: 0, participants: 0 }
+    }
+    grouped[u.unit].usage += u.usage ?? 0
+    grouped[u.unit].hours += u.hours ?? 0
+    grouped[u.unit].participants += u.participants ?? 0
+  })
+
+  const units = Object.keys(grouped)
+  const usageData = units.map(u => grouped[u].usage)
+  const hoursData = units.map(u => grouped[u].hours)
+  const participantsData = units.map(u => grouped[u].participants)
+
   const list = [
     {
       label: usageLabel,
-      data: props.units.map(u => u.usage ?? 0),
+      data: usageData,
       borderColor: '#1976d2',
       backgroundColor: 'rgba(25,118,210,.09)',
       tension: 0.35,
       fill: false,
       pointRadius: 3
-    }
-  ]
-  if (props.units.some(u => u.hours !== undefined)) {
-    list.push({
+    },
+    {
       label: 'จำนวนชั่วโมง',
-      data: props.units.map(u => u.hours ?? 0),
+      data: hoursData,
       borderColor: '#d32f2f',
       backgroundColor: 'rgba(211,47,47,.09)',
       tension: 0.35,
       fill: false,
       pointRadius: 3
-    })
-  }
+    },
+    {
+      label: 'จำนวนคน',
+      data: participantsData,
+      borderColor: '#388e3c',
+      backgroundColor: 'rgba(56,142,60,.09)',
+      tension: 0.35,
+      fill: false,
+      pointRadius: 3
+    }
+  ]
+
   return list
 })
+
 
 // 2) จัดการสถานะซ่อน/แสดงของแต่ละเส้น
 const hidden = ref([])
@@ -115,7 +141,7 @@ const hasData = computed(() =>
 // 4) options: ปิด legend ของ chart.js, ใช้ hidden จาก _hidden
 const chartOptions = computed(() => ({
   responsive: true,
-  layout: { padding: { left: 0, right: 0 } },
+  layout: { padding: { left: 10, right: 40, top: 0, bottom: 0 } },
   maintainAspectRatio: false,
   plugins: {
     legend: { display: false }, // << ปิด legend ในแคนวาส
@@ -133,7 +159,8 @@ const chartOptions = computed(() => ({
   scales: {
     x: {
       title: { display: false },
-      ticks: { autoSkip: false, maxRotation: 0, minRotation: 0 }
+      ticks: { autoSkip: false, maxRotation: 5, minRotation: 5 },
+      
     },
     y: {
       beginAtZero: true,
@@ -152,23 +179,23 @@ const chartOptions = computed(() => ({
 </script>
 
 <style scoped>
-.chart-wrap{
+.chart-wrap {
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
-  display: block;            /* สำคัญ: ให้เป็น block เต็มบล็อก */
+  display: block;
+  overflow-x: hidden !important;
 }
 
 /* บังคับ canvas ให้เต็มกว้างเหมือนกราฟอื่น และตัดพฤติกรรม inline */
-.chart-wrap :deep(canvas){
-  display: block !important; /* กันช่องว่าง inline */
+.chart-wrap :deep(canvas) {
+  display: block !important;
   width: 100% !important;
-  height: 260px !important;  /* เท่ากับการ์ดอื่น */
+  height: 300px !important;   /* ปรับความสูงให้เท่ากับกราฟอื่น */
+  padding-right: 24px;        /* ✅ เพิ่มระยะขวาให้แกนเท่ากัน */
+  margin: 0 auto;
 }
-.chart-container.overall{
-  overflow-x: hidden !important; /* การ์ดที่ต้องกว้างเท่ากัน ใช้ hidden ไปเลย */
-  scrollbar-gutter: stable both-edges;
-}
+
 
 .chart-legend {
   margin-top: 12px;
