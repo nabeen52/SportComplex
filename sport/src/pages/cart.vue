@@ -425,7 +425,38 @@ async function handleCheckout() {
     return;
   }
 
-  // 3) เลือกแบบยืมวันเดียว / หลายวัน
+  // 3) ตรวจสอบว่า user มีเบอร์โทรในฐานข้อมูลหรือไม่
+  const uid = localStorage.getItem('user_id') || '';
+  if (!uid) {
+    await Swal.fire({
+      icon: 'warning',
+      title: 'Please log in before using',
+      confirmButtonText: 'OK'
+    });
+    router.replace('/login');
+    return;
+  }
+
+  try {
+    const { data: userData } = await axios.get(`${API_BASE}/api/users/${uid}`);
+    const phone = userData?.phone?.trim() || '';
+
+    if (!phone) {
+      await Swal.fire({
+        icon: 'warning',
+        title: 'Please add a contact phone number to your profile page before making a transaction.',
+        
+        confirmButtonText: 'ตกลง'
+      });
+      return; // ❌ หยุดไม่ให้ไปขั้นต่อไป
+    }
+  } catch (err) {
+    console.error('Error fetching user info:', err);
+    await Swal.fire('Error', 'ไม่สามารถตรวจสอบข้อมูลผู้ใช้ได้', 'error');
+    return;
+  }
+
+  // 4) เลือกแบบยืมวันเดียว / หลายวัน
   const { value: borrowType } = await Swal.fire({
     title: 'Do you want to borrow for one day or several days?',
     icon: 'question',
@@ -442,7 +473,7 @@ async function handleCheckout() {
 
   if (!borrowType) return;
 
-  // 4) หลายวัน → ไปกรอกฟอร์ม
+  // 5) หลายวัน → ไปกรอกฟอร์ม
   if (borrowType === 'multiDay') {
     router.push({
       path: '/form_equipment',
@@ -452,13 +483,6 @@ async function handleCheckout() {
   }
 
   // ---- จากนี้คือ "ยืมวันเดียว" ----
-  const uid = localStorage.getItem('user_id') || '';
-  if (!uid) {
-    await Swal.fire({ icon: 'warning', title: 'Please log in before using', confirmButtonText: 'OK' });
-    router.replace('/login');
-    return;
-  }
-
   const booking_id = `${Date.now()}_${uid}`;
   const nowISO = new Date().toISOString();
 
@@ -510,6 +534,7 @@ async function handleCheckout() {
     isSubmitting.value = false;
   }
 }
+
 
 
 

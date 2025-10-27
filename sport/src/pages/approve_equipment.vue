@@ -1142,12 +1142,14 @@ async handoverGroup(group) {
     const res = await axios.get(`${API_BASE}/api/users`);
     this.usersMap = {};
     this.usersEmailMap = {};
+    this.usersPhoneMap = {}; // ✅ เพิ่ม Map สำหรับเก็บเบอร์โทร
 
-    (Array.isArray(res.data) ? res.data : []).forEach(u => {
+    const users = Array.isArray(res.data) ? res.data : [];
+    users.forEach(u => {
       const id = String(u.user_id || '').trim();
       if (!id) return;
 
-      const thai   = (u.thaiName || '').trim();
+      const thai = (u.thaiName || '').trim();
       const enFull = [u.firstname, u.lastname].filter(Boolean).join(' ').trim();
       const fallback = (u.name || id || '').trim();
       this.usersMap[id] = thai || enFull || fallback;
@@ -1155,15 +1157,22 @@ async handoverGroup(group) {
       const email = String(u.email || '').trim();
       if (email) this.usersEmailMap[id] = email;
 
+      // ✅ ถ้าไม่มี phone ให้แทนด้วย "-"
+      const phone = (u.phone || '').trim() || '-';
+      this.usersPhoneMap[id] = phone;
+
       if (String(id) === String(this.userId)) {
         localStorage.setItem('thaiName', this.usersMap[id]);
       }
     });
   } catch (err) {
+    console.error('Error fetching users:', err);
     this.usersMap = {};
     this.usersEmailMap = {};
+    this.usersPhoneMap = {};
   }
 },
+
 
 
     formatDate(dateStr) {
@@ -1452,11 +1461,12 @@ async cancelGroup(group) {
     return s || '-';
   };
 
-  // ให้แน่ใจว่ามี email map แล้ว (ถ้าไม่มี โหลดเลย)
-  if (!this.usersEmailMap || !Object.keys(this.usersEmailMap).length) {
+  // ✅ โหลด users map ถ้ายังไม่มี (รวม phone ด้วย)
+  if (!this.usersEmailMap || !Object.keys(this.usersEmailMap).length || !this.usersPhoneMap) {
     await this.fetchUsers().catch(() => {});
   }
   const emailMap = this.usersEmailMap || {};
+  const phoneMap = this.usersPhoneMap || {};
 
   // หา user_id กลางของ booking ไว้เป็น fallback
   let bookingUid = '';
@@ -1473,19 +1483,16 @@ async cancelGroup(group) {
   }
 
   const hasPeriod = group.items.some(it => it.since || it.uptodate);
-
-  // 🟢 helper: รับได้ทั้ง string/array แล้วคืนค่ารูปแรก
   const pickFirstImage = (v) => Array.isArray(v) ? (v[0] || '') : (v || '');
 
   const rows = (group.items || []).map((it, idx) => {
     const requester = this.usersMap[it.user_id] || it.requester || it.user_id || '-';
-
-    // อีเมลจาก users ตาม user_id + fallback bookingUid
     const uid = (it.user_id ?? bookingUid ?? '').toString().trim();
-    const email = (uid && emailMap[uid]) ? emailMap[uid] : '-';
 
-    // 🟢 หลายวัน (มี since/uptodate): ให้ใช้ returnPhoto เป็นหลัก
-    //    วันเดียว: คงลำดับเดิม attachment → fileData → returnPhoto
+    // ✅ ดึงอีเมลและเบอร์โทรจาก map
+    const email = (uid && emailMap[uid]) ? emailMap[uid] : '-';
+    const phone = (uid && phoneMap[uid]) ? phoneMap[uid] : '-';
+
     const rawSrc = hasPeriod
       ? pickFirstImage(it.returnPhoto)
       : (pickFirstImage(it.attachment) || pickFirstImage(it.fileData) || pickFirstImage(it.returnPhoto));
@@ -1509,6 +1516,7 @@ async cancelGroup(group) {
         <td class="td-center">${esc(it.quantity ?? '-')}</td>
         <td>${esc(requester)}</td>
         <td class="td-center">${esc(email)}</td>
+        <td class="td-center">${esc(phone)}</td>
         ${
           hasPeriod
             ? `<td class="td-center">${esc(fmtDate(it.since))}</td>
@@ -1521,23 +1529,24 @@ async cancelGroup(group) {
     `;
   }).join('');
 
+  // ✅ ปรับขนาดคอลัมน์ให้เผื่อช่องเบอร์โทรเพิ่ม
   const cols = hasPeriod
-    ? `<col style="width:5%"><col style="width:20%"><col style="width:8%">
-       <col style="width:15%"><col style="width:12%"><col style="width:12%">
-       <col style="width:10%"><col style="width:8%"><col style="width:10%">`
-    : `<col style="width:5%"><col style="width:22%"><col style="width:8%">
-       <col style="width:18%"><col style="width:15%"><col style="width:12%">
-       <col style="width:10%"><col style="width:10%">`;
+    ? `<col style="width:4%"><col style="width:17%"><col style="width:7%">
+       <col style="width:13%"><col style="width:12%"><col style="width:10%">
+       <col style="width:9%"><col style="width:8%"><col style="width:10%">`
+    : `<col style="width:4%"><col style="width:18%"><col style="width:7%">
+       <col style="width:14%"><col style="width:13%"><col style="width:10%">
+       <col style="width:9%"><col style="width:8%"><col style="width:10%">`;
 
   const head = hasPeriod
     ? `<tr>
          <th>ลำดับ</th><th>อุปกรณ์</th><th>จำนวน</th><th>ผู้ขอใช้</th>
-         <th>อีเมล</th><th>ตั้งแต่</th><th>ถึง</th>
+         <th>อีเมล</th><th>เบอร์โทร</th><th>ตั้งแต่</th><th>ถึง</th>
          <th>สถานะ</th><th>รูป</th>
        </tr>`
     : `<tr>
          <th>ลำดับ</th><th>อุปกรณ์</th><th>จำนวน</th><th>ผู้ขอใช้</th>
-         <th>อีเมล</th><th>วันที่ยืม</th>
+         <th>อีเมล</th><th>เบอร์โทร</th><th>วันที่ยืม</th>
          <th>สถานะ</th><th>รูป</th>
        </tr>`;
 
@@ -1547,7 +1556,7 @@ async cancelGroup(group) {
         <colgroup>${cols}</colgroup>
         <thead>${head}</thead>
         <tbody>${
-          rows || `<tr><td colspan="${hasPeriod ? 9 : 8}" class="td-center">ไม่มีรายการ</td></tr>`
+          rows || `<tr><td colspan="${hasPeriod ? 10 : 9}" class="td-center">ไม่มีรายการ</td></tr>`
         }</tbody>
       </table>
     </div>
@@ -1575,6 +1584,7 @@ async cancelGroup(group) {
     willClose: () => { window.__equipShowPhoto = undefined; }
   });
 },
+
 
     async returnGroup(group) {
   // กันกดย้ำ

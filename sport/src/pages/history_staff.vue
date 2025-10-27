@@ -197,6 +197,9 @@ export default {
       itemsPerPage: 5, 
       staffId: (localStorage.getItem('user_id') || '').trim(),
       userEmailCache: {},
+      usersMap: {},
+      usersEmailMap: {},
+      usersPhoneMap: {},
     }
   },
   computed: {
@@ -682,15 +685,43 @@ pickFirstImage(...candidates) {
   return null;
 },
 
+ async fetchUsers() {
+  try {
+    const res = await axios.get(`${API_BASE}/api/users`);
+    this.usersMap = {};
+    this.usersEmailMap = {};
+    this.usersPhoneMap = {};
+
+    (Array.isArray(res.data) ? res.data : []).forEach(u => {
+      const id = String(u.user_id || '').trim();
+      if (!id) return;
+
+      const thai = (u.thaiName || '').trim();
+      const enFull = [u.firstname, u.lastname].filter(Boolean).join(' ').trim();
+      const fallback = (u.name || id || '').trim();
+      this.usersMap[id] = thai || enFull || fallback || '-';
+
+      const email = String(u.email || '').trim();
+      this.usersEmailMap[id] = email || '-';
+
+      const phone = String(u.phone || u.tel || '').trim();
+      this.usersPhoneMap[id] = phone || '-';
+
+      // เก็บชื่อเราไว้ใน localStorage ด้วย
+      if (String(id) === String(this.staffId)) {
+        localStorage.setItem('thaiName', this.usersMap[id]);
+      }
+    });
+  } catch (err) {
+    this.usersMap = {};
+    this.usersEmailMap = {};
+    this.usersPhoneMap = {};
+  }
+},
 
 
 
-
-// ป๊อปอัป "รายละเอียด" (แก้ให้รูปใช้ returnPhoto ก่อน และสถานะแต่ละแถวสัมพันธ์กับผู้ใช้)
-// ป๊อปอัป "รายละเอียด" (อีเมล + จัดการรูปหลายวัน ถ้าไม่มีรูปให้แสดง '-')
-// ป๊อปอัป "รายละเอียด" (ถ้าคนเดียวกันส่งมอบและรับคืน ให้โชว์เฉพาะ returned)
 async detailGroup(group) {
-  // ---------- helpers ----------
   const esc = (s) => String(s ?? '-')
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
     .replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/\n/g,'<br>');
@@ -713,27 +744,23 @@ async detailGroup(group) {
   const byMe = (v) => String(v || '').trim() === me;
   const keyOf = (it) => `${String(it.user_id||'').trim()}||${String(it.name||'').trim().toLowerCase()}`;
 
-  // ตัด return-pending ออกก่อน
   const cleaned = (group || []).filter(
     it => String(it.status || '').toLowerCase() !== 'return-pending'
   );
 
-  // คงไว้เฉพาะแถวที่ 'ฉัน' เป็นผู้ลงมือ
   const myItems = cleaned.filter(it => {
     const st = String(it.status || '').toLowerCase();
     if (st === 'returned')     return byMe(it.returnedById);
     if (st === 'disapproved')  return byMe(it.disapprovedById);
     if (st === 'approved') {
-      if (it.handoverAt || it.handoverBy || it.handoverById) return byMe(it.handoverById); // ส่งมอบ
-      return byMe(it.approvedById); // อนุมัติ
+      if (it.handoverAt || it.handoverBy || it.handoverById) return byMe(it.handoverById);
+      return byMe(it.approvedById);
     }
     return false;
   });
 
-  // === NEW: ถ้า "ฉัน" มีทั้งส่งมอบและรับคืนอุปกรณ์/ผู้ใช้เดียวกัน ให้แสดงเฉพาะ returned
   let itemsToShow;
   if (myItems.length) {
-    // นับจำนวน returned ของฉันต่อ (user_id+name)
     const returnedCount = new Map();
     for (const it of myItems) {
       const st = String(it.status || '').toLowerCase();
@@ -743,7 +770,6 @@ async detailGroup(group) {
       }
     }
 
-    // กรอง: ตัด approved/handedover ของฉันออกเท่ากับจำนวน returned ที่คู่กัน
     const reduceApprovedIfReturned = (it) => {
       const st = String(it.status || '').toLowerCase();
       const isMyHandover = st==='approved' && (it.handoverAt || it.handoverBy || it.handoverById) && byMe(it.handoverById);
@@ -752,7 +778,7 @@ async detailGroup(group) {
       if (isMyHandover || isMyApprove) {
         const k = keyOf(it);
         const c = returnedCount.get(k) || 0;
-        if (c > 0) {                 // มี returned คู่กันอยู่ → ตัดตัวนี้ออก และหัก count
+        if (c > 0) {
           returnedCount.set(k, c - 1);
           return false;
         }
@@ -762,26 +788,22 @@ async detailGroup(group) {
 
     itemsToShow = myItems.filter(reduceApprovedIfReturned);
   } else {
-    // ไม่ใช่งานที่ฉันทำ → โชว์ตามข้อมูลเดิมทั้งหมด
     itemsToShow = cleaned;
   }
 
-  // ✅ ดึงอีเมลทั้งหมดของ user_id ที่เกี่ยวข้องก่อนแสดง
   const ids = itemsToShow.map(it => it.user_id).filter(Boolean);
   await this.fetchEmailsForUserIds(ids);
 
-  // สำหรับลิงก์ PDF การส่งมอบ (จะมีเฉพาะถ้าฉันเป็นคนส่งมอบ)
   const anyHandover = itemsToShow.find(it =>
     (it.handoverAt || it.handoverBy || it.handoverById) &&
     byMe(it.handoverById) &&
     it.bookingPdfUrl
   );
 
-  // วาดแถว
+  // ✅ เพิ่มส่วนแสดงเบอร์โทร
   const rows = itemsToShow.map((item, idx) => {
     const st = String(item.status || '').toLowerCase();
 
-    // สถานะโชว์ตามบทบาทของฉัน
     let stForShow = st;
     if (st === 'returned' && byMe(item.returnedById)) stForShow = 'returned';
     else if (st === 'approved' && (item.handoverAt || item.handoverBy || item.handoverById) && byMe(item.handoverById)) stForShow = 'handedover';
@@ -789,6 +811,8 @@ async detailGroup(group) {
     else if (st === 'disapproved' && byMe(item.disapprovedById)) stForShow = 'disapproved';
 
     const email = this.userEmailCache[String(item.user_id || '').trim()] || '-';
+    const phone = this.usersPhoneMap?.[String(item.user_id || '').trim()] || '-';
+
 
     const imgUrl = this.pickFirstImage(
       item.returnPhoto, item.returnImage, item.return_photo, item.returnPhotos,
@@ -810,6 +834,7 @@ async detailGroup(group) {
         <td style="text-align:center">${esc(item.quantity)}</td>
         <td>${esc(item.requester || '-')}</td>
         <td>${esc(email)}</td>
+        <td>${esc(phone)}</td> <!-- ✅ แสดงเบอร์โทร -->
         <td>${esc(fmtDate(item.date))}</td>
         <td>${esc(statusTitle(stForShow))}</td>
         <td>${esc(item.returnedAt ? fmtDate(item.returnedAt) : '-')}</td>
@@ -829,7 +854,7 @@ async detailGroup(group) {
     </div>` : '';
 
   const GAP  = 24;
-  const MAXW = 1400;
+  const MAXW = 1500; // ✅ เพิ่มความกว้างนิดหน่อยเพื่อรองรับคอลัมน์ใหม่
   const popupW = Math.min(Math.max(window.innerWidth - GAP*2, 360), MAXW);
 
   Swal.fire({
@@ -839,11 +864,12 @@ async detailGroup(group) {
         <table class="swal-table">
           <thead>
             <tr>
-              <th style="width:56px;text-align:center">ลำดับ</th>
+              <th style="width:60px;text-align:center">ลำดับ</th>
               <th>อุปกรณ์</th>
               <th style="width:90px;text-align:center">จำนวน</th>
               <th style="width:160px">ผู้ขอใช้</th>
               <th style="width:160px">อีเมล</th>
+              <th style="width:120px">เบอร์โทร</th> <!-- ✅ เพิ่มหัวคอลัมน์ -->
               <th style="width:120px">วันที่ขอยืม</th>
               <th style="width:150px">สถานะ</th>
               <th style="width:130px">วันที่คืน</th>
@@ -851,7 +877,7 @@ async detailGroup(group) {
               <th style="width:160px">หมายเหตุ</th>
             </tr>
           </thead>
-          <tbody>${rows || `<tr><td colspan="10" style="text-align:center">ไม่มีรายการ</td></tr>`}</tbody>
+          <tbody>${rows || `<tr><td colspan="11" style="text-align:center">ไม่มีรายการ</td></tr>`}</tbody>
         </table>
       </div>
       ${pdfFooter}
@@ -877,6 +903,7 @@ async detailGroup(group) {
     willClose: () => { window.__showFullReturnPhoto = undefined; }
   });
 }
+
   },
   async mounted () {
   try {
@@ -966,6 +993,7 @@ async detailGroup(group) {
   await this.fetchNotifications()
   this.polling = setInterval(this.fetchNotifications, 30000)
   window.addEventListener('resize', this.checkMobile)
+  this.fetchUsers();
 },
 
   beforeUnmount() {

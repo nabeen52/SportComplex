@@ -412,6 +412,32 @@ async function sendDisapproveFieldEmail({ to, name, field, activity, since, upto
         return await sendBulk(to, 'แจ้งเตือน: ไม่อนุมัติการขอใช้สนาม', html);
     } catch (err) { console.error('ส่งเมลแจ้ง disapprove field ไม่สำเร็จ:', err); }
 }
+
+async function sendAdminApprovedNotification({ to, field, activity, since, uptodate, startTime, endTime, approvedBy, fileUrl }) {
+    if (!to) return;
+
+    const html = `
+    <div>
+      <h2>มีรายการจองสนามได้รับการอนุมัติแล้ว</h2>
+      <p><b>สนาม:</b> ${field || '-'}</p>
+      <p><b>กิจกรรม:</b> ${activity || '-'}</p>
+      <p><b>วันที่:</b> ${formatDateRange(since, uptodate)}</p>
+      <p><b>เวลา:</b> ${startTime || '-'} ถึง ${endTime || '-'}</p>
+      <p><b>อนุมัติโดย:</b> ${approvedBy || '-'}</p>
+      ${fileUrl ? `<p><b>ไฟล์อนุมัติ:</b> <a href="${fileUrl}" target="_blank" rel="noopener">เปิดไฟล์</a></p>` : ''}
+      <br>
+      <p>กรุณาตรวจสอบข้อมูลในระบบหากต้องการติดตามรายละเอียดเพิ่มเติม</p>
+      <hr>
+      <p style="font-size:0.95em;color:#888;">Sport Complex – MFU</p>
+    </div>`;
+
+    try {
+        return await sendBulk(to, 'แจ้งเตือน: รายการจองสนามได้รับการอนุมัติแล้ว', html);
+    } catch (err) {
+        console.error('ส่งเมลแจ้งเตือน admin ไม่สำเร็จ:', err);
+    }
+}
+
 // ฟังก์ชันส่งอีเมลแจ้ง user ว่า "รายการขอใช้สนามของคุณถูกยกเลิก"
 async function sendCancelFieldEmail({ to, name, field, activity, since, uptodate, startTime, endTime, remark }) {
     if (!to) return;
@@ -3998,6 +4024,31 @@ app.patch('/api/history/:id/approve_field_super', async (req, res) => {
             }
         } catch (mailErr) {
             console.error('ส่งเมลแจ้ง approve field ไม่สำเร็จ:', mailErr.message);
+        }
+        // ✅ ====== ส่งอีเมลแจ้งเตือน admin ทุกคน ======
+        try {
+            const admins = await User.find({ role: 'admin', email: { $exists: true, $ne: '' } });
+            if (admins.length > 0) {
+                const adminEmails = admins.map(a => a.email);
+
+                await sendAdminApprovedNotification({
+                    to: adminEmails,
+                    field: updated.name,
+                    activity: updated.name_active,
+                    since: updated.since,
+                    uptodate: updated.uptodate,
+                    startTime: updated.startTime,
+                    endTime: updated.endTime,
+                    approvedBy: superName,
+                    fileUrl: updated.bookingPdfUrl || '',
+                });
+
+                console.log(`📧 ส่งอีเมลแจ้งเตือน admin ${admins.length} คนแล้ว`);
+            } else {
+                console.log('ℹ️ ไม่พบ admin ที่มีอีเมล');
+            }
+        } catch (adminMailErr) {
+            console.error('ส่งอีเมลแจ้งเตือน admin ไม่สำเร็จ:', adminMailErr.message);
         }
 
         return res.send(updated);
